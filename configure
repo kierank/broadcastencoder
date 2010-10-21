@@ -1,0 +1,577 @@
+#!/bin/bash
+
+if test x"$1" = x"-h" -o x"$1" = x"--help" ; then
+
+echo "Usage: ./configure [options]"
+echo ""
+echo "available options:"
+echo ""
+echo "  --help                   print this message"
+echo "  --extra-asflags=EASFLAGS add EASFLAGS to ASFLAGS"
+echo "  --extra-cflags=ECFLAGS   add ECFLAGS to CFLAGS"
+echo "  --extra-ldflags=ELDFLAGS add ELDFLAGS to LDFLAGS"
+echo "  --host=HOST              build programs to run on HOST"
+echo "  --cross-prefix=PREFIX    use PREFIX for compilation tools"
+echo "  --sysroot=SYSROOT        root of cross-build tree"
+echo ""
+echo "audio encoding:"
+echo ""
+echo "  --disable-libaften       disable support for libaften"
+echo "  --disable-twolame        disable support for twolame"
+echo ""
+echo "filtering:"
+echo ""
+echo "  --disable-swscale        disable swscale support"
+echo ""
+exit 1
+fi
+
+log_check() {
+    echo -n "checking $1... " >> config.log
+}
+
+log_ok() {
+    echo "yes" >> config.log
+}
+
+log_fail() {
+    echo "no" >> config.log
+}
+
+log_msg() {
+    echo "$1" >> config.log
+}
+
+cc_check() {
+    if [ -z "$3" ]; then
+        if [ -z "$1$2" ]; then
+            log_check "whether $CC works"
+        elif [ -z "$1" ]; then
+            log_check "for $2"
+        else
+            log_check "for $1"
+        fi
+    elif [ -z "$1" ]; then
+        log_check "whether $CC supports $3"
+    else
+        log_check "for $3 in $1";
+    fi
+    rm -f conftest.c
+    [ -n "$1" ] && echo "#include <$1>" > conftest.c
+    echo "int main () { $3 return 0; }" >> conftest.c
+    if $CC conftest.c $CFLAGS $2 $LDFLAGSCLI $LDFLAGS -o conftest >conftest.log 2>&1; then
+        res=$?
+        log_ok
+    else
+        res=$?
+        log_fail
+        log_msg "Failed commandline was:"
+        log_msg "--------------------------------------------------"
+        log_msg "$CC conftest.c $CFLAGS $2 $LDFLAGSCLI $LDFLAGS"
+        cat conftest.log >> config.log
+        log_msg "--------------------------------------------------"
+    fi
+    return $res
+}
+
+cpp_check() {
+    log_check "whether $3 is true"
+    rm -f conftest.c
+    [ -n "$1" ] && echo "#include <$1>" > conftest.c
+    echo -e "#if !($3) \n#error $4 \n#endif " >> conftest.c
+
+    if $CC conftest.c $CFLAGS $2 -E -o conftest >conftest.log 2>&1; then
+        res=$?
+        log_ok
+    else
+        res=$?
+        log_fail
+        log_msg "--------------------------------------------------"
+        cat conftest.log >> config.log
+        log_msg "--------------------------------------------------"
+    fi
+    return $res
+}
+
+as_check() {
+    log_check "whether $AS supports $1"
+    echo "$1" > conftest.asm
+    if $AS conftest.asm $ASFLAGS $2 -o conftest.o >conftest.log 2>&1; then
+        res=$?
+        log_ok
+    else
+        res=$?
+        log_fail
+        log_msg "Failed commandline was:"
+        log_msg "--------------------------------------------------"
+        log_msg "$AS conftest.asm $ASFLAGS $2 -o conftest.o"
+        cat conftest.log >> config.log
+        log_msg "--------------------------------------------------"
+    fi
+    return $res
+}
+
+define() {
+    echo "#define $1$([ -n "$2" ] && echo " $2" || echo " 1")" >> config.h
+}
+
+die() {
+    log_msg "DIED: $@"
+    echo "$@"
+    exit 1
+}
+
+rm -f config.h config.mak config.log
+
+prefix='/usr/local'
+exec_prefix='${prefix}'
+bindir='${exec_prefix}/bin'
+libdir='${exec_prefix}/lib'
+includedir='${prefix}/include'
+DEVNULL='/dev/null'
+
+pthread="auto"
+libaften="auto"
+libtwolame="auto"
+swscale="auto"
+lavf="auto"
+
+CFLAGS="$CFLAGS -Wall -I."
+LDFLAGS="$LDFLAGS"
+LDFLAGSCLI="$LDFLAGSCLI"
+ASFLAGS="$ASFLAGS"
+cross_prefix=""
+
+EXE=""
+
+# parse options
+
+for opt do
+    optarg="${opt#*=}"
+    case "$opt" in
+        --prefix=*)
+            prefix="$optarg"
+            ;;
+        --exec-prefix=*)
+            exec_prefix="$optarg"
+            ;;
+        --bindir=*)
+            bindir="$optarg"
+            ;;
+        --libdir=*)
+            libdir="$optarg"
+            ;;
+        --includedir=*)
+            includedir="$optarg"
+            ;;
+# stuff here
+        --disable-libaften)
+            libaften="no"
+            ;;
+        --disable-libtwolame)
+            libtwolame="no"
+            ;;
+        --disable-swscale)
+            swscale="no"
+            ;;
+        --disable-lavf)
+            lavf="no"
+            ;;
+        --extra-asflags=*)
+            ASFLAGS="$ASFLAGS ${opt#--extra-asflags=}"
+            ;;
+        --extra-cflags=*)
+            CFLAGS="$CFLAGS ${opt#--extra-cflags=}"
+            ;;
+        --extra-ldflags=*)
+            LDFLAGS="$LDFLAGS ${opt#--extra-ldflags=}"
+            ;;
+        --host=*)
+            host="${opt#--host=}"
+            ;;
+        --cross-prefix=*)
+            cross_prefix="${opt#--cross-prefix=}"
+            ;;
+        --sysroot=*)
+            CFLAGS="$CFLAGS --sysroot=${opt#--sysroot=}"
+            LDFLAGS="$LDFLAGS --sysroot=${opt#--sysroot=}"
+            ;;
+        *)
+            echo "Unknown option $opt, ignored"
+            ;;
+    esac
+done
+
+CC="${CC-${cross_prefix}gcc}"
+AR="${AR-${cross_prefix}ar}"
+RANLIB="${RANLIB-${cross_prefix}ranlib}"
+STRIP="${STRIP-${cross_prefix}strip}"
+
+if [ "x$host" = x ]; then
+    host=`./config.guess`
+fi
+# normalize a triplet into a quadruplet
+host=`./config.sub $host`
+
+# split $host
+host_cpu="${host%%-*}"
+host="${host#*-}"
+host_vendor="${host%%-*}"
+host_os="${host#*-}"
+
+case $host_os in
+  beos*)
+    SYS="BEOS"
+    define HAVE_MALLOC_H
+    ;;
+  darwin*)
+    SYS="MACOSX"
+    CFLAGS="$CFLAGS -falign-loops=16"
+    LDFLAGS="$LDFLAGS -lm"
+    if [ "$pic" = "no" ]; then
+        cc_check "" -mdynamic-no-pic && CFLAGS="$CFLAGS -mdynamic-no-pic"
+    fi
+    ;;
+  freebsd*)
+    SYS="FREEBSD"
+    LDFLAGS="$LDFLAGS -lm"
+    ;;
+  kfreebsd*-gnu)
+    SYS="FREEBSD"
+    define HAVE_MALLOC_H
+    LDFLAGS="$LDFLAGS -lm"
+    ;;
+  netbsd*)
+    SYS="NETBSD"
+    LDFLAGS="$LDFLAGS -lm"
+    ;;
+  openbsd*)
+    SYS="OPENBSD"
+    LDFLAGS="$LDFLAGS -lm"
+    ;;
+  *linux*)
+    SYS="LINUX"
+    define HAVE_MALLOC_H
+    LDFLAGS="$LDFLAGS -lm"
+    ;;
+  cygwin*)
+    SYS="MINGW"
+    EXE=".exe"
+    DEVNULL="NUL"
+    if cc_check "" -mno-cygwin; then
+        CFLAGS="$CFLAGS -mno-cygwin"
+        LDFLAGS="$LDFLAGS -mno-cygwin"
+    fi
+    ;;
+  mingw*)
+    SYS="MINGW"
+    EXE=".exe"
+    DEVNULL="NUL"
+    ;;
+  sunos*|solaris*)
+    SYS="SunOS"
+    define HAVE_MALLOC_H
+    LDFLAGS="$LDFLAGS -lm"
+    ;;
+  *)
+    die "Unknown system $host, edit the configure"
+    ;;
+esac
+
+case $host_cpu in
+  i*86)
+    ARCH="X86"
+    AS="yasm"
+    ASFLAGS="$ASFLAGS -O2"
+    if [[ "$asm" == auto && "$CFLAGS" != *-march* ]]; then
+      CFLAGS="$CFLAGS -march=i686"
+    fi
+    if [[ "$asm" == auto && "$CFLAGS" != *-mfpmath* ]]; then
+      CFLAGS="$CFLAGS -mfpmath=sse -msse"
+    fi
+    if [ "$SYS" = MACOSX ]; then
+      ASFLAGS="$ASFLAGS -f macho -DPREFIX"
+    elif [ "$SYS" = MINGW ]; then
+      ASFLAGS="$ASFLAGS -f win32 -DPREFIX"
+      LDFLAGS="$LDFLAGS -Wl,--large-address-aware"
+    else
+      ASFLAGS="$ASFLAGS -f elf"
+    fi
+    ;;
+  x86_64)
+    ARCH="X86_64"
+    AS="yasm"
+    if [ "$SYS" = MACOSX ];then
+      ASFLAGS="$ASFLAGS -f macho64 -m amd64 -DPIC -DPREFIX"
+      if cc_check '' "-arch x86_64"; then
+        CFLAGS="$CFLAGS -arch x86_64"
+        LDFLAGS="$LDFLAGS -arch x86_64"
+      fi
+    elif [ "$SYS" = MINGW ]; then
+      ASFLAGS="$ASFLAGS -f win32 -m amd64"
+      cc_check "" "-S" && grep -q "_main:" conftest && ASFLAGS="$ASFLAGS -DPREFIX"
+    else
+      ASFLAGS="$ASFLAGS -f elf -m amd64"
+    fi
+    ;;
+  powerpc|powerpc64)
+    ARCH="PPC"
+    if [ $asm = auto ] ; then
+      define HAVE_ALTIVEC
+      AS="${AS-${cross_prefix}gcc}"
+      if [ $SYS = MACOSX ] ; then
+        CFLAGS="$CFLAGS -faltivec -fastf -mcpu=G4"
+      else
+        CFLAGS="$CFLAGS -maltivec -mabi=altivec"
+        define HAVE_ALTIVEC_H
+      fi
+    fi
+    ;;
+  sparc)
+    if [ $asm = auto ] && test "$(uname -m)" = "sun4u"; then
+      ARCH="UltraSparc"
+      CFLAGS="$CFLAGS -mcpu=ultrasparc"
+      LDFLAGS="$LDFLAGS -mcpu=ultrasparc"
+      AS="${AS-${cross_prefix}as}"
+      ASFLAGS="$ASFLAGS -xarch=v8plusa"
+    else
+      ARCH="Sparc"
+    fi
+    ;;
+  mips|mipsel|mips64|mips64el)
+    ARCH="MIPS"
+    ;;
+  arm*)
+    ARCH="ARM"
+    if [ "$SYS" = MACOSX ] ; then
+      AS="${AS-extras/gas-preprocessor.pl $CC}"
+      ASFLAGS="$ASFLAGS -DPREFIX -DPIC"  # apple's ld doesn't support movw/movt relocations at all
+      # build for armv7 by default
+      if ! echo $CFLAGS | grep -Eq '\-arch' ; then
+        CFLAGS="$CFLAGS -arch armv7"
+        LDFLAGS="$LDFLAGS -arch armv7"
+      fi
+    else
+      AS="${AS-${cross_prefix}gcc}"
+    fi
+    ;;
+  s390|s390x)
+    ARCH="S390"
+    ;;
+  parisc|parisc64)
+    ARCH="PARISC"
+    ;;
+  ia64)
+    ARCH="IA64"
+    ;;
+  *)
+    ARCH="$(echo $host_cpu | tr a-z A-Z)"
+    ;;
+esac
+
+log_msg "x264 configure script"
+if [ -n "$*" ]; then
+    msg="Command line options:"
+    for i in $@; do
+        msg="$msg \"$i\""
+    done
+    log_msg "$msg"
+fi
+log_msg ""
+
+# check requirements
+
+cc_check || die "No working C compiler found."
+
+if cc_check '' -std=gnu99 ; then
+    CFLAGS="$CFLAGS -std=gnu99"
+elif cc_check '' -std=c99 ; then
+    CFLAGS="$CFLAGS -std=c99 -D_POSIX_C_SOURCE=200112L -D_BSD_SOURCE"
+fi
+
+define ARCH_$ARCH
+define SYS_$SYS
+
+# autodetect options that weren't forced nor disabled
+
+libpthread=""
+if test "$pthread" = "auto" ; then
+    pthread="no"
+    case $SYS in
+        BEOS)
+            pthread="yes"
+            ;;
+        MINGW)
+            if cc_check pthread.h -lpthread "pthread_create(0,0,0,0);" ; then
+                pthread="yes"
+                libpthread="-lpthread"
+            elif cc_check pthread.h -lpthreadGC2 "pthread_create(0,0,0,0);" ; then
+                pthread="yes"
+                libpthread="-lpthreadGC2"
+            elif cc_check pthread.h "-lpthreadGC2 -lwsock32 -DPTW32_STATIC_LIB" "pthread_create(0,0,0,0);" ; then
+                pthread="yes"
+                libpthread="-lpthreadGC2 -lwsock32"
+                define PTW32_STATIC_LIB
+            elif cc_check pthread.h "-lpthreadGC2 -lws2_32 -DPTW32_STATIC_LIB" "pthread_create(0,0,0,0);" ; then
+                pthread="yes"
+                libpthread="-lpthreadGC2 -lws2_32"
+                define PTW32_STATIC_LIB
+            fi
+            ;;
+        OPENBSD)
+            cc_check pthread.h -pthread && pthread="yes" && libpthread="-pthread"
+            ;;
+        *)
+            cc_check pthread.h -lpthread && pthread="yes" && libpthread="-lpthread"
+            ;;
+    esac
+fi
+if test "$pthread" = "yes" ; then
+    define HAVE_PTHREAD
+    LDFLAGS="$LDFLAGS $libpthread"
+fi
+
+if [ "$libaften" = "auto" ] ; then
+    libaften="no"
+    libaftenflags="-laften"
+    if cc_check "aften/aften.h" $libaftenflags "aften_encode_init(0);" ; then
+        libaften="yes"
+    fi
+fi
+
+if [ "$libaften" = "yes" ] ; then
+    define HAVE_LIBAFTEN
+    LDFLAGS="$LDFLAGS $libaftenflags" # fixme cflags too?
+fi
+
+if [ "$libtwolame" = "auto" ] ; then
+    libtwolame="no"
+    libtwolameflags="-ltwolame"
+    if cc_check "twolame.h" $libtwolameflags "twolame_init();" ; then
+        libtwolame="yes"
+    fi
+fi
+
+if [ "$libtwolame" = "yes" ] ; then
+    define HAVE_LIBTWOLAME
+    LDFLAGS="$LDFLAGS $libtwolameflags" # fixme cflags too?
+fi
+
+if [ "$swscale" = "auto" ] ; then
+    swscale="no"
+    if ${cross_prefix}pkg-config --exists libswscale 2>$DEVNULL; then
+        SWSCALE_LIBS="$SWSCALE_LIBS $(${cross_prefix}pkg-config --libs libswscale)"
+        SWSCALE_CFLAGS="$SWSCALE_CFLAGS $(${cross_prefix}pkg-config --cflags libswscale)"
+    fi
+    [ -z "$SWSCALE_LIBS" ] && SWSCALE_LIBS="-lswscale -lavutil"
+
+    error="swscale must be at least version 0.9.0"
+    if cc_check "libswscale/swscale.h" "$SWSCALE_CFLAGS $SWSCALE_LIBS" "sws_getContext(0,0,0,0,0,0,0,0,0,0);" ; then
+        if cpp_check "libswscale/swscale.h" "$SWSCALE_CFLAGS" "LIBSWSCALE_VERSION_INT >= AV_VERSION_INT(0,9,0)" "$error"; then
+            # we use colorspaces that were defined in libavutil r19775
+            if cc_check "libavutil/pixfmt.h" "$SWSCALE_CFLAGS" "enum PixelFormat pixfmt = PIX_FMT_YUV422P16LE;" ; then
+                define HAVE_SWSCALE
+                swscale="yes"
+            else
+                echo "Warning: libavutil is too old, update to ffmpeg r19775+"
+            fi
+        else
+            echo "Warning: ${error}"
+        fi
+    fi
+fi
+
+if [ "$lavf" = "auto" ] ; then
+    lavf="no"
+    if ${cross_prefix}pkg-config --exists libavformat libavcodec libswscale 2>$DEVNULL; then
+        LAVF_LIBS="$LAVF_LIBS $(${cross_prefix}pkg-config --libs libavformat libavcodec libavutil libswscale)"
+        LAVF_CFLAGS="$LAVF_CFLAGS $(${cross_prefix}pkg-config --cflags libavformat libavcodec libavutil libswscale)"
+    fi
+    if [ -z "$LAVF_LIBS" -a -z "$LAVF_CFLAGS" ]; then
+        LAVF_LIBS="-lavformat"
+        for lib in -lpostproc -lavcodec -lavcore -lswscale -lavutil -lm -lz -lbz2 $libpthread -lavifil32; do
+            cc_check "" $lib && LAVF_LIBS="$LAVF_LIBS $lib"
+        done
+    fi
+    LAVF_LIBS="-L. $LAVF_LIBS"
+    if cc_check libavformat/avformat.h "$LAVF_CFLAGS $LAVF_LIBS" "avcodec_decode_video2(0,0,0,0);" ; then
+        # libvautil/pixdesc.h included the private header intreadwrite.h until r21854
+        if cc_check libavutil/pixdesc.h "$LAVF_CFLAGS $LAVF_LIBS" ; then
+            if [ "$swscale" = "yes" ]; then
+                lavf="yes"
+                define HAVE_LAVF
+            else
+                echo "Warning: libavformat is not supported without swscale support"
+            fi
+        else
+            echo "Warning: libavutil is too old, update to ffmpeg r21854+"
+        fi
+    fi
+fi
+
+if [ "$lavf" = "yes" ]; then
+    LDFLAGSCLI="$LAVF_LIBS $LDFLAGSCLI"
+    CFLAGS="$CFLAGS $LAVF_CFLAGS"
+elif [ "$swscale" = "yes" ]; then
+    LDFLAGSCLI="$SWSCALE_LIBS $LDFLAGSCLI"
+    CFLAGS="$CFLAGS $SWSCALE_CFLAGS"
+fi
+
+if cc_check '' -fno-tree-vectorize ; then
+    CFLAGS="$CFLAGS -fno-tree-vectorize"
+fi
+
+if cc_check "stdio.h" "" "fseeko(stdin,0,0);" ; then
+    define fseek fseeko
+    define ftell ftello
+elif cc_check "stdio.h" "" "fseeko64(stdin,0,0);" ; then
+    define fseek fseeko64
+    define ftell ftello64
+fi
+
+if cc_check '' -Wshadow ; then
+    CFLAGS="-Wshadow $CFLAGS"
+fi
+
+# generate config files
+
+cat > config.mak << EOF
+prefix=$prefix
+exec_prefix=$exec_prefix
+bindir=$bindir
+libdir=$libdir
+includedir=$includedir
+ARCH=$ARCH
+SYS=$SYS
+CC=$CC
+CFLAGS=$CFLAGS
+LDFLAGS=$LDFLAGS
+LDFLAGSCLI=$LDFLAGSCLI
+AR=$AR
+RANLIB=$RANLIB
+STRIP=$STRIP
+AS=$AS
+ASFLAGS=$ASFLAGS
+EXE=$EXE
+EOF
+
+# FIXME
+#./version.sh >> config.h
+
+cat > conftest.log <<EOF
+Platform:   $ARCH
+System:     $SYS
+libaften:   $libaften
+libtwolame: $libtwolame
+swscale:    $swscale
+lavf:       $lavf
+EOF
+
+echo >> config.log
+cat conftest.log >> config.log
+cat conftest.log
+rm conftest.log
+
+echo
+echo "You can run 'make' now."
+
