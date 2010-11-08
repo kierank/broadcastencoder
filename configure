@@ -584,13 +584,41 @@ EOF
 #./version.sh >> config.h
 
 cat > conftest.log <<EOF
+
+MISC
+
+System Information
+
 Platform:   $ARCH
 System:     $SYS
+
+CODECS
+
+Audio/Video Decoding
+
+lavf:       $lavf
+
+Audio Encoders
+
 libaften:   $libaften
 libtwolame: $libtwolame
+
+Filters
+
 swscale:    $swscale
-lavf:       $lavf
+
+Frontends
+
 readline:   $readline
+
+Subtitles
+
+SMPTE 333:  no
+
+Monitoring
+
+net-snmp:   no
+
 EOF
 
 echo >> config.log
