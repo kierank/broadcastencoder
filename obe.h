@@ -70,12 +70,6 @@ enum misc_formats_e
     MISC_VANC,
 };
 
-enum description_source_e
-{
-    SOURCE_TRANSPORT,
-    SOURCE_CODEC,
-};
-
 /* Initialisation Function */
 obe_t obe_setup( void );
 
@@ -99,10 +93,8 @@ typedef struct
     int channel_map;
     int sample_rate;
 
-    int text_source_1;
-    char *description_text1;
-    int text_source_2;
-    char *description_text2;
+    char *transport_desc_text;
+    char *codec_desc_text;
 
     /* Raw Audio */
     int sample_format;
