@@ -448,19 +448,6 @@ if test "$pthread" = "yes" ; then
     LDFLAGS="$LDFLAGS $libpthread"
 fi
 
-if [ "$libaften" = "auto" ] ; then
-    libaften="no"
-    libaftenflags="-laften"
-    if cc_check "aften/aften.h" $libaftenflags "aften_encode_init(0);" ; then
-        libaften="yes"
-    fi
-fi
-
-if [ "$libaften" = "yes" ] ; then
-    define HAVE_LIBAFTEN
-    LDFLAGS="$LDFLAGS $libaftenflags" # fixme cflags too?
-fi
-
 if [ "$libtwolame" = "auto" ] ; then
     libtwolame="no"
     libtwolameflags="-ltwolame"
@@ -606,7 +593,6 @@ lavf:       $lavf
 
 Audio Encoders
 
-libaften:   $libaften
 libtwolame: $libtwolame
 
 Filters
