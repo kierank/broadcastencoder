@@ -65,7 +65,9 @@ cc_check() {
         log_check "for $3 in $1";
     fi
     rm -f conftest.c
-    [ -n "$1" ] && echo "#include <stdio.h>" > conftest.c && echo "#include <$1>" >> conftest.c
+    echo "#include <stdio.h>" > conftest.c
+    echo "#include <stdint.h>" >> conftest.c
+    [ -n "$1" ] && echo "#include <$1>" >> conftest.c
     echo "int main () { $3 return 0; }" >> conftest.c
     if $CC conftest.c $CFLAGS $2 $LDFLAGSCLI $LDFLAGS -o conftest >conftest.log 2>&1; then
         res=$?
@@ -85,7 +87,9 @@ cc_check() {
 cpp_check() {
     log_check "whether $3 is true"
     rm -f conftest.c
-    [ -n "$1" ] && echo "#include <$1>" > conftest.c
+    echo "#include <stdio.h>" > conftest.c
+    echo "#include <stdint.h>" >> conftest.c
+    [ -n "$1" ] && echo "#include <$1>" >> conftest.c
     echo -e "#if !($3) \n#error $4 \n#endif " >> conftest.c
 
     if $CC conftest.c $CFLAGS $2 -E -o conftest >conftest.log 2>&1; then
@@ -95,24 +99,6 @@ cpp_check() {
         res=$?
         log_fail
         log_msg "--------------------------------------------------"
-        cat conftest.log >> config.log
-        log_msg "--------------------------------------------------"
-    fi
-    return $res
-}
-
-as_check() {
-    log_check "whether $AS supports $1"
-    echo "$1" > conftest.asm
-    if $AS conftest.asm $ASFLAGS $2 -o conftest.o >conftest.log 2>&1; then
-        res=$?
-        log_ok
-    else
-        res=$?
-        log_fail
-        log_msg "Failed commandline was:"
-        log_msg "--------------------------------------------------"
-        log_msg "$AS conftest.asm $ASFLAGS $2 -o conftest.o"
         cat conftest.log >> config.log
         log_msg "--------------------------------------------------"
     fi
@@ -138,6 +124,7 @@ libdir='${exec_prefix}/lib'
 includedir='${prefix}/include'
 DEVNULL='/dev/null'
 
+libx264="auto"
 pthread="auto"
 libaften="auto"
 libtwolame="auto"
@@ -381,7 +368,7 @@ case $host_cpu in
     ;;
 esac
 
-log_msg "x264 configure script"
+log_msg "OBE configure script"
 if [ -n "$*" ]; then
     msg="Command line options:"
     for i in $@; do
@@ -405,6 +392,24 @@ define ARCH_$ARCH
 define SYS_$SYS
 
 # autodetect options that weren't forced nor disabled
+
+if [ "$libx264" = "auto" ] ; then
+    libx264="no"
+    libx264flags="-lx264"
+    if cc_check "x264.h" $libx264flags "x264_encoder_close(0);" ; then
+        if cpp_check x264.h $libx264flags "X264_BUILD >= 99" ; then
+            libx264="yes"
+            define HAVE_LIBX264
+            LDFLAGS="$LDFLAGS $libx264flags"
+        else
+            die "libx264 is too old"
+        fi
+    fi
+fi
+
+if [ "$libx264" = "no" ] ; then
+    die "libx264 is a mandatory component"
+fi
 
 libpthread=""
 if test "$pthread" = "auto" ; then
@@ -534,12 +539,13 @@ if [ "$readline" = "auto" ] ; then
     readlineflags="-lreadline"
     if cc_check "readline/readline.h" $readlineflags "rl_initialize();" ; then
         readline="yes"
+        define HAVE_READLINE
+        LDFLAGS="$LDFLAGS $readlineflags"
     fi
 fi
 
-if [ "$readline" = "yes" ] ; then
-    define HAVE_READLINE
-    LDFLAGS="$LDFLAGS $readlineflags"
+if [ "$readline" = "no" ] ; then
+    die "readline is a mandatory component"
 fi
 
 if cc_check '' -fno-tree-vectorize ; then
@@ -585,14 +591,14 @@ EOF
 
 cat > conftest.log <<EOF
 
-MISC
-
 System Information
 
 Platform:   $ARCH
 System:     $SYS
 
-CODECS
+Input
+
+Codecs
 
 Audio/Video Decoding
 
@@ -610,10 +616,6 @@ swscale:    $swscale
 Frontends
 
 readline:   $readline
-
-Subtitles
-
-SMPTE 333:  no
 
 Monitoring
 
