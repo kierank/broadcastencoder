@@ -28,7 +28,54 @@
 #include <signal.h>
 #define _GNU_SOURCE
 
+#include <readline/readline.h>
+#include <readline/history.h>
+
+#include "obe.h"
+
+static char *line_read = NULL;
+
+static void show_bitdepth( void )
+{
+    printf("AVC output bit depth: %i bits per sample\n", x264_bit_depth );
+}
+
+static void show_help( int longhelp )
+{
+#define H0 printf
+#define H1 if(longhelp>=1) printf
+#define H2 if(longhelp==2) printf
+    H0( "OBE\n" );
+
+}
+
 int main( int argc, char **argv )
 {
+    printf("\nOpen Broadcast Encoder command line interface.\n");
+    show_bitdepth();
+    printf("\n");
 
+    while( 1 )
+    {
+        if(line_read)
+        {
+          free (line_read);
+          line_read = NULL;
+        }
+
+        line_read = readline ("obecli> ");
+
+        if( line_read && *line_read )
+	{
+            if( 0 )
+            {
+            }
+            else
+                printf( "%s: command not found \n", line_read );
+
+            add_history( line_read );
+        }
+    }
+
+    return 0;
 }

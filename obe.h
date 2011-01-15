@@ -24,6 +24,8 @@
 #ifndef OBE_H
 #define OBE_H
 
+#include <stdint.h>
+#include <x264.h>
 #include <libavcore/avcore.h>
 
 #define OBE_VERSION_MAJOR 0
@@ -35,10 +37,28 @@ typedef struct obe_t obe_t;
 enum input_type_e
 {
     INPUT_URL,
-    INPUT_DEVICE_HD_SDI,
+    INPUT_DEVICE_SDI,
+    INPUT_DEVICE_ASI,
 };
 
-/* Stream Formats */
+/**** Initialisation Function ****/
+obe_t *obe_setup( void );
+
+typedef struct
+{
+    int input_type;
+    char *location;
+} obe_input_t;
+
+/**** Stream Formats ****/
+enum stream_type_e
+{
+    STREAM_TYPE_VIDEO,
+    STREAM_TYPE_AUDIO,
+    STREAM_TYPE_SUBTITLES,
+    STREAM_TYPE_MISC,
+};
+
 enum video_formats_e
 {
     VIDEO_AVC,
@@ -56,7 +76,7 @@ enum audio_formats_e
     AUDIO_SMPTE_302M,
 };
 
-enum subtitle_formats_e_
+enum subtitle_formats_e
 {
     SUBTITLES_DVB,
     SUBTITLES_EIA_608,
@@ -67,27 +87,19 @@ enum misc_formats_e
 {
     MISC_AFD,     /* Active Format Description */
     MISC_TELETEXT,
-    MISC_VANC,
+    MISC_VANC,    /* Vertical Ancillary */
 };
-
-/* Initialisation Function */
-obe_t obe_setup( void );
-
-typedef struct
-{
-    int input_type;
-    char *location;
-} obe_input_t;
-
-int obe_probe_device( obe_input_t *input_device, obe_stream_t *streams, int *num_streams );
 
 typedef struct
 {
     int stream_id;
+    int stream_type;
     int stream_format;
 
     /** Video **/
     int bit_depth;
+    int width;
+    int height;
 
     /** Audio **/
     int channel_map;
@@ -100,22 +112,24 @@ typedef struct
     int sample_format;
 
     /* Compressed Audio */
-    int bitrate;
+     int bitrate;
 
-} obe_stream_t;
+    /** Subtitles **/
+} obe_input_stream_t;
 
+int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_stream_t *streams, int *num_streams );
 
-/**** DVB ****/
+enum stream_action_e
+{
+    STREAM_PASSTHROUGH,
+    STREAM_ENCODE,
+};
 
-
-/**** ATSC ****/
-
-
-
-
+/**** AVC Encoding ****/
+int obe_setup_avc_encoding( obe_t *h, x264_param_t *param );
 
 /**** 3DTV ****/
-/* Arrangements - Frame Packing  */
+/* Arrangements - Frame Packing */
 enum frame_packing_arrangement_e
 {
     FRAME_PACKING_CHECKERBOARD,
@@ -126,6 +140,23 @@ enum frame_packing_arrangement_e
     FRAME_PACKING_TEMPORAL,
 };
 
-int obe_setup_3dtv( void );
+/**** MPEG-1 Layer II Encoding ****/
+
+/**** AC-3 Encoding ****/
+
+/**** AAC Encoding ****/
+
+/**** Transport Stream ****/
+
+/** DVB **/
+
+/** ATSC **/
+
+
+
+int obe_start( obe_t *h );
+int obe_stop( obe_t *h );
+
+
 
 #endif
