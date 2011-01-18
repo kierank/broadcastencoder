@@ -7,6 +7,7 @@ echo ""
 echo "available options:"
 echo ""
 echo "  --help                   print this message"
+echo "  --enable-debug           adds -g, doesn't strip"
 echo "  --extra-asflags=EASFLAGS add EASFLAGS to ASFLAGS"
 echo "  --extra-cflags=ECFLAGS   add ECFLAGS to CFLAGS"
 echo "  --extra-ldflags=ELDFLAGS add ELDFLAGS to LDFLAGS"
@@ -124,6 +125,7 @@ libdir='${exec_prefix}/lib'
 includedir='${prefix}/include'
 DEVNULL='/dev/null'
 
+debug="no"
 libx264="auto"
 pthread="auto"
 libaften="auto"
@@ -160,6 +162,7 @@ for opt do
         --includedir=*)
             includedir="$optarg"
             ;;
+
 # stuff here
         --disable-libaften)
             libaften="no"
@@ -184,6 +187,9 @@ for opt do
             ;;
         --extra-ldflags=*)
             LDFLAGS="$LDFLAGS ${opt#--extra-ldflags=}"
+            ;;
+        --enable-debug)
+            debug="yes"
             ;;
         --host=*)
             host="${opt#--host=}"
@@ -535,8 +541,28 @@ if [ "$readline" = "no" ] ; then
     die "readline is a mandatory component"
 fi
 
+if [ "$debug" != "yes" ]; then
+    CFLAGS="$CFLAGS -s -fomit-frame-pointer"
+    LDFLAGS="$LDFLAGS -s"
+fi
+
+if [ "$debug" = "yes" ]; then
+    CFLAGS="-O1 -g $CFLAGS"
+elif [ $ARCH = ARM ]; then
+    # arm-gcc-4.2 produces incorrect output with -ffast-math
+    # and it doesn't save any speed anyway on 4.4, so disable it
+    CFLAGS="-O3 -fno-fast-math $CFLAGS"
+else
+    CFLAGS="-O3 -ffast-math $CFLAGS"
+fi
+
 if cc_check '' -fno-tree-vectorize ; then
     CFLAGS="$CFLAGS -fno-tree-vectorize"
+fi
+
+if [ $SYS = MINGW -a $ARCH = X86 ] ; then
+    # workaround gcc/ld bug with alignment of static variables/arrays that are initialized to zero
+    cc_check '' -fno-zero-initialized-in-bss && CFLAGS="$CFLAGS -fno-zero-initialized-in-bss"
 fi
 
 if cc_check "stdio.h" "" "fseeko(stdin,0,0);" ; then
