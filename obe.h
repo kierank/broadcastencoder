@@ -48,6 +48,10 @@ typedef struct
 {
     int input_type;
     char *location;
+
+    char *name;
+    char *provider_name;
+
 } obe_input_t;
 
 /**** Stream Formats ****/
@@ -96,6 +100,11 @@ typedef struct
     int stream_type;
     int stream_format;
 
+    char lang_code[4];
+
+    char *transport_desc_text;
+    char *codec_desc_text;
+
     /** Video **/
     int bit_depth;
     int width;
@@ -105,14 +114,11 @@ typedef struct
     int channel_map;
     int sample_rate;
 
-    char *transport_desc_text;
-    char *codec_desc_text;
-
     /* Raw Audio */
     int sample_format;
 
     /* Compressed Audio */
-     int bitrate;
+    int bitrate;
 
     /** Subtitles **/
 } obe_input_stream_t;
@@ -126,6 +132,8 @@ enum stream_action_e
 };
 
 /**** AVC Encoding ****/
+int obe_populate_encoder_params( obe_t *h, int input_stream_id, x264_param_t *param ); 
+
 int obe_setup_avc_encoding( obe_t *h, x264_param_t *param );
 
 /**** 3DTV ****/
@@ -157,6 +165,6 @@ enum frame_packing_arrangement_e
 int obe_start( obe_t *h );
 int obe_stop( obe_t *h );
 
-
+void obe_close( obe_t *h );
 
 #endif
