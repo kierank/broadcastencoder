@@ -37,7 +37,7 @@ typedef struct obe_t obe_t;
 enum input_type_e
 {
     INPUT_URL,
-    INPUT_DEVICE_SDI,
+    INPUT_DEVICE_SDI_V4L2,
     INPUT_DEVICE_ASI,
 };
 
@@ -48,10 +48,6 @@ typedef struct
 {
     int input_type;
     char *location;
-
-    char *name;
-    char *provider_name;
-
 } obe_input_t;
 
 /**** Stream Formats ****/
@@ -59,39 +55,29 @@ enum stream_type_e
 {
     STREAM_TYPE_VIDEO,
     STREAM_TYPE_AUDIO,
-    STREAM_TYPE_SUBTITLES,
+    STREAM_TYPE_SUBTITLE,
     STREAM_TYPE_MISC,
 };
 
-enum video_formats_e
+enum stream_formats_e
 {
+    VIDEO_UNCOMPRESSED,
     VIDEO_AVC,
     VIDEO_MPEG2,
-};
 
-enum audio_formats_e
-{
     AUDIO_PCM,
     AUDIO_MP2,    /* MPEG-1 Layer II */
     AUDIO_AC_3,   /* ATSC A/52B / AC-3 */
     AUDIO_E_AC_3, /* ATSC A/52B Annex E / Enhanced AC-3 */
     AUDIO_E_DIST, /* E Distribution Audio */
     AUDIO_AAC,
-    AUDIO_SMPTE_302M,
-};
 
-enum subtitle_formats_e
-{
     SUBTITLES_DVB,
     SUBTITLES_EIA_608,
     SUBTITLES_CEA_708,
-};
 
-enum misc_formats_e
-{
-    MISC_AFD,     /* Active Format Description */
     MISC_TELETEXT,
-    MISC_VANC,    /* Vertical Ancillary */
+    MISC_VANC    /* Vertical Ancillary */
 };
 
 typedef struct
@@ -106,12 +92,16 @@ typedef struct
     char *codec_desc_text;
 
     /** Video **/
-    int bit_depth;
     int width;
     int height;
+    int csp;
+    int interlaced;
+
+    int subtitles_type;
+    int has_afd;
 
     /** Audio **/
-    int channel_map;
+    int64_t channel_layout;
     int sample_rate;
 
     /* Raw Audio */
@@ -121,18 +111,35 @@ typedef struct
     int bitrate;
 
     /** Subtitles **/
-} obe_input_stream_t;
+    /* Has display definition segment (i.e HD subtitling) */
+    int dvb_has_dds;
+}obe_input_stream_t;
 
-int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_stream_t *streams, int *num_streams );
+typedef struct
+{
+    char *name;
+    char *provider_name;
+
+    int num_streams;
+    obe_input_stream_t *streams;
+}obe_input_program_t;
+
+/* Only one program is returned */
+int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *program );
 
 enum stream_action_e
 {
     STREAM_PASSTHROUGH,
     STREAM_ENCODE,
+    STREAM_LATM_TO_ADTS,
 };
 
 /**** AVC Encoding ****/
-int obe_populate_encoder_params( obe_t *h, int input_stream_id, x264_param_t *param ); 
+/* Use this function to let OBE guess the encoding profile.
+ * You can use the functions in the x264 API for tweaking or edit directly.
+ * Be aware that some parameters will affect speed of encoding and hardware support
+ */
+int obe_populate_encoder_params( obe_t *h, int input_stream_id, x264_param_t *param );
 
 int obe_setup_avc_encoding( obe_t *h, x264_param_t *param );
 
@@ -153,6 +160,15 @@ enum frame_packing_arrangement_e
 /**** AC-3 Encoding ****/
 
 /**** AAC Encoding ****/
+
+typedef struct
+{
+    int he_aac;
+    int bitrate;
+    int capped_vbr;
+
+    int latm_output;
+} obe_aac_opts_t;
 
 /**** Transport Stream ****/
 
