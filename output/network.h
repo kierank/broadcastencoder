@@ -1,10 +1,11 @@
 /*****************************************************************************
  * network.h : Networking headers
  *****************************************************************************
- * Copyright (C) 2010 Open Broadcast Systems Ltd.
+ * Copyright (C) 2010 FFmpeg
  *
  * Authors: Kieran Kunhya <kieran@kunhya.com>
  *
+ * This code originates from FFmpeg.
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -40,7 +41,7 @@
 #define IN6_IS_ADDR_MULTICAST(a) (((uint8_t *) (a))[0] == 0xff)
 #endif
 
-static inline int is_multicast_address(struct sockaddr *addr)
+static inline int is_multicast_address( struct sockaddr *addr )
 {
     if( addr->sa_family == AF_INET )
     {
