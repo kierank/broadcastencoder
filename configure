@@ -127,6 +127,7 @@ DEVNULL='/dev/null'
 
 debug="no"
 libx264="auto"
+lmpegts="auto"
 pthread="auto"
 libaften="auto"
 libtwolame="auto"
@@ -164,6 +165,9 @@ for opt do
             ;;
 
 # stuff here
+        --disable-libmpegts)
+            lmpegts="no"
+            ;;
         --disable-libaften)
             libaften="no"
             ;;
@@ -399,23 +403,7 @@ define SYS_$SYS
 
 # autodetect options that weren't forced nor disabled
 
-if [ "$libx264" = "auto" ] ; then
-    libx264="no"
-    libx264flags="-lx264"
-    if cc_check "x264.h" $libx264flags "x264_encoder_close(0);" ; then
-        if cpp_check x264.h $libx264flags "X264_BUILD >= 99" ; then
-            libx264="yes"
-            define HAVE_LIBX264
-            LDFLAGS="$LDFLAGS $libx264flags"
-        else
-            die "libx264 is too old"
-        fi
-    fi
-fi
-
-if [ "$libx264" = "no" ] ; then
-    die "libx264 is a mandatory component"
-fi
+# TODO make pthread mandatory
 
 libpthread=""
 if test "$pthread" = "auto" ; then
@@ -452,6 +440,24 @@ fi
 if test "$pthread" = "yes" ; then
     define HAVE_PTHREAD
     LDFLAGS="$LDFLAGS $libpthread"
+fi
+
+if [ "$libx264" = "auto" ] ; then
+    libx264="no"
+    libx264flags="-lx264"
+    if cc_check "x264.h" "$libpthread $libx264flags" "x264_encoder_close(0);" ; then
+        if cpp_check x264.h "$libpthread $libx264flags" "X264_BUILD >= 99" ; then
+            libx264="yes"
+            define HAVE_LIBX264
+            LDFLAGS="$LDFLAGS $libx264flags"
+        else
+            die "libx264 is too old"
+        fi
+    fi
+fi
+
+if [ "$libx264" = "no" ] ; then
+    die "libx264 is a mandatory component"
 fi
 
 if [ "$libtwolame" = "auto" ] ; then
@@ -541,6 +547,19 @@ if [ "$readline" = "no" ] ; then
     die "readline is a mandatory component"
 fi
 
+LMPEGTS_LIBS="-lmpegts"
+if [ "$lmpegts" = "auto" ] ; then
+    lmpegts="no"
+    if cc_check libmpegts.h "$LMPEGTS_LIBS" ; then
+        lmpegts="yes"
+    fi
+fi
+
+if [ "$lmpegts" = "yes" ] ; then
+    define HAVE_LIBMPEGTS
+    LDFLAGSCLI="$LMPEGTS_LIBS $LDFLAGSCLI"
+fi
+
 if [ "$debug" != "yes" ]; then
     CFLAGS="$CFLAGS -s -fomit-frame-pointer"
     LDFLAGS="$LDFLAGS -s"
@@ -611,19 +630,21 @@ System:     $SYS
 
 Input
 
-Codecs
-
 Audio/Video Decoding
 
 lavf:       $lavf
+
+Filters
+
+swscale:    $swscale
 
 Audio Encoders
 
 libtwolame: $libtwolame
 
-Filters
+Mux
 
-swscale:    $swscale
+libmpegts:  $lmpegts
 
 Frontends
 
