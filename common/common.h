@@ -33,6 +33,7 @@
 #include <unistd.h>
 #include <stddef.h>
 #include <errno.h>
+#include <syslog.h>
 #include "obe.h"
 
 #define MAX_DEVICES 1
@@ -56,11 +57,20 @@ typedef struct
     char *transport_desc_text;
     char *codec_desc_text;
 
+    /* Timebase of transport */
+    int transport_timebase_num;
+    int transport_timebase_den;
+
+    /* Timebase of codec */
     int timebase_num;
     int timebase_den;
 
+    /* MPEG-TS */
+    int pid;
+    int ts_stream_id;
     int has_stream_identifier;
     int stream_identifier;
+    int audio_type;
 
     /** Video **/
     int csp;
@@ -104,6 +114,12 @@ typedef struct
     int device_id;
     int device_type;
     char *location;
+
+    /* MPEG-TS */
+    int program_num;
+    int ts_id;
+    int pmt_pid;
+    int pcr_pid;
 
     pthread_mutex_t device_mutex;
     pthread_t device_thread;
@@ -152,6 +168,7 @@ typedef struct
     /* Non-video */
     int len;
     uint8_t *data;
+    uint8_t *cur_pos;
 
     int valid_timecode;
     // timecode TODO
@@ -172,7 +189,7 @@ typedef struct
     pthread_mutex_t encoder_mutex;
     pthread_cond_t  encoder_cv;
 
-    hnd_t encoder_opts;
+    hnd_t encoder_params;
 
     int num_raw_frames;
     obe_raw_frame_t **frames;
@@ -188,6 +205,8 @@ typedef struct
     /* Video Only */
     int64_t real_pts;
     int64_t real_dts;
+    int random_access;
+    int priority;
 
     int len;
     uint8_t *data;
@@ -195,8 +214,9 @@ typedef struct
 
 typedef struct
 {
-    int len;
+    int bytes_left;
     uint8_t *data;
+    uint8_t *cur_pos;
 } obe_muxed_data_t;
 
 struct obe_t
@@ -246,7 +266,8 @@ obe_device_t *new_device( void );
 void destroy_device( obe_device_t *device );
 obe_raw_frame_t *new_raw_frame( void );
 void destroy_raw_frame( obe_raw_frame_t *raw_frame );
-obe_coded_frame_t *new_coded_frame( int len );
+int remove_early_frames( obe_t *h, int64_t pts );
+obe_coded_frame_t *new_coded_frame( int stream_id, int len );
 void destroy_coded_frame( obe_coded_frame_t *coded_frame );
 
 int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame );
