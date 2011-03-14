@@ -23,6 +23,8 @@
 
 #include "output/network.h"
 
+#define TS_PACKET_SIZE 1316
+
 int udp_open( hnd_t *p_handle, char *url );
 int udp_write( hnd_t p_handle, uint8_t *buf, int size );
-int udp_close( hnd_t p_handle );
+void udp_close( hnd_t handle );

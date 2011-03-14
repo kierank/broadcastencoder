@@ -22,6 +22,8 @@
  *
  *****************************************************************************/
 
+#include "common/common.h"
+#include "output/output.h"
 #include "udp.h"
 
 typedef struct
@@ -38,6 +40,12 @@ typedef struct
     int max_packet_size;
 } obe_udp_ctx;
 
+struct udp_status
+{
+    obe_output_params_t *output_params;
+    hnd_t *udp_handle;
+};
+
 static int udp_set_multicast_ttl( int sockfd, int mcast_ttl, struct sockaddr *addr )
 {
 #ifdef IP_MULTICAST_TTL
@@ -45,7 +53,7 @@ static int udp_set_multicast_ttl( int sockfd, int mcast_ttl, struct sockaddr *ad
     {
         if( setsockopt( sockfd, IPPROTO_IP, IP_MULTICAST_TTL, &mcast_ttl, sizeof(mcast_ttl) ) < 0 )
         {
-            // TODO ERROR
+            fprintf( stderr, "[udp] Could not setup IPv4 multicast" );
             return -1;
         }
     }
@@ -55,7 +63,7 @@ static int udp_set_multicast_ttl( int sockfd, int mcast_ttl, struct sockaddr *ad
     {
         if( setsockopt( sockfd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &mcast_ttl, sizeof(mcast_ttl) ) < 0 )
         {
-            // TODO ERROR
+            fprintf( stderr, "[udp] Could not setup IPv6 multicast" );
             return -1;
         }
     }
@@ -85,7 +93,7 @@ static struct addrinfo* udp_resolve_host( const char *hostname, int port, int ty
     if( (error = getaddrinfo( node, service, &hints, &res )) )
     {
         res = NULL;
-        // TODO ERROR
+        fprintf( stderr, "[udp] error: %s \n", gai_strerror( error ) );
     }
 
     return res;
@@ -149,7 +157,7 @@ static int udp_port( struct sockaddr_storage *addr, int addr_len )
 
     if( getnameinfo( (struct sockaddr *)addr, addr_len, NULL, 0, sbuf, sizeof(sbuf), NI_NUMERICSERV ) != 0 )
     {
-        // TODO error
+        fprintf( stderr, "[udp]: getnameinfo failed \n" );
         return -1;
     }
 
@@ -194,10 +202,10 @@ static int udp_set_remote_url( obe_udp_ctx *s, const char *uri )
             s->is_connected = strtol(buf, NULL, 10);
             if( s->is_connected && !was_connected )
             {
-                if( connect(s->udp_fd, (struct sockaddr *) &s->dest_addr, s->dest_addr_len) )
+                if( connect( s->udp_fd, (struct sockaddr *) &s->dest_addr, s->dest_addr_len ) )
                 {
                     s->is_connected = 0;
-                    // TODO error
+                    fprintf( stderr, "[udp]: connect() failed: \n" ); 
                     return -1;
                 }
             }
@@ -238,16 +246,16 @@ int udp_open( hnd_t *p_handle, char *uri )
             s->ttl = strtol( buf, NULL, 10 );
 
         if( av_find_info_tag( buf, sizeof(buf), "localport", p ) )
-            s->local_port = strtol(buf, NULL, 10);
+            s->local_port = strtol( buf, NULL, 10 );
 
         if( av_find_info_tag( buf, sizeof(buf), "pkt_size", p ) )
-            s->max_packet_size = strtol(buf, NULL, 10);
+            s->max_packet_size = strtol( buf, NULL, 10 );
 
         if( av_find_info_tag( buf, sizeof(buf), "buffer_size", p ) )
-            s->buffer_size = strtol(buf, NULL, 10);
+            s->buffer_size = strtol( buf, NULL, 10 );
 
         if( av_find_info_tag( buf, sizeof(buf), "connect", p ) )
-            s->is_connected = strtol(buf, NULL, 10);
+            s->is_connected = strtol( buf, NULL, 10 );
     }
 
     /* fill the dest addr */
@@ -272,7 +280,7 @@ int udp_open( hnd_t *p_handle, char *uri )
 
     /* bind to the local address if not multicast or if the multicast
      * bind failed */
-    if( bind_ret < 0 && bind( udp_fd,(struct sockaddr *)&my_addr, len ) < 0 )
+    if( bind_ret < 0 && bind( udp_fd, (struct sockaddr *)&my_addr, len ) < 0 )
         goto fail;
 
     len = sizeof(my_addr);
@@ -286,19 +294,10 @@ int udp_open( hnd_t *p_handle, char *uri )
     /* limit the tx buf size to limit latency */
     tmp = s->buffer_size;
     if( setsockopt( udp_fd, SOL_SOCKET, SO_SNDBUF, &tmp, sizeof(tmp) ) < 0 )
-    {
-        // TODO error
         goto fail;
-    }
 
-    if( s->is_connected )
-    {
-        if( connect( udp_fd, (struct sockaddr *) &s->dest_addr, s->dest_addr_len ) )
-        {
-            // TODO error
-            goto fail;
-        }
-    }
+    if( s->is_connected && connect( udp_fd, (struct sockaddr *)&s->dest_addr, s->dest_addr_len ) )
+        goto fail;
 
     s->udp_fd = udp_fd;
     *p_handle = s;
@@ -314,22 +313,71 @@ int udp_open( hnd_t *p_handle, char *uri )
 int udp_write( hnd_t handle, uint8_t *buf, int size )
 {
     obe_udp_ctx *s = handle;
+    int ret;
 
+    if( !s->is_connected )
+        ret = sendto( s->udp_fd, buf, size, 0, (struct sockaddr *)&s->dest_addr, s->dest_addr_len );
+    else
+        ret = send( s->udp_fd, buf, size, 0 );
 
-    return 0;
+    if( ret < 0 )
+    {
+        // TODO syslog
+        return -1;
+    }
+
+    return size;
 }
 
-int udp_close( hnd_t handle )
+void udp_close( hnd_t handle )
 {
     obe_udp_ctx *s = handle;
 
     close( s->udp_fd );
     free( s );
-    return 0;
 }
 
-static int udp_start( void )
+static void close_output( void *handle )
 {
+    struct udp_status *status = handle;
 
-    return 0;
+    if( *status->udp_handle )
+        udp_close( *status->udp_handle );
+    free( status->output_params );
 }
+
+void *open_output( void *ptr )
+{
+    obe_output_params_t *output_params = ptr;
+    obe_t *h = output_params->h;
+    char *location = output_params->location;
+    struct udp_status status;
+    hnd_t udp_handle = NULL;
+    int num_muxed_data = 0;
+
+    status.output_params = output_params;
+    status.udp_handle = &udp_handle;
+
+    pthread_cleanup_push( close_output, (void*)&status );
+
+    if( udp_open( &udp_handle, location ) < 0 )
+    {
+        fprintf( stderr, "[udp] Could not create output" );
+        return NULL;
+    }
+
+    while( 1 )
+    {
+        pthread_mutex_lock( &h->output_mutex );
+        if( h->num_muxed_data == num_muxed_data )
+            pthread_cond_wait( &h->output_cv, &h->output_mutex );
+
+        pthread_mutex_unlock( &h->output_mutex );
+    }
+
+    pthread_cleanup_pop( 1 );
+
+    return NULL;
+}
+
+const obe_output_func_t udp_output = { open_output };
