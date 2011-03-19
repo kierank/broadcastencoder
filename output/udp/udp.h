@@ -21,10 +21,15 @@
  *
  *****************************************************************************/
 
+#ifndef OBE_OUTPUT_UDP_H
+#define OBE_OUTPUT_UDP_H
+
 #include "output/network.h"
 
-#define TS_PACKET_SIZE 1316
+#define TS_PACKETS_SIZE 1316
 
 int udp_open( hnd_t *p_handle, char *url );
 int udp_write( hnd_t p_handle, uint8_t *buf, int size );
 void udp_close( hnd_t handle );
+
+#endif /* OBE_OUTPUT_UDP_H */
