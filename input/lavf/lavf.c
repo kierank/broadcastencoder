@@ -178,6 +178,7 @@ void *probe_stream( void *ptr )
 
     av_register_all();
     av_log_set_level( AV_LOG_QUIET );
+    avcodec_init();
 
     pthread_cleanup_push( close_input, (void*)&status );
 
@@ -273,7 +274,7 @@ void *probe_stream( void *ptr )
                     else if( codec->codec_id == CODEC_ID_EAC3 )
                         streams[num_streams]->stream_format = AUDIO_E_AC_3;
 #endif
-                    else if( codec->codec_id == CODEC_ID_MP2 )
+                    else if( codec->codec_id == CODEC_ID_MP3 )
                         streams[num_streams]->stream_format = AUDIO_MP2;
                     else if( codec->codec_id == CODEC_ID_AAC || codec->codec_id == CODEC_ID_AAC_LATM )
                     {
@@ -288,7 +289,6 @@ void *probe_stream( void *ptr )
                 {
                     streams[num_streams]->stream_type = STREAM_TYPE_SUBTITLE;
                     streams[num_streams]->stream_format = SUBTITLES_DVB;
-                    /* FIXME: What happens if there is no descriptor? */
                     /* The descriptor sometimes doesn't signal DDS so we need to probe it later */
                     streams[num_streams]->dvb_subtitling_type = codec->dvb_subtitling_type;
                     streams[num_streams]->composition_page_id = (codec->extradata[0] << 8) | codec->extradata[1];
@@ -432,7 +432,6 @@ fail:
     return NULL;
 }
 
-// TODO setup thread cancellation
 void *open_input( void *ptr )
 {
     obe_input_params_t *input = ptr;
@@ -443,6 +442,7 @@ void *open_input( void *ptr )
     obe_coded_frame_t *coded_frame;
     obe_raw_frame_t *raw_frame;
     obe_encoder_t *encoder;
+    struct lavf_status status = {0};
 
     int width;
     int height;
@@ -457,11 +457,17 @@ void *open_input( void *ptr )
     av_register_all();
     av_log_set_level( AV_LOG_QUIET );
 
+    status.lavf = &lavf;
+
+    pthread_cleanup_push( close_input, (void*)&status );
+
     if( av_open_input_file( &lavf, device->location, NULL, 0, NULL ) < 0 )
         return (void*)-1;
 
     if( av_find_stream_info( lavf ) < 0 )
         return (void*)-1;
+
+    status.status = 1;
 
     stream_lut = calloc( 1, (input->num_output_streams+1) * sizeof(lavf_stream_lut) );
     if( !stream_lut )
@@ -543,7 +549,7 @@ void *open_input( void *ptr )
                 /* FFmpeg removes the DVB subtitle header */
                 if( codec->codec_id == CODEC_ID_DVB_SUBTITLE )
                 {
-                    coded_frame = new_coded_frame( out_lut->stream_id, pkt.size + 3 );
+                    coded_frame = new_coded_frame( out_lut->stream_id, pkt.size+3 );
                     coded_frame->data[0] = 0x20;
                     coded_frame->data[1] = 0x00;
                     memcpy( coded_frame->data+2, pkt.data, pkt.size );
@@ -552,7 +558,12 @@ void *open_input( void *ptr )
                 else
                 {
                     coded_frame = new_coded_frame( out_lut->stream_id, pkt.size );
-                    // TODO fail
+                    if( !coded_frame )
+                    {
+                        syslog( LOG_ERR, "Malloc failed\n" );
+                        obe_free_packet( &pkt );
+                        break;
+                    }
                     memcpy( coded_frame->data, pkt.data, pkt.size );
                 }
                 coded_frame->stream_id = out_lut->stream_id;
@@ -570,6 +581,12 @@ void *open_input( void *ptr )
                     if( finished )
                     {
                         raw_frame = new_raw_frame();
+                        if( !raw_frame )
+                        {
+                            syslog( LOG_ERR, "Malloc failed\n" );
+                            obe_free_packet( &pkt );
+                            break;
+                        }
                         raw_frame->stream_id = out_lut->stream_id;
 
                         /* XXX: full_range_flag is almost always wrong so ignore it for now */
@@ -580,8 +597,12 @@ void *open_input( void *ptr )
 
                         /* FIXME: get rid of this ugly memcpy */
                         avcodec_align_dimensions2( codec, &width, &height, stride );
-                        av_image_alloc( raw_frame->img.plane, raw_frame->img.stride, width, height, codec->pix_fmt, 16 );
-                        // TODO fail
+                        if( av_image_alloc( raw_frame->img.plane, raw_frame->img.stride, width, height, codec->pix_fmt, 16 ) < 0 )
+                        {
+                            syslog( LOG_ERR, "Malloc failed\n" );
+                            obe_free_packet( &pkt );
+                            break;
+                        }
                         av_image_copy( raw_frame->img.plane, raw_frame->img.stride, (const uint8_t**)&frame.data,
                                        frame.linesize, codec->pix_fmt, width, height );
 
@@ -612,8 +633,16 @@ void *open_input( void *ptr )
         obe_free_packet( &pkt );
     }
 
-    // free stuff
-    printf("\n end \n");
+    for( int i = 0; i < input->num_output_streams; i++ )
+    {
+        out_lut = find_lavf_stream_idx( stream_lut, input->output_streams[i].stream_id );
+        codec = lavf->streams[out_lut->lavf_stream_idx]->codec;
+
+	if( codec )
+            avcodec_close( codec );
+    }
+
+    pthread_cleanup_pop( 1 );
 
     return NULL;
 }
