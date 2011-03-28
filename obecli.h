@@ -24,14 +24,33 @@
 #ifndef OBECLI_H
 #define OBECLI_H
 
+// FIXME
+#define RETURN_IF_ERR( cond, name, ret, ... )\
+if( cond )\
+{\
+    return ret;\
+}
+
+#define FAIL_IF_ERR( cond, name, ... ) RETURN_IF_ERR( cond, name, -1, __VA_ARGS__ )
+
 typedef struct obecli_command_t obecli_command_t;
+
+static int parse_command( char *command, obecli_command_t *commmand_list );
+static int probe_device( char *command, obecli_command_t *child );
+
+static int set_muxer( char *command, obecli_command_t *child );
+static int set_output( char *command, obecli_command_t *child );
+static int set_stream( char *command, obecli_command_t *child );
 
 static int show_bitdepth( char *command, obecli_command_t *child );
 static int show_decoders( char *command, obecli_command_t *child );
 static int show_encoders( char *command, obecli_command_t *child );
 static int show_help( char *command, obecli_command_t *child );
-static int parse_command( char *command, obecli_command_t *commmand_list );
-static int probe_device( char *command, obecli_command_t *child );
+static int show_inputs( char *command, obecli_command_t *child );
+static int show_muxers( char *command, obecli_command_t *child );
+static int show_outputs( char *command, obecli_command_t *child );
+
+static int start_encode( char *command, obecli_command_t *child );
 
 struct obecli_command_t
 {
@@ -44,57 +63,87 @@ struct obecli_command_t
 
 typedef struct
 {
+    int input;
+    char *input_name;
+    char *long_name;
+    char *input_lib_name;
+} obecli_input_name_t;
+
+typedef struct
+{
     int format;
     char *format_name;
-    char *long_format_name;
+    char *long_name;
     char *decoder_name;
     char *encoder_name;
-}obecli_format_name_t;
+} obecli_format_name_t;
 
 typedef struct
 {
     int muxer;
-    char *format_name;
+    char *muxer_name;
     char *long_name;
-}obecli_muxer_name_t;
+    char *mux_lib_name;
+} obecli_muxer_name_t;
+
+typedef struct
+{
+    int output;
+    char *output_name;
+    char *long_name;
+    char *output_lib_name;
+} obecli_output_name_t;
 
 /* Commands */
-
+#if 0
 static obecli_command_t add_commands[] =
 {
-#if 0
-    //{"filter",  "",  "Show supported filters"  , show_bitdepth, NULL },
-    {"output",  "",  "Show supported outputs"  , show_bitdepth, NULL },
-#endif
+
     {0}
 };
+#endif
 
 static obecli_command_t show_commands[] =
 {
-    {"bitdepth", "",  "Show AVC encoder bit depth", show_bitdepth, NULL },
-    {"decoders", "",  "Show supported decoders" , show_decoders, NULL },
-    {"encoders", "",  "Show supported encoders" , show_encoders, NULL },
-    //{"filters",  "",  "Show supported filters"  , show_bitdepth, NULL },
-    {"inputs",   "",  "Show supported inputs"   , show_bitdepth, NULL },
-    {"muxers",   "",  "Show supported muxers"   , show_bitdepth, NULL },
-    {"outputs",  "",  "Show supported outputs"  , show_bitdepth, NULL },
-    {0}
+    { "bitdepth", "",  "Show AVC encoder bit depth", show_bitdepth, NULL },
+    { "decoders", "",  "Show supported decoders",    show_decoders, NULL },
+    { "encoders", "",  "Show supported encoders",    show_encoders, NULL },
+    //{ "filters",  "",  "Show supported filters",   show_filters, NULL },
+    { "inputs",   "",  "Show supported inputs",      show_inputs,   NULL },
+    { "muxers",   "",  "Show supported muxers",      show_muxers,   NULL },
+    { "outputs",  "",  "Show supported outputs",     show_outputs,  NULL },
+    { 0 }
+};
+
+static obecli_command_t set_commands[] =
+{
+    { "muxer",  "[name] OR opts [opts]",  "Set muxer name or muxer opts",   set_muxer,  NULL },
+    { "stream-opts", "streamid:[opts]",   "Set stream options",             set_stream, NULL },
+    { "output", "[name] OR opts [opts]",  "Set output name or output opts", set_output, NULL },
+    { 0 }
 };
 
 static obecli_command_t main_commands[] =
 {
-    //{"add",   "[item] ...", "Add stream"                , parse_command, add_commands },
-    {"help",  "[item] ...", "Display help"            , show_help, NULL },
-    //{"set",   "[item] ...", "Set parameter"           , set_param, NULL },
-    {"show",  "[item] ...", "Show item"               , parse_command, show_commands },
-    //{"start", ""          , "Start encoding"          , start_encode, NULL },
-    {"probe", ""          , "Probe input"            , probe_device, NULL },
-    {0}
+    //{ "add",   "[item] ...", "Add stream",             parse_command, add_commands },
+    { "help",  "[item] ...", "Display help",             show_help,     NULL },
+    { "probe", "[input]",    "Probe input",              probe_device,  NULL },
+    { "set",   "[item] ...", "Set item",                 parse_command, set_commands },
+    { "show",  "[item] ...", "Show item",                parse_command, show_commands },
+    { "start", "",           "Start encoding",           start_encode,  NULL },
+    { 0 }
+};
+
+/* TODO: put this all in the main OBE library at some point */
+/* Input Names */
+static const obecli_input_name_t input_names[] =
+{
+    { INPUT_URL, "URL", "URL (includes UDP and RTP)", "libavformat" },
+    { 0, 0, 0 },
 };
 
 /* Format names */
-
-static obecli_format_name_t format_names[] =
+static const obecli_format_name_t format_names[] =
 {
     { VIDEO_AVC,    "AVC",      "Advanced Video Coding", "FFmpeg AVC decoder",        "x264 encoder" },
     { VIDEO_MPEG2,  "MPEG-2",   "MPEG-2",                "FFmpeg MPEG-2 decoder",     NULL  },
@@ -106,9 +155,21 @@ static obecli_format_name_t format_names[] =
     { AUDIO_AAC,    "AAC",      "Advanced Audio Coding", "FFmpeg AAC decoder",        "Quicktime AAC encoder" },
     { SUBTITLES_DVB, "DVB-SUB", "DVB Subtitles", NULL, NULL },
     { MISC_TELETEXT, "DVB-TTX", "DVB Teletext", NULL, NULL },
-    { 0, 0, 0 },
+    { 0, 0, 0, 0, 0 },
 };
 
 /* Muxer names */
+static const obecli_muxer_name_t muxer_names[] =
+{
+    { MUXERS_MPEGTS, "MPEG-TS",  "MPEG Transport Stream", "libmpegts" },
+    { 0, 0, 0, 0 },
+};
 
+/* Output names */
+static const obecli_output_name_t output_names[] =
+{
+    { OUTPUT_UDP, "UDP",  "MPEG-TS in UDP",        "internal" },
+    { OUTPUT_RTP, "RTP",  "MPEG-TS in RTP in UDP", "internal" },
+    { 0, 0, 0, 0 },
+};
 #endif

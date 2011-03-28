@@ -24,7 +24,7 @@
 #ifndef OBE_H
 #define OBE_H
 
-#include <stdint.h>
+#include <inttypes.h>
 #include <libavutil/audioconvert.h>
 #include <x264.h>
 
@@ -34,20 +34,41 @@
 /* Opaque Handle */
 typedef struct obe_t obe_t;
 
+/**** Initialisation Function ****/
+obe_t *obe_setup( void );
+
+enum input_video_connection
+{
+    INPUT_VIDEO_CONNECTION_SDI,
+    INPUT_VIDEO_CONNECTION_HDMI,
+    INPUT_VIDEO_CONNECTION_OPTICAL_SDI,
+    INPUT_VIDEO_CONNECTION_COMPONENT,
+    INPUT_VIDEO_CONNECTION_COMPOSITE,
+    INPUT_VIDEO_CONNECTION_S_VIDEO,
+};
+
+enum input_audio_connection
+{
+    INPUT_AUDIO_EMBEDDED,
+    INPUT_AUDIO_AES_EBU,
+    INPUT_AUDIO_ANALOGUE,
+};
+
 enum input_type_e
 {
     INPUT_URL,
+//    INPUT_DEVICE_SDI_DECKLINK,
 //    INPUT_DEVICE_SDI_V4L2,
 //    INPUT_DEVICE_ASI,
 };
-
-/**** Initialisation Function ****/
-obe_t *obe_setup( void );
 
 typedef struct
 {
     int input_type;
     char *location;
+
+    int video_connection;
+    int audio_connection;
 } obe_input_t;
 
 /**** Stream Formats ****/
@@ -70,7 +91,7 @@ enum stream_formats_e
     AUDIO_MP2,    /* MPEG-1 Layer II */
     AUDIO_AC_3,   /* ATSC A/52B / AC-3 */
     AUDIO_E_AC_3, /* ATSC A/52B Annex E / Enhanced AC-3 */
-    AUDIO_E_DIST, /* E Distribution Audio */
+//    AUDIO_E_DIST, /* E Distribution Audio */
     AUDIO_AAC,
 
     SUBTITLES_DVB,
@@ -80,7 +101,7 @@ enum stream_formats_e
     SUBTITLES_CEA_608,
     SUBTITLES_CEA_708,
 
-    MISC_VANC    /* Vertical Ancillary */
+    /* Vertical Ancillary */
 };
 
 typedef struct
@@ -120,6 +141,8 @@ typedef struct
     /** Subtitles **/
     /* Has display definition segment (i.e HD subtitling) */
     int dvb_has_dds;
+
+    /* Vertical Ancillary */
 }obe_input_stream_t;
 
 typedef struct
@@ -209,8 +232,6 @@ typedef struct
     int stream_format;
     /* AVC */
     x264_param_t avc_param;
-    int ignore_captions;
-    int ignore_afds;
 
     /* Audio */
     int bitrate;
@@ -252,10 +273,13 @@ typedef struct
     int ts_type;
     int cbr;
     int ts_muxrate;
-    int ts_id;
 
-    int pmt_pid;
+    int passthrough;
+// TODO mention only passthrough next four things
+// TODO mention default pids
+    int ts_id;
     int program_num;
+    int pmt_pid;
     int pcr_pid;
 
     int pcr_period;
@@ -283,7 +307,6 @@ enum output_e
 /* Output structure
  *
  * location - TODO document url parameters
- * num_ts_pkts - Number of TS packets in IP packet. Default value of 7
  *
  */
 
@@ -291,10 +314,6 @@ typedef struct
 {
     int output;
     char *location;
-
-    /* IP Outputs */
-    int num_ts_pkts;
-
 } obe_output_opts_t;
 
 int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts );

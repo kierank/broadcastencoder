@@ -35,7 +35,7 @@ obe_device_t *new_device( void )
 
     if( !device )
     {
-        fprintf( stderr, "Malloc failed\n" ); // FIXME syslog
+        syslog( LOG_ERR, "Malloc failed\n" );
         return NULL;
     }
 
@@ -44,9 +44,9 @@ obe_device_t *new_device( void )
 
 void destroy_device( obe_device_t *device )
 {
-    free( device );
     if( device->location )
         free( device->location );
+    free( device );
 }
 
 /* Raw frame */
@@ -56,29 +56,26 @@ obe_raw_frame_t *new_raw_frame( void )
 
     if( !raw_frame )
     {
-        fprintf( stderr, "Malloc failed\n" ); // FIXME syslog
+        syslog( LOG_ERR, "Malloc failed\n" );
         return NULL;
     }
 
     return raw_frame;
 }
 
-void destroy_raw_frame( obe_raw_frame_t *raw_frame )
-{
-    free( raw_frame );
-}
-
 /* Coded frame */
-obe_coded_frame_t *new_coded_frame( int len )
+obe_coded_frame_t *new_coded_frame( int stream_id, int len )
 {
     obe_coded_frame_t *coded_frame = calloc( 1, sizeof(*coded_frame) );
     if( !coded_frame )
         return NULL;
 
+    coded_frame->stream_id = stream_id;
     coded_frame->len = len;
     coded_frame->data = malloc( len );
     if( !coded_frame->data )
     {
+        syslog( LOG_ERR, "Malloc failed\n" );
         free( coded_frame );
         return NULL;
     }
@@ -88,11 +85,37 @@ obe_coded_frame_t *new_coded_frame( int len )
 
 void destroy_coded_frame( obe_coded_frame_t *coded_frame )
 {
-    if( coded_frame )
+    free( coded_frame->data );
+    free( coded_frame );
+}
+
+/* Muxed data */
+obe_muxed_data_t *new_muxed_data( int len )
+{
+    obe_muxed_data_t *muxed_data = calloc( 1, sizeof(*muxed_data) );
+    if( !muxed_data )
+        return NULL;
+
+    muxed_data->bytes_left = len;
+    muxed_data->data = malloc( len );
+    if( !muxed_data->data )
     {
-        free( coded_frame->data );
-        free( coded_frame );
+        syslog( LOG_ERR, "Malloc failed\n" );
+        free( muxed_data );
+        return NULL;
     }
+    muxed_data->cur_pos = muxed_data->data;
+
+    return muxed_data;
+}
+
+void destroy_muxed_data( obe_muxed_data_t *muxed_data )
+{
+    if( muxed_data->pcr_list )
+        free( muxed_data->pcr_list );
+
+    free( muxed_data->data );
+    free( muxed_data );
 }
 
 /** Add/Remove from queues */
@@ -115,7 +138,7 @@ int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame )
     tmp = realloc( encoder->frames, sizeof(*encoder->frames) * (encoder->num_raw_frames+1) );
     if( !tmp )
     {
-        fprintf( stderr, "Malloc failed\n" ); // FIXME syslog
+        syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
     }
     encoder->frames = tmp;
@@ -137,7 +160,7 @@ int remove_frame_from_encode_queue( obe_encoder_t *encoder )
     encoder->num_raw_frames--;
     if( !tmp && encoder->num_raw_frames )
     {
-        fprintf( stderr, "Malloc failed\n" ); // FIXME syslog
+        syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
     }
     encoder->frames = tmp;
@@ -154,7 +177,7 @@ int add_to_mux_queue( obe_t *h, obe_coded_frame_t *coded_frame )
     tmp = realloc( h->coded_frames, sizeof(*h->coded_frames) * (h->num_coded_frames+1) );
     if( !tmp )
     {
-        fprintf( stderr, "Malloc failed\n" ); // FIXME syslog
+        syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
     }
     h->coded_frames = tmp;
@@ -168,25 +191,48 @@ int add_to_mux_queue( obe_t *h, obe_coded_frame_t *coded_frame )
 int remove_from_mux_queue( obe_t *h, obe_coded_frame_t *coded_frame )
 {
     obe_coded_frame_t **tmp;
-    //pthread_mutex_lock( &h->mux_mutex );
+    pthread_mutex_lock( &h->mux_mutex );
     for( int i = 0; i < h->num_coded_frames; i++ )
     {
         if( h->coded_frames[i] == coded_frame )
         {
-            if( h->num_coded_frames > 1 )
-                memmove( &h->coded_frames[i], &h->coded_frames[i+1], sizeof(*h->coded_frames) * (h->num_coded_frames-1-i) );
+            memmove( &h->coded_frames[i], &h->coded_frames[i+1], sizeof(*h->coded_frames) * (h->num_coded_frames-1-i) );
             tmp = realloc( h->coded_frames, sizeof(*h->coded_frames) * (h->num_coded_frames-1) );
             h->num_coded_frames--;
-	    if( !tmp && h->num_coded_frames )
+            if( !tmp && h->num_coded_frames )
             {
-                fprintf( stderr, "Malloc failed\n" ); // FIXME syslog
+                syslog( LOG_ERR, "Malloc failed\n" );
                 return -1;
             }
             h->coded_frames = tmp;
             break;
         }
     }
-    //pthread_mutex_unlock( &h->mux_mutex );
+    pthread_mutex_unlock( &h->mux_mutex );
+
+    return 0;
+}
+
+int remove_early_frames( obe_t *h, int64_t pts )
+{
+    obe_coded_frame_t **tmp;
+    for( int i = 0; i < h->num_coded_frames; i++ )
+    {
+        if( !h->coded_frames[i]->is_video && h->coded_frames[i]->pts < pts )
+        {
+            destroy_coded_frame( h->coded_frames[i] );
+            memmove( &h->coded_frames[i], &h->coded_frames[i+1], sizeof(*h->coded_frames) * (h->num_coded_frames-1-i) );
+            tmp = realloc( h->coded_frames, sizeof(*h->coded_frames) * (h->num_coded_frames-1) );
+            h->num_coded_frames--;
+            i--;
+            if( !tmp && h->num_coded_frames )
+            {
+                syslog( LOG_ERR, "Malloc failed\n" );
+                return -1;
+            }
+            h->coded_frames = tmp;
+        }
+    }
 
     return 0;
 }
@@ -199,7 +245,7 @@ int add_to_output_queue( obe_t *h, obe_muxed_data_t *muxed_data )
     tmp = realloc( h->muxed_data, sizeof(*h->muxed_data) * (h->num_muxed_data+1) );
     if( !tmp )
     {
-        fprintf( stderr, "Malloc failed\n" ); // FIXME syslog
+        syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
     }
     h->muxed_data = tmp;
@@ -210,23 +256,43 @@ int add_to_output_queue( obe_t *h, obe_muxed_data_t *muxed_data )
     return 0;
 }
 
+int remove_from_output_queue( obe_t *h )
+{
+    obe_muxed_data_t **tmp;
+
+    pthread_mutex_lock( &h->output_mutex );
+    if( h->num_muxed_data > 1 )
+        memmove( &h->muxed_data[0], &h->muxed_data[1], sizeof(*h->muxed_data) * (h->num_muxed_data-1) );
+    tmp = realloc( h->muxed_data, sizeof(*h->muxed_data) * (h->num_muxed_data-1) );
+    h->num_muxed_data--;
+    if( !tmp && h->num_muxed_data )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+    h->muxed_data = tmp;
+    pthread_mutex_unlock( &h->output_mutex );
+
+    return 0;
+}
+
 /** Get items **/
 /* Input stream */
 obe_int_input_stream_t *get_input_stream( obe_t *h, int input_stream_id )
 {
-    // lock
+    /* TODO lock and unlock when we can reconfig input streams */
     for( int j = 0; j < h->devices[0]->num_input_streams; j++ )
     {
         if( h->devices[0]->streams[j]->stream_id == input_stream_id )
             return h->devices[0]->streams[j];
     }
-    // unlock
     return NULL;
 }
 
 /* Encoder */
 obe_encoder_t *get_encoder( obe_t *h, int stream_id )
 {
+    /* TODO lock and unlock when we can reconfig encoders */
     for( int i = 0; i < h->num_encoders; i++ )
     {
         if( h->encoders[i]->stream_id == stream_id )
@@ -237,6 +303,8 @@ obe_encoder_t *get_encoder( obe_t *h, int stream_id )
 
 obe_t *obe_setup( void )
 {
+    openlog( "obe", LOG_NDELAY | LOG_PID, LOG_USER );
+
     obe_t *h = calloc( 1, sizeof(*h) );
     if( !h )
     {
@@ -390,9 +458,9 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     }
 
     x264_param_default( param );
-
     param->b_vfr_input = 0;
     param->b_pic_struct = 1;
+    param->i_open_gop = X264_OPEN_GOP_NORMAL;
 
     param->i_width = stream->width;
     param->i_height = stream->height;
@@ -408,13 +476,13 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
 
     param->vui.i_overscan = 2;
 
-    /* TODO goplength */
     if( ( param->i_fps_num == 25 || param->i_fps_num == 50 ) && param->i_fps_den == 1 )
     {
         param->vui.i_vidformat = 1; // PAL
         param->vui.i_colorprim = 5; // BT.470-2 bg
         param->vui.i_transfer  = 5; // BT.470-2 bg
         param->vui.i_colmatrix = 5; // BT.470-2 bg
+        param->i_keyint_max = param->i_fps_num >> 1;
     }
     else if( ( param->i_fps_num == 30000 || param->i_fps_num == 60000 ) && param->i_fps_den == 1001 )
     {
@@ -422,6 +490,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         param->vui.i_colorprim = 6; // BT.601-6
         param->vui.i_transfer  = 6; // BT.601-6
         param->vui.i_colmatrix = 6; // BT.601-6
+        param->i_keyint_max = (param->i_fps_num / 1000) >> 1;
     }
     else
     {
@@ -446,7 +515,6 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     param->b_aud = 1;
     param->i_nal_hrd = X264_NAL_HRD_FAKE_VBR;
     //param->i_log_level = X264_LOG_NONE;
-    param->i_keyint_max = 15;
 
     return 0;
 }
@@ -462,23 +530,133 @@ int obe_setup_streams( obe_t *h, obe_output_stream_t *output_streams, int num_st
 
     h->num_output_streams = num_streams;
     /* TODO deal with updating case */
-    h->output_streams = malloc( num_streams * sizeof(obe_output_stream_t) );
+    h->output_streams = malloc( num_streams * sizeof(*h->output_streams) );
     if( !h->output_streams )
     {
         fprintf( stderr, "Malloc failed \n" );
         return -1;
     }
-    memcpy( h->output_streams, output_streams, num_streams * sizeof(obe_output_stream_t) );
+    memcpy( h->output_streams, output_streams, num_streams * sizeof(*h->output_streams) );
 
     return 0;
 }
 
 int obe_setup_muxer( obe_t *h, obe_mux_opts_t *mux_opts )
 {
+    // TODO sanity check
+
     memcpy( &h->mux_opts, mux_opts, sizeof(obe_mux_opts_t) );
     return 0;
 }
+
+int obe_start( obe_t *h )
+{
+    int rc;
+    obe_vid_enc_params_t *enc_params;
+    obe_output_params_t *out_params;
+    obe_output_func_t output;
+
+    // sanity check
+
+    if( h->mux_opts.muxer == OUTPUT_UDP )
+        output = udp_output;
+    else
+        output = rtp_output;
+
+    /* Open Output Thread */
+    pthread_mutex_init( &h->output_mutex, NULL );
+    pthread_cond_init( &h->output_cv, NULL );
+
+    out_params = malloc( sizeof(*out_params) );
+    if( !out_params )
+    {
+        // TODO fail
+    }
+    out_params->h = h;
+    rc = pthread_create( &h->output_thread, NULL, output.open_output, (void*)out_params );
+
+    if( rc < 0 )
+    {
+        fprintf( stderr, "Couldn't create output thread \n" );
+        return -1;
+    }
+
+    struct sched_param s_param = {0};
+    s_param.sched_priority = 99;
+
+    pthread_setschedparam( h->output_thread, SCHED_RR, &s_param );
+
+    /* Open Encoder Threads */
+    for( int i = 0; i < h->num_output_streams; i++ )
+    {
+        if( h->output_streams[i].stream_action == STREAM_ENCODE )
+        {
+            h->encoders[h->num_encoders] = calloc( 1, sizeof(obe_encoder_t) );
+            if( !h->encoders[h->num_encoders] )
+            {
+                // TODO fail
+            }
+            h->encoders[h->num_encoders]->stream_id = h->output_streams[i].stream_id;
+            pthread_mutex_init( &h->encoders[h->num_encoders]->encoder_mutex, NULL );
+            pthread_cond_init( &h->encoders[h->num_encoders]->encoder_cv, NULL );
+            enc_params = calloc( 1, sizeof(obe_vid_enc_params_t) );
+            if( !enc_params )
+            {
+                // TODO fail
+            }
+            enc_params->h = h;
+            enc_params->encoder = h->encoders[h->num_encoders];
+            memcpy( &enc_params->avc_param, &h->output_streams[i].avc_param, sizeof(x264_param_t) );
+            rc = pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, x264_encoder.start_encoder, (void*)enc_params );
+            h->num_encoders++;
+        }
+    }
+
+    /* Open Mux Thread */
+    obe_mux_params_t *mux_params = calloc( 1, sizeof(*mux_params) );
+    // FIXME fail
+    mux_params->h = h;
+    mux_params->device = h->devices[0];
+    mux_params->num_output_streams = h->num_output_streams;
+    mux_params->output_streams = h->output_streams;
+    // FIXME fail
+    rc = pthread_create( &h->mux_thread, NULL, ts_muxer.open_muxer, (void*)mux_params );
+
+    if( rc < 0 )
+    {
+        fprintf( stderr, "Couldn't create output thread \n" );
+        return -1;
+    }
+
+    struct sched_param s_param2 = {0};
+    s_param2.sched_priority = 50;
+
+    pthread_setschedparam( h->mux_thread, SCHED_RR, &s_param2 );
+
+    /* Open Filter Thread */
+
+    /* Open Input Thread */
+    pthread_mutex_init( &h->devices[0]->device_mutex, NULL );
+    obe_input_params_t *input_params = calloc( 1, sizeof(*input_params) );
+    // FIXME fail
+    input_params->h = h;
+    input_params->device = h->devices[0];
+    input_params->num_output_streams = h->num_output_streams;
+    input_params->output_streams = h->output_streams;
+    // FIXME fail
+
+    // TODO: in the future give it only the streams which are necessary
+    rc = pthread_create( &h->devices[0]->device_thread, NULL, lavf_input.open_input, (void*)input_params );
+
+    h->is_active = 1;
+
+    return 0;
+};
+
 void obe_close( obe_t *h )
 {
+
+
+
     free( h );
 }

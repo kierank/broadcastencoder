@@ -41,6 +41,11 @@
 
 #define MAX_PROBE_TIME 200
 
+/* Macros */
+#define BOOLIFY(x) x = !!x
+#define MIN(a,b) ( (a)<(b) ? (a) : (b) )
+#define MAX(a,b) ( (a)>(b) ? (a) : (b) )
+
 typedef void *hnd_t;
 
 typedef struct
@@ -217,6 +222,10 @@ typedef struct
     int bytes_left;
     uint8_t *data;
     uint8_t *cur_pos;
+
+    /* MPEG-TS */
+    int64_t *pcr_list;
+    int64_t *pcr_list_pos;
 } obe_muxed_data_t;
 
 struct obe_t
@@ -269,11 +278,15 @@ void destroy_raw_frame( obe_raw_frame_t *raw_frame );
 int remove_early_frames( obe_t *h, int64_t pts );
 obe_coded_frame_t *new_coded_frame( int stream_id, int len );
 void destroy_coded_frame( obe_coded_frame_t *coded_frame );
+obe_muxed_data_t *new_muxed_data( int len );
+void destroy_muxed_data( obe_muxed_data_t *muxed_data );
 
 int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame );
 int remove_frame_from_encode_queue( obe_encoder_t *encoder );
 int add_to_mux_queue( obe_t *h, obe_coded_frame_t *coded_frame );
 int remove_from_mux_queue( obe_t *h, obe_coded_frame_t *coded_frame );
+int add_to_output_queue( obe_t *h, obe_muxed_data_t *muxed_data );
+int remove_from_output_queue( obe_t *h );
 
 obe_int_input_stream_t *get_input_stream( obe_t *h, int input_stream_id );
 obe_encoder_t *get_encoder( obe_t *h, int stream_id );

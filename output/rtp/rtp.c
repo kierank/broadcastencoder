@@ -37,6 +37,9 @@
 #define RTCP_SR_PACKET_TYPE 200
 #define RTCP_PACKET_SIZE 28
 
+#define NTP_OFFSET 2208988800ULL
+#define NTP_OFFSET_US (NTP_OFFSET * 1000000ULL)
+
 typedef struct
 {
     hnd_t udp_handle;
@@ -48,8 +51,11 @@ typedef struct
     uint32_t octet_cnt;
 } obe_rtp_ctx;
 
-#define NTP_OFFSET 2208988800ULL
-#define NTP_OFFSET_US (NTP_OFFSET * 1000000ULL)
+struct rtp_status
+{
+    obe_output_params_t *output_params;
+    hnd_t *rtp_handle;
+};
 
 static int64_t obe_gettime(void)
 {
@@ -63,7 +69,7 @@ static uint64_t obe_ntp_time(void)
   return (obe_gettime() / 1000) * 1000 + NTP_OFFSET_US;
 }
 
-static int init_rtp( hnd_t *p_handle, char *location )
+static int rtp_open( hnd_t *p_handle, char *location )
 {
     obe_rtp_ctx *p_rtp = calloc( 1, sizeof(*p_rtp) );
     if( !p_rtp )
@@ -77,14 +83,14 @@ static int init_rtp( hnd_t *p_handle, char *location )
         fprintf( stderr, "[rtp] Could not create udp output" );
         return -1;
     }
-        
+
     p_rtp->ssrc = av_get_random_seed();
 
     *p_handle = p_rtp;
 
     return 0;
 }
-
+#if 0
 static int write_rtcp_pkt( hnd_t handle )
 {
     obe_rtp_ctx *p_rtp = handle;
@@ -111,7 +117,7 @@ static int write_rtcp_pkt( hnd_t handle )
 
     return 0;
 }
-
+#endif
 static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestamp )
 {
     obe_rtp_ctx *p_rtp = handle;
@@ -149,11 +155,78 @@ static void rtp_close( hnd_t handle )
     free( p_rtp );
 }
 
-void *open_output( void *ptr )
+static void close_output( void *handle )
+{
+    struct rtp_status *status = handle;
+
+    if( *status->rtp_handle )
+        rtp_close( *status->rtp_handle );
+    free( status->output_params );
+}
+
+/* TODO: merge with udp? */
+static void *open_output( void *ptr )
 {
     obe_output_params_t *output_params = ptr;
     obe_t *h = output_params->h;
     char *location = output_params->location;
+    struct rtp_status status;
+    hnd_t rtp_handle = NULL;
+    int num_muxed_data = 0;
+    obe_muxed_data_t **muxed_data;
+    int64_t last_pcr = -1, last_clock = -1, delta, mpegtime;
+
+    status.output_params = output_params;
+    status.rtp_handle = &rtp_handle;
+    pthread_cleanup_push( close_output, (void*)&status );
+
+    if( rtp_open( &rtp_handle, location ) < 0 )
+        return NULL;
+
+    while( 1 )
+    {
+        pthread_mutex_lock( &h->output_mutex );
+        if( !h->num_muxed_data )
+            pthread_cond_wait( &h->output_cv, &h->output_mutex );
+
+        num_muxed_data = h->num_muxed_data;
+
+        muxed_data = malloc( num_muxed_data * sizeof(*muxed_data) );
+        if( !muxed_data )
+        {
+            // TODO fail
+        }
+        memcpy( muxed_data, h->muxed_data, num_muxed_data * sizeof(*muxed_data) );
+        pthread_mutex_unlock( &h->output_mutex );
+
+        for( int i = 0; i < num_muxed_data; i++ )
+        {
+            while( muxed_data[i]->bytes_left > 0 )
+            {
+                if( last_clock != -1 )
+                {
+                    delta = muxed_data[i]->pcr_list_pos[0] - last_pcr;
+                    mpegtime = get_wallclock_in_mpeg_ticks();
+                    if( last_clock + delta >= mpegtime )
+                        sleep_mpeg_ticks( mpegtime - delta - last_clock );
+                }
+                last_pcr = muxed_data[i]->pcr_list_pos[0];
+                last_clock = get_wallclock_in_mpeg_ticks();
+                write_rtp_pkt( rtp_handle, muxed_data[i]->cur_pos, MIN( muxed_data[i]->bytes_left, TS_PACKETS_SIZE ),
+                               muxed_data[i]->pcr_list_pos[0] / 300 ); // handle fail
+                muxed_data[i]->cur_pos += MIN( muxed_data[i]->bytes_left, TS_PACKETS_SIZE );
+                muxed_data[i]->bytes_left -= MIN( muxed_data[i]->bytes_left, TS_PACKETS_SIZE );
+                muxed_data[i]->pcr_list_pos += 7;
+            }
+
+            remove_from_output_queue( h );
+            destroy_muxed_data( muxed_data[i] );
+        }
+
+        free( muxed_data );
+    }
+
+    pthread_cleanup_pop( 1 );
 
     return NULL;
 }

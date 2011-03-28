@@ -4,7 +4,13 @@ include config.mak
 
 all: default
 
-SRCS = obe.c
+SRCS = obe.c \
+       input/lavf/lavf.c \
+       encoders/video/avc/x264.c \
+       mux/ts/ts.c \
+       output/network.c output/rtp/rtp.c output/udp/udp.c
+
+SRCCPP =
 
 SRCCLI = obecli.c
 
@@ -16,7 +22,6 @@ CONFIG := $(shell cat config.h)
 ifneq ($(findstring HAVE_GPL 1, $(CONFIG)),)
 SRCCLI +=
 endif
-
 
 OBJS = $(SRCS:%.c=%.o)
 OBJCLI = $(SRCCLI:%.c=%.o)
@@ -66,10 +71,9 @@ install: x264$(EXE) $(SONAME)
 	install -d $(DESTDIR)$(includedir)
 	install -d $(DESTDIR)$(libdir)
 	install -d $(DESTDIR)$(libdir)/pkgconfig
-	install -m 644 x264_config.h $(DESTDIR)$(includedir)
 	install -m 644 libobe.a $(DESTDIR)$(libdir)
 	install -m 644 obe.pc $(DESTDIR)$(libdir)/pkgconfig
-	install x264$(EXE) $(DESTDIR)$(bindir)
+	install obecli$(EXE) $(DESTDIR)$(bindir)
 	$(RANLIB) $(DESTDIR)$(libdir)/libobe.a
 ifeq ($(SYS),MINGW)
 	$(if $(SONAME), install -m 755 $(SONAME) $(DESTDIR)$(bindir))

@@ -205,7 +205,7 @@ static int udp_set_remote_url( obe_udp_ctx *s, const char *uri )
                 if( connect( s->udp_fd, (struct sockaddr *) &s->dest_addr, s->dest_addr_len ) )
                 {
                     s->is_connected = 0;
-                    fprintf( stderr, "[udp]: connect() failed: \n" ); 
+                    fprintf( stderr, "[udp]: connect() failed: \n" );
                     return -1;
                 }
             }
@@ -346,7 +346,7 @@ static void close_output( void *handle )
     free( status->output_params );
 }
 
-void *open_output( void *ptr )
+static void *open_output( void *ptr )
 {
     obe_output_params_t *output_params = ptr;
     obe_t *h = output_params->h;
@@ -354,10 +354,11 @@ void *open_output( void *ptr )
     struct udp_status status;
     hnd_t udp_handle = NULL;
     int num_muxed_data = 0;
+    obe_muxed_data_t **muxed_data;
+    int64_t last_pcr = -1, last_clock = -1, delta, mpegtime;
 
     status.output_params = output_params;
     status.udp_handle = &udp_handle;
-
     pthread_cleanup_push( close_output, (void*)&status );
 
     if( udp_open( &udp_handle, location ) < 0 )
@@ -368,11 +369,53 @@ void *open_output( void *ptr )
 
     while( 1 )
     {
+        int64_t wait = get_wallclock_in_mpeg_ticks();
+
         pthread_mutex_lock( &h->output_mutex );
-        if( h->num_muxed_data == num_muxed_data )
+        if( !h->num_muxed_data )
             pthread_cond_wait( &h->output_cv, &h->output_mutex );
 
+        num_muxed_data = h->num_muxed_data;
+
+        muxed_data = malloc( num_muxed_data * sizeof(*muxed_data) );
+        if( !muxed_data )
+        {
+            // TODO fail
+            pthread_mutex_unlock( &h->output_mutex );
+        }
+        memcpy( muxed_data, h->muxed_data, num_muxed_data * sizeof(*muxed_data) );
         pthread_mutex_unlock( &h->output_mutex );
+
+        //printf("\n START \n");
+
+        for( int i = 0; i < num_muxed_data; i++ )
+        {
+            while( muxed_data[i]->bytes_left > 0 )
+            {
+                if( last_clock != -1 )
+                {
+                    delta = muxed_data[i]->pcr_list_pos[0] - last_pcr;
+                    mpegtime = get_wallclock_in_mpeg_ticks();
+                    if( last_clock + delta >= mpegtime )
+                        sleep_mpeg_ticks( mpegtime - delta - last_clock );
+#if 0
+                    else
+                        printf("\n behind1 %f \n", (double)(last_clock + delta - mpegtime)/27000000 );
+#endif
+                }
+                last_pcr = muxed_data[i]->pcr_list_pos[0];
+                last_clock = get_wallclock_in_mpeg_ticks();
+                udp_write( udp_handle, muxed_data[i]->cur_pos, MIN( muxed_data[i]->bytes_left, TS_PACKETS_SIZE ) ); // handle fail
+                muxed_data[i]->cur_pos += TS_PACKETS_SIZE;
+                muxed_data[i]->bytes_left -= TS_PACKETS_SIZE;
+                muxed_data[i]->pcr_list_pos += 7;
+            }
+
+            remove_from_output_queue( h );
+            destroy_muxed_data( muxed_data[i] );
+        }
+
+        free( muxed_data );
     }
 
     pthread_cleanup_pop( 1 );
