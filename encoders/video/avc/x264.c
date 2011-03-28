@@ -24,8 +24,6 @@
 #include "common/common.h"
 #include "encoders/video/video.h"
 
-#include <time.h>
-
 static void convert_cli_to_lib_pic( x264_picture_t *lib, cli_image_t *img )
 {
     memcpy( lib->img.i_stride, img->stride, sizeof(img->stride) );
@@ -69,6 +67,7 @@ static void *start_encoder( void *ptr )
     if( !encoder->encoder_params )
     {
         pthread_mutex_unlock( &encoder->encoder_mutex );
+        syslog( LOG_ERR, "Malloc failed\n" );
         goto fail;
     }
     memcpy( encoder->encoder_params, &enc_params->avc_param, sizeof(enc_params->avc_param) );
@@ -94,7 +93,8 @@ static void *start_encoder( void *ptr )
         pts2 = malloc( sizeof(int64_t) );
         if( !pts2 )
         {
-            // TODO fail
+            syslog( LOG_ERR, "Malloc failed\n" );
+            goto fail;
         }
         *pts2 = raw_frame->pts;
         pic.passthrough_opaque = pts2;
@@ -107,13 +107,18 @@ static void *start_encoder( void *ptr )
 
         if( frame_size < 0 )
         {
-            // TODO fail
+            syslog( LOG_ERR, "x264_encoder_encode failed\n" );
+            goto fail;
         }
 
         if( frame_size )
         {
             coded_frame = new_coded_frame( encoder->stream_id, frame_size );
-            // TODO fail
+	    if( !coded_frame )
+            {
+                syslog( LOG_ERR, "Malloc failed\n" );
+                goto fail;
+            }
             memcpy( coded_frame->data, nal[0].p_payload, frame_size );
             coded_frame->is_video = 1;
             coded_frame->len = frame_size;
@@ -123,15 +128,10 @@ static void *start_encoder( void *ptr )
             coded_frame->random_access = pic_out.b_keyframe;
             coded_frame->priority = IS_X264_TYPE_I( pic_out.i_type );
             free( pic_out.passthrough_opaque );
-            
+
             add_to_mux_queue( h, coded_frame );
         }
     }
-
-    x264_encoder_close( s );
-    free( ptr );
-
-    return NULL;
 
 fail:
     x264_encoder_close( s );
