@@ -57,4 +57,7 @@ static inline int is_multicast_address( struct sockaddr *addr )
     return 0;
 }
 
+int64_t get_wallclock_in_mpeg_ticks( void );
+void sleep_mpeg_ticks( int64_t i_delay );
+
 #endif
