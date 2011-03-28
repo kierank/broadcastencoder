@@ -106,6 +106,40 @@ cpp_check() {
     return $res
 }
 
+cxx_check() {
+    if [ -z "$3" ]; then
+        if [ -z "$1$2" ]; then
+            log_check "whether $CXX works"
+        elif [ -z "$1" ]; then
+            log_check "for $2"
+        else
+            log_check "for $1"
+        fi
+    elif [ -z "$1" ]; then
+        log_check "whether $CXX supports $3"
+    else
+        log_check "for $3 in $1";
+    fi
+    rm -f conftest.c
+    echo "#include <stdio.h>" > conftest.c
+    echo "#include <stdint.h>" >> conftest.c
+    [ -n "$1" ] && echo "#include <$1>" >> conftest.c
+    echo "int main () { $3 return 0; }" >> conftest.c
+    if $CXX conftest.c $CXXFLAGS $2  -o conftest >conftest.log 2>&1; then
+        res=$?
+        log_ok
+    else
+        res=$?
+        log_fail
+        log_msg "Failed commandline was:"
+        log_msg "--------------------------------------------------"
+        log_msg "$CXX conftest.c $CXXFLAGS $2 $LDFLAGSCLI $LDFLAGS"
+        cat conftest.log >> config.log
+        log_msg "--------------------------------------------------"
+    fi
+    return $res
+}
+
 define() {
     echo "#define $1$([ -n "$2" ] && echo " $2" || echo " 1")" >> config.h
 }
@@ -134,8 +168,10 @@ libtwolame="auto"
 swscale="auto"
 lavf="auto"
 readline="auto"
+decklink="auto"
 
 CFLAGS="$CFLAGS -Wall -I."
+CXXFLAGS="$CXXFLAGS -Wall -I."
 LDFLAGS="$LDFLAGS"
 LDFLAGSCLI="$LDFLAGSCLI"
 ASFLAGS="$ASFLAGS"
@@ -189,6 +225,9 @@ for opt do
         --extra-cflags=*)
             CFLAGS="$CFLAGS ${opt#--extra-cflags=}"
             ;;
+        --extra-cxxflags=*)
+            CXXFLAGS="$CXXFLAGS ${opt#--extra-cxxflags=}"
+            ;;
         --extra-ldflags=*)
             LDFLAGS="$LDFLAGS ${opt#--extra-ldflags=}"
             ;;
@@ -203,6 +242,7 @@ for opt do
             ;;
         --sysroot=*)
             CFLAGS="$CFLAGS --sysroot=${opt#--sysroot=}"
+            CXXFLAGS="$CXXFLAGS --sysroot=${opt#--sysroot=}"
             LDFLAGS="$LDFLAGS --sysroot=${opt#--sysroot=}"
             ;;
         *)
@@ -212,6 +252,7 @@ for opt do
 done
 
 CC="${CC-${cross_prefix}gcc}"
+CXX="${CXX-${cross_prefix}g++}"
 AR="${AR-${cross_prefix}ar}"
 RANLIB="${RANLIB-${cross_prefix}ranlib}"
 STRIP="${STRIP-${cross_prefix}strip}"
@@ -261,7 +302,7 @@ case $host_os in
   *linux*)
     SYS="LINUX"
     define HAVE_MALLOC_H
-    LDFLAGS="$LDFLAGS -lm"
+    LDFLAGS="$LDFLAGS -lm -lrt"
     ;;
   cygwin*)
     SYS="MINGW"
@@ -560,6 +601,23 @@ if [ "$lmpegts" = "yes" ] ; then
     LDFLAGSCLI="$LMPEGTS_LIBS $LDFLAGSCLI"
 fi
 
+if [ "$decklink" = "auto" ] ; then
+    decklink="no"
+    log_check "for DeckLink API binary $prefix/lib/libDeckLinkAPI.so"
+    if [ -f "$prefix/lib/libDeckLinkAPI.so" ] ; then
+        log_ok
+        if cxx_check ; then
+            decklink="yes"
+        fi
+    else
+        log_fail
+    fi
+fi
+
+if [ "$decklink" = "yes" ] ; then
+    define HAVE_DECKLINK
+fi
+
 if [ "$debug" != "yes" ]; then
     CFLAGS="$CFLAGS -s -fomit-frame-pointer"
     LDFLAGS="$LDFLAGS -s"
@@ -607,6 +665,7 @@ includedir=$includedir
 ARCH=$ARCH
 SYS=$SYS
 CC=$CC
+CXX=$CXX
 CFLAGS=$CFLAGS
 LDFLAGS=$LDFLAGS
 LDFLAGSCLI=$LDFLAGSCLI
@@ -629,6 +688,8 @@ Platform:   $ARCH
 System:     $SYS
 
 Input
+
+decklink:   $decklink
 
 Audio/Video Decoding
 
