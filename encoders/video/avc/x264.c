@@ -45,7 +45,6 @@ static void *start_encoder( void *ptr )
     int64_t *pts2;
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
-    int i = 0;
 
     /* TODO check for width, height changes */
 
@@ -100,7 +99,6 @@ static void *start_encoder( void *ptr )
         pic.passthrough_opaque = pts2;
 
         frame_size = x264_encoder_encode( s, &nal, &i_nal, &pic, &pic_out );
-        i++;
 
         raw_frame->release_frame( raw_frame );
         remove_frame_from_encode_queue( encoder );
