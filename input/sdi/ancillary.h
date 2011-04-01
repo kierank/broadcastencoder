@@ -1,5 +1,5 @@
 /*****************************************************************************
- * vanc.h : OBE vanc headers
+ * ancillary.h : OBE ancillary headers
  *****************************************************************************
  * Copyright (C) 2010 Open Broadcast Systems Ltd.
  *
@@ -21,24 +21,29 @@
  *
  *****************************************************************************/
 
-#ifndef OBE_INPUT_SDI_VANC_H
-#define OBE_INPUT_SDI_VANC_H
+#ifndef OBE_INPUT_SDI_ANCILLARY_H
+#define OBE_INPUT_SDI_ANCILLARY_H
 
 #include "common/common.h"
 
 /* DID, SDID, Type */
 int obe_vanc_identifier[][3] =
 {
-    { 0x41, 0x5, 0 }, // TODO AFD
+    { 0x41, 0x5, MISC_AFD },
+    { 0x41, 0x6, MISC_PAN_SCAN },
+    { 0x41, 0x8, ANC_DVB_SCTE_VBI },
 
-    { 0x43, 0x2, 0 }, // TODO OP-47
+    { 0x43, 0x1, ANC_OP47_SDP },
+    { 0x43, 0x2, ANC_OP47_MULTI_PACKET },
+
+    { 0x60, 0x60, ANC_ATC },
 
     { 0x61, 0x1, SUBTITLES_CEA_708 },
     { 0x61, 0x1, SUBTITLES_CEA_608 },
 
-    { 0x62, 0x1, 0 }, // TODO Program description (DTV)
-    { 0x62, 0x2, 0 }, // TODO Data broadcast (DTV)
-    { 0x62, 0x3, 0 }, // TODO VBI data
+    { 0x62, 0x1, ANC_DTV_PROGRAM_DESCRIPTION },
+    { 0x62, 0x2, ANC_DTV_DATA_BROADCAST },
+    { 0x62, 0x3, ANC_SMPTE_VBI },
 
     { 0, 0, 0 },
 }
