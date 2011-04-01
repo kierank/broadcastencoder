@@ -157,6 +157,14 @@ typedef struct
 
 typedef struct
 {
+    int hours;
+    int mins;
+    int seconds;
+    int frames;
+} obe_timecode_t;
+
+typedef struct
+{
     int stream_id;
     int64_t pts;
 
@@ -176,13 +184,13 @@ typedef struct
     uint8_t *cur_pos;
 
     int valid_timecode;
-    // timecode TODO
+    obe_timecode_t timecode;
 
     /* Audio */
     int num_samples;
     int sample_fmt;
     int channel_map;
-    int interleaved;
+    // TODO channel order
 } obe_raw_frame_t;
 
 typedef struct
