@@ -54,6 +54,37 @@ enum input_audio_connection
     INPUT_AUDIO_ANALOGUE,
 };
 
+enum input_video_format
+{
+    /* SD */
+    INPUT_VIDEO_FORMAT_PAL,
+    INPUT_VIDEO_FORMAT_NTSC,
+
+    /* 720p HD */
+    INPUT_VIDEO_FORMAT_720p_50,
+    INPUT_VIDEO_FORMAT_720p_5994,
+    INPUT_VIDEO_FORMAT_720p_60 , /* NB: actually 60.00Hz */
+
+    /* 1080i/p HD */
+    INPUT_VIDEO_FORMAT_1080i_50,
+    INPUT_VIDEO_FORMAT_1080i_5994,
+    INPUT_VIDEO_FORMAT_1080i_60, /* NB: actually 60.00Hz */
+
+    INPUT_VIDEO_FORMAT_1080p_2398,
+    INPUT_VIDEO_FORMAT_1080p_24,
+    INPUT_VIDEO_FORMAT_1080p_25,
+    INPUT_VIDEO_FORMAT_1080p_2997,
+    INPUT_VIDEO_FORMAT_1080p_30, /* NB: actually 30.00Hz */
+    INPUT_VIDEO_FORMAT_1080p_50,
+    INPUT_VIDEO_FORMAT_1080p_5994,
+    INPUT_VIDEO_FORMAT_1080p_60, /* NB: actually 60.00Hz */
+
+    /* 2K Modes */
+    INPUT_VIDEO_FORMAT_2K_2398,
+    INPUT_VIDEO_FORMAT_2K_24,
+    INPUT_VIDEO_FORMAT_2K_25,
+};
+
 enum input_type_e
 {
     INPUT_URL,
@@ -67,6 +98,9 @@ typedef struct
     int input_type;
     char *location;
 
+    int card_idx;
+
+    int video_format;
     int video_connection;
     int audio_connection;
 } obe_input_t;
@@ -96,12 +130,22 @@ enum stream_formats_e
 
     SUBTITLES_DVB,
     MISC_TELETEXT,
+    MISC_AFD,
+    MISC_PAN_SCAN,
+    MISC_WSS,
 
     /* Per-frame Streams/Data */
     SUBTITLES_CEA_608,
     SUBTITLES_CEA_708,
 
-    /* Vertical Ancillary */
+    /* Ancillary */
+    ANC_DVB_SCTE_VBI,
+    ANC_OP47_SDP,
+    ANC_OP47_MULTI_PACKET,
+    ANC_ATC,
+    ANC_DTV_PROGRAM_DESCRIPTION,
+    ANC_DTV_DATA_BROADCAST,
+    ANC_SMPTE_VBI,
 };
 
 typedef struct
