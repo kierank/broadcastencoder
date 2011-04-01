@@ -129,8 +129,8 @@ static void release_other_frame( void *ptr )
 {
      obe_raw_frame_t *raw_frame = ptr;
 
-     free( raw_frame->data );
-     free( raw_frame );
+     av_freep( &raw_frame->data );
+     av_freep( &raw_frame );
 }
 
 /* FFmpeg shouldn't call this */
@@ -511,7 +511,7 @@ void *open_input( void *ptr )
                 codec->flags |= CODEC_FLAG_EMU_EDGE;
             }
 
-	    if( avcodec_open( codec, dec ) < 0 )
+            if( avcodec_open( codec, dec ) < 0 )
                 return NULL; // TODO cleanup
 
             /* Wait for encoder to be ready */
@@ -520,7 +520,6 @@ void *open_input( void *ptr )
             if( !encoder->is_ready )
                 pthread_cond_wait( &encoder->encoder_cv, &encoder->encoder_mutex );
             pthread_mutex_unlock( &encoder->encoder_mutex );
-
         }
     }
 
@@ -568,7 +567,7 @@ void *open_input( void *ptr )
                 }
                 coded_frame->stream_id = out_lut->stream_id;
                 coded_frame->pts = pkt.pts;
-		add_to_mux_queue( h, coded_frame );
+                add_to_mux_queue( h, coded_frame );
             }
             else
             {
@@ -638,7 +637,7 @@ void *open_input( void *ptr )
         out_lut = find_lavf_stream_idx( stream_lut, input->output_streams[i].stream_id );
         codec = lavf->streams[out_lut->lavf_stream_idx]->codec;
 
-	if( codec )
+        if( codec )
             avcodec_close( codec );
     }
 
