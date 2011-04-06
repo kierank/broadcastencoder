@@ -119,6 +119,56 @@ void destroy_muxed_data( obe_muxed_data_t *muxed_data )
 }
 
 /** Add/Remove from queues */
+int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame )
+{
+    obe_filter_t *filter = NULL;
+    obe_raw_frame_t **tmp;
+
+    /* TODO: when only the fly reconfig is enabled, lock mutex */
+    for( int i = 0; i < h->num_filters; i++ )
+    {
+        for( int j = 0; j < h->filters[i]->num_stream_ids; j++ )
+        {
+            if( h->filters[i]->stream_id_list[j] == raw_frame->stream_id )
+                filter = h->filters[i];
+        }
+    }
+
+    if( !filter )
+        return -1;
+
+    pthread_mutex_lock( &filter->filter_mutex );
+    tmp = realloc( filter->frames, sizeof(*filter->frames) * (filter->num_raw_frames+1) );
+    if( !tmp )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+    filter->frames = tmp;
+    filter->frames[filter->num_raw_frames++] = raw_frame;
+    pthread_cond_signal( &filter->filter_cv );
+    pthread_mutex_unlock( &filter->filter_mutex );
+}
+
+int remove_frame_from_filter_queue( obe_filter_t *filter )
+{
+    obe_raw_frame_t **tmp;
+
+    pthread_mutex_lock( &filter->filter_mutex );
+    if( filter->num_raw_frames > 1 )
+        memmove( &filter->frames[0], &filter->frames[1], sizeof(*filter->frames) * (filter->num_raw_frames-1) );
+    tmp = realloc( filter->frames, sizeof(*filter->frames) * (filter->num_raw_frames-1) );
+    filter->num_raw_frames--;
+    if( !tmp && filter->num_raw_frames )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+    filter->frames = tmp;
+    pthread_mutex_unlock( &filter->filter_mutex );
+
+    return 0;
+}
 int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame )
 {
     obe_encoder_t *encoder = NULL;

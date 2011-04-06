@@ -195,6 +195,19 @@ typedef struct
 
 typedef struct
 {
+    int num_stream_ids;
+    int *stream_id_list;
+
+    pthread_t filter_thread;
+    pthread_mutex_t filter_mutex;
+    pthread_cond_t  filter_cv;
+
+    int num_raw_frames;
+    obe_raw_frame_t **frames;
+} obe_filter_t;
+
+typedef struct
+{
     int stream_id;
     int is_ready;
 
@@ -258,7 +271,9 @@ struct obe_t
     pthread_t output_thread;
     obe_output_opts_t output_opts;
 
-    /* Filtering TODO */
+    /* Filtering */
+    int num_filters;
+    obe_filter_t *filters[MAX_STREAMS];
 
     /* Input or Postfiltered frames for encoding */
     int num_encoders;
