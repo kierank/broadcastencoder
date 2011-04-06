@@ -24,7 +24,7 @@
 #include "common/common.h"
 #include "encoders/video/video.h"
 
-static void convert_cli_to_lib_pic( x264_picture_t *lib, cli_image_t *img )
+static void convert_cli_to_lib_pic( x264_picture_t *lib, obe_image_t *img )
 {
     memcpy( lib->img.i_stride, img->stride, sizeof(img->stride) );
     memcpy( lib->img.plane, img->plane, sizeof(img->plane) );

@@ -146,7 +146,7 @@ typedef struct
     int     planes;    /* number of planes */
     uint8_t *plane[4]; /* pointers for each plane */
     int     stride[4]; /* strides for each plane */
-} cli_image_t;
+} obe_image_t;
 
 typedef struct
 {
