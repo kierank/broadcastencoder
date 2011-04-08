@@ -148,6 +148,8 @@ int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame )
     filter->frames[filter->num_raw_frames++] = raw_frame;
     pthread_cond_signal( &filter->filter_cv );
     pthread_mutex_unlock( &filter->filter_mutex );
+
+    return 0;
 }
 
 int remove_frame_from_filter_queue( obe_filter_t *filter )
@@ -169,6 +171,7 @@ int remove_frame_from_filter_queue( obe_filter_t *filter )
 
     return 0;
 }
+
 int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame )
 {
     obe_encoder_t *encoder = NULL;

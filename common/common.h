@@ -304,6 +304,8 @@ void destroy_coded_frame( obe_coded_frame_t *coded_frame );
 obe_muxed_data_t *new_muxed_data( int len );
 void destroy_muxed_data( obe_muxed_data_t *muxed_data );
 
+int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame );
+int remove_frame_from_filter_queue( obe_filter_t *filter );
 int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame );
 int remove_frame_from_encode_queue( obe_encoder_t *encoder );
 int add_to_mux_queue( obe_t *h, obe_coded_frame_t *coded_frame );
