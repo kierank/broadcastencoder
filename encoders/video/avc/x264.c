@@ -112,7 +112,7 @@ static void *start_encoder( void *ptr )
         if( frame_size )
         {
             coded_frame = new_coded_frame( encoder->stream_id, frame_size );
-	    if( !coded_frame )
+            if( !coded_frame )
             {
                 syslog( LOG_ERR, "Malloc failed\n" );
                 goto fail;
