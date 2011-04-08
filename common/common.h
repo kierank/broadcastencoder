@@ -24,6 +24,8 @@
 #ifndef OBE_COMMON_H
 #define OBE_COMMON_H
 
+#include <libavutil/imgutils.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -45,6 +47,11 @@
 #define BOOLIFY(x) x = !!x
 #define MIN(a,b) ( (a)<(b) ? (a) : (b) )
 #define MAX(a,b) ( (a)>(b) ? (a) : (b) )
+
+static inline int obe_clip3( int v, int i_min, int i_max )
+{
+    return ( (v < i_min) ? i_min : (v > i_max) ? i_max : v );
+}
 
 typedef void *hnd_t;
 
@@ -152,6 +159,7 @@ typedef struct
 {
     int len;
     int type;
+    int final_type;
     uint8_t *data;
 } obe_user_data_t;
 
@@ -161,18 +169,20 @@ typedef struct
     int mins;
     int seconds;
     int frames;
+    int drop_frame;
 } obe_timecode_t;
 
 typedef struct
 {
     int stream_id;
     int64_t pts;
+    void *opaque;
 
+    void (*release_data)( void* );
     void (*release_frame)( void* );
 
     /* Video */
-    cli_image_t img;
-    void *opaque;
+    obe_image_t img;
 
     /* Ancillary / User-data */
     int num_user_data;

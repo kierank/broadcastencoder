@@ -100,6 +100,7 @@ static void *start_encoder( void *ptr )
 
         frame_size = x264_encoder_encode( s, &nal, &i_nal, &pic, &pic_out );
 
+        raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
         remove_frame_from_encode_queue( encoder );
 

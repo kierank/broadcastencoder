@@ -117,20 +117,25 @@ static void obe_release_buffer( AVCodecContext *codec, AVFrame *pic )
      memset( pic->data, 0, sizeof(pic->data) );
 }
 
-static void release_video_frame( void *ptr )
+static void release_video_data( void *ptr )
 {
      obe_raw_frame_t *raw_frame = ptr;
-
      av_freep( &raw_frame->img.plane[0] );
-     free( raw_frame );
 }
 
-static void release_other_frame( void *ptr )
+static void release_other_data( void *ptr )
+{
+     obe_raw_frame_t *raw_frame = ptr;
+     av_freep( &raw_frame->data );
+}
+
+static void release_frame( void *ptr )
 {
      obe_raw_frame_t *raw_frame = ptr;
 
-     av_freep( &raw_frame->data );
-     av_freep( &raw_frame );
+     /* TODO: free user-data */
+
+     free( raw_frame );
 }
 
 /* FFmpeg shouldn't call this */
@@ -587,12 +592,14 @@ void *open_input( void *ptr )
                             break;
                         }
                         raw_frame->stream_id = out_lut->stream_id;
+                        raw_frame->img.csp = codec->pix_fmt;
 
-                        /* XXX: full_range_flag is almost always wrong so ignore it for now */
-                        raw_frame->img.csp = PIX_FMT_YUV420P;
+                        /* full_range_flag is almost always wrong so ignore it */
+                        if( raw_frame->img.csp == PIX_FMT_YUVJ420P )
+                            raw_frame->img.csp = PIX_FMT_YUV420P;
 
-                        width = codec->width;
-                        height = codec->height;
+                        raw_frame->img.width = width = codec->width;
+                        raw_frame->img.height = height = codec->height;
 
                         /* FIXME: get rid of this ugly memcpy */
                         avcodec_align_dimensions2( codec, &width, &height, stride );
@@ -605,7 +612,8 @@ void *open_input( void *ptr )
                         av_image_copy( raw_frame->img.plane, raw_frame->img.stride, (const uint8_t**)&frame.data,
                                        frame.linesize, codec->pix_fmt, width, height );
 
-                        raw_frame->release_frame = release_video_frame;
+                        raw_frame->release_data = release_video_data;
+                        raw_frame->release_frame = release_frame;
 
                         raw_frame->pts = 0;
                         if( codec->has_b_frames && frame.reordered_opaque != AV_NOPTS_VALUE )
