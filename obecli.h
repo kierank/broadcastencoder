@@ -145,6 +145,7 @@ static const obecli_input_name_t input_names[] =
 /* Format names */
 static const obecli_format_name_t format_names[] =
 {
+    { VIDEO_UNCOMPRESSED, "RAW", "Uncompressed Video",    NULL, NULL },
     { VIDEO_AVC,    "AVC",      "Advanced Video Coding", "FFmpeg AVC decoder",        "x264 encoder" },
     { VIDEO_MPEG2,  "MPEG-2",   "MPEG-2",                "FFmpeg MPEG-2 decoder",     NULL  },
     { AUDIO_PCM,    "PCM",      "Pulse Code Modulation (Raw audio)", "N/A",           NULL },
