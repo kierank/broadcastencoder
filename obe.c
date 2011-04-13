@@ -89,6 +89,27 @@ void destroy_coded_frame( obe_coded_frame_t *coded_frame )
     free( coded_frame );
 }
 
+void obe_release_video_data( void *ptr )
+{
+     obe_raw_frame_t *raw_frame = ptr;
+     av_freep( &raw_frame->img.plane[0] );
+}
+
+void obe_release_other_data( void *ptr )
+{
+     obe_raw_frame_t *raw_frame = ptr;
+     av_freep( &raw_frame->data );
+}
+
+void obe_release_frame( void *ptr )
+{
+     obe_raw_frame_t *raw_frame = ptr;
+
+     /* TODO: free user-data */
+
+     free( raw_frame );
+}
+
 /* Muxed data */
 obe_muxed_data_t *new_muxed_data( int len )
 {

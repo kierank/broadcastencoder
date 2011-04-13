@@ -24,6 +24,7 @@
 #ifndef OBE_COMMON_H
 #define OBE_COMMON_H
 
+#include <libavutil/pixfmt.h>
 #include <libavutil/imgutils.h>
 
 #include <stdio.h>
@@ -311,6 +312,10 @@ void destroy_raw_frame( obe_raw_frame_t *raw_frame );
 int remove_early_frames( obe_t *h, int64_t pts );
 obe_coded_frame_t *new_coded_frame( int stream_id, int len );
 void destroy_coded_frame( obe_coded_frame_t *coded_frame );
+void obe_release_video_data( void *ptr );
+void obe_release_other_data( void *ptr );
+void obe_release_frame( void *ptr );
+
 obe_muxed_data_t *new_muxed_data( int len );
 void destroy_muxed_data( obe_muxed_data_t *muxed_data );
 

@@ -23,8 +23,8 @@
 
 #include "common/common.h"
 #include "input/input.h"
+#include "input/lavc.h"
 #include <libavformat/avformat.h>
-#include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
 
 /* TODO: add support for choosing programs */
@@ -89,68 +89,6 @@ static void close_input( void *ptr )
 
     if( status->status )
         av_close_input_file( *status->lavf );
-}
-
-static int obe_get_buffer( AVCodecContext *codec, AVFrame *pic )
-{
-    int w = codec->width;
-    int h = codec->height;
-    int stride[4];
-
-    avcodec_align_dimensions2( codec, &w, &h, stride );
-
-    /* Only EDGE_EMU codecs are used */
-    if( av_image_alloc( pic->data, pic->linesize, w, h, codec->pix_fmt, 16 ) < 0 )
-        return -1;
-
-    pic->age    = 256*256*256*64; /* FIXME is there a correct value for this? */
-    pic->type   = FF_BUFFER_TYPE_USER;
-    pic->reordered_opaque = codec->reordered_opaque;
-    pic->pkt_pts = codec->pkt ? codec->pkt->pts : AV_NOPTS_VALUE;
-
-    return 0;
-}
-
-static void obe_release_buffer( AVCodecContext *codec, AVFrame *pic )
-{
-     av_freep( &pic->data[0] );
-     memset( pic->data, 0, sizeof(pic->data) );
-}
-
-static void release_video_data( void *ptr )
-{
-     obe_raw_frame_t *raw_frame = ptr;
-     av_freep( &raw_frame->img.plane[0] );
-}
-
-static void release_other_data( void *ptr )
-{
-     obe_raw_frame_t *raw_frame = ptr;
-     av_freep( &raw_frame->data );
-}
-
-static void release_frame( void *ptr )
-{
-     obe_raw_frame_t *raw_frame = ptr;
-
-     /* TODO: free user-data */
-
-     free( raw_frame );
-}
-
-/* FFmpeg shouldn't call this */
-static int obe_reget_buffer( AVCodecContext *codec, AVFrame *pic )
-{
-    if( pic->data[0] == NULL )
-    {
-        pic->buffer_hints |= FF_BUFFER_HINTS_READABLE;
-        return codec->get_buffer( codec, pic );
-    }
-
-    pic->reordered_opaque = codec->reordered_opaque;
-    pic->pkt_pts = codec->pkt ? codec->pkt->pts : AV_NOPTS_VALUE;
-
-    return 0;
 }
 
 /* TODO: share some more code between probe_stream and open_stream */
@@ -611,8 +549,8 @@ void *open_input( void *ptr )
                         av_image_copy( raw_frame->img.plane, raw_frame->img.stride, (const uint8_t**)&frame.data,
                                        frame.linesize, codec->pix_fmt, width, height );
 
-                        raw_frame->release_data = release_video_data;
-                        raw_frame->release_frame = release_frame;
+                        raw_frame->release_data = obe_release_video_data;
+                        raw_frame->release_frame = obe_release_frame;
 
                         raw_frame->pts = 0;
                         if( codec->has_b_frames && frame.reordered_opaque != AV_NOPTS_VALUE )
