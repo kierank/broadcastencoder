@@ -35,13 +35,17 @@
 #define KDeckLinkPreviewAPI_Name "libDeckLinkPreviewAPI.so"
 
 typedef IDeckLinkIterator* (*CreateIteratorFunc)(void);
+typedef IDeckLinkAPIInformation* (*CreateAPIInformationFunc)(void);
 typedef IDeckLinkGLScreenPreviewHelper* (*CreateOpenGLScreenPreviewHelperFunc)(void);
 typedef IDeckLinkVideoConversion* (*CreateVideoConversionInstanceFunc)(void);
 
 static pthread_once_t					gDeckLinkOnceControl = PTHREAD_ONCE_INIT;
 static pthread_once_t					gPreviewOnceControl = PTHREAD_ONCE_INIT;
 
+static bool								gLoadedDeckLinkAPI = false;
+
 static CreateIteratorFunc					gCreateIteratorFunc = NULL;
+static CreateAPIInformationFunc				gCreateAPIInformationFunc = NULL;
 static CreateOpenGLScreenPreviewHelperFunc	gCreateOpenGLPreviewFunc = NULL;
 static CreateVideoConversionInstanceFunc	gCreateVideoConversionFunc	= NULL;
 
@@ -55,8 +59,14 @@ void	InitDeckLinkAPI (void)
 		fprintf(stderr, "%s\n", dlerror());
 		return;
 	}
+	
+	gLoadedDeckLinkAPI = true;
+	
 	gCreateIteratorFunc = (CreateIteratorFunc)dlsym(libraryHandle, "CreateDeckLinkIteratorInstance_0001");
 	if (!gCreateIteratorFunc)
+		fprintf(stderr, "%s\n", dlerror());
+	gCreateAPIInformationFunc = (CreateAPIInformationFunc)dlsym(libraryHandle, "CreateDeckLinkAPIInformationInstance_0001");
+	if (!gCreateAPIInformationFunc)
 		fprintf(stderr, "%s\n", dlerror());
 	gCreateVideoConversionFunc = (CreateVideoConversionInstanceFunc)dlsym(libraryHandle, "CreateVideoConversionInstance_0001");
 	if (!gCreateVideoConversionFunc)
@@ -78,6 +88,12 @@ void	InitDeckLinkPreviewAPI (void)
 		fprintf(stderr, "%s\n", dlerror());
 }
 
+bool		IsDeckLinkAPIPresent (void)
+{
+	// If the DeckLink API dynamic library was successfully loaded, return this knowledge to the caller
+	return gLoadedDeckLinkAPI;
+}
+
 IDeckLinkIterator*		CreateDeckLinkIteratorInstance (void)
 {
 	pthread_once(&gDeckLinkOnceControl, InitDeckLinkAPI);
@@ -85,6 +101,15 @@ IDeckLinkIterator*		CreateDeckLinkIteratorInstance (void)
 	if (gCreateIteratorFunc == NULL)
 		return NULL;
 	return gCreateIteratorFunc();
+}
+
+IDeckLinkAPIInformation*	CreateDeckLinkAPIInformationInstance (void)
+{
+	pthread_once(&gDeckLinkOnceControl, InitDeckLinkAPI);
+	
+	if (gCreateAPIInformationFunc == NULL)
+		return NULL;
+	return gCreateAPIInformationFunc();
 }
 
 IDeckLinkGLScreenPreviewHelper*		CreateOpenGLScreenPreviewHelper (void)
