@@ -52,7 +52,7 @@ void destroy_device( obe_device_t *device )
 /* Raw frame */
 obe_raw_frame_t *new_raw_frame( void )
 {
-    obe_raw_frame_t *raw_frame = calloc( 1, sizeof(obe_raw_frame_t) );
+    obe_raw_frame_t *raw_frame = calloc( 1, sizeof(*raw_frame) );
 
     if( !raw_frame )
     {
