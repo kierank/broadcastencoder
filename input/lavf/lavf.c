@@ -420,9 +420,8 @@ void *probe_stream( void *ptr )
     device->pmt_pid = pmt_pid;
     device->pcr_pid = pcr_pid;
 
-    pthread_mutex_lock( &h->device_list_mutex );
-    h->devices[h->num_devices++] = device;
-    pthread_mutex_unlock( &h->device_list_mutex );
+    /* add device */
+    add_device( h, device );
 
     pthread_cleanup_pop( 1 );
 

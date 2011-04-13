@@ -118,6 +118,14 @@ void destroy_muxed_data( obe_muxed_data_t *muxed_data )
     free( muxed_data );
 }
 
+/**  Add/Remove misc **/
+void add_device( obe_t *h, obe_device_t *device )
+{
+    pthread_mutex_lock( &h->device_list_mutex );
+    h->devices[h->num_devices++] = device;
+    pthread_mutex_unlock( &h->device_list_mutex );
+}
+
 /** Add/Remove from queues */
 int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame )
 {
