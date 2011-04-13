@@ -105,23 +105,21 @@ void *probe_stream( void *ptr )
     lavf_stream_lut *stream_lut, *out_lut;
 
     AVFormatContext *lavf;
+    status.lavf = &lavf;
     AVProgram *cur_program;
     AVStream *stream;
     AVCodecContext *codec;
     AVMetadataTag *lang = NULL;
-    AVCodec *dec;
-
-    status.lavf = &lavf;
-
     AVPacket pkt;
+    AVCodec *dec;
     AVFrame frame;
-    avcodec_get_frame_defaults( &frame );
-
     AVSubtitle subtitle;
+
+    avcodec_init();
+    avcodec_get_frame_defaults( &frame );
 
     av_register_all();
     av_log_set_level( AV_LOG_QUIET );
-    avcodec_init();
 
     pthread_cleanup_push( close_input, (void*)&status );
 
@@ -161,17 +159,16 @@ void *probe_stream( void *ptr )
                 if( codec->codec_id != CODEC_ID_DVB_TELETEXT && avcodec_open( codec, dec ) < 0 )
                     continue;
 
-                /* FIXME: write filter chain to allow 422 input and 10-bit input */
-                if( codec->codec_type == CODEC_TYPE_VIDEO && !(codec->pix_fmt == PIX_FMT_YUV420P || codec->pix_fmt == PIX_FMT_YUVJ420P) )
-                    continue;
-
                 /* FIXME: ignore vfr streams for now */
                 if( codec->codec_id == CODEC_ID_H264 && !codec->h264_fixed_frame_rate )
                     continue;
 
-                streams[num_streams] = calloc( 1, sizeof(obe_int_input_stream_t) );
+                streams[num_streams] = calloc( 1, sizeof(*streams[num_streams]) );
                 if( !streams[num_streams] )
+                {
+                    fprintf( stderr, "Malloc failed\n" );
                     goto fail;
+                }
 
                 pthread_mutex_lock( &h->device_list_mutex );
                 streams[num_streams]->stream_id = h->cur_stream_id++;
@@ -366,7 +363,7 @@ void *probe_stream( void *ptr )
     return NULL;
 
 fail:
-    fprintf( stderr, "malloc failed \n" );
+    fprintf( stderr, "Malloc failed \n" );
 
     for( int k = 0; k < num_streams; k++ )
         free( streams[k] );
