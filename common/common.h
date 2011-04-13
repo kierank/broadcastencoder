@@ -309,7 +309,6 @@ obe_device_t *new_device( void );
 void destroy_device( obe_device_t *device );
 obe_raw_frame_t *new_raw_frame( void );
 void destroy_raw_frame( obe_raw_frame_t *raw_frame );
-int remove_early_frames( obe_t *h, int64_t pts );
 obe_coded_frame_t *new_coded_frame( int stream_id, int len );
 void destroy_coded_frame( obe_coded_frame_t *coded_frame );
 void obe_release_video_data( void *ptr );
@@ -327,6 +326,7 @@ int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame );
 int remove_frame_from_encode_queue( obe_encoder_t *encoder );
 int add_to_mux_queue( obe_t *h, obe_coded_frame_t *coded_frame );
 int remove_from_mux_queue( obe_t *h, obe_coded_frame_t *coded_frame );
+int remove_early_frames( obe_t *h, int64_t pts );
 int add_to_output_queue( obe_t *h, obe_muxed_data_t *muxed_data );
 int remove_from_output_queue( obe_t *h );
 
