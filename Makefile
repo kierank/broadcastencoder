@@ -66,7 +66,7 @@ distclean: clean
 	rm -f config.mak config.h config.log obe.pc
 	rm -rf test/
 
-install: x264$(EXE) $(SONAME)
+install: obecli$(EXE) $(SONAME)
 	install -d $(DESTDIR)$(bindir)
 	install -d $(DESTDIR)$(includedir)
 	install -d $(DESTDIR)$(libdir)
