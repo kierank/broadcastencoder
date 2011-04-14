@@ -696,18 +696,19 @@ int obe_start( obe_t *h )
     }
 
     /* Open Mux Thread */
+    pthread_mutex_init( &h->mux_mutex, NULL );
+    pthread_cond_init( &h->mux_cv, NULL );
     obe_mux_params_t *mux_params = calloc( 1, sizeof(*mux_params) );
     // FIXME fail
     mux_params->h = h;
     mux_params->device = h->devices[0];
     mux_params->num_output_streams = h->num_output_streams;
     mux_params->output_streams = h->output_streams;
-    // FIXME fail
     rc = pthread_create( &h->mux_thread, NULL, ts_muxer.open_muxer, (void*)mux_params );
 
     if( rc < 0 )
     {
-        fprintf( stderr, "Couldn't create output thread \n" );
+        fprintf( stderr, "Couldn't create mux thread \n" );
         return -1;
     }
 
