@@ -11,7 +11,7 @@ SRCS = obe.c \
        mux/ts/ts.c \
        output/network.c output/rtp/rtp.c output/udp/udp.c
 
-SRCCPP =
+SRCCXX =
 
 SRCCLI = obecli.c
 
@@ -19,12 +19,17 @@ SRCSO =
 
 CONFIG := $(shell cat config.h)
 
-# GPL-only files
-ifneq ($(findstring HAVE_GPL 1, $(CONFIG)),)
-SRCCLI +=
+# Optional module sources
+ifneq ($(findstring HAVE_LIBTWOLAME 1, $(CONFIG)),)
+SRCS += encoders/audio/mp2/twolame.c
+endif
+
+ifneq ($(findstring HAVE_DECKLINK 1, $(CONFIG)),)
+SRCCXX += input/sdi/decklink/decklink.cpp
 endif
 
 OBJS = $(SRCS:%.c=%.o)
+OBJSCXX = $(SRCCXX:%.cpp=%.o)
 OBJCLI = $(SRCCLI:%.c=%.o)
 OBJSO = $(SRCSO:%.c=%.o)
 DEP  = depend
@@ -33,19 +38,23 @@ DEP  = depend
 
 default: $(DEP) obecli$(EXE)
 
-libobe.a: .depend $(OBJS) $(OBJASM)
-	$(AR) rc libobe.a $(OBJS) $(OBJASM)
+libobe.a: .depend $(OBJS) $(OBJSCXX)
+	$(AR) rc libobe.a $(OBJS) $(OBJSCXX)
 	$(RANLIB) libobe.a
 
-$(SONAME): .depend $(OBJS) $(OBJASM) $(OBJSO)
-	$(CC) -shared -o $@ $(OBJS) $(OBJASM) $(OBJSO) $(SOFLAGS) $(LDFLAGS)
+$(SONAME): .depend $(OBJS) $(OBJSCXX) $(OBJSO)
+	$(CC) -shared -o $@ $(OBJS) $(OBJSO) $(SOFLAGS) $(LDFLAGS)
 
 obecli$(EXE): $(OBJCLI) libobe.a
 	$(CC) -o $@ $+ $(LDFLAGSCLI) $(LDFLAGS)
 
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -o $@ $<
+
 .depend: config.mak
 	@rm -f .depend
 	@$(foreach SRC, $(SRCS) $(SRCCLI) $(SRCSO), $(CC) $(CFLAGS) $(SRC) -MT $(SRC:%.c=%.o) -MM -g0 1>> .depend;)
+	@$(foreach SRC, $(SRCCXX), $(CXX) $(CXXFLAGS) $(SRC) -MT $(SRCCXX:%.cpp=%.o) -MM -g0 1>> .depend;)
 
 config.mak:
 	./configure
@@ -58,8 +67,7 @@ endif
 SRC2 = $(SRCS) $(SRCCLI)
 
 clean:
-	rm -f $(OBJS) $(OBJASM) $(OBJCLI) $(OBJSO) $(SONAME) *.a obe obe.exe .depend TAGS
-	rm -f checkasm checkasm.exe tools/checkasm.o tools/checkasm-a.o
+	rm -f $(OBJS) $(OBJSCXX) $(OBJCLI) $(OBJSO) $(SONAME) *.a obe obe.exe .depend TAGS
 	rm -f $(SRC2:%.c=%.gcda) $(SRC2:%.c=%.gcno)
 	- sed -e 's/ *-fprofile-\(generate\|use\)//g' config.mak > config.mak2 && mv config.mak2 config.mak
 

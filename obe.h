@@ -88,7 +88,7 @@ enum input_video_format
 enum input_type_e
 {
     INPUT_URL,
-//    INPUT_DEVICE_SDI_DECKLINK,
+    INPUT_DEVICE_SDI_DECKLINK,
 //    INPUT_DEVICE_SDI_V4L2,
 //    INPUT_DEVICE_ASI,
 };

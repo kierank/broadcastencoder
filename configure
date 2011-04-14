@@ -15,13 +15,13 @@ echo "  --host=HOST              build programs to run on HOST"
 echo "  --cross-prefix=PREFIX    use PREFIX for compilation tools"
 echo "  --sysroot=SYSROOT        root of cross-build tree"
 echo ""
-echo "audio/video decoding:"
+echo "input"
 echo ""
+echo "  --disable-decklink       disable support for decklink input"
 echo "  --disable-lavf           disable support for libavformat"
 echo ""
 echo "audio encoding:"
 echo ""
-echo "  --disable-libaften       disable support for libaften"
 echo "  --disable-twolame        disable support for twolame"
 echo ""
 echo "filtering:"
@@ -163,15 +163,15 @@ debug="no"
 libx264="auto"
 lmpegts="auto"
 pthread="auto"
-libaften="auto"
-libtwolame="auto"
+ltwolame="auto"
 swscale="auto"
 lavf="auto"
 readline="auto"
 decklink="auto"
+lzvbi="auto"
 
 CFLAGS="$CFLAGS -Wall -I."
-CXXFLAGS="$CXXFLAGS -Wall -I."
+CXXFLAGS="$CXXFLAGS -c -Wall -I."
 LDFLAGS="$LDFLAGS"
 LDFLAGSCLI="$LDFLAGSCLI"
 ASFLAGS="$ASFLAGS"
@@ -201,20 +201,23 @@ for opt do
             ;;
 
 # stuff here
-        --disable-libmpegts)
-            lmpegts="no"
+        --disable-decklink)
+            decklink="no"
             ;;
-        --disable-libaften)
-            libaften="no"
-            ;;
-        --disable-libtwolame)
-            libtwolame="no"
-            ;;
-        --disable-swscale)
-            swscale="no"
+        --disable-libzvbi)
+            lzvbi="no"
             ;;
         --disable-lavf)
             lavf="no"
+            ;;
+        --disable-libmpegts)
+            lmpegts="no"
+            ;;
+        --disable-libtwolame)
+            ltwolame="no"
+            ;;
+        --disable-swscale)
+            swscale="no"
             ;;
         --disable-readline)
             readline="no"
@@ -501,17 +504,17 @@ if [ "$libx264" = "no" ] ; then
     die "libx264 is a mandatory component"
 fi
 
-if [ "$libtwolame" = "auto" ] ; then
-    libtwolame="no"
-    libtwolameflags="-ltwolame"
-    if cc_check "twolame.h" $libtwolameflags "twolame_init();" ; then
-        libtwolame="yes"
+if [ "$ltwolame" = "auto" ] ; then
+    ltwolame="no"
+    ltwolameflags="-ltwolame"
+    if cc_check "twolame.h" $ltwolameflags "twolame_init();" ; then
+        ltwolame="yes"
     fi
 fi
 
-if [ "$libtwolame" = "yes" ] ; then
+if [ "$ltwolame" = "yes" ] ; then
     define HAVE_LIBTWOLAME
-    LDFLAGS="$LDFLAGS $libtwolameflags" # fixme cflags too?
+    LDFLAGS="$LDFLAGS $ltwolameflags" # fixme cflags too?
 fi
 
 if [ "$swscale" = "auto" ] ; then
@@ -567,12 +570,14 @@ if [ "$lavf" = "auto" ] ; then
 fi
 
 if [ "$lavf" = "yes" ]; then
-    LDFLAGSCLI="$LAVF_LIBS $LDFLAGSCLI"
+    LDFLAGS="$LAVF_LIBS $LDFLAGS"
     CFLAGS="$CFLAGS $LAVF_CFLAGS"
 elif [ "$swscale" = "yes" ]; then
-    LDFLAGSCLI="$SWSCALE_LIBS $LDFLAGSCLI"
+    LDFLAGS="$SWSCALE_LIBS $LDFLAGS"
     CFLAGS="$CFLAGS $SWSCALE_CFLAGS"
 fi
+
+# TODO fail libavformat
 
 if [ "$readline" = "auto" ] ; then
     readline="no"
@@ -598,7 +603,7 @@ fi
 
 if [ "$lmpegts" = "yes" ] ; then
     define HAVE_LIBMPEGTS
-    LDFLAGSCLI="$LMPEGTS_LIBS $LDFLAGSCLI"
+    LDFLAGS="$LDFLAGS $LMPEGTS_LIBS"
 fi
 
 if [ "$decklink" = "auto" ] ; then
@@ -614,8 +619,25 @@ if [ "$decklink" = "auto" ] ; then
     fi
 fi
 
+DECKLINK_CXXFLAGS="-lavformat -lavcodec -lswscale -lavutil $libpthread -ldl "
+DECKLINK_LIBS="-lstdc++ -ldl"
 if [ "$decklink" = "yes" ] ; then
     define HAVE_DECKLINK
+    CXXFLAGS="$CXXFLAGS $DECKLINK_CXXFLAGS"
+    LDFLAGS="$LDFLAGS $DECKLINK_LIBS"
+fi
+
+LZVBI_LIBS="-lzvbi"
+if [ "$lzvbi" = "auto" ] ; then
+    lzvbi="no"
+    if cc_check libzvbi.h "$LZVBI_LIBS" ; then
+        lzvbi="yes"
+    fi
+fi
+
+if [ "$lzvbi" = "yes" ] ; then
+    define HAVE_LIBZVBI
+    LDFLAGS="$LDFLAGS $LZVBI_LIBS"
 fi
 
 if [ "$debug" != "yes" ]; then
@@ -631,6 +653,7 @@ elif [ $ARCH = ARM ]; then
     CFLAGS="-O3 -fno-fast-math $CFLAGS"
 else
     CFLAGS="-O3 -ffast-math $CFLAGS"
+    CXXFLAGS="-O3 -ffast-math $CXXFLAGS"
 fi
 
 if cc_check '' -fno-tree-vectorize ; then
@@ -667,6 +690,7 @@ SYS=$SYS
 CC=$CC
 CXX=$CXX
 CFLAGS=$CFLAGS
+CXXFLAGS=$CXXFLAGS
 LDFLAGS=$LDFLAGS
 LDFLAGSCLI=$LDFLAGSCLI
 AR=$AR
@@ -690,6 +714,7 @@ System:     $SYS
 Input
 
 decklink:   $decklink
+libzvbi:    $lzvbi
 
 Audio/Video Decoding
 
@@ -701,7 +726,7 @@ swscale:    $swscale
 
 Audio Encoders
 
-libtwolame: $libtwolame
+libtwolame: $ltwolame
 
 Mux
 
