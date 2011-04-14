@@ -156,7 +156,7 @@ void *open_muxer( void *ptr )
         stream->stream_id = mpegts_stream_info[j][2];
         if( mux_opts->passthrough )
         {
-            stream->pid = output_stream->ts_opts.pid = input_stream->pid ? input_stream->pid : cur_pid++;
+            output_stream->ts_opts.pid = stream->pid = input_stream->pid ? input_stream->pid : cur_pid++;
             if( input_stream->stream_type == STREAM_TYPE_AUDIO )
             {
                 stream->write_lang_code = !!strlen( input_stream->lang_code );
@@ -168,7 +168,7 @@ void *open_muxer( void *ptr )
         }
         else
         {
-            stream->pid = output_stream->ts_opts.pid ? output_stream->ts_opts.pid : cur_pid++;
+            output_stream->ts_opts.pid = stream->pid = output_stream->ts_opts.pid ? output_stream->ts_opts.pid : cur_pid++;
             if( input_stream->stream_type == STREAM_TYPE_AUDIO )
             {
                 stream->write_lang_code = !!strlen( output_stream->ts_opts.lang_code );
@@ -202,7 +202,7 @@ void *open_muxer( void *ptr )
 
     /* Video stream isn't guaranteed to be first so populate program parameters here */
     if( !mux_opts->passthrough )
-        program.pmt_pid = mux_opts->pmt_pid ? mux_opts->pmt_pid : video_pid;
+        program.pcr_pid = mux_opts->pcr_pid ? mux_opts->pcr_pid : video_pid;
 
     if( ts_setup_transport_stream( w, &params ) < 0 )
     {
