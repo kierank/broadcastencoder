@@ -23,6 +23,7 @@
 
 #include "common/common.h"
 #include "input/input.h"
+#include "filters/video/video.h"
 #include "encoders/video/video.h"
 #include "mux/mux.h"
 #include "output/output.h"
