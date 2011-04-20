@@ -42,7 +42,7 @@
 #define MAX_DEVICES 1
 #define MAX_STREAMS 40
 
-#define MAX_PROBE_TIME 200
+#define MAX_PROBE_TIME 20
 
 /* Macros */
 #define BOOLIFY(x) x = !!x
@@ -55,6 +55,20 @@ static inline int obe_clip3( int v, int i_min, int i_max )
 }
 
 typedef void *hnd_t;
+
+typedef struct
+{
+    int dvb_subtitling_type;
+    int composition_page_id;
+    int ancillary_page_id;
+} obe_dvb_sub_info_t;
+
+typedef struct
+{
+    int dvb_teletext_type;
+    int dvb_teletext_magazine_number;
+    int dvb_teletext_page_number;
+} obe_dvb_ttx_info_t;
 
 typedef struct
 {
@@ -111,10 +125,10 @@ typedef struct
 
     /** Subtitles **/
     /* DVB */
+    int has_dds;
     int dvb_subtitling_type;
     int composition_page_id;
     int ancillary_page_id;
-    int has_dds;
 
     /** DVB Teletext **/
     int dvb_teletext_type;
@@ -259,6 +273,14 @@ typedef struct
     int64_t *pcr_list;
     int64_t *pcr_list_pos;
 } obe_muxed_data_t;
+
+typedef struct
+{
+    pthread_mutex_t output_mutex;
+    pthread_cond_t  output_cv;
+    int num_muxed_data;
+    obe_muxed_data_t **muxed_data;
+} obe_output_t;
 
 struct obe_t
 {
