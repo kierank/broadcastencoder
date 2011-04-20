@@ -699,7 +699,7 @@ static void *open_input( void *ptr )
 
     open_card( decklink_opts );
 
-    sleep( 2000 );
+    sleep( INT_MAX );
 
     close_card( decklink_opts );
 
