@@ -89,8 +89,8 @@ static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
                                          vfilt->sws_ctx_flags, NULL, NULL, NULL );
         if( !vfilt->sws_ctx )
         {
-            fprintf( stderr, "swsfail \n" );
-            // TODO fail
+            fprintf( stderr, "Video scaling failed\n" );
+            return -1;
         }
 
     }
@@ -148,7 +148,6 @@ static void dither_plane_##pitch( pixel *dst, int dst_stride, uint16_t *src, int
 DITHER_PLANE( 1 )
 DITHER_PLANE( 2 )
 
-
 static int dither_image( obe_raw_frame_t *raw_frame, int16_t *error_buf )
 {
     obe_image_t *img = &raw_frame->img;
@@ -188,7 +187,7 @@ static int dither_image( obe_raw_frame_t *raw_frame, int16_t *error_buf )
     }
 
     raw_frame->release_data( raw_frame );
-    memcpy( &raw_frame->img, out, sizeof(*out) );
+    memcpy( &raw_frame->img, out, sizeof(obe_image_t) );
 
     return 0;
 }
