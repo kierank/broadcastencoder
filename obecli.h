@@ -145,17 +145,17 @@ static const obecli_input_name_t input_names[] =
 /* Format names */
 static const obecli_format_name_t format_names[] =
 {
-    { VIDEO_UNCOMPRESSED, "RAW", "Uncompressed Video",    NULL, NULL },
+    { VIDEO_UNCOMPRESSED, "RAW", "Uncompressed Video",    NULL,                       NULL },
     { VIDEO_AVC,    "AVC",      "Advanced Video Coding", "FFmpeg AVC decoder",        "x264 encoder" },
-    { VIDEO_MPEG2,  "MPEG-2",   "MPEG-2",                "FFmpeg MPEG-2 decoder",     NULL  },
-    { AUDIO_PCM,    "PCM",      "Pulse Code Modulation (Raw audio)", "N/A",           NULL },
-    { AUDIO_MP2,    "MP2",      "MPEG-1 Layer II",       "FFmpeg MP2 audio decoder",  "twolame encoder" },
+    { VIDEO_MPEG2,  "MPEG-2",   "MPEG-2 Video",          "FFmpeg MPEG-2 decoder",     NULL },
+    { AUDIO_PCM,    "PCM",      "PCM (raw audio)",       "N/A",                       NULL },
+    { AUDIO_MP2,    "MP2",      "MPEG-1 Layer II Audio", "FFmpeg MP2 audio decoder",  "twolame encoder" },
     { AUDIO_AC_3,   "AC3",      "ATSC A/52B / AC-3",     "FFmpeg AC-3 audio decoder", "FFmpeg AC-3 encoder" },
     { AUDIO_E_AC_3, "E-AC3",    "ATSC A/52B Annex E / Enhanced AC-3", "FFmpeg E-AC3 audio decoder", NULL  },
 //    { AUDIO_E_DIST, "E-Dist", "E-distribution audio" },
     { AUDIO_AAC,    "AAC",      "Advanced Audio Coding", "FFmpeg AAC decoder",        "Quicktime AAC encoder" },
-    { SUBTITLES_DVB, "DVB-SUB", "DVB Subtitles", NULL, NULL },
-    { MISC_TELETEXT, "DVB-TTX", "DVB Teletext", NULL, NULL },
+    { SUBTITLES_DVB, "DVB-SUB", "DVB Subtitles",         NULL,                        NULL },
+    { MISC_TELETEXT, "DVB-TTX", "DVB Teletext",          NULL,                        NULL },
     { 0, 0, 0, 0, 0 },
 };
 
