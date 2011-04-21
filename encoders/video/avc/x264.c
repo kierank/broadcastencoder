@@ -24,6 +24,20 @@
 #include "common/common.h"
 #include "encoders/video/video.h"
 
+struct x264_status
+{
+    x264_t **s;
+    obe_vid_enc_params_t *enc_params;
+};
+
+static void close_encoder( void *ptr )
+{
+    struct x264_status *x264_status = ptr;
+    if( *x264_status->s )
+        x264_encoder_close( *x264_status->s );
+    free( x264_status->enc_params );
+}
+
 static void convert_cli_to_lib_pic( x264_picture_t *lib, obe_image_t *img )
 {
     memcpy( lib->img.i_stride, img->stride, sizeof(img->stride) );
@@ -37,7 +51,7 @@ static void *start_encoder( void *ptr )
     obe_vid_enc_params_t *enc_params = ptr;
     obe_t *h = enc_params->h;
     obe_encoder_t *encoder = enc_params->encoder;
-    x264_t *s;
+    x264_t *s = NULL;
     x264_picture_t pic, pic_out;
     x264_nal_t *nal;
     int i_nal, frame_size = 0;
@@ -45,6 +59,12 @@ static void *start_encoder( void *ptr )
     int64_t *pts2;
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
+
+    struct x264_status status;
+    status.s = &s;
+    status.enc_params = enc_params;
+
+    pthread_cleanup_push( close_encoder, (void*)&status );
 
     /* TODO check for width, height changes */
 
@@ -133,8 +153,7 @@ static void *start_encoder( void *ptr )
     }
 
 fail:
-    x264_encoder_close( s );
-    free( ptr );
+    pthread_cleanup_pop( 1 );
 
     return NULL;
 }
