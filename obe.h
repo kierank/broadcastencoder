@@ -227,10 +227,7 @@ typedef struct
 /**** AVC Encoding ****/
 /* Use this function to let OBE guess the encoding profile.
  * You can use the functions in the x264 API for tweaking or edit the parameter struct directly.
- * Be aware that some parameters will affect speed of encoding and hardware support.
- *
- * For device compatibility reasons OBE will choose Main Profile for SD streams. Many devices
- * support High Profile and so High Profile is recommended where possible
+ * Be aware that some parameters will affect hardware support.
  */
 int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t *param );
 

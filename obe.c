@@ -543,7 +543,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     x264_param_default( param );
     param->b_vfr_input = 0;
     param->b_pic_struct = 1;
-    param->i_open_gop = X264_OPEN_GOP_NORMAL;
+    param->b_open_gop = 1;
 
     param->i_width = stream->width;
     param->i_height = stream->height;
@@ -583,16 +583,15 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         param->vui.i_colmatrix = 2; // undefined
     }
 
-    /* Change to BT.709 and set high profile for HD resolutions */
+    /* Change to BT.709 for HD resolutions */
     if( param->i_width >= 1280 && param->i_height >= 720 )
     {
         param->vui.i_colorprim = 1;
         param->vui.i_transfer  = 1;
         param->vui.i_colmatrix = 1;
-        x264_param_apply_profile( param, "high" );
     }
-    else
-        x264_param_apply_profile( param, "main" );
+
+    x264_param_apply_profile( param, "high" );
 
     param->sc.f_speed = 1.0;
     param->b_aud = 1;
