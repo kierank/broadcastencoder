@@ -350,7 +350,7 @@ static void *open_output( void *ptr )
 {
     obe_output_params_t *output_params = ptr;
     obe_t *h = output_params->h;
-    char *location = output_params->location;
+    char *target = output_params->target;
     struct udp_status status;
     hnd_t udp_handle = NULL;
     int num_muxed_data = 0;
@@ -361,7 +361,7 @@ static void *open_output( void *ptr )
     status.udp_handle = &udp_handle;
     pthread_cleanup_push( close_output, (void*)&status );
 
-    if( udp_open( &udp_handle, location ) < 0 )
+    if( udp_open( &udp_handle, target ) < 0 )
     {
         fprintf( stderr, "[udp] Could not create output" );
         return NULL;

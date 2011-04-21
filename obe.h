@@ -347,14 +347,14 @@ enum output_e
 
 /* Output structure
  *
- * location - TODO document url parameters
+ * target - TODO document url parameters
  *
  */
 
 typedef struct
 {
     int output;
-    char *location;
+    char *target;
 } obe_output_opts_t;
 
 int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts );

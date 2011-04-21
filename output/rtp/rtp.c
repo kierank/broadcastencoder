@@ -69,7 +69,7 @@ static uint64_t obe_ntp_time(void)
   return (obe_gettime() / 1000) * 1000 + NTP_OFFSET_US;
 }
 
-static int rtp_open( hnd_t *p_handle, char *location )
+static int rtp_open( hnd_t *p_handle, char *target )
 {
     obe_rtp_ctx *p_rtp = calloc( 1, sizeof(*p_rtp) );
     if( !p_rtp )
@@ -78,7 +78,7 @@ static int rtp_open( hnd_t *p_handle, char *location )
         return -1;
     }
 
-    if( udp_open( &p_rtp->udp_handle, location ) < 0 )
+    if( udp_open( &p_rtp->udp_handle, target ) < 0 )
     {
         fprintf( stderr, "[rtp] Could not create udp output" );
         return -1;
@@ -169,7 +169,7 @@ static void *open_output( void *ptr )
 {
     obe_output_params_t *output_params = ptr;
     obe_t *h = output_params->h;
-    char *location = output_params->location;
+    char *target = output_params->target;
     struct rtp_status status;
     hnd_t rtp_handle = NULL;
     int num_muxed_data = 0;
@@ -180,7 +180,7 @@ static void *open_output( void *ptr )
     status.rtp_handle = &rtp_handle;
     pthread_cleanup_push( close_output, (void*)&status );
 
-    if( rtp_open( &rtp_handle, location ) < 0 )
+    if( rtp_open( &rtp_handle, target ) < 0 )
         return NULL;
 
     while( 1 )

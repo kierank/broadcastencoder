@@ -28,7 +28,7 @@
 
 #define TS_PACKETS_SIZE 1316
 
-int udp_open( hnd_t *p_handle, char *url );
+int udp_open( hnd_t *p_handle, char *target );
 int udp_write( hnd_t p_handle, uint8_t *buf, int size );
 void udp_close( hnd_t handle );
 
