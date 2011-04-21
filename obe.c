@@ -149,6 +149,7 @@ void add_device( obe_t *h, obe_device_t *device )
 }
 
 /** Add/Remove from queues */
+/* Filter queue */
 int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame )
 {
     obe_filter_t *filter = NULL;
@@ -202,6 +203,24 @@ int remove_frame_from_filter_queue( obe_filter_t *filter )
     return 0;
 }
 
+static void destroy_filter( obe_filter_t *filter )
+{
+    pthread_mutex_lock( &filter->filter_mutex );
+    for( int i = 0; i < filter->num_raw_frames; i++ )
+    {
+        filter->frames[i]->release_data( filter->frames[i] );
+        filter->frames[i]->release_frame( filter->frames[i] );
+    }
+
+    pthread_mutex_unlock( &filter->filter_mutex );
+    pthread_mutex_destroy( &filter->filter_mutex );
+    pthread_cond_destroy( &filter->filter_cv );
+
+    free( filter->stream_id_list );
+    free( filter );
+}
+
+/* Encode queue */
 int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame )
 {
     obe_encoder_t *encoder = NULL;
@@ -252,6 +271,22 @@ int remove_frame_from_encode_queue( obe_encoder_t *encoder )
     return 0;
 }
 
+static void destroy_encoder( obe_encoder_t *encoder )
+{
+    pthread_mutex_lock( &encoder->encoder_mutex );
+    for( int i = 0; i < encoder->num_raw_frames; i++ )
+    {
+        encoder->frames[i]->release_data( encoder->frames[i] );
+        encoder->frames[i]->release_frame( encoder->frames[i] );
+    }
+    pthread_mutex_unlock( &encoder->encoder_mutex );
+    pthread_mutex_destroy( &encoder->encoder_mutex );
+    pthread_cond_destroy( &encoder->encoder_cv );
+
+    free( encoder );
+}
+
+/* Mux queue */
 int add_to_mux_queue( obe_t *h, obe_coded_frame_t *coded_frame )
 {
     obe_coded_frame_t **tmp;
@@ -296,6 +331,19 @@ int remove_from_mux_queue( obe_t *h, obe_coded_frame_t *coded_frame )
     return 0;
 }
 
+static void destroy_mux( obe_t *h )
+{
+    pthread_mutex_lock( &h->mux_mutex );
+    for( int i = 0; i < h->num_coded_frames; i++ )
+        destroy_coded_frame( h->coded_frames[i] );
+
+    free( h->coded_frames );
+
+    pthread_mutex_unlock( &h->mux_mutex );
+    pthread_mutex_destroy( &h->mux_mutex );
+    pthread_cond_destroy( &h->mux_cv );
+}
+
 int remove_early_frames( obe_t *h, int64_t pts )
 {
     obe_coded_frame_t **tmp;
@@ -320,6 +368,7 @@ int remove_early_frames( obe_t *h, int64_t pts )
     return 0;
 }
 
+/* Output queue */
 int add_to_output_queue( obe_t *h, obe_muxed_data_t *muxed_data )
 {
     obe_muxed_data_t **tmp;
@@ -357,6 +406,19 @@ int remove_from_output_queue( obe_t *h )
     pthread_mutex_unlock( &h->output_mutex );
 
     return 0;
+}
+
+static void destroy_output( obe_t *h )
+{
+    pthread_mutex_lock( &h->output_mutex );
+    for( int i = 0; i < h->num_muxed_data; i++ )
+        destroy_muxed_data( h->muxed_data[i] );
+
+    free( h->muxed_data );
+
+    pthread_mutex_unlock( &h->output_mutex );
+    pthread_mutex_destroy( &h->output_mutex );
+    pthread_cond_destroy( &h->output_cv );
 }
 
 /** Get items **/
