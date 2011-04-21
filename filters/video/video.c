@@ -43,6 +43,28 @@ typedef struct
     int16_t *error_buf;
 } obe_vid_filter_ctx_t;
 
+struct filter_status
+{
+    obe_vid_filter_params_t *filter_params;
+    obe_vid_filter_ctx_t **filter_ctx_ptr;
+};
+
+static void close_filter( void *ptr )
+{
+    struct filter_status *filter_status = ptr;
+    if( *filter_status->filter_ctx_ptr )
+    {
+        obe_vid_filter_ctx_t *vfilt = *filter_status->filter_ctx_ptr;
+
+        if( vfilt->sws_ctx )
+            sws_freeContext( vfilt->sws_ctx );
+
+        if( vfilt->error_buf )
+            free( vfilt->error_buf );
+    }
+    free( filter_status->filter_params );
+}
+
 typedef struct
 {
     int planes;
@@ -208,12 +230,19 @@ void *start_filter( void *ptr )
     obe_t *h = filter_params->h;
     obe_filter_t *filter = filter_params->filter;
     obe_raw_frame_t *raw_frame;
+    obe_vid_filter_ctx_t *vfilt = NULL;
 
-    obe_vid_filter_ctx_t *vfilt = calloc( 1, sizeof(*vfilt) );
+    struct filter_status status;
+    status.filter_params = filter_params;
+    status.filter_ctx_ptr = &vfilt;
+
+    pthread_cleanup_push( close_filter, (void*)&status );
+
+    vfilt = calloc( 1, sizeof(*vfilt) );
     if( !vfilt )
     {
         fprintf( stderr, "Malloc failed\n" );
-        return NULL;
+        goto fail;
     }
 
     while( 1 )
@@ -233,7 +262,7 @@ void *start_filter( void *ptr )
         if( raw_frame->img.csp == PIX_FMT_YUV422P || raw_frame->img.csp == PIX_FMT_YUV422P16 )
         {
             if( scale_frame( vfilt, raw_frame ) < 0 )
-                break;
+                goto fail;
         }
 
         if( raw_frame->img.csp == PIX_FMT_YUV420P16 )
@@ -244,25 +273,23 @@ void *start_filter( void *ptr )
                 if( !vfilt->error_buf )
                 {
                     fprintf( stderr, "Malloc failed\n" );
-                    break;
+                    goto fail;
                 }
             }
 
             if( dither_image( raw_frame, vfilt->error_buf ) < 0 )
-                break;
+                goto fail;
         }
 
         if( parse_user_data( raw_frame ) < 0 )
-            break;
+            goto fail;
 
         remove_frame_from_filter_queue( filter );
         add_to_encode_queue( h, raw_frame );
     }
 
-    if( !vfilt->sws_ctx )
-    {
-        sws_freeContext( vfilt->sws_ctx );
-    }
+fail:
+    pthread_cleanup_pop( 1 );
 
     return NULL;
 }
