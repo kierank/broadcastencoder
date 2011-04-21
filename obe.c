@@ -25,6 +25,7 @@
 #include "input/input.h"
 #include "filters/video/video.h"
 #include "encoders/video/video.h"
+#include "encoders/audio/audio.h"
 #include "mux/mux.h"
 #include "output/output.h"
 
@@ -467,13 +468,15 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     pthread_t thread;
     obe_int_input_stream_t *stream_in;
     obe_input_stream_t *stream_out;
-    int rc;
+
+    obe_input_func_t  input;
+
     int probe_time = MAX_PROBE_TIME;
     int i = 0;
     int prev_devices = h->num_devices;
     int cur_devices;
 
-    if( input_device == NULL || program == NULL )
+    if( !input_device || !program )
     {
         fprintf( stderr, "Invalid input pointers \n" );
         return -1;
@@ -487,9 +490,14 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
 
     if( h->num_devices == MAX_DEVICES )
     {
-        fprintf( stderr, "No more devices allowed. \n" );
+        fprintf( stderr, "No more devices allowed \n" );
         return -1;
     }
+
+    if( input_device->input_type == INPUT_URL )
+        input = lavf_input;
+    else
+        input = decklink_input;
 
     obe_input_probe_t *args = malloc( sizeof(*args) );
     if( !args )
@@ -502,12 +510,10 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
 
     strcpy( args->location, input_device->location );
 
-    rc = pthread_create( &thread, NULL, lavf_input.probe_input, (void*)args );
-
-    if( rc < 0 )
+    if( pthread_create( &thread, NULL, input.probe_input, (void*)args ) < 0 )
     {
         fprintf( stderr, "Couldn't create probe thread \n" );
-        return -1;
+        goto fail;
     }
 
     printf( "Probing device \"%s\". Timeout %i seconds\n", input_device->location, probe_time );
@@ -695,12 +701,24 @@ int obe_setup_muxer( obe_t *h, obe_mux_opts_t *mux_opts )
 
 int obe_start( obe_t *h )
 {
-    int rc;
-    obe_vid_enc_params_t *enc_params;
-    obe_output_params_t *out_params;
+    obe_int_input_stream_t  *input_stream;
+    obe_vid_filter_params_t *vid_filter_params;
+    obe_vid_enc_params_t *vid_enc_params;
+    obe_aud_enc_params_t *aud_enc_params;
+    obe_output_params_t  *out_params;
+
+    obe_input_func_t  input;
     obe_output_func_t output;
 
-    // sanity check
+    /* TODO: a lot of sanity checks */
+    /* TODO: decide upon thread priorities */
+
+    /* Setup mutexes and cond vars */
+    pthread_mutex_init( &h->devices[0]->device_mutex, NULL );
+    pthread_mutex_init( &h->mux_mutex, NULL );
+    pthread_cond_init( &h->mux_cv, NULL );
+    pthread_mutex_init( &h->output_mutex, NULL );
+    pthread_cond_init( &h->output_cv, NULL );
 
     if( h->mux_opts.muxer == OUTPUT_UDP )
         output = udp_output;
@@ -708,27 +726,19 @@ int obe_start( obe_t *h )
         output = rtp_output;
 
     /* Open Output Thread */
-    pthread_mutex_init( &h->output_mutex, NULL );
-    pthread_cond_init( &h->output_cv, NULL );
-
-    out_params = malloc( sizeof(*out_params) );
+    out_params = calloc( 1, sizeof(*out_params) );
     if( !out_params )
     {
-        // TODO fail
+        fprintf( stderr, "Malloc failed \n" );
+        goto fail;
     }
     out_params->h = h;
-    rc = pthread_create( &h->output_thread, NULL, output.open_output, (void*)out_params );
 
-    if( rc < 0 )
+    if( pthread_create( &h->output_thread, NULL, output.open_output, (void*)out_params ) < 0 )
     {
         fprintf( stderr, "Couldn't create output thread \n" );
-        return -1;
+        goto fail;
     }
-
-    struct sched_param s_param = {0};
-    s_param.sched_priority = 99;
-
-    pthread_setschedparam( h->output_thread, SCHED_RR, &s_param );
 
     /* Open Encoder Threads */
     for( int i = 0; i < h->num_output_streams; i++ )
@@ -738,64 +748,149 @@ int obe_start( obe_t *h )
             h->encoders[h->num_encoders] = calloc( 1, sizeof(obe_encoder_t) );
             if( !h->encoders[h->num_encoders] )
             {
-                // TODO fail
+                fprintf( stderr, "Malloc failed \n" );
+                goto fail;
             }
             h->encoders[h->num_encoders]->stream_id = h->output_streams[i].stream_id;
             pthread_mutex_init( &h->encoders[h->num_encoders]->encoder_mutex, NULL );
             pthread_cond_init( &h->encoders[h->num_encoders]->encoder_cv, NULL );
-            enc_params = calloc( 1, sizeof(obe_vid_enc_params_t) );
-            if( !enc_params )
+
+            if( h->output_streams[i].stream_format == VIDEO_AVC )
             {
-                // TODO fail
+                vid_enc_params = calloc( 1, sizeof(*vid_enc_params) );
+                if( !vid_enc_params )
+                {
+                    fprintf( stderr, "Malloc failed \n" );
+                    goto fail;
+                }
+                vid_enc_params->h = h;
+                vid_enc_params->encoder = h->encoders[h->num_encoders];
+
+                memcpy( &vid_enc_params->avc_param, &h->output_streams[i].avc_param, sizeof(x264_param_t) );
+                if( pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, x264_encoder.start_encoder, (void*)vid_enc_params ) < 0 )
+                {
+                    fprintf( stderr, "Couldn't create encode thread \n" );
+                    goto fail;
+                }
             }
-            enc_params->h = h;
-            enc_params->encoder = h->encoders[h->num_encoders];
-            memcpy( &enc_params->avc_param, &h->output_streams[i].avc_param, sizeof(x264_param_t) );
-            rc = pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, x264_encoder.start_encoder, (void*)enc_params );
+            else if( h->output_streams[i].stream_format == AUDIO_MP2 )
+            {
+                aud_enc_params = calloc( 1, sizeof(*aud_enc_params) );
+                if( !aud_enc_params )
+                {
+                    fprintf( stderr, "Malloc failed \n" );
+                    goto fail;
+                }
+                aud_enc_params->h = h;
+                aud_enc_params->encoder = h->encoders[h->num_encoders];
+
+                input_stream = get_input_stream( h, h->output_streams[i].stream_id );
+                aud_enc_params->bitrate = h->output_streams[i].bitrate;
+                aud_enc_params->sample_rate = input_stream->sample_rate;
+                aud_enc_params->num_channels = av_get_channel_layout_nb_channels( input_stream->channel_layout );
+                if( pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, twolame_encoder.start_encoder, (void*)aud_enc_params ) < 0 )
+                {
+                    fprintf( stderr, "Couldn't create encode thread \n" );
+                    goto fail;
+                }
+            }
+
             h->num_encoders++;
         }
     }
 
     /* Open Mux Thread */
-    pthread_mutex_init( &h->mux_mutex, NULL );
-    pthread_cond_init( &h->mux_cv, NULL );
     obe_mux_params_t *mux_params = calloc( 1, sizeof(*mux_params) );
-    // FIXME fail
+    if( !mux_params )
+    {
+        fprintf( stderr, "Malloc failed \n" );
+        goto fail;
+    }
     mux_params->h = h;
     mux_params->device = h->devices[0];
     mux_params->num_output_streams = h->num_output_streams;
     mux_params->output_streams = h->output_streams;
-    rc = pthread_create( &h->mux_thread, NULL, ts_muxer.open_muxer, (void*)mux_params );
 
-    if( rc < 0 )
+    if( pthread_create( &h->mux_thread, NULL, ts_muxer.open_muxer, (void*)mux_params ) < 0 )
     {
         fprintf( stderr, "Couldn't create mux thread \n" );
-        return -1;
+        goto fail;
     }
 
-    struct sched_param s_param2 = {0};
-    s_param2.sched_priority = 50;
-
-    pthread_setschedparam( h->mux_thread, SCHED_RR, &s_param2 );
-
     /* Open Filter Thread */
+    for( int i = 0; i < h->num_output_streams; i++ )
+    {
+        input_stream = get_input_stream( h, h->output_streams[i].stream_id );
+        if( input_stream && input_stream->stream_type == STREAM_TYPE_VIDEO )
+        {
+            h->filters[h->num_filters] = calloc( 1, sizeof(obe_filter_t) );
+            if( !h->filters[h->num_filters] )
+                goto fail;
+
+            pthread_mutex_init( &h->filters[h->num_filters]->filter_mutex, NULL );
+            pthread_cond_init( &h->filters[h->num_filters]->filter_cv, NULL );
+
+            h->filters[h->num_filters]->num_stream_ids = 1;
+            h->filters[h->num_filters]->stream_id_list = malloc( sizeof(*h->filters[h->num_filters]->stream_id_list) );
+            if( !h->filters[h->num_filters]->stream_id_list )
+            {
+                fprintf( stderr, "Malloc failed\n" );
+                goto fail;
+            }
+            h->filters[h->num_filters]->stream_id_list[0] = h->output_streams[i].stream_id;
+
+            vid_filter_params = calloc( 1, sizeof(*vid_filter_params) );
+            if( !vid_filter_params )
+            {
+                fprintf( stderr, "Malloc failed\n" );
+                goto fail;
+            }
+
+            vid_filter_params->h = h;
+            vid_filter_params->filter = h->filters[h->num_filters];
+            if( pthread_create( &h->filters[h->num_filters]->filter_thread, NULL, video_filter.start_filter, (void*)vid_filter_params ) < 0 )
+            {
+                fprintf( stderr, "Couldn't create filter thread \n" );
+                goto fail;
+            }
+            h->num_filters++;
+        }
+    }
 
     /* Open Input Thread */
-    pthread_mutex_init( &h->devices[0]->device_mutex, NULL );
     obe_input_params_t *input_params = calloc( 1, sizeof(*input_params) );
-    // FIXME fail
+    if( !input_params )
+    {
+        fprintf( stderr, "Malloc failed\n" );
+        goto fail;
+    }
     input_params->h = h;
     input_params->device = h->devices[0];
+
+    /* TODO: in the future give it only the streams which are necessary */
     input_params->num_output_streams = h->num_output_streams;
     input_params->output_streams = h->output_streams;
-    // FIXME fail
 
-    // TODO: in the future give it only the streams which are necessary
-    rc = pthread_create( &h->devices[0]->device_thread, NULL, lavf_input.open_input, (void*)input_params );
+    if( h->devices[0]->device_type == INPUT_URL )
+        input = lavf_input;
+    else
+        input = decklink_input;
+
+    if( pthread_create( &h->devices[0]->device_thread, NULL, input.open_input, (void*)input_params ) < 0 )
+    {
+        fprintf( stderr, "Couldn't create input thread \n" );
+        goto fail;
+    }
 
     h->is_active = 1;
 
     return 0;
+
+fail:
+
+    obe_close( h );
+
+    return -1;
 };
 
 void obe_close( obe_t *h )

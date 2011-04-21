@@ -88,8 +88,8 @@ enum input_video_format
 enum input_type_e
 {
     INPUT_URL,
-    INPUT_DEVICE_SDI_DECKLINK,
-//    INPUT_DEVICE_SDI_V4L2,
+    INPUT_DEVICE_DECKLINK,
+//    INPUT_DEVICE_V4L2,
 //    INPUT_DEVICE_ASI,
 };
 
@@ -244,6 +244,19 @@ enum frame_packing_arrangement_e
 };
 
 /**** AC-3 Encoding ****/
+/* Options:
+ *
+ * override - Metadata will be passed through if E-distribution audio or AC-3 audio is used or the SDI stream has metadata as per SMPTE 2020-AB.
+ *            This flag forces the use of the specified settings
+ *
+ * dialnorm - dialogue normalisation (valid range -31 to -1)
+ */
+typedef struct
+{
+    int override;
+
+    int dialnorm;
+} obe_ac3_opts_t;
 
 /**** AAC Encoding ****/
 typedef struct
@@ -278,7 +291,7 @@ typedef struct
     int bitrate;
 
     /* AC-3 */
-    // TODO
+    obe_ac3_opts_t ac3_opts;
 
     /* AAC */
     obe_aac_opts_t aac_opts;
