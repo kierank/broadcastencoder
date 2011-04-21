@@ -31,6 +31,7 @@
 #define MAX_PROGRAMS 1
 /* FIXME: arbitrary number */
 #define NUM_FRAMES_TO_SEARCH 20
+#define AUDIO_BUFFER_SIZE 200000
 
 /* FIXME: make 302M work */
 
@@ -125,6 +126,8 @@ void *probe_stream( void *ptr )
 
     if( av_open_input_file( &lavf, location, NULL, 0, NULL ) < 0 )
         return (void*)-1;
+
+    lavf->max_delay = 100000;
 
     if( av_find_stream_info( lavf ) < 0 )
         return (void*)-1;
@@ -335,7 +338,6 @@ void *probe_stream( void *ptr )
         else if( codec->codec_id == CODEC_ID_DVB_SUBTITLE )
             streams[i]->has_dds = codec->dvb_sub_has_dds;
 
-        // FIXME
         if( codec )
             avcodec_close( codec );
     }
@@ -386,6 +388,9 @@ void *open_input( void *ptr )
     int width;
     int height;
     int stride[4];
+
+    int16_t *audio_buffer;
+    int audio_size;
 
     AVFormatContext *lavf;
     AVCodecContext *codec;
@@ -516,6 +521,7 @@ void *open_input( void *ptr )
                     codec->reordered_opaque = pkt.pts;
 
                     ret = avcodec_decode_video2( codec, &frame, &finished, &pkt );
+                    // TODO: handle failure
                     if( finished )
                     {
                         raw_frame = new_raw_frame();
@@ -537,7 +543,7 @@ void *open_input( void *ptr )
 
                         /* FIXME: get rid of this ugly memcpy */
                         avcodec_align_dimensions2( codec, &width, &height, stride );
-                        if( av_image_alloc( raw_frame->img.plane, raw_frame->img.stride, width, height, codec->pix_fmt, 16 ) < 0 )
+                        if( av_image_alloc( raw_frame->img.plane, raw_frame->img.stride, width, height, raw_frame->img.csp, 16 ) < 0 )
                         {
                             syslog( LOG_ERR, "Malloc failed\n" );
                             obe_free_packet( &pkt );
@@ -554,19 +560,49 @@ void *open_input( void *ptr )
                             raw_frame->pts = frame.reordered_opaque;
                         else if( pkt.dts != AV_NOPTS_VALUE )
                             raw_frame->pts = pkt.dts;
- 
-                        add_to_encode_queue( h, raw_frame );
+
+                        add_to_filter_queue( h, raw_frame );
 
                         /* TODO: ancillary data */
                         /* TODO: SAR changes */
                     }
                 }
-#if 0
                 else if( codec->codec_type == CODEC_TYPE_AUDIO )
                 {
+                    /* TODO: find out if there are any odd streams with multiple frames per AVPacket */
+                    audio_size = AUDIO_BUFFER_SIZE;
+                    audio_buffer = av_malloc( audio_size * sizeof(int16_t) );
+                    // TODO fail
+                    if( avcodec_decode_audio3( codec, audio_buffer, &audio_size, &pkt ) < 0 )
+                    {
+                        syslog( LOG_ERR, "[lavf] decoding audio failed\n" );
+                        av_freep( &audio_buffer );
+                        break;
+                    }
 
+                    raw_frame = new_raw_frame();
+                    if( !raw_frame )
+                    {
+                        syslog( LOG_ERR, "Malloc failed\n" );
+                        av_freep( &audio_buffer );
+                        break;
+                    }
+                    raw_frame->stream_id = out_lut->stream_id;
+
+                    raw_frame->len = audio_size;
+                    raw_frame->data = raw_frame->cur_pos = (uint8_t*)audio_buffer;
+                    raw_frame->num_samples = audio_size / ( codec->channels * sizeof(int16_t) ); // FIXME
+                    raw_frame->sample_fmt = codec->sample_fmt;
+                    raw_frame->channel_map = codec->channel_layout;
+                    raw_frame->release_data = obe_release_other_data;
+                    raw_frame->release_frame = obe_release_frame;
+                    raw_frame->pts = -1;
+                    if( pkt.pts != AV_NOPTS_VALUE )
+                        raw_frame->pts = pkt.pts;
+
+                    add_to_encode_queue( h, raw_frame );
                 }
-#endif
+
                 obe_free_packet( &pkt );
             }
         }
