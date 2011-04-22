@@ -138,7 +138,8 @@ static obecli_command_t main_commands[] =
 /* Input Names */
 static const obecli_input_name_t input_names[] =
 {
-    { INPUT_URL, "URL", "URL (includes UDP and RTP)", "libavformat" },
+    { INPUT_URL,             "URL",      "URL (includes UDP and RTP)", "libavformat" },
+    { INPUT_DEVICE_DECKLINK, "Decklink", "Decklink card input",        "internal" },
     { 0, 0, 0 },
 };
 
