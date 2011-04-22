@@ -45,6 +45,8 @@ typedef struct
 } obe_input_params_t;
 
 extern const obe_input_func_t lavf_input;
+#if HAVE_DECKLINK
 extern const obe_input_func_t decklink_input;
+#endif
 
 #endif

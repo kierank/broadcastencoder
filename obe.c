@@ -496,8 +496,15 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
 
     if( input_device->input_type == INPUT_URL )
         input = lavf_input;
-    else
+#if HAVE_DECKLINK
+    else if( input_device->input_type == INPUT_DECKLINK )
         input = decklink_input;
+#endif
+    else
+    {
+        fprintf( stderr, "Invalid input device \n" );
+        return -1;
+    }
 
     obe_input_probe_t *args = malloc( sizeof(*args) );
     if( !args )
@@ -720,6 +727,18 @@ int obe_start( obe_t *h )
     pthread_mutex_init( &h->output_mutex, NULL );
     pthread_cond_init( &h->output_cv, NULL );
 
+    if( h->devices[0]->device_type == INPUT_URL )
+        input = lavf_input;
+#if HAVE_DECKLINK
+    else if( h->devices[0]->device_type == INPUT_DECKLINK )
+        input = decklink_input;
+#endif
+    else
+    {
+        fprintf( stderr, "Invalid input device \n" );
+        goto fail;
+    }
+
     if( h->mux_opts.muxer == OUTPUT_UDP )
         output = udp_output;
     else
@@ -870,11 +889,6 @@ int obe_start( obe_t *h )
     /* TODO: in the future give it only the streams which are necessary */
     input_params->num_output_streams = h->num_output_streams;
     input_params->output_streams = h->output_streams;
-
-    if( h->devices[0]->device_type == INPUT_URL )
-        input = lavf_input;
-    else
-        input = decklink_input;
 
     if( pthread_create( &h->devices[0]->device_thread, NULL, input.open_input, (void*)input_params ) < 0 )
     {
