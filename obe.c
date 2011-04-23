@@ -463,11 +463,22 @@ obe_t *obe_setup( void )
     return h;
 }
 
+static int obe_validate_input_params( obe_input_t *input_device )
+{
+    if( input_device->input_type == INPUT_DEVICE_DECKLINK )
+    {
+        /* TODO check */
+    }
+
+    return 0;
+}
+
 int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *program )
 {
     pthread_t thread;
     obe_int_input_stream_t *stream_in;
     obe_input_stream_t *stream_out;
+    obe_input_probe_t *args = NULL;
 
     obe_input_func_t  input;
 
@@ -482,12 +493,6 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
         return -1;
     }
 
-    if( !input_device->location )
-    {
-        fprintf( stderr, "Invalid input location\n" );
-        return -1;
-    }
-
     if( h->num_devices == MAX_DEVICES )
     {
         fprintf( stderr, "No more devices allowed \n" );
@@ -497,25 +502,40 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     if( input_device->input_type == INPUT_URL )
         input = lavf_input;
 #if HAVE_DECKLINK
-    else if( input_device->input_type == INPUT_DECKLINK )
+    else if( input_device->input_type == INPUT_DEVICE_DECKLINK )
         input = decklink_input;
 #endif
     else
     {
         fprintf( stderr, "Invalid input device \n" );
+        goto fail;
+    }
+
+    if( input_device->input_type == INPUT_URL && !input_device->location )
+    {
+        fprintf( stderr, "Invalid input location\n" );
         return -1;
     }
 
-    obe_input_probe_t *args = malloc( sizeof(*args) );
+    args = malloc( sizeof(*args) );
     if( !args )
+    {
+        fprintf( stderr, "Malloc failed \n" );
         goto fail;
+    }
 
     args->h = h;
     args->location = malloc( strlen( input_device->location ) + 1 );
     if( !args->location )
+    {
+        fprintf( stderr, "Malloc failed \n" );
         goto fail;
+    }
 
     strcpy( args->location, input_device->location );
+
+    if( obe_validate_input_params( input_device ) < 0 )
+        goto fail;
 
     if( pthread_create( &thread, NULL, input.probe_input, (void*)args ) < 0 )
     {
@@ -538,9 +558,6 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
 
     cur_devices = h->num_devices;
 
-    if( args )
-        free( args );
-
     if( prev_devices == cur_devices )
     {
         fprintf( stderr, "Could not probe device \n" );
@@ -553,7 +570,10 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     program->num_streams = h->devices[h->num_devices-1]->num_input_streams;
     program->streams = calloc( 1, program->num_streams * sizeof(*program->streams) );
     if( !program->streams )
+    {
+        fprintf( stderr, "Malloc failed \n" );
         goto fail;
+    }
 
     h->devices[h->num_devices-1]->probed_streams = program->streams;
 
@@ -586,11 +606,13 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     return 0;
 
 fail:
-
     if( args )
+    {
+        if( args->location )
+            free( args->location );
         free( args );
+    }
 
-    fprintf( stderr, "Malloc failed. \n" );
     return -1;
 }
 
@@ -706,6 +728,14 @@ int obe_setup_muxer( obe_t *h, obe_mux_opts_t *mux_opts )
     return 0;
 }
 
+int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts )
+{
+    // TODO sanity check
+
+    memcpy( &h->output_opts, output_opts, sizeof(obe_output_opts_t) );
+    return 0;
+}
+
 int obe_start( obe_t *h )
 {
     obe_int_input_stream_t  *input_stream;
@@ -730,7 +760,7 @@ int obe_start( obe_t *h )
     if( h->devices[0]->device_type == INPUT_URL )
         input = lavf_input;
 #if HAVE_DECKLINK
-    else if( h->devices[0]->device_type == INPUT_DECKLINK )
+    else if( h->devices[0]->device_type == INPUT_DEVICE_DECKLINK )
         input = decklink_input;
 #endif
     else
@@ -751,6 +781,8 @@ int obe_start( obe_t *h )
         fprintf( stderr, "Malloc failed \n" );
         goto fail;
     }
+
+    out_params->target = h->output_opts.target;
     out_params->h = h;
 
     if( pthread_create( &h->output_thread, NULL, output.open_output, (void*)out_params ) < 0 )
