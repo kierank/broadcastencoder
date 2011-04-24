@@ -38,9 +38,10 @@ typedef struct obecli_command_t obecli_command_t;
 static int parse_command( char *command, obecli_command_t *commmand_list );
 static int probe_device( char *command, obecli_command_t *child );
 
+static int set_input( char *command, obecli_command_t *child );
+static int set_stream( char *command, obecli_command_t *child );
 static int set_muxer( char *command, obecli_command_t *child );
 static int set_output( char *command, obecli_command_t *child );
-static int set_stream( char *command, obecli_command_t *child );
 
 static int show_bitdepth( char *command, obecli_command_t *child );
 static int show_decoders( char *command, obecli_command_t *child );
@@ -51,6 +52,7 @@ static int show_muxers( char *command, obecli_command_t *child );
 static int show_outputs( char *command, obecli_command_t *child );
 
 static int start_encode( char *command, obecli_command_t *child );
+static int stop_encode( char *command, obecli_command_t *child );
 
 struct obecli_command_t
 {
@@ -117,8 +119,10 @@ static obecli_command_t show_commands[] =
 
 static obecli_command_t set_commands[] =
 {
+    { "input",  "opts [opts]",            "Set input options",              set_input,  NULL },
+    { "stream", "opts streamid:[opts]",   "Set stream options",             set_stream, NULL },
     { "muxer",  "[name] OR opts [opts]",  "Set muxer name or muxer opts",   set_muxer,  NULL },
-    { "stream-opts", "streamid:[opts]",   "Set stream options",             set_stream, NULL },
+    { "mux",    "[name] OR opts [opts]",  "Set muxer name or muxer opts",   set_muxer,  NULL },
     { "output", "[name] OR opts [opts]",  "Set output name or output opts", set_output, NULL },
     { 0 }
 };
@@ -131,6 +135,7 @@ static obecli_command_t main_commands[] =
     { "set",   "[item] ...", "Set item",                 parse_command, set_commands },
     { "show",  "[item] ...", "Show item",                parse_command, show_commands },
     { "start", "",           "Start encoding",           start_encode,  NULL },
+    { "stop",  "",           "Stop encoding",            stop_encode,  NULL },
     { 0 }
 };
 
@@ -146,17 +151,19 @@ static const obecli_input_name_t input_names[] =
 /* Format names */
 static const obecli_format_name_t format_names[] =
 {
-    { VIDEO_UNCOMPRESSED, "RAW", "Uncompressed Video",    NULL,                       NULL },
+    { VIDEO_UNCOMPRESSED, "RAW", "Uncompressed Video",   "N/A",                       "N/A" },
     { VIDEO_AVC,    "AVC",      "Advanced Video Coding", "FFmpeg AVC decoder",        "x264 encoder" },
-    { VIDEO_MPEG2,  "MPEG-2",   "MPEG-2 Video",          "FFmpeg MPEG-2 decoder",     NULL },
-    { AUDIO_PCM,    "PCM",      "PCM (raw audio)",       "N/A",                       NULL },
+    { VIDEO_MPEG2,  "MPEG-2",   "MPEG-2 Video",          "FFmpeg MPEG-2 decoder",     "N/A" },
+    { AUDIO_PCM,    "PCM",      "PCM (raw audio)",       "N/A",                       "N/A" },
     { AUDIO_MP2,    "MP2",      "MPEG-1 Layer II Audio", "FFmpeg MP2 audio decoder",  "twolame encoder" },
-    { AUDIO_AC_3,   "AC3",      "ATSC A/52B / AC-3",     "FFmpeg AC-3 audio decoder", "FFmpeg AC-3 encoder" },
-    { AUDIO_E_AC_3, "E-AC3",    "ATSC A/52B Annex E / Enhanced AC-3", "FFmpeg E-AC3 audio decoder", NULL  },
+    { AUDIO_AC_3,   "AC3",      "ATSC A/52B / AC-3",     "FFmpeg AC-3 audio decoder", "N/A" },
+//    { AUDIO_AC_3,   "AC3",      "ATSC A/52B / AC-3",     "FFmpeg AC-3 audio decoder", "FFmpeg AC-3 encoder" },
+    { AUDIO_E_AC_3, "E-AC3",    "ATSC A/52B Annex E / Enhanced AC-3", "FFmpeg E-AC3 audio decoder", "N/A"  },
 //    { AUDIO_E_DIST, "E-Dist", "E-distribution audio" },
-    { AUDIO_AAC,    "AAC",      "Advanced Audio Coding", "FFmpeg AAC decoder",        "Quicktime AAC encoder" },
-    { SUBTITLES_DVB, "DVB-SUB", "DVB Subtitles",         NULL,                        NULL },
-    { MISC_TELETEXT, "DVB-TTX", "DVB Teletext",          NULL,                        NULL },
+    { AUDIO_AAC,    "AAC",      "Advanced Audio Coding", "FFmpeg AAC decoder",        "N/A" },
+//    { AUDIO_AAC,    "AAC",      "Advanced Audio Coding", "FFmpeg AAC decoder",        "Quicktime AAC encoder" },
+    { SUBTITLES_DVB, "DVB-SUB", "DVB Subtitles",         "N/A",                       "N/A" },
+    { MISC_TELETEXT, "DVB-TTX", "DVB Teletext",          "N/A",                       "N/A" },
     { 0, 0, 0, 0, 0 },
 };
 

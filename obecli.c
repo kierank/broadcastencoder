@@ -45,7 +45,21 @@ obe_t *h = NULL;
 static volatile int b_ctrl_c = 0;
 static char *line_read = NULL;
 
-static const char * const ts_types[] = { "generic", "dvb", "cablelabs", "atsc", "isdb", 0 };
+static const char * const input_video_format_types[] = { "pal", "ntsc", "720p50", "720p59.94", "720p60", "1080i50", "1080i59.94", "1080i60",
+                                                         "1080p23.98", "1080p24", "1080p25", "1080p29.97", "1080p30", "1080p50", "1080p59.94",
+                                                         "1080p60", "2k23.98", "2k24", "2k25", 0 };
+static const char * const input_video_connections[]  = { "sdi", "hdmi", "optical-sdi", "component", "composite", "s-video", 0 };
+static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", "analogue", 0 };
+static const char * const stream_actions[]           = { "passthrough", "encode", 0 };
+static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", 0 };
+
+static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", NULL };
+static const char * stream_opts[] = { "action", "format", "vbv-maxrate", "vbv-bufsize", "bitrate", "sar-width", "sar-height",
+                                      "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", NULL };
+static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrough", "ts-id", "program-num", "pmt-pid", "pcr-pid",
+                                      "pcr-period", "pat-period", NULL };
+static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
+static const char * output_opts[] = { "target", NULL };
 
 static char **obe_split_string( char *string, char *sep, uint32_t limit )
 {
@@ -240,19 +254,63 @@ static int parse_enum_value( const char *arg, const char * const *names, int *ds
     return -1;
 }
 
-obe_input_t device = {0};
+obe_input_t input = {0};
 obe_input_program_t program = {0};
 obe_output_stream_t *output_streams;
 obe_mux_opts_t mux_opts = {0};
 obe_output_opts_t output = {0};
+int avc_profile = -1;
 
 /* set functions - TODO add lots more opts */
-static int set_muxer( char *command, obecli_command_t *child )
+static int set_input( char *command, obecli_command_t *child )
 {
     if( !strlen( command ) )
         return -1;
 
-    static const char *optlist[] = { "ts-type", "ts-muxrate", "cbr", NULL };
+    int tok_len = strcspn( command, " " );
+    int str_len = strlen( command );
+    command[tok_len] = 0;
+
+    if( !strcasecmp( command, "url" ) )
+        input.input_type = INPUT_URL;
+    else if( !strcasecmp( command, "decklink" ) )
+        input.input_type = INPUT_DEVICE_DECKLINK;
+    else if( !strcasecmp( command, "opts" ) && str_len > tok_len )
+    {
+        char *params = command + tok_len + 1;
+        char **opts = obe_split_options( params, input_opts );
+        if( !opts && params )
+            return -1;
+
+        char *location     = obe_get_option( input_opts[0], opts );
+        char *card_idx     = obe_get_option( input_opts[1], opts );
+        char *video_format = obe_get_option( input_opts[2], opts );
+        char *video_connection = obe_get_option( input_opts[3], opts );
+        char *audio_connection = obe_get_option( input_opts[4], opts );
+
+        if( location )
+        {
+             if( input.location )
+                 free( input.location );
+
+             input.location = malloc( strlen( location ) + 1 );
+             FAIL_IF_ERROR( !input.location, "malloc failed\n" );
+             strcpy( input.location, location );
+        }
+
+        input.card_idx         = obe_otoi( card_idx, 0 );
+        input.video_format     = obe_otoi( video_format, 0 );
+        input.video_connection = obe_otoi( video_connection, 0 );
+        input.audio_connection = obe_otoi( audio_connection, 0 );
+    }
+
+    return 0;
+}
+
+static int set_muxer( char *command, obecli_command_t *child )
+{
+    if( !strlen( command ) )
+        return -1;
 
     int tok_len = strcspn( command, " " );
     int str_len = strlen( command );
@@ -263,19 +321,32 @@ static int set_muxer( char *command, obecli_command_t *child )
     else if( !strcasecmp( command, "opts" ) && str_len > tok_len )
     {
         char *params = command + tok_len + 1;
-        char **opts = obe_split_options( params, optlist );
+        char **opts = obe_split_options( params, muxer_opts );
         if( !opts && params )
             return -1;
 
-        char *ts_type = obe_get_option( optlist[0], opts );
-        char *ts_muxrate  = obe_get_option( optlist[1], opts );
-        char *ts_cbr      = obe_get_option( optlist[2], opts );
+        char *ts_type     = obe_get_option( muxer_opts[0], opts );
+        char *ts_cbr      = obe_get_option( muxer_opts[1], opts );
+        char *ts_muxrate  = obe_get_option( muxer_opts[2], opts );
+        char *passthrough = obe_get_option( muxer_opts[3], opts );
+        char *ts_id       = obe_get_option( muxer_opts[4], opts );
+        char *program_num = obe_get_option( muxer_opts[5], opts );
+        char *pmt_pid     = obe_get_option( muxer_opts[6], opts );
+        char *pcr_pid     = obe_get_option( muxer_opts[7], opts );
+        char *pcr_period  = obe_get_option( muxer_opts[8], opts );
+        char *pat_period  = obe_get_option( muxer_opts[9], opts );
         if( ts_type )
             parse_enum_value( ts_type, ts_types, &mux_opts.ts_type );
-        if( ts_muxrate )
-            mux_opts.ts_muxrate = obe_otoi( ts_muxrate, 0 );
-        if( ts_cbr )
-            mux_opts.cbr = obe_otob( ts_cbr, 0 );
+
+        mux_opts.ts_muxrate = obe_otoi( ts_muxrate, 0 );
+        mux_opts.cbr = obe_otob( ts_cbr, 0 );
+        mux_opts.passthrough = obe_otob( passthrough, 0 );
+        mux_opts.ts_id = obe_otoi( ts_id, 0 );
+        mux_opts.program_num = obe_otoi( program_num, 0 );
+        mux_opts.pmt_pid    = obe_otoi( pmt_pid, 0 );
+        mux_opts.pcr_pid    = obe_otoi( pcr_pid, 0 );
+        mux_opts.pcr_period = obe_otoi( pcr_period, 0 );
+        mux_opts.pat_period = obe_otoi( pat_period, 0 );
     }
 
     return 0;
@@ -286,32 +357,87 @@ static int set_stream( char *command, obecli_command_t *child )
     if( !strlen( command ) )
         return -1;
 
-    static const char *optlist[] = { "vbv-maxrate", "vbv-bufsize", "bitrate", NULL };
+    int tok_len = strcspn( command, " " );
     int str_len = strlen( command );
-    int id_len = strcspn( command, ":" );
-    command[id_len] = 0;
+    command[tok_len] = 0;
 
-    int stream_id = obe_otoi( command, -1 );
-
-    if( stream_id < 0 || stream_id > program.num_streams-1 )
+    if( !strcasecmp( command, "opts" ) && str_len > tok_len )
     {
-        fprintf( stderr, "invalid stream id\n" );
-        return -1;
-    }
+        command += tok_len+1;
+        int tok_len2 = strcspn( command, ":" );
+        int str_len2 = strlen( command );
+        command[tok_len2] = 0;
 
-    if( str_len > id_len )
-    {
-        char *params = command + id_len + 1;
-        char **opts = obe_split_options( params, optlist );
-        if( !opts && params )
+        int stream_id = obe_otoi( command, -1 );
+
+        if( stream_id < 0 || stream_id > program.num_streams-1 )
+        {
+            fprintf( stderr, "invalid stream id\n" );
             return -1;
+        }
 
-        char *vbv_maxrate = obe_get_option( optlist[0], opts );
-        char *vbv_bufsize = obe_get_option( optlist[1], opts );
-        char *bitrate     = obe_get_option( optlist[2], opts );
-        output_streams[stream_id].avc_param.rc.i_vbv_max_bitrate = obe_otoi( vbv_maxrate, 0 );
-        output_streams[stream_id].avc_param.rc.i_vbv_buffer_size = obe_otoi( vbv_bufsize, 0 );
-        output_streams[stream_id].avc_param.rc.i_bitrate         = obe_otoi( bitrate, 0 );
+        if( str_len > str_len2 )
+        {
+            char *params = command + tok_len2 + 1;
+            char **opts = obe_split_options( params, stream_opts );
+            if( !opts && params )
+                return -1;
+
+            char *action      = obe_get_option( stream_opts[0], opts );
+            char *format      = obe_get_option( stream_opts[1], opts );
+            char *vbv_maxrate = obe_get_option( stream_opts[2], opts );
+            char *vbv_bufsize = obe_get_option( stream_opts[3], opts );
+            char *bitrate     = obe_get_option( stream_opts[4], opts );
+            char *sar_width   = obe_get_option( stream_opts[5], opts );
+            char *sar_height  = obe_get_option( stream_opts[6], opts );
+            char *profile     = obe_get_option( stream_opts[7], opts );
+            char *level       = obe_get_option( stream_opts[8], opts );
+            char *keyint      = obe_get_option( stream_opts[9], opts );
+            char *lookahead   = obe_get_option( stream_opts[10], opts );
+            char *threads     = obe_get_option( stream_opts[11], opts );
+            char *bframes     = obe_get_option( stream_opts[12], opts );
+            char *b_pyramid   = obe_get_option( stream_opts[13], opts );
+
+            if( program.streams[stream_id].stream_type == STREAM_TYPE_VIDEO )
+            {
+                x264_param_t *avc_param = &output_streams[stream_id].avc_param;
+
+                output_streams[stream_id].stream_format = VIDEO_AVC;
+                avc_param->rc.i_vbv_max_bitrate = obe_otoi( vbv_maxrate, 0 );
+                avc_param->rc.i_vbv_buffer_size = obe_otoi( vbv_bufsize, 0 );
+                avc_param->rc.i_bitrate         = obe_otoi( bitrate, 0 );
+                avc_param->vui.i_sar_width      = obe_otoi( sar_width, avc_param->vui.i_sar_width );
+                avc_param->vui.i_sar_height     = obe_otoi( sar_height, avc_param->vui.i_sar_width );
+
+                if( profile )
+                    parse_enum_value( profile, x264_profile_names, &avc_profile );
+
+                if( level )
+                {
+                    if( !strcasecmp( level, "1b" ) )
+                        avc_param->i_level_idc = 9;
+                    else if( obe_otof( level, 7.0 ) < 6 )
+                        avc_param->i_level_idc = (int)( 10*obe_otof( level, 0.0 ) + .5 );
+                    else
+                        avc_param->i_level_idc = obe_otoi( level, avc_param->i_level_idc );
+                }
+                avc_param->i_keyint_max        = obe_otoi( keyint, avc_param->i_keyint_max );
+                avc_param->i_sync_lookahead    = obe_otoi( lookahead, avc_param->i_sync_lookahead );
+                avc_param->rc.i_lookahead      = obe_otoi( lookahead, avc_param->rc.i_lookahead );
+                avc_param->i_threads           = obe_otoi( keyint, avc_param->i_threads );
+                avc_param->i_bframe            = obe_otoi( bframes, avc_param->i_bframe );
+                avc_param->i_bframe_pyramid    = obe_otoi( bframes, avc_param->i_bframe_pyramid );             
+            }
+            else if( program.streams[stream_id].stream_type == STREAM_TYPE_AUDIO )
+            {
+                if( action )
+                    parse_enum_value( action, stream_actions, &output_streams[stream_id].stream_action );
+
+                /* MP2 is all we support right now */
+                output_streams[stream_id].stream_format = AUDIO_MP2;
+                output_streams[stream_id].bitrate = obe_otoi( bitrate, 0 );
+            }
+        }
     }
 
     return 0;
@@ -321,8 +447,6 @@ static int set_output( char *command, obecli_command_t *child )
 {
     if( !strlen( command ) )
         return -1;
-
-    static const char *optlist[] = { "location", NULL };
 
     int tok_len = strcspn( command, " " );
     int str_len = strlen( command );
@@ -335,19 +459,19 @@ static int set_output( char *command, obecli_command_t *child )
     else if( !strcasecmp( command, "opts" ) && str_len > tok_len )
     {
         char *params = command + tok_len + 1;
-        char **opts = obe_split_options( params, optlist );
+        char **opts = obe_split_options( params, output_opts );
         if( !opts && params )
             return -1;
 
-        char *location = obe_get_option( optlist[0], opts );
-        if( location )
+        char *target = obe_get_option( output_opts[0], opts );
+        if( target )
         {
-             if( output.location )
-                 free( output.location );
+             if( output.target )
+                 free( output.target );
 
-             output.location = malloc( strlen( location ) + 1 );
-             FAIL_IF_ERROR( !output.location, "malloc failed\n" );
-             strcpy( output.location, location );
+             output.target = malloc( strlen( target ) + 1 );
+             FAIL_IF_ERROR( !output.target, "malloc failed\n" );
+             strcpy( output.target, target );
         }
     }
     else
@@ -370,32 +494,20 @@ static int show_bitdepth( char *command, obecli_command_t *child )
 
 static int show_decoders( char *command, obecli_command_t *child )
 {
-    int i = 0;
-
     printf( "\nSupported Decoders: \n" );
 
-    while( format_names[i].decoder_name )
-    {
-        if( format_names[i].decoder_name )
-            printf( "       %-*s          - %s \n", 8, format_names[i].format_name, format_names[i].decoder_name );
-        i++;
-    }
+    for( int i = 0; format_names[i].decoder_name != 0; i++ )
+        printf( "       %-*s %-*s - %s \n", 7, format_names[i].format_name, 22, format_names[i].long_name, format_names[i].decoder_name );
 
     return 0;
 }
 
 static int show_encoders( char *command, obecli_command_t *child )
 {
-    int i = 0;
-
     printf( "\nSupported Encoders: \n" );
 
-    while( format_names[i].format_name )
-    {
-        if( format_names[i].encoder_name )
-            printf( "       %-*s          - %s \n", 8, format_names[i].format_name, format_names[i].encoder_name );
-        i++;
-    }
+    for( int i = 0; format_names[i].encoder_name != 0; i++ )
+        printf( "       %-*s %-*s - %s \n", 7, format_names[i].format_name, 22, format_names[i].long_name, format_names[i].encoder_name );
 
     return 0;
 }
@@ -415,6 +527,7 @@ static int show_help( char *command, obecli_command_t *child )
 
     H0( "\n" );
 
+    /* TODO: stream selection */
 #if 0
     H0( "add  - Add item\n" );
     while( add_commands[i].name )
@@ -425,25 +538,28 @@ static int show_help( char *command, obecli_command_t *child )
 
     H0( "\n" );
 
+
     H0( "list - List current items\n" );
     H0( "       inputs               - List current inputs\n" );
     H0( "       muxers               - List current muxers\n" );
     H0( "       streams              - List current streams\n" );
     H0( "       outputs              - List current outputs\n" );
-#endif
+
     H0( "\n" );
 
-//    H0( "load - Load configuration\n" );
+    H0( "load - Load configuration\n" );
+
+#endif
 
     H0( "set  - Set parameter\n" );
     for( int i = 0; set_commands[i].name != 0; i++ )
-        H0( "       %-*s          - %s \n", 8, set_commands[i].name, set_commands[i].description );
+        H0( "       %-*s %-*s  - %s \n", 8, set_commands[i].name, 21, set_commands[i].child_opts, set_commands[i].description );
 
     H0( "\n" );
 
     H0( "Starting/Stopping OBE:\n" );
     H0( "start - Start encoding\n" );
-    //H0( "stop  - Stop encoding\n" );
+    H0( "stop  - Stop encoding\n" );
 
     H0( "\n" );
 
@@ -503,30 +619,48 @@ static int start_encode( char *command, obecli_command_t *child )
         return -1;
     }
 
-    if( !output.location )
-    {
-        fprintf( stderr, "No output location \n" );
-        return -1;
-    }
-
     for( int i = 0; i < program.num_streams; i++ )
     {
         output_streams[i].stream_id = program.streams[i].stream_id;
         if( program.streams[i].stream_type == STREAM_TYPE_VIDEO )
         {
+            if( !output_streams[i].avc_param.rc.i_vbv_buffer_size )
+            {
+                fprintf( stderr, "No VBV buffer size chosen\n" );
+                return -1;
+            }
+
             output_streams[i].stream_action = STREAM_ENCODE;
             output_streams[i].stream_format = VIDEO_AVC;
+            if( avc_profile >= 0 )
+                x264_param_apply_profile( &output_streams[i].avc_param, x264_profile_names[avc_profile] );
         }
-        else
-            output_streams[i].stream_action = STREAM_PASSTHROUGH;
-        output_streams[i].ts_opts.passthrough_opts = 1;
+    }
+
+    if( !mux_opts.ts_muxrate )
+    {
+        fprintf( stderr, "No mux rate selected \n" );
+        return -1;
+    }
+
+    if( !output.target )
+    {
+        fprintf( stderr, "No output target \n" );
+        return -1;
     }
 
     obe_setup_streams( h, output_streams, program.num_streams );
-    mux_opts.passthrough = 1;
     obe_setup_muxer( h, &mux_opts );
+    obe_setup_output( h, &output );
     if( obe_start( h ) < 0 )
         return -1;
+
+    return 0;
+}
+
+static int stop_encode( char *command, obecli_command_t *child )
+{
+    obe_close( h );
 
     return 0;
 }
@@ -550,10 +684,15 @@ static int probe_device( char *command, obecli_command_t *child )
     if( !strlen( command ) )
         return -1;
 
-    device.input_type = INPUT_URL;
-    device.location = command;
+    if( strcasecmp( command, "input" ) )
+    {
+        fprintf( stderr, "%s is not a valid item to probe\n", command );
+        return -1;
+    }
 
-    obe_probe_device( h, &device, &program );
+    /* TODO check for validity */
+
+    obe_probe_device( h, &input, &program );
 
     printf("\n");
 
@@ -573,7 +712,7 @@ static int probe_device( char *command, obecli_command_t *child )
             /* let it work out the number of channels from the channel map */
             av_get_channel_layout_string( buf, 200, 0, stream->channel_layout );
             printf( "Stream-id: %d - Audio: %s%s %s %ikbps %ikHz Language: %s \n", stream->stream_id, format_name,
-                    stream->stream_format == AUDIO_AAC ? stream->aac_is_latm ? " LATM" : " ADTS"  : "",
+                    stream->stream_format == AUDIO_AAC ? stream->aac_is_latm ? " LATM" : " ADTS" : "",
                     buf, stream->bitrate / 1000, stream->sample_rate / 1000, strlen( stream->lang_code ) ? stream->lang_code : "none" );
         }
         else if( stream->stream_format == SUBTITLES_DVB )
@@ -638,7 +777,20 @@ static int parse_command( char *command, obecli_command_t *commmand_list )
 
 int main( int argc, char **argv )
 {
+    char *home_dir = getenv( "HOME" );
+    char *history_filename;
     char *prompt = "obecli> ";
+
+    history_filename = malloc( strlen( home_dir ) + 16 + 1 );
+    if( !history_filename )
+    {
+        fprintf( stderr, "malloc failed\n" );
+        return -1;
+    }
+
+    sprintf( history_filename, "%s/.obecli_history", home_dir );
+    read_history( history_filename );
+
     h = obe_setup();
     if( !h )
     {
@@ -647,7 +799,7 @@ int main( int argc, char **argv )
     }
 
     printf( "\nOpen Broadcast Encoder command line interface.\n" );
-    printf( "Version 0.1 \n" );
+    printf( "Version 0.1-alpha \n" );
     printf( "\n" );
 
     while( 1 )
@@ -662,6 +814,9 @@ int main( int argc, char **argv )
 
         if( line_read && *line_read )
         {
+            if( !strcasecmp( line_read, "exit" ) )
+                break;
+
             add_history( line_read );
 
             int ret = parse_command( line_read, main_commands );
@@ -670,7 +825,7 @@ int main( int argc, char **argv )
         }
     }
 
-    obe_close( h );
+    write_history( history_filename );
 
     return 0;
 }
