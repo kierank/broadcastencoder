@@ -45,7 +45,7 @@ obe_t *h = NULL;
 static volatile int b_ctrl_c = 0;
 static char *line_read = NULL;
 
-static const char * const input_video_format_types[] = { "pal", "ntsc", "720p50", "720p59.94", "720p60", "1080i50", "1080i59.94", "1080i60",
+static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50", "720p59.94", "720p60", "1080i50", "1080i59.94", "1080i60",
                                                          "1080p23.98", "1080p24", "1080p25", "1080p29.97", "1080p30", "1080p50", "1080p59.94",
                                                          "1080p60", "2k23.98", "2k24", "2k25", 0 };
 static const char * const input_video_connections[]  = { "sdi", "hdmi", "optical-sdi", "component", "composite", "s-video", 0 };
@@ -299,9 +299,12 @@ static int set_input( char *command, obecli_command_t *child )
         }
 
         input.card_idx         = obe_otoi( card_idx, 0 );
-        input.video_format     = obe_otoi( video_format, 0 );
-        input.video_connection = obe_otoi( video_connection, 0 );
-        input.audio_connection = obe_otoi( audio_connection, 0 );
+        if( video_format )
+            parse_enum_value( video_format, input_video_formats, &input.video_format );
+        if( video_connection )
+            parse_enum_value( video_connection, input_video_connections, &input.video_connection );
+        if( audio_connection )
+            parse_enum_value( audio_connection, input_audio_connections, &input.audio_connection );
     }
 
     return 0;
