@@ -941,8 +941,59 @@ fail:
 
 void obe_close( obe_t *h )
 {
+    void *ret_ptr;
 
+    /* Cancel input thread */
+    for( int i = 0; i < h->num_devices; i++ )
+    {
+        pthread_cancel( h->devices[i]->device_thread );
+        pthread_join( h->devices[i]->device_thread, &ret_ptr );
+    }
 
+    fprintf( stderr, "input cancelled \n" );
+
+    /* Cancel filter threads */
+    for( int i = 0; i < h->num_filters; i++ )
+    {
+        pthread_cancel( h->filters[i]->filter_thread );
+        pthread_join( h->filters[i]->filter_thread, &ret_ptr );
+    }
+
+    fprintf( stderr, "filters cancelled \n" );
+
+    /* Cancel encoder thread */
+    for( int i = 0; i < h->num_encoders; i++ )
+    {
+        pthread_cancel( h->encoders[i]->encoder_thread );
+        pthread_join( h->encoders[i]->encoder_thread, &ret_ptr );
+    }
+
+    fprintf( stderr, "encoders cancelled \n" );
+
+    /* Cancel mux thread */
+    pthread_cancel( h->mux_thread );
+    pthread_join( h->mux_thread, &ret_ptr );
+
+    fprintf( stderr, "mux cancelled \n" );
+
+    /* Destroy devices */
+    for( int i = 0; i < h->num_devices; i++ )
+        destroy_device( h->devices[i] );
+
+    /* Destroy filters */
+    for( int i = 0; i < h->num_filters; i++ )
+        destroy_filter( h->filters[i] );
+
+    /* Destroy encoders */
+    for( int i = 0; i < h->num_encoders; i++ )
+        destroy_encoder( h->encoders[i] );
+
+    /* Destroy mux */
+    destroy_mux( h );
+
+    /* Destroy output */
+    destroy_output( h );
 
     free( h );
+    h = NULL;
 }
