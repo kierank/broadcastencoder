@@ -433,6 +433,9 @@ static int set_stream( char *command, obecli_command_t *child )
             }
             else if( program.streams[stream_id].stream_type == STREAM_TYPE_AUDIO )
             {
+                /* Set it to encode by default */
+                output_streams[stream_id].stream_action = STREAM_ENCODE;
+
                 if( action )
                     parse_enum_value( action, stream_actions, &output_streams[stream_id].stream_action );
 
@@ -637,6 +640,19 @@ static int start_encode( char *command, obecli_command_t *child )
             output_streams[i].stream_format = VIDEO_AVC;
             if( avc_profile >= 0 )
                 x264_param_apply_profile( &output_streams[i].avc_param, x264_profile_names[avc_profile] );
+        }
+        else if( program.streams[i].stream_type == STREAM_TYPE_AUDIO )
+        {
+            if( output_streams[i].stream_action == STREAM_PASSTHROUGH && program.streams[i].stream_format == AUDIO_PCM )
+            {
+                fprintf( stderr, "Uncompressed audio cannot yet be placed in TS\n" );
+                return -1;
+            }
+            else if( output_streams[i].stream_action == STREAM_ENCODE && !output_streams[i].bitrate )
+            {
+                fprintf( stderr, "Audio stream requires bitrate\n" );
+                return -1;
+            }
         }
     }
 
