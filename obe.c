@@ -525,14 +525,17 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     }
 
     args->h = h;
-    args->location = malloc( strlen( input_device->location ) + 1 );
-    if( !args->location )
+    if( input_device->location )
     {
-        fprintf( stderr, "Malloc failed \n" );
-        goto fail;
-    }
+       args->location = malloc( strlen( input_device->location ) + 1 );
+       if( !args->location )
+       {
+           fprintf( stderr, "Malloc failed \n" );
+           goto fail;
+        }
 
-    strcpy( args->location, input_device->location );
+        strcpy( args->location, input_device->location );
+    }
 
     if( obe_validate_input_params( input_device ) < 0 )
         goto fail;
@@ -543,7 +546,10 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
         goto fail;
     }
 
-    printf( "Probing device \"%s\". Timeout %i seconds\n", input_device->location, probe_time );
+    if( input_device->location )
+        printf( "Probing device: \"%s\". Timeout %i seconds\n", input_device->location, probe_time );
+    else
+        printf( "Probing device: Decklink card %i. Timeout %i seconds\n", input_device->card_idx, probe_time );
 
     while( i++ < probe_time )
     {
@@ -769,7 +775,7 @@ int obe_start( obe_t *h )
         goto fail;
     }
 
-    if( h->mux_opts.muxer == OUTPUT_UDP )
+    if( h->output_opts.output == OUTPUT_UDP )
         output = udp_output;
     else
         output = rtp_output;
