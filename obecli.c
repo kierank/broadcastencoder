@@ -424,7 +424,7 @@ static int set_stream( char *command, obecli_command_t *child )
                 avc_param->i_keyint_max        = obe_otoi( keyint, avc_param->i_keyint_max );
                 avc_param->i_sync_lookahead    = obe_otoi( lookahead, avc_param->i_sync_lookahead );
                 avc_param->rc.i_lookahead      = obe_otoi( lookahead, avc_param->rc.i_lookahead );
-                avc_param->i_threads           = obe_otoi( keyint, avc_param->i_threads );
+                avc_param->i_threads           = obe_otoi( threads, avc_param->i_threads );
                 avc_param->i_bframe            = obe_otoi( bframes, avc_param->i_bframe );
                 avc_param->i_bframe_pyramid    = obe_otoi( b_pyramid, avc_param->i_bframe_pyramid );
             }
