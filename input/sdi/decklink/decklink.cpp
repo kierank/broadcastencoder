@@ -637,6 +637,7 @@ static void *probe_stream( void *ptr )
 
     device->num_input_streams = num_streams;
     memcpy( device->streams, streams, num_streams * sizeof(obe_int_input_stream_t**) );
+    device->device_type = INPUT_DEVICE_DECKLINK;
 
     /* add device */
     add_device( h, device );
