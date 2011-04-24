@@ -24,6 +24,8 @@
 #ifndef OBE_COMMON_H
 #define OBE_COMMON_H
 
+#include "config.h"
+
 #include <libavutil/pixfmt.h>
 #include <libavutil/imgutils.h>
 
