@@ -150,13 +150,13 @@ void *probe_stream( void *ptr )
             stream = lavf->streams[idx];
             codec = stream->codec;
 
-            if( codec->codec_type == CODEC_TYPE_VIDEO || codec->codec_type == CODEC_TYPE_AUDIO ||
-                codec->codec_type == CODEC_TYPE_SUBTITLE )
+            if( codec->codec_type == AVMEDIA_TYPE_VIDEO || codec->codec_type ==AVMEDIA_TYPE_AUDIO ||
+                codec->codec_type == AVMEDIA_TYPE_SUBTITLE )
             {
                 dec = avcodec_find_decoder( codec->codec_id );
 
                 /* ignore video streams which don't support custom allocators */
-                if( codec->codec_type == CODEC_TYPE_VIDEO && !( dec->capabilities & CODEC_CAP_DR1 ) )
+                if( codec->codec_type == AVMEDIA_TYPE_VIDEO && !( dec->capabilities & CODEC_CAP_DR1 ) )
                     continue;
 
                 if( codec->codec_id != CODEC_ID_DVB_TELETEXT && avcodec_open( codec, dec ) < 0 )
@@ -199,7 +199,7 @@ void *probe_stream( void *ptr )
                 streams[num_streams]->has_stream_identifier = stream->has_stream_identifier;
                 streams[num_streams]->stream_identifier = stream->stream_identifier;
 
-                if( codec->codec_type == CODEC_TYPE_VIDEO )
+                if( codec->codec_type == AVMEDIA_TYPE_VIDEO )
                 {
                     streams[num_streams]->stream_type = STREAM_TYPE_VIDEO;
                     if( codec->codec_id == CODEC_ID_H264 )
@@ -207,7 +207,7 @@ void *probe_stream( void *ptr )
                     else if( codec->codec_id == CODEC_ID_MPEG2VIDEO )
                         streams[num_streams]->stream_format = VIDEO_MPEG2;
                 }
-                else if( codec->codec_type == CODEC_TYPE_AUDIO )
+                else if( codec->codec_type == AVMEDIA_TYPE_AUDIO )
                 {
                     streams[num_streams]->stream_type = STREAM_TYPE_AUDIO;
 
@@ -289,7 +289,7 @@ void *probe_stream( void *ptr )
         out_lut = find_stream_id( stream_lut, pkt.stream_index );
         if( out_lut->stream_id != -1 )
         {
-            if( codec->codec_type == CODEC_TYPE_VIDEO )
+            if( codec->codec_type == AVMEDIA_TYPE_VIDEO )
             {
                 if( ret < 0 )
                     pkt.size = 0;
@@ -319,7 +319,7 @@ void *probe_stream( void *ptr )
 
         streams[i]->bitrate = codec->bit_rate;
 
-        if( codec->codec_type == CODEC_TYPE_VIDEO )
+        if( codec->codec_type == AVMEDIA_TYPE_VIDEO )
         {
             streams[i]->width  = codec->width;
             streams[i]->height = codec->height;
@@ -329,7 +329,7 @@ void *probe_stream( void *ptr )
             streams[i]->sar_num = codec->sample_aspect_ratio.num;
             streams[i]->sar_den = codec->sample_aspect_ratio.den;
         }
-        else if( codec->codec_type == CODEC_TYPE_AUDIO )
+        else if( codec->codec_type == AVMEDIA_TYPE_AUDIO )
         {
             streams[i]->channel_layout = codec->channel_layout;
             streams[i]->sample_format = codec->sample_fmt;
@@ -445,7 +445,7 @@ void *open_input( void *ptr )
             codec = lavf->streams[out_lut->lavf_stream_idx]->codec;
             dec = avcodec_find_decoder( codec->codec_id );
 
-            if( codec->codec_type == CODEC_TYPE_VIDEO )
+            if( codec->codec_type == AVMEDIA_TYPE_VIDEO )
             {
 #if 0
                 codec->get_buffer = obe_get_buffer;
@@ -515,7 +515,7 @@ void *open_input( void *ptr )
             }
             else
             {
-                if( codec->codec_type == CODEC_TYPE_VIDEO )
+                if( codec->codec_type == AVMEDIA_TYPE_VIDEO )
                 {
                     avcodec_get_frame_defaults( &frame );
                     codec->reordered_opaque = pkt.pts;
@@ -567,7 +567,7 @@ void *open_input( void *ptr )
                         /* TODO: SAR changes */
                     }
                 }
-                else if( codec->codec_type == CODEC_TYPE_AUDIO )
+                else if( codec->codec_type == AVMEDIA_TYPE_AUDIO )
                 {
                     /* TODO: find out if there are any odd streams with multiple frames per AVPacket */
                     audio_size = AUDIO_BUFFER_SIZE;
