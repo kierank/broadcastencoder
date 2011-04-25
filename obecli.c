@@ -54,8 +54,14 @@ static const char * const stream_actions[]           = { "passthrough", "encode"
 static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", 0 };
 
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", NULL };
-static const char * stream_opts[] = { "action", "format", "vbv-maxrate", "vbv-bufsize", "bitrate", "sar-width", "sar-height",
-                                      "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", NULL };
+static const char * stream_opts[] = { "action", "format",
+                                      /* Encoding options */
+                                      "vbv-maxrate", "vbv-bufsize", "bitrate", "sar-width", "sar-height",
+                                      "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", "weightp",
+                                      "interlaced", "tff",
+                                      /* TS options */
+                                      "pid", "lang",
+                                      NULL };
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrough", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
@@ -388,6 +394,7 @@ static int set_stream( char *command, obecli_command_t *child )
 
             char *action      = obe_get_option( stream_opts[0], opts );
             char *format      = obe_get_option( stream_opts[1], opts );
+
             char *vbv_maxrate = obe_get_option( stream_opts[2], opts );
             char *vbv_bufsize = obe_get_option( stream_opts[3], opts );
             char *bitrate     = obe_get_option( stream_opts[4], opts );
@@ -400,6 +407,13 @@ static int set_stream( char *command, obecli_command_t *child )
             char *threads     = obe_get_option( stream_opts[11], opts );
             char *bframes     = obe_get_option( stream_opts[12], opts );
             char *b_pyramid   = obe_get_option( stream_opts[13], opts );
+            char *weightp     = obe_get_option( stream_opts[14], opts );
+            char *interlaced  = obe_get_option( stream_opts[15], opts );
+            char *tff         = obe_get_option( stream_opts[16], opts );
+
+            /* NB: remap these if more encoding options are added */
+            char *pid         = obe_get_option( stream_opts[17], opts );
+            char *lang        = obe_get_option( stream_opts[18], opts );
 
             if( program.streams[stream_id].stream_type == STREAM_TYPE_VIDEO )
             {
@@ -430,6 +444,9 @@ static int set_stream( char *command, obecli_command_t *child )
                 avc_param->i_threads           = obe_otoi( threads, avc_param->i_threads );
                 avc_param->i_bframe            = obe_otoi( bframes, avc_param->i_bframe );
                 avc_param->i_bframe_pyramid    = obe_otoi( b_pyramid, avc_param->i_bframe_pyramid );
+                avc_param->analyse.i_weighted_pred = obe_otoi( weightp, avc_param->analyse.i_weighted_pred );
+                avc_param->b_interlaced        = obe_otob( interlaced, avc_param->b_interlaced );
+                avc_param->b_tff               = obe_otob( tff, avc_param->b_tff );
             }
             else if( program.streams[stream_id].stream_type == STREAM_TYPE_AUDIO )
             {
@@ -442,6 +459,14 @@ static int set_stream( char *command, obecli_command_t *child )
                 /* MP2 is all we support right now */
                 output_streams[stream_id].stream_format = AUDIO_MP2;
                 output_streams[stream_id].bitrate = obe_otoi( bitrate, 0 );
+            }
+
+            output_streams[stream_id].ts_opts.pid = obe_otoi( pid, output_streams[stream_id].ts_opts.pid );
+            if( lang && strlen( lang ) >= 3 )
+            {
+                output_streams[stream_id].ts_opts.write_lang_code = 1;
+                memcpy( output_streams[stream_id].ts_opts.lang_code, lang, 3 );
+                output_streams[stream_id].ts_opts.lang_code[3] = 0;
             }
         }
     }
