@@ -699,6 +699,8 @@ static int start_encode( char *command, obecli_command_t *child )
     if( obe_start( h ) < 0 )
         return -1;
 
+    printf( "Encoding started\n" );
+
     return 0;
 }
 
