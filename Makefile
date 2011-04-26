@@ -94,7 +94,7 @@ endif
 
 uninstall:
 	rm -f $(DESTDIR)$(includedir)/obe.h $(DESTDIR)$(libdir)/libobe.a
-	rm -f $(DESTDIR)$(bindir)/obe$(EXE) $(DESTDIR)$(libdir)/pkgconfig/obe.pc
+	rm -f $(DESTDIR)$(bindir)/obecli$(EXE) $(DESTDIR)$(libdir)/pkgconfig/obe.pc
 	$(if $(SONAME), rm -f $(DESTDIR)$(libdir)/$(SONAME) $(DESTDIR)$(libdir)/libobe.$(SOSUFFIX))
 
 etags: TAGS
