@@ -1,0 +1,13 @@
+OBE-RT 0.1-Alpha Release Notes
+
+** Suitability **
+
+This release is suitable for testing SD/HD SDI input encoded to IP out.
+Much of the features are not yet documented. Only obecli use is recommended. API use is not recommended.
+
+** Known issues **
+
+Output jitter on IP out can be unacceptable - this needs further investigation
+Encoder shutdown fails currently. Ctrl-C will suffice.
+IP-in -> IP-out transcoding is an experimental feature
+
