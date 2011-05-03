@@ -72,13 +72,16 @@ typedef struct
     float height[4];
     int mod_width;
     int mod_height;
+    int bit_depth;
 } obe_cli_csp_t;
 
-const obe_cli_csp_t obe_cli_csps[] =
+static obe_cli_csp_t obe_cli_csps[] =
 {
-    [PIX_FMT_YUV420P] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2 },
-    [PIX_FMT_NV12] =    { 2, { 1,  1 },     { 1, .5 },     2, 2 },
-    [PIX_FMT_YUV420P16] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2 },
+    [PIX_FMT_YUV420P] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 8 },
+    [PIX_FMT_NV12] =    { 2, { 1,  1 },     { 1, .5 },     2, 2, 8 },
+    [PIX_FMT_YUV420P10] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 10 },
+    [PIX_FMT_YUV422P10] = { 3, { 1, .5, .5 }, { 1, 1, 1 }, 2, 2, 10 },
+    [PIX_FMT_YUV420P16] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 16 },
 };
 
 static uint32_t convert_cpu_to_flag( void )
@@ -94,10 +97,57 @@ static uint32_t convert_cpu_to_flag( void )
     return swscale_cpu;
 }
 
-static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
+static int scale_frame( obe_raw_frame_t *raw_frame )
+{
+    obe_image_t *img = &raw_frame->img;
+    obe_image_t tmp_image = {0};
+    obe_image_t *out = &tmp_image;
+
+    tmp_image.csp = img->csp == PIX_FMT_YUV420P10 ? PIX_FMT_YUV420P16 : PIX_FMT_YUV422P16;
+    tmp_image.width = raw_frame->img.width;
+    tmp_image.height = raw_frame->img.height;
+    tmp_image.planes = av_pix_fmt_descriptors[tmp_image.csp].nb_components;
+
+    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height,
+                        tmp_image.csp, 16 ) < 0 )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+
+    /* this function mimics how swscale does upconversion. 8-bit is converted
+     * to 16-bit through left shifting the orginal value with 8 and then adding
+     * the original value to that. This effectively keeps the full color range
+     * while also being fast. for n-bit we basically do the same thing, but we
+     * discard the lower 16-n bits. */
+    const int lshift = 16-obe_cli_csps[img->csp].bit_depth;
+    const int rshift = 2*obe_cli_csps[img->csp].bit_depth - 16;
+    for( int i = 0; i < img->planes; i++ )
+    {
+        uint16_t *src = (uint16_t*)img->plane[i];
+        uint16_t *dst = (uint16_t*)out->plane[i];
+        int height = obe_cli_csps[img->csp].height[i] * img->height;
+        int width = obe_cli_csps[img->csp].width[i] * img->width;
+
+        for( int j = 0; j < height; j++ )
+        {
+            for( int k = 0; k < width; k++ )
+                dst[k] = (src[k] << lshift) + (src[k] >> rshift);
+
+            src += img->stride[i]/2;
+            dst += out->stride[i]/2;
+        }
+    }
+
+    raw_frame->release_data( raw_frame );
+    memcpy( &raw_frame->img, &tmp_image, sizeof(obe_image_t) );
+
+    return 0;
+}
+
+static int downconvert_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
     obe_image_t tmp_image = {0};
-    tmp_image.planes = 3; // FIXME
 
     if( !vfilt->sws_ctx )
     {
@@ -120,6 +170,7 @@ static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
     tmp_image.csp = vfilt->dst_pix_fmt;
     tmp_image.width = raw_frame->img.width;
     tmp_image.height = raw_frame->img.height;
+    tmp_image.planes = av_pix_fmt_descriptors[vfilt->dst_pix_fmt].nb_components;
 
     if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height,
                         vfilt->dst_pix_fmt, 16 ) < 0 )
@@ -214,9 +265,9 @@ static int dither_image( obe_raw_frame_t *raw_frame, int16_t *error_buf )
     return 0;
 }
 
-int parse_user_data( obe_raw_frame_t *raw_frame )
+int encapsulate_user_data( obe_raw_frame_t *raw_frame )
 {
-    /* Parse user-data */
+    /* Encapsulate user-data */
     for( int i = 0; i < raw_frame->num_user_data; i++ )
     {
     }
@@ -248,7 +299,6 @@ void *start_filter( void *ptr )
     while( 1 )
     {
         /* TODO: support resolution changes */
-        /* TODO: handle actual 10-bit images */
         /* TODO: support changes in pixel format */
 
         pthread_mutex_lock( &filter->filter_mutex );
@@ -259,9 +309,15 @@ void *start_filter( void *ptr )
         raw_frame = filter->frames[0];
         pthread_mutex_unlock( &filter->filter_mutex );
 
+        if( raw_frame->img.csp == PIX_FMT_YUV420P10 || raw_frame->img.csp == PIX_FMT_YUV422P10 )
+        {
+            if( scale_frame( raw_frame ) < 0 )
+                goto fail;
+        }
+
         if( raw_frame->img.csp == PIX_FMT_YUV422P || raw_frame->img.csp == PIX_FMT_YUV422P16 )
         {
-            if( scale_frame( vfilt, raw_frame ) < 0 )
+            if( downconvert_frame( vfilt, raw_frame ) < 0 )
                 goto fail;
         }
 
@@ -281,7 +337,7 @@ void *start_filter( void *ptr )
                 goto fail;
         }
 
-        if( parse_user_data( raw_frame ) < 0 )
+        if( encapsulate_user_data( raw_frame ) < 0 )
             goto fail;
 
         remove_frame_from_filter_queue( filter );
