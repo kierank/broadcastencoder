@@ -130,13 +130,17 @@ enum stream_formats_e
 
     SUBTITLES_DVB,
     MISC_TELETEXT,
-    MISC_AFD,
     MISC_PAN_SCAN,
     MISC_WSS,
+    MISC_VPS,
 
     /* Per-frame Streams/Data */
-    SUBTITLES_CEA_608,
-    SUBTITLES_CEA_708,
+    CAPTIONS_CEA_608,
+    CAPTIONS_CEA_708,
+    MISC_AFD,
+
+    /* VBI */
+    VBI_RAW,
 
     /* Ancillary */
     ANC_DVB_SCTE_VBI,
@@ -205,8 +209,6 @@ enum stream_action_e
 {
     STREAM_PASSTHROUGH,
     STREAM_ENCODE,
-//    STREAM_LATM_TO_ADTS,
-//    STREAM_ADTS_TO_LATM,
 };
 
 typedef struct
@@ -221,6 +223,8 @@ typedef struct
 
     int has_stream_identifier;
     int stream_identifier;
+
+    // TODO TTX/VBI etc
 
 } obe_ts_stream_opts_t;
 
@@ -355,7 +359,8 @@ enum output_e
 {
     OUTPUT_UDP, /* MPEG-TS in UDP */
     OUTPUT_RTP, /* MPEG-TS in RTP in UDP */
-//    OUTPUT_ASI,
+//    OUTPUT_LINSYS_ASI,
+//    OUTPUT_LINSYS_SMPTE_310M,
 };
 
 /* Output structure

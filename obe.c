@@ -525,16 +525,17 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     }
 
     args->h = h;
+    memcpy( &args->user_opts, input_device, sizeof(*input_device) );
     if( input_device->location )
     {
-       args->location = malloc( strlen( input_device->location ) + 1 );
-       if( !args->location )
+       args->user_opts.location = malloc( strlen( input_device->location ) + 1 );
+       if( !args->user_opts.location)
        {
            fprintf( stderr, "Malloc failed \n" );
            goto fail;
         }
 
-        strcpy( args->location, input_device->location );
+        strcpy( args->user_opts.location, input_device->location );
     }
 
     if( obe_validate_input_params( input_device ) < 0 )
@@ -614,8 +615,8 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
 fail:
     if( args )
     {
-        if( args->location )
-            free( args->location );
+        if( args->user_opts.location )
+            free( args->user_opts.location );
         free( args );
     }
 
@@ -695,11 +696,10 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     }
 
     x264_param_apply_profile( param, "high" );
-
     param->sc.f_speed = 1.0;
     param->b_aud = 1;
     param->i_nal_hrd = X264_NAL_HRD_FAKE_VBR;
-    param->i_log_level = X264_LOG_NONE;
+    //param->i_log_level = X264_LOG_NONE;
 
     return 0;
 }

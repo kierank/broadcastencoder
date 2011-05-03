@@ -45,6 +45,8 @@ obe_t *h = NULL;
 static volatile int b_ctrl_c = 0;
 static char *line_read = NULL;
 
+static int running = 0;
+
 static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50", "720p59.94", "720p60", "1080i50", "1080i59.94", "1080i60",
                                                          "1080p23.98", "1080p24", "1080p25", "1080p29.97", "1080p30", "1080p50", "1080p59.94",
                                                          "1080p60", "2k23.98", "2k24", "2k25", 0 };
@@ -644,6 +646,12 @@ static int show_outputs( char *command, obecli_command_t *child )
 
 static int start_encode( char *command, obecli_command_t *child )
 {
+    if( running )
+    {
+        fprintf( stderr, "Encoder already running \n" );
+        return -1;
+    }
+
     if( !program.num_streams )
     {
         fprintf( stderr, "No active devices \n" );
@@ -699,6 +707,7 @@ static int start_encode( char *command, obecli_command_t *child )
     if( obe_start( h ) < 0 )
         return -1;
 
+    running = 1;
     printf( "Encoding started\n" );
 
     return 0;

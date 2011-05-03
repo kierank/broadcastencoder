@@ -144,6 +144,8 @@ typedef struct
     int device_type;
     char *location;
 
+    obe_input_t user_opts;
+
     /* MPEG-TS */
     int program_num;
     int ts_id;
@@ -171,6 +173,17 @@ typedef struct
     uint8_t *plane[4]; /* pointers for each plane */
     int     stride[4]; /* strides for each plane */
 } obe_image_t;
+
+enum user_data_types_e
+{
+    /* Encapsulated data formats */
+    USER_DATA_AVC_REGISTERED_ITU_T35 = 4,
+    USER_DATA_AVC_UNREGISTERED       = 5,
+
+    /* Raw data formats */
+
+    USER_DATA_CEA_608                = 64, /* Raw CEA-608 data */
+};
 
 typedef struct
 {
