@@ -97,7 +97,7 @@ void *probe_stream( void *ptr )
 {
     obe_input_probe_t *probe_ctx = ptr;
     obe_t *h = probe_ctx->h;
-    char *location = probe_ctx->location;
+    char *location = probe_ctx->user_opts.location;
     obe_int_input_stream_t *streams[MAX_STREAMS];
     int num_streams = 0, frame_idx = 0, have_video = 0,
     lavf_idx = 0, ts_id = 0, program_num = 0, pmt_pid = 0, pcr_pid = 0;

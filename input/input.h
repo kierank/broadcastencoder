@@ -33,7 +33,7 @@ typedef struct
 typedef struct
 {
     obe_t *h;
-    char *location;
+    obe_input_t user_opts;
 } obe_input_probe_t;
 
 typedef struct
