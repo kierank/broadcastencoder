@@ -23,6 +23,7 @@
 
 #include "common/common.h"
 #include "encoders/video/video.h"
+#include "output/network.h"
 
 struct x264_status
 {
@@ -60,13 +61,17 @@ static void *start_encoder( void *ptr )
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
 
+    int num_frames = 0;
+    obe_coded_frame_t **frame_queue;
+
     struct x264_status status;
     status.s = &s;
     status.enc_params = enc_params;
 
     pthread_cleanup_push( close_encoder, (void*)&status );
 
-    /* TODO check for width, height changes */
+    /* TODO: check for width, height changes */
+    /* TODO: send messages from x264 to syslog */
 
     /* Lock the mutex until we verify and fetch new parameters */
     pthread_mutex_lock( &encoder->encoder_mutex );
@@ -90,6 +95,14 @@ static void *start_encoder( void *ptr )
         goto fail;
     }
     memcpy( encoder->encoder_params, &enc_params->avc_param, sizeof(enc_params->avc_param) );
+
+    frame_queue = malloc( (enc_params->avc_param.sc.i_buffer_size+1) * sizeof(*frame_queue) );
+    if( !frame_queue )
+    {
+        pthread_mutex_unlock( &encoder->encoder_mutex );
+        syslog( LOG_ERR, "Malloc failed\n" );
+        goto fail;
+    }
 
     encoder->is_ready = 1;
     /* Broadcast because input and muxer can be stuck waiting for encoder */
@@ -148,7 +161,13 @@ static void *start_encoder( void *ptr )
             coded_frame->priority = IS_X264_TYPE_I( pic_out.i_type );
             free( pic_out.passthrough_opaque );
 
-            add_to_mux_queue( h, coded_frame );
+            if( num_frames == enc_params->avc_param.sc.i_buffer_size+1 )
+            {
+                add_to_mux_queue( h, frame_queue[0] );
+                memcpy( &frame_queue[0], &frame_queue[1], --num_frames * sizeof(*frame_queue) );
+            }
+
+            frame_queue[num_frames++] = coded_frame;
         }
     }
 
