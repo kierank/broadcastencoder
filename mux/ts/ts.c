@@ -33,6 +33,12 @@
 #define MP2_NUM_SAMPLES 1152
 #define AAC_NUM_SAMPLES 1024
 
+struct ts_status
+{
+    ts_writer_t **w;
+    ts_stream_t **streams;
+};
+
 static const int mpegts_stream_info[][3] =
 {
     { VIDEO_AVC,   LIBMPEGTS_VIDEO_AVC,      LIBMPEGTS_STREAM_ID_MPEGVIDEO },
@@ -75,10 +81,11 @@ void *open_muxer( void *ptr )
     obe_mux_opts_t *mux_opts = &h->mux_opts;
     int cur_pid = MIN_PID;
     int stream_format, video_pid = 0, video_found = 0, width = 0,
-    height = 0, has_dds = 0, len = 0, num_frames = 0, total_frames = 0;
+    height = 0, has_dds = 0, len = 0, num_frames = 0;
     uint8_t *output;
     int64_t first_video_pts = -1, video_dts, first_video_real_pts = -1;
     int64_t *pcr_list;
+    ts_writer_t *w;
     ts_main_t params = {0};
     ts_program_t program = {0};
     ts_stream_t *stream;
@@ -90,6 +97,10 @@ void *open_muxer( void *ptr )
     obe_encoder_t *encoder;
     obe_muxed_data_t *muxed_data;
 
+    struct sched_param param = {0};
+    param.sched_priority = 99;
+    pthread_setschedparam( pthread_self(), SCHED_RR, &param );
+
     // TODO sanity check the options
 
     params.ts_type = mux_opts->ts_type;
@@ -99,7 +110,7 @@ void *open_muxer( void *ptr )
     params.pcr_period = mux_opts->pcr_period;
     params.pat_period = mux_opts->pat_period;
 
-    ts_writer_t *w = ts_create_writer();
+    w = ts_create_writer();
 
     if( !w )
     {
@@ -276,9 +287,7 @@ void *open_muxer( void *ptr )
         }
     }
 
-    int64_t mpeg_time = -1;
-
-    //FILE *fp = fopen( "test.ts", "wb" );
+    FILE *fp = fopen( "test.ts", "wb" );
 
     while( 1 )
     {
@@ -295,48 +304,21 @@ void *open_muxer( void *ptr )
                 if( h->coded_frames[i]->is_video )
                 {
                     video_found = 1;
+                    video_dts = h->coded_frames[i]->real_dts;
+                    /* FIXME: handle case where first_video_pts < h->coded_frames[i]->real_pts */
+                    if( first_video_pts == -1 )
+                    {
+                        /* Get rid of frames which are too early */
+                        first_video_pts = h->coded_frames[i]->pts;
+                        first_video_real_pts = h->coded_frames[i]->real_pts;
+                        remove_early_frames( h, first_video_pts );
+                    }
                     break;
                 }
             }
 
             if( !video_found )
                 pthread_cond_wait( &h->mux_cv, &h->mux_mutex );
-        }
-
-        remove_early_frames( h, first_video_pts );
-
-        video_found = 0;
-        for( int i = 0; i < h->num_coded_frames; i++ )
-        {
-            if( h->coded_frames[i]->is_video && !video_found )
-            {
-                video_found = 1;
-                video_dts = h->coded_frames[i]->real_dts;
-                /* FIXME: handle case where first_video_pts < h->coded_frames[i]->real_pts */
-                if( first_video_pts == -1 )
-                {
-                    /* Get rid of frames which are too early */
-                    first_video_pts = h->coded_frames[i]->pts;
-                    first_video_real_pts = h->coded_frames[i]->real_pts;
-                    remove_early_frames( h, first_video_pts );
-                    lowest_pts = largest_pts = -1;
-                    break;
-                }
-            }
-            if( lowest_pts == -1 || h->coded_frames[i]->pts < lowest_pts )
-                lowest_pts = h->coded_frames[i]->pts;
-
-            if( largest_pts == -1 || h->coded_frames[i]->pts > largest_pts )
-                largest_pts = h->coded_frames[i]->pts;
-        }
-
-        total_frames = h->num_coded_frames;
-
-        /* FIXME HACK - we should block in the demuxer */
-        if( largest_pts - lowest_pts < 1*90000 )
-        {
-            pthread_mutex_unlock( &h->mux_mutex );
-            continue;
         }
 
         frames = calloc( 1, h->num_coded_frames * sizeof(*frames) );
@@ -346,7 +328,7 @@ void *open_muxer( void *ptr )
             goto fail;
         }
 
-        //printf("\n START \n");
+        //printf("\n START - queuelen %i \n", h->num_coded_frames);
 
         num_frames = 0;
         for( int i = 0; i < h->num_coded_frames; i++ )
@@ -356,6 +338,8 @@ void *open_muxer( void *ptr )
             int64_t rescaled_dts = h->coded_frames[i]->pts - first_video_pts + first_video_real_pts;
             if( h->coded_frames[i]->is_video )
                 rescaled_dts = h->coded_frames[i]->real_dts;
+
+            //printf("\n stream-id %i ours: %"PRIi64" \n", h->coded_frames[i]->stream_id, h->coded_frames[i]->pts );
 
             if( rescaled_dts <= video_dts )
             {
@@ -413,8 +397,6 @@ void *open_muxer( void *ptr )
         }
 
         free( frames );
-
-        total_frames -= num_frames;
     }
 
 fail:
