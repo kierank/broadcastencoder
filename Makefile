@@ -5,7 +5,7 @@ include config.mak
 all: default
 
 SRCS = obe.c \
-       input/lavc.c input/lavf/lavf.c \
+       input/lavc.c input/lavf/lavf.c input/sdi/vbi.c \
        filters/video/video.c \
        encoders/video/avc/x264.c \
        mux/ts/ts.c \
