@@ -761,6 +761,8 @@ static int probe_device( char *command, obecli_command_t *child )
             printf( "Stream-id: %d - Video: %s %dx%d%s %d/%dfps SAR: %d:%d \n", stream->stream_id,
                     format_name, stream->width, stream->height, stream->interlaced ? "i" : "p",
                     stream->timebase_den, stream->timebase_num, stream->sar_num, stream->sar_den );
+
+            /* TODO: tell user about frame-data like Captions/AFD */
         }
         else if( stream->stream_type == STREAM_TYPE_AUDIO )
         {

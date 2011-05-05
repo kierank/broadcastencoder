@@ -154,6 +154,12 @@ enum stream_formats_e
 
 typedef struct
 {
+     int type;
+     int source;
+} obe_frame_data_t;
+
+typedef struct
+{
     int stream_id;
     int stream_type;
     int stream_format;
@@ -173,7 +179,9 @@ typedef struct
     int timebase_num;
     int timebase_den;
 
-    // TODO multiple extra streams
+    /* Per-frame data (e.g. Captions/AFD) */
+    int num_frame_data;
+    obe_frame_data_t *frame_data;
 
     /** Audio **/
     int64_t channel_layout;
@@ -190,7 +198,8 @@ typedef struct
     /* Has display definition segment (i.e HD subtitling) */
     int dvb_has_dds;
 
-    /* Vertical Ancillary */
+    /** Misc **/
+    int source;
 }obe_input_stream_t;
 
 typedef struct

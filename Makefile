@@ -6,7 +6,7 @@ all: default
 
 SRCS = obe.c \
        input/lavc.c input/lavf/lavf.c input/sdi/vbi.c \
-       filters/video/video.c \
+       filters/video/video.c filters/video/cc.c \
        encoders/video/avc/x264.c \
        mux/ts/ts.c \
        output/network.c output/rtp/rtp.c output/udp/udp.c

@@ -39,12 +39,30 @@ static void close_encoder( void *ptr )
     free( x264_status->enc_params );
 }
 
-static void convert_cli_to_lib_pic( x264_picture_t *lib, obe_image_t *img )
+static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_frame )
 {
-    memcpy( lib->img.i_stride, img->stride, sizeof(img->stride) );
-    memcpy( lib->img.plane, img->plane, sizeof(img->plane) );
-    lib->img.i_plane = img->planes;
-    lib->img.i_csp = X264_CSP_I420;
+    obe_image_t *img = &raw_frame->img;
+
+    memcpy( pic->img.i_stride, img->stride, sizeof(img->stride) );
+    memcpy( pic->img.plane, img->plane, sizeof(img->plane) );
+    pic->img.i_plane = img->planes;
+    pic->img.i_csp = X264_CSP_I420;
+
+    pic->extra_sei.sei_free = free;
+    pic->extra_sei.num_payloads = raw_frame->num_user_data;
+    pic->extra_sei.payloads = calloc( 1, raw_frame->num_user_data * sizeof(*pic->extra_sei.payloads) );
+
+    if( !pic->extra_sei.payloads )
+        return -1;
+
+    for( int i = 0; i < raw_frame->num_user_data; i++ )
+    {
+        pic->extra_sei.payloads[i].payload_type = raw_frame->user_data[i].type;
+        pic->extra_sei.payloads[i].payload_size = raw_frame->user_data[i].len;
+        pic->extra_sei.payloads[i].payload = raw_frame->user_data[i].data;
+    }
+
+    return 0;
 }
 
 static void *start_encoder( void *ptr )
@@ -119,8 +137,13 @@ static void *start_encoder( void *ptr )
         raw_frame = encoder->frames[0];
         pthread_mutex_unlock( &encoder->encoder_mutex );
 
-        /* TODO handle user data */
-        convert_cli_to_lib_pic( &pic, &raw_frame->img );
+        if( convert_obe_to_x264_pic( &pic, raw_frame ) < 0 )
+        {
+            syslog( LOG_ERR, "Malloc failed\n" );
+            goto fail;
+        }
+
+        /* FIXME: if frames are dropped this might not be true */
         pic.i_pts = pts++;
         pts2 = malloc( sizeof(int64_t) );
         if( !pts2 )

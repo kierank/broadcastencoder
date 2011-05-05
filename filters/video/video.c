@@ -24,7 +24,8 @@
 #include <libavutil/cpu.h>
 #include <libswscale/swscale.h>
 #include "common/common.h"
-#include "filters/video/video.h"
+#include "video.h"
+#include "cc.h"
 
 #if X264_BIT_DEPTH > 8
 typedef uint16_t pixel;
@@ -265,11 +266,13 @@ static int dither_image( obe_raw_frame_t *raw_frame, int16_t *error_buf )
     return 0;
 }
 
-int encapsulate_user_data( obe_raw_frame_t *raw_frame )
+int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stream_t *input_stream )
 {
     /* Encapsulate user-data */
     for( int i = 0; i < raw_frame->num_user_data; i++ )
     {
+        if( raw_frame->user_data[i].type == USER_DATA_CEA_608 )
+            write_cc( &raw_frame->user_data[i], input_stream );
     }
 
     return 0;
@@ -280,6 +283,7 @@ void *start_filter( void *ptr )
     obe_vid_filter_params_t *filter_params = ptr;
     obe_t *h = filter_params->h;
     obe_filter_t *filter = filter_params->filter;
+    obe_int_input_stream_t *input_stream = filter_params->input_stream;
     obe_raw_frame_t *raw_frame;
     obe_vid_filter_ctx_t *vfilt = NULL;
 
@@ -337,7 +341,7 @@ void *start_filter( void *ptr )
                 goto fail;
         }
 
-        if( encapsulate_user_data( raw_frame ) < 0 )
+        if( encapsulate_user_data( raw_frame, input_stream ) < 0 )
             goto fail;
 
         remove_frame_from_filter_queue( filter );

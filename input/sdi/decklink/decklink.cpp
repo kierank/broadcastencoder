@@ -44,8 +44,6 @@ struct obe_to_decklink_video
 {
     int obe_name;
     uint32_t bmd_name;
-    int width;
-    int height;
     int timebase_num;
     int timebase_den;
 };
@@ -235,9 +233,12 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         ret = avcodec_decode_video2( decklink_ctx->codec, &frame, &finished, &pkt );
         if( ret < 0 || !finished )
         {
-            syslog( LOG_ERR, "Could not decode video frame\n" );
+            syslog( LOG_ERR, "[decklink]: Could not decode video frame\n" );
             goto end;
         }
+
+        raw_frame->release_data = obe_release_video_data;
+        raw_frame->release_frame = obe_release_frame;
 
         memcpy( raw_frame->img.stride, frame.linesize, sizeof(raw_frame->img.stride) );
         memcpy( raw_frame->img.plane, frame.data, sizeof(raw_frame->img.plane) );
@@ -246,10 +247,52 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         raw_frame->img.width = width;
         raw_frame->img.height = height;
 
+        /* Extract VBI data from PAL and NTSC */
+        if( decklink_opts_->video_format == INPUT_VIDEO_FORMAT_PAL || decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC )
+        {
+            /* FIXME: Test and use PAL */
+            /* FIXME: does this behave differently with a different NTSC source */
+
+            uint16_t *y = (uint16_t*)raw_frame->img.plane[0];
+            uint16_t *u = (uint16_t*)raw_frame->img.plane[1];
+            uint16_t *v = (uint16_t*)raw_frame->img.plane[2];
+
+            if( decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC )
+            {
+                /* skip line 283 in NTSC */
+                y += raw_frame->img.stride[0] >> 1;
+                u += raw_frame->img.stride[1] >> 1;
+                v += raw_frame->img.stride[2] >> 1;
+            }
+
+            vbi_buf = (uint8_t*)malloc( raw_frame->img.width * 2 * NUM_VBI_LINES );
+            if( !vbi_buf )
+	    {
+                syslog( LOG_ERR, "Malloc failed\n" );
+                goto fail;
+            }
+            vbi_buf_pos = vbi_buf;
+	    for( int i = 0; i < NUM_VBI_LINES; i++ )
+            {
+                for( int j = 0; j < raw_frame->img.width/2; j++ )
+                {
+                    *vbi_buf_pos++ = u[j] >> 2;
+                    *vbi_buf_pos++ = y[2*j] >> 2;
+                    *vbi_buf_pos++ = v[j] >> 2;
+                    *vbi_buf_pos++ = y[2*j+1] >> 2;
+                }
+                y += raw_frame->img.stride[0] >> 1;
+                u += raw_frame->img.stride[1] >> 1;
+                v += raw_frame->img.stride[2] >> 1;
+            }
+
+            if( decode_vbi( &decklink_ctx->vbi_decoder, vbi_buf, decklink_opts_->probe, raw_frame ) < 0 )
+                goto fail;
+            free( vbi_buf );
+        }
+
         if( decklink_opts_->probe )
         {
-            // TODO probe VBI
-
             obe_release_video_data( raw_frame );
             obe_release_frame( raw_frame );
         }
@@ -259,9 +302,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             videoframe->GetStreamTime( &stream_time, &frame_duration, 90000 );
 
             raw_frame->pts = stream_time;
-            raw_frame->release_data = obe_release_video_data;
-            raw_frame->release_frame = obe_release_frame;
-
             add_to_filter_queue( decklink_ctx->h, raw_frame );
         }
     }
@@ -289,7 +329,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         if( !raw_frame->data )
         {
             syslog( LOG_ERR, "Malloc failed\n" );
-            goto end;
+            goto fail;
         }
 
         raw_frame->cur_pos = raw_frame->data;
@@ -309,11 +349,23 @@ end:
     av_free_packet( &pkt );
 
     return S_OK;
+
+fail:
+
+    if( raw_frame )
+    {
+        raw_frame->release_data( raw_frame );
+        raw_frame->release_frame( raw_frame );
+    }
+
+    return S_OK;
 }
 
 static void close_card( decklink_opts_t *decklink_opts )
 {
     decklink_ctx_t *decklink_ctx = &decklink_opts->decklink_ctx;
+
+    /* FIXME this should NOT crash */
 
     if( decklink_ctx->p_config )
         decklink_ctx->p_config->Release();
@@ -337,7 +389,7 @@ static void close_card( decklink_opts_t *decklink_opts )
     }
 
     if( decklink_opts->video_format == INPUT_VIDEO_FORMAT_PAL || decklink_opts->video_format == INPUT_VIDEO_FORMAT_NTSC )
-        destroy_vbi_parser( &decklink_ctx->vbi_decoder );
+        vbi_raw_decoder_destroy( &decklink_ctx->vbi_decoder );
 
     //destroy_vbi_parser( &decklink_ctx->vanc_vbi_decoder );
 }
@@ -641,7 +693,6 @@ static void *probe_stream( void *ptr )
     obe_int_input_stream_t *streams[MAX_STREAMS];
     int num_streams = 0;
 
-    decklink_ctx_t *decklink_ctx;
     decklink_opts_t *decklink_opts = (decklink_opts_t*)calloc( 1, sizeof(*decklink_opts) );
     if( !decklink_opts )
     {
@@ -665,6 +716,7 @@ static void *probe_stream( void *ptr )
     close_card( decklink_opts );
 
     /* TODO: probe for SMPTE 337M */
+    /* TODO: add other streams */
 
     for( int i = 0; i < 2; i++ )
     {
@@ -722,8 +774,6 @@ finish:
 
 static void *open_input( void *ptr )
 {
-    int ret;
-
     obe_input_params_t *input = (obe_input_params_t*)ptr;
     obe_t *h = input->h;
     obe_device_t *device = input->device;

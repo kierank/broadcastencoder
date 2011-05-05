@@ -30,17 +30,16 @@ int setup_vbi_parser( vbi_raw_decoder *vbi_decoder_ctx, int ntsc, int vanc )
 
     vbi_raw_decoder_init( vbi_decoder_ctx );
 
-    vbi_decoder_ctx->sampling_format = VBI_PIXFMT_YUV420;
+    vbi_decoder_ctx->sampling_format = VBI_PIXFMT_UYVY;
     vbi_decoder_ctx->sampling_rate   = 13.5e6;
     vbi_decoder_ctx->bytes_per_line  = 720 * 2;
     vbi_decoder_ctx->offset          = 9.5e-6 * 13.5e6; // FIXME correct value for NTSC
-
     vbi_decoder_ctx->interlaced      = TRUE;
     vbi_decoder_ctx->synchronous     = TRUE;
 
     if( ntsc == 0 )
     {
-        vbi_decoder_ctx->scanning        = 625;
+        vbi_decoder_ctx->scanning    = 625;
 
         // FIXME PAL VBI
 
@@ -51,11 +50,11 @@ int setup_vbi_parser( vbi_raw_decoder *vbi_decoder_ctx, int ntsc, int vanc )
     }
     else
     {
-        vbi_decoder_ctx->scanning        = 525;
-        vbi_decoder_ctx->start[0]        = 21;
-        vbi_decoder_ctx->count[0]        = 1;
-        vbi_decoder_ctx->start[1]        = 284;
-        vbi_decoder_ctx->count[1]        = 1;
+        vbi_decoder_ctx->scanning    = 525;
+        vbi_decoder_ctx->start[0]    = 21;
+        vbi_decoder_ctx->count[0]    = 1;
+        vbi_decoder_ctx->start[1]    = 284;
+        vbi_decoder_ctx->count[1]    = 1;
 
         ret = vbi_raw_decoder_add_services( vbi_decoder_ctx, VBI_SLICED_CAPTION_525, 2 );
     }
@@ -66,7 +65,44 @@ int setup_vbi_parser( vbi_raw_decoder *vbi_decoder_ctx, int ntsc, int vanc )
     return 0;
 }
 
-void destroy_vbi_parser( vbi_raw_decoder *vbi_decoder_ctx )
+int decode_vbi( vbi_raw_decoder *vbi_decoder_ctx, uint8_t *lines, int probe, obe_raw_frame_t *raw_frame )
 {
-    vbi_raw_decoder_destroy( vbi_decoder_ctx );
+    int decoded_lines;
+    vbi_sliced sliced[2];
+    obe_user_data_t *tmp, *user_data;
+
+    decoded_lines = vbi_raw_decode( vbi_decoder_ctx, lines, sliced );
+
+    if( probe )
+    {
+
+    }
+    else
+    {
+        /* FIXME: deal with more NTSC VBI services */
+        if( vbi_decoder_ctx->scanning == 525 && decoded_lines == 2 )
+        {
+            tmp = realloc( raw_frame->user_data, (raw_frame->num_user_data+1) * sizeof(*raw_frame->user_data) );
+            if( !tmp )
+            {
+                syslog( LOG_ERR, "Malloc failed\n" );
+                return -1;
+            }
+            raw_frame->user_data = tmp;
+	    user_data = &raw_frame->user_data[raw_frame->num_user_data];
+            user_data->data = malloc( 4 );
+            if( !user_data->data )
+            {
+                syslog( LOG_ERR, "Malloc failed\n" );
+                return -1;
+            }
+            user_data->len  = 4;
+            user_data->type = USER_DATA_CEA_608;
+            memcpy( &user_data->data[0], sliced[0].data, 2 );
+            memcpy( &user_data->data[2], sliced[1].data, 2 );
+            raw_frame->num_user_data++;
+        }
+    }
+
+    return 0;
 }

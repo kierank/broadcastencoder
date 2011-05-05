@@ -905,6 +905,7 @@ int obe_start( obe_t *h )
 
             vid_filter_params->h = h;
             vid_filter_params->filter = h->filters[h->num_filters];
+            vid_filter_params->input_stream = input_stream;
             if( pthread_create( &h->filters[h->num_filters]->filter_thread, NULL, video_filter.start_filter, (void*)vid_filter_params ) < 0 )
             {
                 fprintf( stderr, "Couldn't create filter thread \n" );

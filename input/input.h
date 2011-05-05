@@ -44,6 +44,26 @@ typedef struct
     obe_output_stream_t *output_streams;
 } obe_input_params_t;
 
+typedef struct
+{
+    int user_data;
+    int location;
+} obe_user_data_location_t;
+
+enum obe_user_data_location_e
+{
+    USER_DATA_LOCATION_FRAME,
+    USER_DATA_LOCATION_DVB_STREAM,
+};
+
+#if 0
+const obe_user_data_location_t user_data_locations[] =
+{
+    { USER_DATA_CEA_608, USER_DATA_LOCATION_FRAME },
+    { -1, -1 },
+};
+#endif
+
 extern const obe_input_func_t lavf_input;
 #if HAVE_DECKLINK
 extern const obe_input_func_t decklink_input;

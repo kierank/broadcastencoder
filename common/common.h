@@ -176,20 +176,23 @@ typedef struct
 
 enum user_data_types_e
 {
-    /* Encapsulated data formats */
+    /* Encapsulated frame data formats */
     USER_DATA_AVC_REGISTERED_ITU_T35 = 4,
     USER_DATA_AVC_UNREGISTERED       = 5,
 
-    /* Raw data formats */
+    /* Encapsulated stream data formats */
+    USER_DATA_DVB_TTX                = 32,
+    USER_DATA_DVB_VBI                = 33, /* VBI packets */
 
-    USER_DATA_CEA_608                = 64, /* Raw CEA-608 data */
+    /* Raw data formats */
+    USER_DATA_CEA_608                = 64, /* Raw CEA-608 data 4 bytes */
+    USER_DATA_CEA_708                = 65, /* Caption Distribution Packet */
 };
 
 typedef struct
 {
-    int len;
     int type;
-    int final_type;
+    int len;
     uint8_t *data;
 } obe_user_data_t;
 
