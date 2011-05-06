@@ -24,7 +24,7 @@
 #include "common/common.h"
 #include "vbi.h"
 
-int setup_vbi_parser( vbi_raw_decoder *vbi_decoder_ctx, int ntsc, int vanc )
+int setup_vbi_parser( vbi_raw_decoder *vbi_decoder_ctx, int ntsc )
 {
     int ret;
 
@@ -33,24 +33,22 @@ int setup_vbi_parser( vbi_raw_decoder *vbi_decoder_ctx, int ntsc, int vanc )
     vbi_decoder_ctx->sampling_format = VBI_PIXFMT_UYVY;
     vbi_decoder_ctx->sampling_rate   = 13.5e6;
     vbi_decoder_ctx->bytes_per_line  = 720 * 2;
-    vbi_decoder_ctx->offset          = 9.5e-6 * 13.5e6; // FIXME correct value for NTSC
     vbi_decoder_ctx->interlaced      = TRUE;
     vbi_decoder_ctx->synchronous     = TRUE;
 
     if( ntsc == 0 )
     {
         vbi_decoder_ctx->scanning    = 625;
+        vbi_decoder_ctx->offset      = 128;
 
         // FIXME PAL VBI
 
-        if( vanc )
-            ret = vbi_raw_decoder_add_services( vbi_decoder_ctx, VBI_SLICED_WSS_625, 2 ); // FIXME
-        else
-            ret = vbi_raw_decoder_add_services( vbi_decoder_ctx, VBI_SLICED_WSS_625, 2 );
+        ret = vbi_raw_decoder_add_services( vbi_decoder_ctx, VBI_SLICED_WSS_625, 2 );
     }
     else
     {
         vbi_decoder_ctx->scanning    = 525;
+        vbi_decoder_ctx->offset      = 118;
         vbi_decoder_ctx->start[0]    = 21;
         vbi_decoder_ctx->count[0]    = 1;
         vbi_decoder_ctx->start[1]    = 284;

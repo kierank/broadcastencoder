@@ -28,7 +28,7 @@
 
 #define NUM_VBI_LINES 2
 
-int setup_vbi_parser( vbi_raw_decoder *vbi_decoder, int ntsc, int vanc );
+int setup_vbi_parser( vbi_raw_decoder *vbi_decoder, int ntsc );
 int decode_vbi( vbi_raw_decoder *vbi_decoder_ctx, uint8_t *lines, int probe, obe_raw_frame_t *raw_frame );
 
 #endif

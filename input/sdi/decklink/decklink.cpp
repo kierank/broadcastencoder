@@ -110,7 +110,6 @@ typedef struct
     AVCodecContext *codec;
 
     vbi_raw_decoder vbi_decoder;
-    vbi_raw_decoder vanc_vbi_decoder;
 
     obe_t *h;
 } decklink_ctx_t;
@@ -195,6 +194,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     void *frame_bytes;
     int finished = 0;
     int ret, bytes;
+    uint8_t *vbi_buf, *vbi_buf_pos;
 
     av_init_packet( &pkt );
 
@@ -629,11 +629,9 @@ static int open_card( decklink_opts_t *decklink_opts )
     }
 
     if( decklink_opts->video_format == INPUT_VIDEO_FORMAT_PAL )
-        ret = setup_vbi_parser( &decklink_ctx->vbi_decoder, 0, 0 );
+        ret = setup_vbi_parser( &decklink_ctx->vbi_decoder, 0 );
     else if( decklink_opts->video_format == INPUT_VIDEO_FORMAT_NTSC )
-        ret = setup_vbi_parser( &decklink_ctx->vbi_decoder, 1, 0 );
-
-    // TODO VANC vbi
+        ret = setup_vbi_parser( &decklink_ctx->vbi_decoder, 1 );
 
     if( ret < 0 )
     {
