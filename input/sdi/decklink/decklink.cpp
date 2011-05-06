@@ -247,23 +247,20 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         raw_frame->img.width = width;
         raw_frame->img.height = height;
 
-        /* Extract VBI data from PAL and NTSC */
-        if( decklink_opts_->video_format == INPUT_VIDEO_FORMAT_PAL || decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC )
+        /* Extract VBI data from NTSC (and later PAL) */
+        /* FIXME: Test and use PAL */
+        if( decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC )
         {
-            /* FIXME: Test and use PAL */
             /* FIXME: does this behave differently with a different NTSC source */
 
             uint16_t *y = (uint16_t*)raw_frame->img.plane[0];
             uint16_t *u = (uint16_t*)raw_frame->img.plane[1];
             uint16_t *v = (uint16_t*)raw_frame->img.plane[2];
 
-            if( decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC )
-            {
-                /* skip line 283 in NTSC */
-                y += raw_frame->img.stride[0] >> 1;
-                u += raw_frame->img.stride[1] >> 1;
-                v += raw_frame->img.stride[2] >> 1;
-            }
+            /* skip line 283 in NTSC */
+            y += raw_frame->img.stride[0] >> 1;
+            u += raw_frame->img.stride[1] >> 1;
+            v += raw_frame->img.stride[2] >> 1;
 
             vbi_buf = (uint8_t*)malloc( raw_frame->img.width * 2 * NUM_VBI_LINES );
             if( !vbi_buf )
