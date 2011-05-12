@@ -44,28 +44,6 @@ typedef struct
     int16_t *error_buf;
 } obe_vid_filter_ctx_t;
 
-struct filter_status
-{
-    obe_vid_filter_params_t *filter_params;
-    obe_vid_filter_ctx_t **filter_ctx_ptr;
-};
-
-static void close_filter( void *ptr )
-{
-    struct filter_status *filter_status = ptr;
-    if( *filter_status->filter_ctx_ptr )
-    {
-        obe_vid_filter_ctx_t *vfilt = *filter_status->filter_ctx_ptr;
-
-        if( vfilt->sws_ctx )
-            sws_freeContext( vfilt->sws_ctx );
-
-        if( vfilt->error_buf )
-            free( vfilt->error_buf );
-    }
-    free( filter_status->filter_params );
-}
-
 typedef struct
 {
     int planes;
@@ -285,19 +263,12 @@ void *start_filter( void *ptr )
     obe_filter_t *filter = filter_params->filter;
     obe_int_input_stream_t *input_stream = filter_params->input_stream;
     obe_raw_frame_t *raw_frame;
-    obe_vid_filter_ctx_t *vfilt = NULL;
 
-    struct filter_status status;
-    status.filter_params = filter_params;
-    status.filter_ctx_ptr = &vfilt;
-
-    pthread_cleanup_push( close_filter, (void*)&status );
-
-    vfilt = calloc( 1, sizeof(*vfilt) );
+    obe_vid_filter_ctx_t *vfilt = calloc( 1, sizeof(*vfilt) );
     if( !vfilt )
     {
         fprintf( stderr, "Malloc failed\n" );
-        goto fail;
+        goto end;
     }
 
     while( 1 )
@@ -307,8 +278,20 @@ void *start_filter( void *ptr )
 
         pthread_mutex_lock( &filter->filter_mutex );
 
+        if( filter->cancel_thread )
+        {
+            pthread_mutex_unlock( &filter->filter_mutex );
+            goto end;
+        }
+
         if( !filter->num_raw_frames )
             pthread_cond_wait( &filter->filter_cv, &filter->filter_mutex );
+
+        if( filter->cancel_thread )
+        {
+            pthread_mutex_unlock( &filter->filter_mutex );
+            goto end;
+        }
 
         raw_frame = filter->frames[0];
         pthread_mutex_unlock( &filter->filter_mutex );
@@ -316,13 +299,13 @@ void *start_filter( void *ptr )
         if( raw_frame->img.csp == PIX_FMT_YUV420P10 || raw_frame->img.csp == PIX_FMT_YUV422P10 )
         {
             if( scale_frame( raw_frame ) < 0 )
-                goto fail;
+                goto end;
         }
 
         if( raw_frame->img.csp == PIX_FMT_YUV422P || raw_frame->img.csp == PIX_FMT_YUV422P16 )
         {
             if( downconvert_frame( vfilt, raw_frame ) < 0 )
-                goto fail;
+                goto end;
         }
 
         if( raw_frame->img.csp == PIX_FMT_YUV420P16 )
@@ -333,23 +316,34 @@ void *start_filter( void *ptr )
                 if( !vfilt->error_buf )
                 {
                     fprintf( stderr, "Malloc failed\n" );
-                    goto fail;
+                    goto end;
                 }
             }
 
             if( dither_image( raw_frame, vfilt->error_buf ) < 0 )
-                goto fail;
+                goto end;
         }
 
         if( encapsulate_user_data( raw_frame, input_stream ) < 0 )
-            goto fail;
+            goto end;
 
         remove_frame_from_filter_queue( filter );
         add_to_encode_queue( h, raw_frame );
     }
 
-fail:
-    pthread_cleanup_pop( 1 );
+end:
+    if( vfilt )
+    {
+        if( vfilt->sws_ctx )
+            sws_freeContext( vfilt->sws_ctx );
+
+        if( vfilt->error_buf )
+            free( vfilt->error_buf );
+
+        free( vfilt );
+    }
+
+    free( filter_params );
 
     return NULL;
 }

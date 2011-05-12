@@ -962,16 +962,22 @@ void obe_close( obe_t *h )
     /* Cancel filter threads */
     for( int i = 0; i < h->num_filters; i++ )
     {
-        pthread_cancel( h->filters[i]->filter_thread );
+        pthread_mutex_lock( &h->filters[i]->filter_mutex );
+        h->filters[i]->cancel_thread = 1;
+        pthread_cond_signal( &h->filters[i]->filter_cv );
+        pthread_mutex_unlock( &h->filters[i]->filter_mutex );
         pthread_join( h->filters[i]->filter_thread, &ret_ptr );
     }
 
     fprintf( stderr, "filters cancelled \n" );
 
-    /* Cancel encoder thread */
+    /* Cancel encoder threads */
     for( int i = 0; i < h->num_encoders; i++ )
     {
-        pthread_cancel( h->encoders[i]->encoder_thread );
+        pthread_mutex_lock( &h->encoders[i]->encoder_mutex );
+        h->encoders[i]->cancel_thread = 1;
+        pthread_cond_signal( &h->encoders[i]->encoder_cv );
+        pthread_mutex_unlock( &h->encoders[i]->encoder_mutex );
         pthread_join( h->encoders[i]->encoder_thread, &ret_ptr );
     }
 
@@ -982,6 +988,8 @@ void obe_close( obe_t *h )
     pthread_join( h->mux_thread, &ret_ptr );
 
     fprintf( stderr, "mux cancelled \n" );
+
+    /* Cancel output_thread */
 
     /* Destroy devices */
     for( int i = 0; i < h->num_devices; i++ )

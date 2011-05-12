@@ -25,20 +25,6 @@
 #include "encoders/video/video.h"
 #include "output/network.h"
 
-struct x264_status
-{
-    x264_t **s;
-    obe_vid_enc_params_t *enc_params;
-};
-
-static void close_encoder( void *ptr )
-{
-    struct x264_status *x264_status = ptr;
-    if( *x264_status->s )
-        x264_encoder_close( *x264_status->s );
-    free( x264_status->enc_params );
-}
-
 static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_frame )
 {
     obe_image_t *img = &raw_frame->img;
@@ -82,12 +68,6 @@ static void *start_encoder( void *ptr )
     int num_frames = 0;
     obe_coded_frame_t **frame_queue;
 
-    struct x264_status status;
-    status.s = &s;
-    status.enc_params = enc_params;
-
-    pthread_cleanup_push( close_encoder, (void*)&status );
-
     /* TODO: check for width, height changes */
     /* TODO: send messages from x264 to syslog */
 
@@ -99,7 +79,7 @@ static void *start_encoder( void *ptr )
     {
         pthread_mutex_unlock( &encoder->encoder_mutex );
         fprintf( stderr, "[x264]: encoder configuration failed\n" );
-        return NULL;
+        goto end;
     }
 
     x264_encoder_parameters( s, &enc_params->avc_param );
@@ -110,7 +90,7 @@ static void *start_encoder( void *ptr )
     {
         pthread_mutex_unlock( &encoder->encoder_mutex );
         syslog( LOG_ERR, "Malloc failed\n" );
-        goto fail;
+        goto end;
     }
     memcpy( encoder->encoder_params, &enc_params->avc_param, sizeof(enc_params->avc_param) );
 
@@ -119,7 +99,7 @@ static void *start_encoder( void *ptr )
     {
         pthread_mutex_unlock( &encoder->encoder_mutex );
         syslog( LOG_ERR, "Malloc failed\n" );
-        goto fail;
+        goto end;
     }
 
     encoder->is_ready = 1;
@@ -131,8 +111,20 @@ static void *start_encoder( void *ptr )
     {
         pthread_mutex_lock( &encoder->encoder_mutex );
 
+        if( encoder->cancel_thread )
+        {
+            pthread_mutex_unlock( &encoder->encoder_mutex );
+            goto end;
+        }
+
         if( !encoder->num_raw_frames )
             pthread_cond_wait( &encoder->encoder_cv, &encoder->encoder_mutex );
+
+        if( encoder->cancel_thread )
+        {
+            pthread_mutex_unlock( &encoder->encoder_mutex );
+            goto end;
+        }
 
         raw_frame = encoder->frames[0];
         pthread_mutex_unlock( &encoder->encoder_mutex );
@@ -140,7 +132,7 @@ static void *start_encoder( void *ptr )
         if( convert_obe_to_x264_pic( &pic, raw_frame ) < 0 )
         {
             syslog( LOG_ERR, "Malloc failed\n" );
-            goto fail;
+            goto end;
         }
 
         /* FIXME: if frames are dropped this might not be true */
@@ -149,7 +141,7 @@ static void *start_encoder( void *ptr )
         if( !pts2 )
         {
             syslog( LOG_ERR, "Malloc failed\n" );
-            goto fail;
+            goto end;
         }
         *pts2 = raw_frame->pts;
         pic.passthrough_opaque = pts2;
@@ -163,7 +155,7 @@ static void *start_encoder( void *ptr )
         if( frame_size < 0 )
         {
             syslog( LOG_ERR, "x264_encoder_encode failed\n" );
-            goto fail;
+            goto end;
         }
 
         if( frame_size )
@@ -172,7 +164,7 @@ static void *start_encoder( void *ptr )
             if( !coded_frame )
             {
                 syslog( LOG_ERR, "Malloc failed\n" );
-                goto fail;
+                goto end;
             }
             memcpy( coded_frame->data, nal[0].p_payload, frame_size );
             coded_frame->is_video = 1;
@@ -194,8 +186,10 @@ static void *start_encoder( void *ptr )
         }
     }
 
-fail:
-    pthread_cleanup_pop( 1 );
+end:
+    if( s )
+        x264_encoder_close( s );
+    free( enc_params );
 
     return NULL;
 }

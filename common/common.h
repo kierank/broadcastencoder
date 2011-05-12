@@ -244,6 +244,7 @@ typedef struct
     pthread_t filter_thread;
     pthread_mutex_t filter_mutex;
     pthread_cond_t  filter_cv;
+    int cancel_thread;
 
     int num_raw_frames;
     obe_raw_frame_t **frames;
@@ -257,6 +258,7 @@ typedef struct
     pthread_t encoder_thread;
     pthread_mutex_t encoder_mutex;
     pthread_cond_t  encoder_cv;
+    int cancel_thread;
 
     hnd_t encoder_params;
 
@@ -316,6 +318,7 @@ struct obe_t
 
     /* Mux */
     pthread_t mux_thread;
+    int cancel_mux_thread;
     obe_mux_opts_t mux_opts;
 
     /* Output */

@@ -129,7 +129,7 @@ int write_cc( obe_user_data_t *user_data, obe_int_input_stream_t *input_stream )
             bs_write( &q, 8, user_data->data[2*i] );   // c_data_1
             bs_write( &q, 8, user_data->data[2*i+1] ); // c_data_2
         }
-	else /* nothing to write so maintain a constant bitrate */
+        else /* nothing to write so maintain a constant bitrate */
             write_invalid( &q );
     }
 

@@ -28,20 +28,6 @@
 #define MP2_FRAME_SIZE 1152
 #define MP2_AUDIO_BUFFER_SIZE 50000
 
-struct twolame_status
-{
-    twolame_options **tl_opts;
-    obe_aud_enc_params_t *enc_params;
-};
-
-static void close_encoder( void *ptr )
-{
-    struct twolame_status *twolame_status = ptr;
-    if( *twolame_status->tl_opts )
-        twolame_close( twolame_status->tl_opts );
-    free( twolame_status->enc_params );
-}
-
 void *start_encoder( void *ptr )
 {
     twolame_options *tl_opts = NULL;
@@ -57,12 +43,6 @@ void *start_encoder( void *ptr )
     uint8_t output_buffer[MP2_AUDIO_BUFFER_SIZE];
     uint8_t *output_pos;
 
-    struct twolame_status status;
-    status.tl_opts = &tl_opts;
-    status.enc_params = enc_params;
-
-    pthread_cleanup_push( close_encoder, (void*)&status );
-
     /* Lock the mutex until we verify parameters */
     pthread_mutex_lock( &encoder->encoder_mutex );
 
@@ -71,7 +51,7 @@ void *start_encoder( void *ptr )
     {
         fprintf( stderr, "[twolame] could load options" );
         pthread_mutex_unlock( &encoder->encoder_mutex );
-        goto fail;
+        goto end;
     }
 
     /* TODO: setup bitrate reconfig, errors */
@@ -96,8 +76,20 @@ void *start_encoder( void *ptr )
     {
         pthread_mutex_lock( &encoder->encoder_mutex );
 
+        if( encoder->cancel_thread )
+        {
+            pthread_mutex_unlock( &encoder->encoder_mutex );
+            goto end;
+        }
+
         if( !encoder->num_raw_frames )
             pthread_cond_wait( &encoder->encoder_cv, &encoder->encoder_mutex );
+
+        if( encoder->cancel_thread )
+        {
+            pthread_mutex_unlock( &encoder->encoder_mutex );
+            goto end;
+        }
 
         raw_frame = encoder->frames[0];
         pthread_mutex_unlock( &encoder->encoder_mutex );
@@ -116,7 +108,7 @@ void *start_encoder( void *ptr )
             if( !s16_data )
             {
                 syslog( LOG_ERR, "Malloc failed" );
-                goto fail;
+                goto end;
             }
             for( int i = 0; i < num_channels * raw_frame->num_samples; i++ )
                 s16_data[i] = s32_data[i] >> 16;
@@ -137,7 +129,7 @@ void *start_encoder( void *ptr )
         if( output_size < 0 )
         {
             syslog( LOG_ERR, "[twolame] Encode failed\n" );
-            goto fail;
+            goto end;
         }
 
         output_pos = output_buffer;
@@ -149,7 +141,7 @@ void *start_encoder( void *ptr )
             if( !coded_frame )
             {
                 syslog( LOG_ERR, "Malloc failed\n" );
-                goto fail;
+                goto end;
             }
             memcpy( coded_frame->data, output_pos, frame_size );
             coded_frame->pts = cur_pts;
@@ -166,8 +158,10 @@ void *start_encoder( void *ptr )
         remove_frame_from_encode_queue( encoder );
     }
 
-fail:
-    pthread_cleanup_pop( 1 );
+end:
+    if( tl_opts )
+        twolame_close( &tl_opts );
+    free( enc_params );
 
     return NULL;
 }
