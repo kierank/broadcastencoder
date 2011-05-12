@@ -387,8 +387,6 @@ static void close_card( decklink_opts_t *decklink_opts )
 
     if( decklink_opts->video_format == INPUT_VIDEO_FORMAT_PAL || decklink_opts->video_format == INPUT_VIDEO_FORMAT_NTSC )
         vbi_raw_decoder_destroy( &decklink_ctx->vbi_decoder );
-
-    //destroy_vbi_parser( &decklink_ctx->vanc_vbi_decoder );
 }
 
 static int open_card( decklink_opts_t *decklink_opts )
