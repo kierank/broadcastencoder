@@ -51,7 +51,6 @@ void obe_release_buffer( AVCodecContext *codec, AVFrame *pic )
      memset( pic->data, 0, sizeof(pic->data) );
 }
 
-
 /* FFmpeg shouldn't call this */
 int obe_reget_buffer( AVCodecContext *codec, AVFrame *pic )
 {
