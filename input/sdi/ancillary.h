@@ -31,9 +31,9 @@ typedef struct
     int did;
     int sdid;
     int type;
-} obe_vanc_identifier_t;
+} obe_anc_identifier_t;
 
-obe_vanc_identifier_t vanc_identifiers =
+obe_anc_identifier_t anc_identifiers =
 {
     { 0x41, 0x5, MISC_AFD },
     { 0x41, 0x6, MISC_PAN_SCAN },
