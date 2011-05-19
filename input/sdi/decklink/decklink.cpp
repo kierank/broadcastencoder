@@ -28,11 +28,42 @@ extern "C"
 #include "common/common.h"
 #include "input/lavc.h"
 #include "input/input.h"
+#include "input/sdi/sdi.h"
 #include "input/sdi/vbi.h"
 }
 
 #include "include/DeckLinkAPI.h"
 #include "include/DeckLinkAPIDispatch.cpp"
+
+const static obe_line_number_t first_line[] =
+{
+    { INPUT_VIDEO_FORMAT_PAL,         23 },
+    { INPUT_VIDEO_FORMAT_NTSC,       283 },
+    { -1, -1 },
+};
+
+/* PCIe 1x devices can only provide data after the switching point */
+const static obe_line_number_t post_switch_point_line[] =
+{
+    { INPUT_VIDEO_FORMAT_PAL,         7 },
+    { INPUT_VIDEO_FORMAT_NTSC,       11 },
+    { INPUT_VIDEO_FORMAT_720P_50,     8 },
+    { INPUT_VIDEO_FORMAT_720P_5994,   8 },
+    { INPUT_VIDEO_FORMAT_720P_60,     8 },
+    { INPUT_VIDEO_FORMAT_1080I_50,    8 },
+    { INPUT_VIDEO_FORMAT_1080I_5994,  8 },
+    { INPUT_VIDEO_FORMAT_1080I_60,    8 },
+    { INPUT_VIDEO_FORMAT_1080P_2398,  8 },
+    { INPUT_VIDEO_FORMAT_1080P_24,    8 },
+    { INPUT_VIDEO_FORMAT_1080P_25,    8 },
+    { INPUT_VIDEO_FORMAT_1080P_2997,  8 },
+    { INPUT_VIDEO_FORMAT_1080P_30,    8 },
+    { INPUT_VIDEO_FORMAT_1080P_50,    8 },
+    { INPUT_VIDEO_FORMAT_1080P_5994,  8 },
+    { INPUT_VIDEO_FORMAT_1080P_60,    8 },
+    /* (Unsurprisingly) SMPTE RP-168 does not provide any information about 2K formats */
+    { -1, -1 },
+};
 
 struct obe_to_decklink
 {
@@ -104,12 +135,12 @@ typedef struct
     IDeckLinkConfiguration *p_config;
 
     int      probe_buf_len;
-    int32_t *audio_probe_buf;
+    int32_t  *audio_probe_buf;
 
-    AVCodec *dec;
-    AVCodecContext *codec;
+    AVCodec         *dec;
+    AVCodecContext  *codec;
 
-    vbi_raw_decoder vbi_decoder;
+    obe_sdi_non_display_data_t non_display_parser;
 
     obe_t *h;
 } decklink_ctx_t;
@@ -120,7 +151,6 @@ typedef struct
 
     /* Input */
     int card_idx;
-    // FIXME interface index
     int video_conn;
     int audio_conn;
 
@@ -200,6 +230,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
     /* TODO: probe ancillary data */
 
+    IDeckLinkVideoFrameAncillary *ancillary;
+
     if( videoframe && ( !decklink_opts_->probe ||
        ( decklink_opts_->video_format == INPUT_VIDEO_FORMAT_PAL || decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC ) ) )
     {
@@ -208,6 +240,14 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             syslog( LOG_ERR, "No input signal detected" );
             return S_OK;
         }
+
+        /* TODO: Deal with ancillary data */
+        /* TODO: Write v210 to UYVY converter */
+#if 0
+        videoframe->GetAncillaryData( &ancillary );
+
+        ancillary->Release();
+#endif
 
         videoframe->GetBytes( &frame_bytes );
 
@@ -251,25 +291,27 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         /* FIXME: Test and use PAL */
         if( decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC )
         {
-            /* FIXME: does this behave differently with a different NTSC source */
-
             uint16_t *y = (uint16_t*)raw_frame->img.plane[0];
             uint16_t *u = (uint16_t*)raw_frame->img.plane[1];
             uint16_t *v = (uint16_t*)raw_frame->img.plane[2];
 
-            /* skip line 283 in NTSC */
-            y += raw_frame->img.stride[0] >> 1;
-            u += raw_frame->img.stride[1] >> 1;
-            v += raw_frame->img.stride[2] >> 1;
+            if( decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC )
+            {
+                /* skip line 283 in NTSC for now */
+                y += raw_frame->img.stride[0] >> 1;
+                u += raw_frame->img.stride[1] >> 1;
+                v += raw_frame->img.stride[2] >> 1;
+            }
 
+            /* Convert from 10-bit YUV422P to 8-bit UYVY */
             vbi_buf = (uint8_t*)malloc( raw_frame->img.width * 2 * NUM_VBI_LINES );
             if( !vbi_buf )
-	    {
+            {
                 syslog( LOG_ERR, "Malloc failed\n" );
                 goto fail;
             }
             vbi_buf_pos = vbi_buf;
-	    for( int i = 0; i < NUM_VBI_LINES; i++ )
+            for( int i = 0; i < NUM_VBI_LINES; i++ )
             {
                 for( int j = 0; j < raw_frame->img.width/2; j++ )
                 {
@@ -283,7 +325,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 v += raw_frame->img.stride[2] >> 1;
             }
 
-            if( decode_vbi( &decklink_ctx->vbi_decoder, vbi_buf, decklink_opts_->probe, raw_frame ) < 0 )
+            if( decode_vbi( &decklink_ctx->non_display_parser, vbi_buf, raw_frame ) < 0 )
                 goto fail;
             free( vbi_buf );
         }
@@ -300,6 +342,16 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
             raw_frame->pts = stream_time;
             add_to_filter_queue( decklink_ctx->h, raw_frame );
+
+            /* Send any DVB-VBI frames */
+            if( decklink_ctx->non_display_parser.dvb_frame )
+            {
+                decklink_ctx->non_display_parser.dvb_frame->stream_id = 3; // FIXME
+                decklink_ctx->non_display_parser.dvb_frame->pts = stream_time;
+
+                add_to_mux_queue( decklink_ctx->h, decklink_ctx->non_display_parser.dvb_frame );
+                decklink_ctx->non_display_parser.dvb_frame = NULL;
+            }
         }
     }
 
@@ -362,7 +414,7 @@ static void close_card( decklink_opts_t *decklink_opts )
 {
     decklink_ctx_t *decklink_ctx = &decklink_opts->decklink_ctx;
 
-    /* FIXME this should NOT crash */
+    /* FIXME: this should NOT crash when the wrong video format is chosen */
 
     if( decklink_ctx->p_config )
         decklink_ctx->p_config->Release();
@@ -386,7 +438,7 @@ static void close_card( decklink_opts_t *decklink_opts )
     }
 
     if( decklink_opts->video_format == INPUT_VIDEO_FORMAT_PAL || decklink_opts->video_format == INPUT_VIDEO_FORMAT_NTSC )
-        vbi_raw_decoder_destroy( &decklink_ctx->vbi_decoder );
+        vbi_raw_decoder_destroy( &decklink_ctx->non_display_parser.vbi_decoder );
 }
 
 static int open_card( decklink_opts_t *decklink_opts )
@@ -471,8 +523,6 @@ static int open_card( decklink_opts_t *decklink_opts )
     }
 
     syslog( LOG_INFO, "Opened DeckLink PCI card %d (%s)", decklink_opts->card_idx, model_name );
-
-    /* FIXME: make it possible to select different interface */
 
     if( decklink_ctx->p_card->QueryInterface( IID_IDeckLinkInput, (void**)&decklink_ctx->p_input) != S_OK )
     {
@@ -623,10 +673,8 @@ static int open_card( decklink_opts_t *decklink_opts )
         goto finish;
     }
 
-    if( decklink_opts->video_format == INPUT_VIDEO_FORMAT_PAL )
-        ret = setup_vbi_parser( &decklink_ctx->vbi_decoder, 0 );
-    else if( decklink_opts->video_format == INPUT_VIDEO_FORMAT_NTSC )
-        ret = setup_vbi_parser( &decklink_ctx->vbi_decoder, 1 );
+    if( decklink_opts->video_format == INPUT_VIDEO_FORMAT_PAL || decklink_opts->video_format == INPUT_VIDEO_FORMAT_NTSC )
+        ret = setup_vbi_parser( &decklink_ctx->non_display_parser, decklink_opts->video_format == INPUT_VIDEO_FORMAT_NTSC );
 
     if( ret < 0 )
     {
@@ -700,11 +748,11 @@ static void *probe_stream( void *ptr )
     decklink_opts->audio_conn = user_opts->audio_connection;
     decklink_opts->video_format = user_opts->video_format;
 
-    decklink_opts->probe = 1;
+    decklink_opts->probe = decklink_opts->decklink_ctx.non_display_parser.probe = 1;
 
     open_card( decklink_opts );
 
-    /* TODO: sleep while we probe for ancillary data */
+    //sleep( 5 );
 
     close_card( decklink_opts );
 
@@ -717,6 +765,7 @@ static void *probe_stream( void *ptr )
         if( !streams[i] )
             goto finish;
 
+        /* TODO: make it take a continuous set of stream-ids */
         pthread_mutex_lock( &h->device_list_mutex );
         streams[i]->stream_id = h->cur_stream_id++;
         pthread_mutex_unlock( &h->device_list_mutex );
@@ -734,13 +783,18 @@ static void *probe_stream( void *ptr )
             streams[i]->tff = decklink_opts->tff;
             streams[i]->sar_num = streams[i]->sar_den = 1; /* The user can choose this when encoding */
         }
-        else
+        else if( i == 1 )
         {
             streams[i]->stream_type = STREAM_TYPE_AUDIO;
             streams[i]->stream_format = AUDIO_PCM;
             streams[i]->channel_layout = AV_CH_LAYOUT_STEREO;
             streams[i]->sample_format = AV_SAMPLE_FMT_S32;
             streams[i]->sample_rate = 48000;
+        }
+        else /* VBI stream */
+        {
+            streams[i]->stream_type = STREAM_TYPE_MISC;
+            streams[i]->stream_format = VBI_RAW;
         }
         num_streams++;
     }
@@ -789,6 +843,8 @@ static void *open_input( void *ptr )
     decklink_ctx = &decklink_opts->decklink_ctx;
 
     decklink_ctx->h = h;
+
+    /* TODO: wait for encoder */
 
     open_card( decklink_opts );
 

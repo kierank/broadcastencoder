@@ -1,5 +1,5 @@
 /*****************************************************************************
- * vbi.h: OBE VBI parsing functions
+ * sdi.h: OBE SDI generic headers
  *****************************************************************************
  * Copyright (C) 2010 Open Broadcast Systems Ltd.
  *
@@ -21,14 +21,33 @@
  *
  *****************************************************************************/
 
-#ifndef OBE_VBI_H
-#define OBE_VBI_H
+#ifndef OBE_SDI_H
+#define OBE_SDI_H
 
-#include "input/sdi/sdi.h"
+#include "common/common.h"
+#include <libzvbi.h>
 
-#define NUM_VBI_LINES 2
+typedef struct
+{
+    int probe;
+    vbi_raw_decoder vbi_decoder;
 
-int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data, int ntsc );
-int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, obe_raw_frame_t *raw_frame );
+    /* Probing */
+    int has_probed;
+    int num_frame_data;
+    obe_frame_data_t *frame_data;
+
+    /* Decoding */
+    obe_coded_frame_t *dvb_frame;
+
+    /* TODO: start/end lines etc */
+} obe_sdi_non_display_data_t;
+
+/* NB: Lines start from 1 */
+typedef struct
+{
+    int format;
+    int line;
+} obe_line_number_t;
 
 #endif
