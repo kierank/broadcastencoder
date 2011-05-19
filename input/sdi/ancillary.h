@@ -23,8 +23,6 @@
 
 #ifndef OBE_ANCILLARY_H
 #define OBE_ANCILLARY_H
-#ifndef OBE_INPUT_SDI_ANCILLARY_H
-#define OBE_INPUT_SDI_ANCILLARY_H
 
 #include "common/common.h"
 
