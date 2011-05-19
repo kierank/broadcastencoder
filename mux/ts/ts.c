@@ -33,12 +33,6 @@
 #define MP2_NUM_SAMPLES 1152
 #define AAC_NUM_SAMPLES 1024
 
-struct ts_status
-{
-    ts_writer_t **w;
-    ts_stream_t **streams;
-};
-
 static const int mpegts_stream_info[][3] =
 {
     { VIDEO_AVC,   LIBMPEGTS_VIDEO_AVC,      LIBMPEGTS_STREAM_ID_MPEGVIDEO },
@@ -52,6 +46,14 @@ static const int mpegts_stream_info[][3] =
     { SUBTITLES_DVB, LIBMPEGTS_DVB_SUB,      LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { MISC_TELETEXT, LIBMPEGTS_DVB_TELETEXT, LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { -1, -1, -1 },
+};
+
+static const int vbi_service_ids[][2] =
+{
+    { MISC_TELETEXT, LIBMPEGTS_DVB_VBI_DATA_SERVICE_ID_TTX },
+    { MISC_WSS,      LIBMPEGTS_DVB_VBI_DATA_SERVICE_ID_WSS },
+    { MISC_VPS,      LIBMPEGTS_DVB_VBI_DATA_SERVICE_ID_VPS },
+    { 0, 0 },
 };
 
 static const int avc_profiles[][2] =
@@ -91,6 +93,7 @@ void *open_muxer( void *ptr )
     ts_stream_t *stream;
     ts_dvb_sub_t subtitles;
     ts_dvb_ttx_t teletext;
+    ts_dvb_vbi_t *vbi_services;
     ts_frame_t *frames;
     obe_int_input_stream_t *input_stream;
     obe_output_stream_t *output_stream;
@@ -173,7 +176,7 @@ void *open_muxer( void *ptr )
                 stream->write_lang_code = !!strlen( input_stream->lang_code );
                 memcpy( stream->lang_code, input_stream->lang_code, 4 );
                 stream->audio_type = input_stream->audio_type;
-	    }
+            }
             stream->has_stream_identifier = input_stream->has_stream_identifier;
             stream->stream_identifier = input_stream->stream_identifier;
         }
@@ -251,8 +254,7 @@ void *open_muxer( void *ptr )
         else if( stream_format == AUDIO_AAC )
         {
             /* Even though the stream might be stereo, it could switch to 5.1 at some point.
-             * It's simpler to let T-STD use 5 channels. As usual the spec doesn't explain how to deal with channel switches
-             */
+             * It's simpler to let T-STD use 5 channels. As usual the spec doesn't explain how to deal with channel switches */
             if( ts_setup_mpeg4_aac_stream( w, stream->pid, LIBMPEGTS_MPEG4_AAC_PROFILE_LEVEL_5, 5 ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup AAC stream\n" );
@@ -283,6 +285,31 @@ void *open_muxer( void *ptr )
             {
                 fprintf( stderr, "[ts] Could not setup Teletext stream\n" );
                 goto fail;
+            }
+        }
+        else if( stream_format == VBI_RAW )
+        {
+            vbi_services = calloc( 1, input_stream->num_frame_data * sizeof(*vbi_services) );
+            if( !vbi_services )
+                goto fail;
+
+            for( int j = 0; j < input_stream->num_frame_data; j++ )
+            {
+                for( int k = 0; vbi_service_ids[k][0] != 0; k++ )
+                {
+                    if( input_stream->frame_data[j].type == vbi_service_ids[k][0] )
+                        vbi_services[j].data_service_id = vbi_service_ids[k][1];
+                }
+
+                if( !vbi_services[j].data_service_id )
+                    goto fail;
+
+                vbi_services[j].num_lines = 1;
+                vbi_services[j].lines = malloc( sizeof(*vbi_services[j].lines) );
+                if( !vbi_services[j].lines )
+                    goto fail;
+                vbi_services[j].lines[0].field_parity = 1;
+                vbi_services[j].lines[0].line_offset = input_stream->frame_data[j].line_number;
             }
         }
     }
@@ -401,6 +428,8 @@ void *open_muxer( void *ptr )
 
 fail:
     ts_close_writer( w );
+
+    /* TODO: clean more */
 
     free( program.streams );
     free( ptr );

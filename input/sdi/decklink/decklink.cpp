@@ -287,9 +287,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         raw_frame->img.width = width;
         raw_frame->img.height = height;
 
-        /* Extract VBI data from NTSC (and later PAL) */
-        /* FIXME: Test and use PAL */
-        if( decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC )
+        /* Extract VBI data from PAL and NTSC */
+        if( decklink_opts_->video_format == INPUT_VIDEO_FORMAT_PAL || decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC )
         {
             uint16_t *y = (uint16_t*)raw_frame->img.plane[0];
             uint16_t *u = (uint16_t*)raw_frame->img.plane[1];
