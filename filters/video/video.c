@@ -206,7 +206,7 @@ static int dither_image( obe_raw_frame_t *raw_frame, int16_t *error_buf )
     obe_image_t tmp_image = {0};
     obe_image_t *out = &tmp_image;
 
-    tmp_image.csp = PIX_FMT_YUV420P;
+    tmp_image.csp = X264_BIT_DEPTH == 10 ? PIX_FMT_YUV420P10 : PIX_FMT_YUV420P;
     tmp_image.width = raw_frame->img.width;
     tmp_image.height = raw_frame->img.height;
 
