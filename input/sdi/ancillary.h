@@ -21,13 +21,21 @@
  *
  *****************************************************************************/
 
+#ifndef OBE_ANCILLARY_H
+#define OBE_ANCILLARY_H
 #ifndef OBE_INPUT_SDI_ANCILLARY_H
 #define OBE_INPUT_SDI_ANCILLARY_H
 
 #include "common/common.h"
 
-/* DID, SDID, Type */
-int obe_vanc_identifier[][3] =
+typedef struct
+{
+    int did;
+    int sdid;
+    int type;
+} obe_vanc_identifier_t;
+
+obe_vanc_identifier_t vanc_identifiers =
 {
     { 0x41, 0x5, MISC_AFD },
     { 0x41, 0x6, MISC_PAN_SCAN },
