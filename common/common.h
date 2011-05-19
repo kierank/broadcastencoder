@@ -181,17 +181,24 @@ enum user_data_types_e
     USER_DATA_AVC_UNREGISTERED       = 5,
 
     /* Encapsulated stream data formats */
-    USER_DATA_DVB_TTX                = 32,
-    USER_DATA_DVB_VBI                = 33, /* VBI packets */
+    USER_DATA_DVB_VBI                = 32, /* VBI packets */
 
     /* Raw data formats */
     USER_DATA_CEA_608                = 64, /* Raw CEA-608 data 4 bytes */
     USER_DATA_CEA_708                = 65, /* Caption Distribution Packet */
 };
 
+enum user_data_location_e
+{
+    USER_DATA_LOCATION_FRAME,  /* e.g. AFD, Captions */
+    USER_DATA_LOCATION_STREAM, /* e.g. DVB-VBI */
+    /* TODO: various other minor locations */
+};
+
 typedef struct
 {
     int type;
+    int source;
     int len;
     uint8_t *data;
 } obe_user_data_t;

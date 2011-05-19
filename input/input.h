@@ -50,12 +50,6 @@ typedef struct
     int location;
 } obe_user_data_location_t;
 
-enum obe_user_data_location_e
-{
-    USER_DATA_LOCATION_FRAME,
-    USER_DATA_LOCATION_DVB_STREAM,
-};
-
 #if 0
 const obe_user_data_location_t user_data_locations[] =
 {
