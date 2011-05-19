@@ -130,7 +130,6 @@ enum stream_formats_e
 
     SUBTITLES_DVB,
     MISC_TELETEXT,
-    MISC_PAN_SCAN,
     MISC_WSS,
     MISC_VPS,
 
