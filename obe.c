@@ -599,12 +599,19 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
             memcpy( &stream_out->csp, &stream_in->csp, offsetof( obe_input_stream_t, timebase_num ) - offsetof( obe_input_stream_t, csp ) );
             stream_out->timebase_num = stream_in->timebase_num;
             stream_out->timebase_den = stream_in->timebase_den;
+            stream_out->num_frame_data = stream_in->num_frame_data;
+            stream_out->frame_data = stream_in->frame_data;
         }
         else if( stream_in->stream_type == STREAM_TYPE_AUDIO )
         {
             memcpy( &stream_out->channel_layout, &stream_in->channel_layout,
             offsetof( obe_input_stream_t, bitrate ) - offsetof( obe_input_stream_t, channel_layout ) );
             stream_out->aac_is_latm = stream_in->is_latm;
+        }
+        else if( stream_in->stream_format == STREAM_TYPE_MISC )
+        {
+            stream_out->num_frame_data = stream_in->num_frame_data;
+            stream_out->frame_data = stream_in->frame_data;
         }
 
         memcpy( stream_out->lang_code, stream_in->lang_code, 4 );

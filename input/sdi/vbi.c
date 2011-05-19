@@ -52,6 +52,7 @@ int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data, int ntsc )
     }
     else
     {
+        /* FIXME: other */
         non_display_data->vbi_decoder.scanning    = 525;
         non_display_data->vbi_decoder.offset      = 118;
         non_display_data->vbi_decoder.start[0]    = 21;
@@ -93,9 +94,15 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             /* FIXME: many other formats, including mixed separate stream and frame */
             /* For now all PAL VBI goes as a separate stream and all NTSC goes in the frame */
             if( non_display_data->vbi_decoder.scanning == 625 )
+            {
                 non_display_data->frame_data[0].type = MISC_WSS;
+                non_display_data->frame_data[0].location = USER_DATA_LOCATION_DVB_STREAM;
+            }
             else
-                non_display_data->frame_data[0].type = USER_DATA_CEA_608;
+            {
+                non_display_data->frame_data[0].type = CAPTIONS_CEA_608;
+                non_display_data->frame_data[0].location = USER_DATA_LOCATION_FRAME;
+            }
 
             non_display_data->frame_data[0].source = VBI_RAW;
             non_display_data->frame_data[0].line_number = sliced[0].line;
@@ -106,9 +113,11 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
     }
     else
     {
+        /* FIXME: if WSS suddenly appears in the stream this will leak */
         /* FIXME: deal with more VBI services */
         if( non_display_data->vbi_decoder.scanning == 625 && decoded_lines == 1 )
         {
+            /* Overallocate a little */
             buf_size = DVB_VBI_MAX_SIZE;
             dvb_buf = malloc( buf_size );
             if( !dvb_buf )
@@ -118,20 +127,19 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             buf_ptr = &dvb_buf[1];
             buf_size--;
 
-	    if( !vbi_dvb_multiplex_sliced( &buf_ptr, &buf_size, (const vbi_sliced **)&sliced, &decoded_lines,
+            if( !vbi_dvb_multiplex_sliced( &buf_ptr, &buf_size, (const vbi_sliced **)&sliced, &decoded_lines,
                                            VBI_SLICED_WSS_625, DVB_VBI_DATA_IDENTIFIER, FALSE ) )
             {
                 free( dvb_buf );
                 goto fail;
             }
 
-            /* The input device will add the stream_id */
+            /* The input device will add the stream_id and pts */
             non_display_data->dvb_frame = new_coded_frame( 0, DVB_VBI_MAX_SIZE - buf_size );
             if( !non_display_data->dvb_frame )
                 goto fail;
 
             non_display_data->dvb_frame->data = dvb_buf;
-
         }
         else if( non_display_data->vbi_decoder.scanning == 525 && decoded_lines == 2 )
         {
@@ -166,4 +174,33 @@ fail:
 
     syslog( LOG_ERR, "Malloc failed\n" );
     return -1;
+}
+
+int add_vbi_services( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream, int location )
+{
+    int idx = 0, count = 0;
+
+    for( int i = 0; i < non_display_data->num_frame_data; i++ )
+    {
+        if( non_display_data->frame_data[i].location == location )
+            count++;
+    }
+
+    stream->num_frame_data = count;
+    stream->frame_data = calloc( 1, stream->num_frame_data * sizeof(stream->frame_data) );
+    if( !stream->frame_data && stream->num_frame_data )
+        return -1;
+
+    for( int i = 0; i < non_display_data->num_frame_data; i++ )
+    {
+        if( non_display_data->frame_data[i].location == location )
+        {
+            stream->frame_data[idx].type = non_display_data->frame_data[i].type;
+            stream->frame_data[idx].source = non_display_data->frame_data[i].source;
+            stream->frame_data[idx].line_number = non_display_data->frame_data[i].line_number;
+            idx++;
+        }
+    }
+
+    return 0;
 }

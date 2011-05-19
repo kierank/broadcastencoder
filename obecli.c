@@ -54,6 +54,7 @@ static const char * const input_video_connections[]  = { "sdi", "hdmi", "optical
 static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", "analogue", 0 };
 static const char * const stream_actions[]           = { "passthrough", "encode", 0 };
 static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", 0 };
+static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", NULL };
 static const char * stream_opts[] = { "action", "format",
@@ -485,11 +486,7 @@ static int set_output( char *command, obecli_command_t *child )
     int str_len = strlen( command );
     command[tok_len] = 0;
 
-    if( !strcasecmp( command, "udp" ) )
-        output.output = OUTPUT_UDP;
-    else if( !strcasecmp( command, "rtp" ) )
-        output.output = OUTPUT_RTP;
-    else if( !strcasecmp( command, "opts" ) && str_len > tok_len )
+    if( !strcasecmp( command, "opts" ) && str_len > tok_len )
     {
         char *params = command + tok_len + 1;
         char **opts = obe_split_options( params, output_opts );
@@ -509,8 +506,8 @@ static int set_output( char *command, obecli_command_t *child )
     }
     else
     {
-        fprintf( stderr, "Invalid output %s\n", command );
-        return -1;
+        FAIL_IF_ERROR( parse_enum_value( command, output_modules, &output.output ) < 0,
+                       "Invalid output %s\n", command )
     }
 
     return 0;
@@ -720,14 +717,14 @@ static int stop_encode( char *command, obecli_command_t *child )
     return 0;
 }
 
-static char *get_format_shortname( int stream_format, const obecli_format_name_t *names )
+static char *get_format_name( int stream_format, const obecli_format_name_t *names, int long_name )
 {
     int i = 0;
 
     while( names[i].format_name != 0 && names[i].format != stream_format )
         i++;
 
-    return names[i].format_name;
+    return  long_name ? names[i].long_name : names[i].format_name;
 }
 
 static int probe_device( char *command, obecli_command_t *child )
@@ -739,11 +736,7 @@ static int probe_device( char *command, obecli_command_t *child )
     if( !strlen( command ) )
         return -1;
 
-    if( strcasecmp( command, "input" ) )
-    {
-        fprintf( stderr, "%s is not a valid item to probe\n", command );
-        return -1;
-    }
+    FAIL_IF_ERROR( strcasecmp( command, "input" ), "%s is not a valid item to probe\n", command )
 
     /* TODO check for validity */
 
@@ -754,7 +747,7 @@ static int probe_device( char *command, obecli_command_t *child )
     for( int i = 0; i < program.num_streams; i++ )
     {
         stream = &program.streams[i];
-        format_name = get_format_shortname( stream->stream_format, format_names );
+        format_name = get_format_name( stream->stream_format, format_names, 0 );
         if( stream->stream_type == STREAM_TYPE_VIDEO )
         {
             /* TODO: show profile, level, csp etc */
@@ -762,7 +755,11 @@ static int probe_device( char *command, obecli_command_t *child )
                     format_name, stream->width, stream->height, stream->interlaced ? "i" : "p",
                     stream->timebase_den, stream->timebase_num, stream->sar_num, stream->sar_den );
 
-            /* TODO: tell user about frame-data like Captions/AFD */
+            for( int j = 0; j < stream->num_frame_data; j++ )
+            {
+                format_name = get_format_name( stream->frame_data[j].type, format_names, 1 );
+                printf( "               %s:   %s\n", stream->frame_data[j].source == VBI_RAW ? "VBI" : "", format_name );
+            }
         }
         else if( stream->stream_type == STREAM_TYPE_AUDIO )
         {
@@ -780,6 +777,15 @@ static int probe_device( char *command, obecli_command_t *child )
         else if( stream->stream_format == MISC_TELETEXT )
         {
             printf( "Stream-id: %d - Teletext: Language: %s \n", stream->stream_id, stream->lang_code );
+        }
+        else if( stream->stream_format == VBI_RAW )
+        {
+            printf( "Stream-id: %d - DVB-VBI: Containing:\n", stream->stream_id );
+            for( int j = 0; j < stream->num_frame_data; j++ )
+            {
+                format_name = get_format_name( stream->frame_data[j].type, format_names, 1 );
+                printf( "               %s:   %s\n", stream->frame_data[j].source == VBI_RAW ? "VBI" : "", format_name );
+            }
         }
         else
             printf( "Stream-id: %d \n", stream->stream_id );

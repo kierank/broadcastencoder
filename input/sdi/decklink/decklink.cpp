@@ -732,7 +732,8 @@ static void *probe_stream( void *ptr )
     obe_input_t *user_opts = &probe_ctx->user_opts;
     obe_device_t *device;
     obe_int_input_stream_t *streams[MAX_STREAMS];
-    int num_streams = 0;
+    int num_streams = 0, vbi_stream_services = 0;
+    obe_sdi_non_display_data_t *non_display_parser;
 
     decklink_opts_t *decklink_opts = (decklink_opts_t*)calloc( 1, sizeof(*decklink_opts) );
     if( !decklink_opts )
@@ -740,6 +741,8 @@ static void *probe_stream( void *ptr )
         fprintf( stderr, "Malloc failed\n" );
         goto finish;
     }
+
+    non_display_parser = &decklink_opts->decklink_ctx.non_display_parser;
 
     /* TODO: support multi-channel */
     decklink_opts->num_channels = 2;
@@ -752,14 +755,20 @@ static void *probe_stream( void *ptr )
 
     open_card( decklink_opts );
 
-    //sleep( 5 );
+    sleep( 1 );
 
     close_card( decklink_opts );
 
     /* TODO: probe for SMPTE 337M */
     /* TODO: add other streams */
 
-    for( int i = 0; i < 2; i++ )
+    for( int i = 0; i < non_display_parser->num_frame_data; i++ )
+    {
+        if( non_display_parser->frame_data[i].location == USER_DATA_LOCATION_DVB_STREAM )
+            vbi_stream_services++;
+    }
+
+    for( int i = 0; i < 2+!!vbi_stream_services; i++ )
     {
         streams[i] = (obe_int_input_stream_t*)calloc( 1, sizeof(*streams[i]) );
         if( !streams[i] )
@@ -782,6 +791,9 @@ static void *probe_stream( void *ptr )
             streams[i]->interlaced = decklink_opts->interlaced;
             streams[i]->tff = decklink_opts->tff;
             streams[i]->sar_num = streams[i]->sar_den = 1; /* The user can choose this when encoding */
+
+            if( add_vbi_services( non_display_parser, streams[i], USER_DATA_LOCATION_FRAME ) < 0 )
+                goto finish;
         }
         else if( i == 1 )
         {
@@ -795,9 +807,14 @@ static void *probe_stream( void *ptr )
         {
             streams[i]->stream_type = STREAM_TYPE_MISC;
             streams[i]->stream_format = VBI_RAW;
+            if( add_vbi_services( non_display_parser, streams[i], USER_DATA_LOCATION_DVB_STREAM ) < 0 )
+                goto finish;
         }
         num_streams++;
     }
+
+    if( non_display_parser->num_frame_data )
+        free( non_display_parser->frame_data );
 
     device = new_device();
 

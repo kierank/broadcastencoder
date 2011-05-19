@@ -180,7 +180,8 @@ typedef struct
     int timebase_num;
     int timebase_den;
 
-    /* Per-frame data (e.g. Captions/AFD) */
+    /*  Video Streams: Per-frame data (e.g. Captions/AFD)
+     *  VBI: Components of DVB-VBI packet */
     int num_frame_data;
     obe_frame_data_t *frame_data;
 
@@ -199,7 +200,7 @@ typedef struct
     int dvb_has_dds; /* Has display definition segment (i.e HD subtitling) */
 
     /** Misc **/
-    int source;
+    int source; /* e.g. VBI/VANC */
 }obe_input_stream_t;
 
 typedef struct

@@ -35,7 +35,7 @@ typedef struct
     /* Probing */
     int has_probed;
     int num_frame_data;
-    obe_frame_data_t *frame_data;
+    obe_int_frame_data_t *frame_data;
 
     /* Decoding */
     obe_coded_frame_t *dvb_frame;
@@ -49,5 +49,18 @@ typedef struct
     int format;
     int line;
 } obe_line_number_t;
+
+typedef struct
+{
+    int service;
+    int location;
+} obe_non_display_data_location_t;
+
+const obe_non_display_data_location_t non_display_data_locations[] =
+{
+    { CAPTIONS_CEA_608, USER_DATA_LOCATION_FRAME },
+    { MISC_WSS,         USER_DATA_LOCATION_DVB_STREAM },
+    { -1, -1 },
+};
 
 #endif

@@ -110,6 +110,10 @@ typedef struct
     int interlaced;
     int tff;
 
+    /* Per-frame Data */
+    int num_frame_data;
+    obe_frame_data_t *frame_data;
+
     /** Audio **/
     int64_t channel_layout;
     int sample_rate;
@@ -136,6 +140,9 @@ typedef struct
     int dvb_teletext_type;
     int dvb_teletext_magazine_number;
     int dvb_teletext_page_number;
+
+    /** Misc **/
+    int source;
 } obe_int_input_stream_t;
 
 typedef struct
@@ -174,6 +181,14 @@ typedef struct
     int     stride[4]; /* strides for each plane */
 } obe_image_t;
 
+typedef struct
+{
+     int type;
+     int source;
+     int line_number; /* Line number of frame starting from line 1 */
+     int location;
+} obe_int_frame_data_t;
+
 enum user_data_types_e
 {
     /* Encapsulated frame data formats */
@@ -190,8 +205,8 @@ enum user_data_types_e
 
 enum user_data_location_e
 {
-    USER_DATA_LOCATION_FRAME,  /* e.g. AFD, Captions */
-    USER_DATA_LOCATION_STREAM, /* e.g. DVB-VBI */
+    USER_DATA_LOCATION_FRAME,      /* e.g. AFD, Captions */
+    USER_DATA_LOCATION_DVB_STREAM, /* e.g. DVB-VBI */
     /* TODO: various other minor locations */
 };
 
