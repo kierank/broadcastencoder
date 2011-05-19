@@ -307,58 +307,13 @@ static int set_input( char *command, obecli_command_t *child )
              strcpy( input.location, location );
         }
 
-        input.card_idx         = obe_otoi( card_idx, 0 );
+        input.card_idx = obe_otoi( card_idx, input.card_idx );
         if( video_format )
             parse_enum_value( video_format, input_video_formats, &input.video_format );
         if( video_connection )
             parse_enum_value( video_connection, input_video_connections, &input.video_connection );
         if( audio_connection )
             parse_enum_value( audio_connection, input_audio_connections, &input.audio_connection );
-    }
-
-    return 0;
-}
-
-static int set_muxer( char *command, obecli_command_t *child )
-{
-    if( !strlen( command ) )
-        return -1;
-
-    int tok_len = strcspn( command, " " );
-    int str_len = strlen( command );
-    command[tok_len] = 0;
-
-    if( !strcasecmp( command, "mpegts" ) )
-        mux_opts.muxer = MUXERS_MPEGTS;
-    else if( !strcasecmp( command, "opts" ) && str_len > tok_len )
-    {
-        char *params = command + tok_len + 1;
-        char **opts = obe_split_options( params, muxer_opts );
-        if( !opts && params )
-            return -1;
-
-        char *ts_type     = obe_get_option( muxer_opts[0], opts );
-        char *ts_cbr      = obe_get_option( muxer_opts[1], opts );
-        char *ts_muxrate  = obe_get_option( muxer_opts[2], opts );
-        char *passthrough = obe_get_option( muxer_opts[3], opts );
-        char *ts_id       = obe_get_option( muxer_opts[4], opts );
-        char *program_num = obe_get_option( muxer_opts[5], opts );
-        char *pmt_pid     = obe_get_option( muxer_opts[6], opts );
-        char *pcr_pid     = obe_get_option( muxer_opts[7], opts );
-        char *pcr_period  = obe_get_option( muxer_opts[8], opts );
-        char *pat_period  = obe_get_option( muxer_opts[9], opts );
-        if( ts_type )
-            parse_enum_value( ts_type, ts_types, &mux_opts.ts_type );
-
-        mux_opts.ts_muxrate = obe_otoi( ts_muxrate, 0 );
-        mux_opts.cbr = obe_otob( ts_cbr, 0 );
-        mux_opts.passthrough = obe_otob( passthrough, 0 );
-        mux_opts.ts_id = obe_otoi( ts_id, 0 );
-        mux_opts.program_num = obe_otoi( program_num, 0 );
-        mux_opts.pmt_pid    = obe_otoi( pmt_pid, 0 );
-        mux_opts.pcr_pid    = obe_otoi( pcr_pid, 0 );
-        mux_opts.pcr_period = obe_otoi( pcr_period, 0 );
-        mux_opts.pat_period = obe_otoi( pat_period, 0 );
     }
 
     return 0;
@@ -472,6 +427,51 @@ static int set_stream( char *command, obecli_command_t *child )
                 output_streams[stream_id].ts_opts.lang_code[3] = 0;
             }
         }
+    }
+
+    return 0;
+}
+
+static int set_muxer( char *command, obecli_command_t *child )
+{
+    if( !strlen( command ) )
+        return -1;
+
+    int tok_len = strcspn( command, " " );
+    int str_len = strlen( command );
+    command[tok_len] = 0;
+
+    if( !strcasecmp( command, "mpegts" ) )
+        mux_opts.muxer = MUXERS_MPEGTS;
+    else if( !strcasecmp( command, "opts" ) && str_len > tok_len )
+    {
+        char *params = command + tok_len + 1;
+        char **opts = obe_split_options( params, muxer_opts );
+        if( !opts && params )
+            return -1;
+
+        char *ts_type     = obe_get_option( muxer_opts[0], opts );
+        char *ts_cbr      = obe_get_option( muxer_opts[1], opts );
+        char *ts_muxrate  = obe_get_option( muxer_opts[2], opts );
+        char *passthrough = obe_get_option( muxer_opts[3], opts );
+        char *ts_id       = obe_get_option( muxer_opts[4], opts );
+        char *program_num = obe_get_option( muxer_opts[5], opts );
+        char *pmt_pid     = obe_get_option( muxer_opts[6], opts );
+        char *pcr_pid     = obe_get_option( muxer_opts[7], opts );
+        char *pcr_period  = obe_get_option( muxer_opts[8], opts );
+        char *pat_period  = obe_get_option( muxer_opts[9], opts );
+        if( ts_type )
+            parse_enum_value( ts_type, ts_types, &mux_opts.ts_type );
+
+        mux_opts.cbr = obe_otob( ts_cbr, mux_opts.cbr );
+        mux_opts.ts_muxrate = obe_otoi( ts_muxrate, mux_opts.ts_muxrate );
+        mux_opts.passthrough = obe_otob( passthrough, mux_opts.passthrough );
+        mux_opts.ts_id = obe_otoi( ts_id, mux_opts.ts_id );
+        mux_opts.program_num = obe_otoi( program_num, mux_opts.program_num );
+        mux_opts.pmt_pid    = obe_otoi( pmt_pid, mux_opts.pmt_pid );
+        mux_opts.pcr_pid    = obe_otoi( pcr_pid, mux_opts.pcr_pid  );
+        mux_opts.pcr_period = obe_otoi( pcr_period, mux_opts.pcr_period );
+        mux_opts.pat_period = obe_otoi( pat_period, mux_opts.pat_period );
     }
 
     return 0;
