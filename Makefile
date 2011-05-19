@@ -67,7 +67,7 @@ endif
 SRC2 = $(SRCS) $(SRCCLI)
 
 clean:
-	rm -f $(OBJS) $(OBJSCXX) $(OBJCLI) $(OBJSO) $(SONAME) *.a obe obe.exe .depend TAGS
+	rm -f $(OBJS) $(OBJSCXX) $(OBJCLI) $(OBJSO) $(SONAME) *.a obecli obecli.exe .depend TAGS
 	rm -f $(SRC2:%.c=%.gcda) $(SRC2:%.c=%.gcno)
 	- sed -e 's/ *-fprofile-\(generate\|use\)//g' config.mak > config.mak2 && mv config.mak2 config.mak
 
