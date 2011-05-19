@@ -156,6 +156,8 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
         }
     }
 
+    free( sliced );
+
     return 0;
 
 fail:
