@@ -138,6 +138,7 @@ enum stream_formats_e
     CAPTIONS_CEA_608,
     CAPTIONS_CEA_708,
     MISC_AFD,
+    MISC_PAN_SCAN,
 
     /* VBI */
     VBI_RAW,
@@ -156,6 +157,7 @@ typedef struct
 {
      int type;
      int source;
+     int line_number; /* Line number of frame starting from line 1 */
 } obe_frame_data_t;
 
 typedef struct
@@ -195,8 +197,7 @@ typedef struct
     int aac_is_latm; /* LATM is sometimes known as MPEG-4 Encapsulation */
 
     /** Subtitles **/
-    /* Has display definition segment (i.e HD subtitling) */
-    int dvb_has_dds;
+    int dvb_has_dds; /* Has display definition segment (i.e HD subtitling) */
 
     /** Misc **/
     int source;
