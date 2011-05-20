@@ -25,7 +25,8 @@
 #include "vbi.h"
 
 #define DVB_VBI_DATA_IDENTIFIER 0x10
-#define DVB_VBI_MAX_SIZE 65536
+/* libzvbi input buffer must be mod 46... */
+#define DVB_VBI_MAX_SIZE 69967
 
 int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data, int ntsc )
 {
@@ -127,8 +128,8 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             buf_ptr = &dvb_buf[1];
             buf_size--;
 
-            if( !vbi_dvb_multiplex_sliced( &buf_ptr, &buf_size, (const vbi_sliced **)&sliced, &decoded_lines,
-                                           VBI_SLICED_WSS_625, DVB_VBI_DATA_IDENTIFIER, FALSE ) )
+            if( vbi_dvb_multiplex_sliced( &buf_ptr, &buf_size, (const vbi_sliced **)&sliced, &decoded_lines,
+                                           VBI_SLICED_WSS_625, DVB_VBI_DATA_IDENTIFIER, FALSE ) == FALSE )
             {
                 free( dvb_buf );
                 goto fail;
