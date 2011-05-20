@@ -74,13 +74,14 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
 {
     unsigned int decoded_lines, buf_size; /* unsigned for libzvbi */
     uint8_t *dvb_buf, *buf_ptr;
-    vbi_sliced *sliced;
+    vbi_sliced *sliced, *sliced_tmp;
     obe_user_data_t *tmp, *user_data;
 
     sliced = malloc( 100 * sizeof(*sliced) );
     if( !sliced )
         goto fail;
 
+    sliced_tmp = sliced;
     decoded_lines = vbi_raw_decode( &non_display_data->vbi_decoder, lines, sliced );
 
     if( non_display_data->probe )
@@ -128,7 +129,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             buf_ptr = &dvb_buf[1];
             buf_size--;
 
-            if( vbi_dvb_multiplex_sliced( &buf_ptr, &buf_size, (const vbi_sliced **)&sliced, &decoded_lines,
+            if( vbi_dvb_multiplex_sliced( &buf_ptr, &buf_size, (const vbi_sliced **)&sliced_tmp, &decoded_lines,
                                            VBI_SLICED_WSS_625, DVB_VBI_DATA_IDENTIFIER, FALSE ) == FALSE )
             {
                 free( dvb_buf );
