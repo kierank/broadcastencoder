@@ -113,8 +113,8 @@ static int scale_frame( obe_raw_frame_t *raw_frame )
             for( int k = 0; k < width; k++ )
                 dst[k] = (src[k] << lshift) + (src[k] >> rshift);
 
-            src += img->stride[i]/2;
-            dst += out->stride[i]/2;
+            src += img->stride[i] >> 1;
+            dst += out->stride[i] >> 1;
         }
     }
 
