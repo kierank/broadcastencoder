@@ -345,7 +345,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             /* Send any DVB-VBI frames */
             if( decklink_ctx->non_display_parser.dvb_frame )
             {
-                decklink_ctx->non_display_parser.dvb_frame->stream_id = 3; // FIXME
+                decklink_ctx->non_display_parser.dvb_frame->stream_id = 2; // FIXME
                 decklink_ctx->non_display_parser.dvb_frame->pts = stream_time;
 
                 add_to_mux_queue( decklink_ctx->h, decklink_ctx->non_display_parser.dvb_frame );
