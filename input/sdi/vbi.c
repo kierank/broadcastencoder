@@ -187,7 +187,7 @@ int add_vbi_services( obe_sdi_non_display_data_t *non_display_data, obe_int_inpu
     }
 
     stream->num_frame_data = count;
-    stream->frame_data = calloc( 1, stream->num_frame_data * sizeof(stream->frame_data) );
+    stream->frame_data = calloc( 1, stream->num_frame_data * sizeof(*stream->frame_data) );
     if( !stream->frame_data && stream->num_frame_data )
         return -1;
 
