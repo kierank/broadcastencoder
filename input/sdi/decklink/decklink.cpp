@@ -750,7 +750,7 @@ static void *probe_stream( void *ptr )
     decklink_opts->audio_conn = user_opts->audio_connection;
     decklink_opts->video_format = user_opts->video_format;
 
-    decklink_opts->probe = decklink_opts->decklink_ctx.non_display_parser.probe = 1;
+    decklink_opts->probe = non_display_parser->probe = 1;
 
     open_card( decklink_opts );
 
