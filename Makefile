@@ -28,6 +28,29 @@ ifneq ($(findstring HAVE_DECKLINK 1, $(CONFIG)),)
 SRCCXX += input/sdi/decklink/decklink.cpp
 endif
 
+# MMX/SSE optims
+ifneq ($(AS),)
+X86SRC0 = vfilter.asm
+X86SRC = $(X86SRC0:%=common/x86/%)
+
+ifeq ($(ARCH),X86)
+ARCH_X86 = yes
+ASMSRC   = $(X86SRC) common/x86/pixel-32.asm
+endif
+
+ifeq ($(ARCH),X86_64)
+ARCH_X86 = yes
+ASMSRC   = $(X86SRC:-32.asm=-64.asm)
+ASFLAGS += -DARCH_X86_64
+endif
+
+ifdef ARCH_X86
+ASFLAGS += -Icommon/x86/
+OBJASM  = $(ASMSRC:%.asm=%.o)
+$(OBJASM): common/x86/x86inc.asm common/x86/x86util.asm
+endif
+endif
+
 OBJS = $(SRCS:%.c=%.o)
 OBJSCXX = $(SRCCXX:%.cpp=%.o)
 OBJCLI = $(SRCCLI:%.c=%.o)
@@ -38,15 +61,19 @@ DEP  = depend
 
 default: $(DEP) obecli$(EXE)
 
-libobe.a: .depend $(OBJS) $(OBJSCXX)
-	$(AR) rc libobe.a $(OBJS) $(OBJSCXX)
+libobe.a: .depend $(OBJS) $(OBJSCXX) $(OBJASM)
+	$(AR) rc libobe.a $(OBJS) $(OBJSCXX) $(OBJASM)
 	$(RANLIB) libobe.a
 
-$(SONAME): .depend $(OBJS) $(OBJSCXX) $(OBJSO)
-	$(CC) -shared -o $@ $(OBJS) $(OBJSO) $(SOFLAGS) $(LDFLAGS)
+$(SONAME): .depend $(OBJS) $(OBJSCXX) $(OBJASM) $(OBJSO)
+	$(CC) -shared -o $@ $(OBJS) $(OBJASM) $(OBJSO) $(SOFLAGS) $(LDFLAGS)
 
 obecli$(EXE): $(OBJCLI) libobe.a
 	$(CC) -o $@ $+ $(LDFLAGSCLI) $(LDFLAGS)
+
+%.o: %.asm
+	$(AS) $(ASFLAGS) -o $@ $<
+	-@ $(if $(STRIP), $(STRIP) -x $@) # delete local/anonymous symbols, so they don't show up in oprofile
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $<
@@ -67,7 +94,7 @@ endif
 SRC2 = $(SRCS) $(SRCCLI)
 
 clean:
-	rm -f $(OBJS) $(OBJSCXX) $(OBJCLI) $(OBJSO) $(SONAME) *.a obecli obecli.exe .depend TAGS
+	rm -f $(OBJS) $(OBJSCXX) $(OBJASM) $(OBJCLI) $(OBJSO) $(SONAME) *.a obecli obecli.exe .depend TAGS
 	rm -f $(SRC2:%.c=%.gcda) $(SRC2:%.c=%.gcno)
 	- sed -e 's/ *-fprofile-\(generate\|use\)//g' config.mak > config.mak2 && mv config.mak2 config.mak
 

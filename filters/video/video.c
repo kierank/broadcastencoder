@@ -23,6 +23,7 @@
 
 #include <libavutil/cpu.h>
 #include <libswscale/swscale.h>
+#include "common/x86/vfilter.h"
 #include "common/common.h"
 #include "video.h"
 #include "cc.h"
@@ -35,7 +36,13 @@ typedef uint8_t pixel;
 
 typedef struct
 {
-    /* scaling */
+    /* cpu flags */
+    uint32_t avutil_cpu;
+
+    /* upscaling */
+    void (*scale_plane)( uint16_t *src, int stride, int width, int height, int lshift, int rshift );
+
+    /* downscaling */
     struct SwsContext *sws_ctx;
     int sws_ctx_flags;
     enum PixelFormat dst_pix_fmt;
@@ -63,9 +70,8 @@ static obe_cli_csp_t obe_cli_csps[] =
     [PIX_FMT_YUV420P16] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 16 },
 };
 
-static uint32_t convert_cpu_to_flag( void )
+static uint32_t convert_cpu_to_flag( uint32_t avutil_cpu )
 {
-    uint32_t avutil_cpu = av_get_cpu_flags();
     uint32_t swscale_cpu = 0;
     if( avutil_cpu & AV_CPU_FLAG_ALTIVEC )
         swscale_cpu |= SWS_CPU_CAPS_ALTIVEC;
@@ -76,23 +82,38 @@ static uint32_t convert_cpu_to_flag( void )
     return swscale_cpu;
 }
 
-static int scale_frame( obe_raw_frame_t *raw_frame )
+static void scale_plane( uint16_t *src, int stride, int width, int height, int lshift, int rshift )
+{
+    for( int i = 0; i < height; i++ )
+    {
+        for( int j = 0; j < width; j++ )
+            src[j] = (src[j] << lshift) + (src[j] >> rshift);
+
+        src += stride >> 1;
+    }
+}
+
+static void init_filter( obe_vid_filter_ctx_t *vfilt )
+{
+    vfilt->avutil_cpu = av_get_cpu_flags();
+    vfilt->scale_plane = scale_plane;
+
+    if( vfilt->avutil_cpu & AV_CPU_FLAG_MMX2 )
+        vfilt->scale_plane = obe_scale_plane_mmxext;
+
+    if( vfilt->avutil_cpu & AV_CPU_FLAG_SSE2 )
+        vfilt->scale_plane = obe_scale_plane_sse2;
+
+    if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX )
+        vfilt->scale_plane = obe_scale_plane_avx;
+}
+
+static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
     obe_image_t *img = &raw_frame->img;
-    obe_image_t tmp_image = {0};
-    obe_image_t *out = &tmp_image;
+    img->csp = img->csp == PIX_FMT_YUV420P10 ? PIX_FMT_YUV420P16 : PIX_FMT_YUV422P16;
 
-    tmp_image.csp = img->csp == PIX_FMT_YUV420P10 ? PIX_FMT_YUV420P16 : PIX_FMT_YUV422P16;
-    tmp_image.width = raw_frame->img.width;
-    tmp_image.height = raw_frame->img.height;
-    tmp_image.planes = av_pix_fmt_descriptors[tmp_image.csp].nb_components;
-
-    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height,
-                        tmp_image.csp, 16 ) < 0 )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
+    /* TODO: when frames are needed for reference we can't scale in-place */
 
     /* this function mimics how swscale does upconversion. 8-bit is converted
      * to 16-bit through left shifting the orginal value with 8 and then adding
@@ -104,22 +125,11 @@ static int scale_frame( obe_raw_frame_t *raw_frame )
     for( int i = 0; i < img->planes; i++ )
     {
         uint16_t *src = (uint16_t*)img->plane[i];
-        uint16_t *dst = (uint16_t*)out->plane[i];
         int height = obe_cli_csps[img->csp].height[i] * img->height;
         int width = obe_cli_csps[img->csp].width[i] * img->width;
 
-        for( int j = 0; j < height; j++ )
-        {
-            for( int k = 0; k < width; k++ )
-                dst[k] = (src[k] << lshift) + (src[k] >> rshift);
-
-            src += img->stride[i] >> 1;
-            dst += out->stride[i] >> 1;
-        }
+        vfilt->scale_plane( src, img->stride[i], width, height, lshift, rshift );
     }
-
-    raw_frame->release_data( raw_frame );
-    memcpy( &raw_frame->img, &tmp_image, sizeof(obe_image_t) );
 
     return 0;
 }
@@ -132,7 +142,7 @@ static int downconvert_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_
     {
         vfilt->sws_ctx_flags |= SWS_SPLINE;
         vfilt->sws_ctx_flags |= SWS_FULL_CHR_H_INT | SWS_FULL_CHR_H_INP | SWS_ACCURATE_RND;
-        vfilt->sws_ctx_flags |= convert_cpu_to_flag();
+        vfilt->sws_ctx_flags |= convert_cpu_to_flag( vfilt->avutil_cpu );
         vfilt->dst_pix_fmt = raw_frame->img.csp == PIX_FMT_YUV422P ? PIX_FMT_YUV420P : PIX_FMT_YUV420P16;
 
         vfilt->sws_ctx = sws_getContext( raw_frame->img.width, raw_frame->img.height, raw_frame->img.csp,
@@ -271,6 +281,8 @@ void *start_filter( void *ptr )
         goto end;
     }
 
+    init_filter( vfilt );
+
     while( 1 )
     {
         /* TODO: support resolution changes */
@@ -296,9 +308,11 @@ void *start_filter( void *ptr )
         raw_frame = filter->frames[0];
         pthread_mutex_unlock( &filter->filter_mutex );
 
+        /* TODO: scale 8-bit to 16-bit */
+
         if( raw_frame->img.csp == PIX_FMT_YUV420P10 || raw_frame->img.csp == PIX_FMT_YUV422P10 )
         {
-            if( scale_frame( raw_frame ) < 0 )
+            if( scale_frame( vfilt, raw_frame ) < 0 )
                 goto end;
         }
 
