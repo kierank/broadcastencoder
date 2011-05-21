@@ -32,8 +32,9 @@ int obe_get_buffer( AVCodecContext *codec, AVFrame *pic )
 
     avcodec_align_dimensions2( codec, &w, &h, stride );
 
-    /* Only EDGE_EMU codecs are used */
-    if( av_image_alloc( pic->data, pic->linesize, w, h, codec->pix_fmt, 16 ) < 0 )
+    /* Only EDGE_EMU codecs are used
+     * Allocate an extra line so that SIMD can modify the entire stride for every active line */
+    if( av_image_alloc( pic->data, pic->linesize, w, h + 1, codec->pix_fmt, 16 ) < 0 )
         return -1;
 
     pic->age    = 256*256*256*64; /* FIXME is there a correct value for this? */
