@@ -20,6 +20,7 @@ cglobal scale_plane_%1, 6,6
     paddw   m0, m1
     mova   [r0], m0
     sub     r1d, mmsize
+    lea     r0, [r0+mmsize]
     jg .loop
     REP_RET
 %endmacro
