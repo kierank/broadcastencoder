@@ -111,7 +111,6 @@ static void init_filter( obe_vid_filter_ctx_t *vfilt )
 static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
     obe_image_t *img = &raw_frame->img;
-    img->csp = img->csp == PIX_FMT_YUV420P10 ? PIX_FMT_YUV420P16 : PIX_FMT_YUV422P16;
 
     /* TODO: when frames are needed for reference we can't scale in-place */
 
@@ -130,6 +129,8 @@ static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
 
         vfilt->scale_plane( src, img->stride[i], width, height, lshift, rshift );
     }
+
+    img->csp = img->csp == PIX_FMT_YUV420P10 ? PIX_FMT_YUV420P16 : PIX_FMT_YUV422P16;
 
     return 0;
 }

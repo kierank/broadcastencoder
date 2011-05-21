@@ -9,10 +9,10 @@ SECTION .text
 
 %macro SCALE_plane 1
 
-cglobal scale_plane_%1, 5,5
+cglobal scale_plane_%1, 6,6
     imul   r1d, r3m
-    movd    m2, r3m
-    movd    m3, r4m
+    movd    m2, r4m
+    movd    m3, r5m
 .loop
     mova    m0, [r0]
     psllw   m1, m0, m2
