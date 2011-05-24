@@ -23,7 +23,7 @@
 
 #include <libavutil/cpu.h>
 #include <libswscale/swscale.h>
-#include "common/x86/vfilter.h"
+#include "x86/vfilter.h"
 #include "common/common.h"
 #include "video.h"
 #include "cc.h"

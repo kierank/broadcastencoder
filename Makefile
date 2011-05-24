@@ -31,12 +31,7 @@ endif
 # MMX/SSE optims
 ifneq ($(AS),)
 X86SRC0 = vfilter.asm
-X86SRC = $(X86SRC0:%=common/x86/%)
-
-ifeq ($(ARCH),X86)
-ARCH_X86 = yes
-ASMSRC   = $(X86SRC) common/x86/pixel-32.asm
-endif
+X86SRC = $(X86SRC0:%=filters/video/x86/%)
 
 ifeq ($(ARCH),X86_64)
 ARCH_X86 = yes
