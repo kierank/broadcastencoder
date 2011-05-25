@@ -29,10 +29,6 @@
 #define MIN_PID 0x30
 #define MAX_PID 0x1fff
 
-#define AC3_NUM_SAMPLES 1536
-#define MP2_NUM_SAMPLES 1152
-#define AAC_NUM_SAMPLES 1024
-
 static const int mpegts_stream_info[][3] =
 {
     { VIDEO_AVC,   LIBMPEGTS_VIDEO_AVC,      LIBMPEGTS_STREAM_ID_MPEGVIDEO },

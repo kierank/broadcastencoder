@@ -51,6 +51,11 @@
 #define MIN(a,b) ( (a)<(b) ? (a) : (b) )
 #define MAX(a,b) ( (a)>(b) ? (a) : (b) )
 
+/* Audio formats */
+#define AC3_NUM_SAMPLES 1536
+#define MP2_NUM_SAMPLES 1152
+#define AAC_NUM_SAMPLES 1024
+
 static inline int obe_clip3( int v, int i_min, int i_max )
 {
     return ( (v < i_min) ? i_min : (v > i_max) ? i_max : v );
