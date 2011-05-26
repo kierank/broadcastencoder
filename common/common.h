@@ -250,6 +250,7 @@ typedef struct
 
     /* Non-video */
     int len;
+    int bytes_left;
     uint8_t *data;
     uint8_t *cur_pos;
 

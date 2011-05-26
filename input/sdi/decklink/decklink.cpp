@@ -372,7 +372,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         bytes = raw_frame->num_samples * decklink_opts_->num_channels * sizeof(int32_t);
 
         audioframe->GetBytes( &frame_bytes );
-        raw_frame->len = bytes;
+        raw_frame->len = raw_frame->bytes_left = bytes;
         raw_frame->data = (uint8_t*)av_malloc( raw_frame->len );
         if( !raw_frame->data )
         {
