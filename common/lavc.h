@@ -29,5 +29,6 @@
 int obe_get_buffer( AVCodecContext *codec, AVFrame *pic );
 void obe_release_buffer( AVCodecContext *codec, AVFrame *pic );
 int obe_reget_buffer( AVCodecContext *codec, AVFrame *pic );
+int obe_lavc_lockmgr( void **mutex, enum AVLockOp op );
 
 #endif

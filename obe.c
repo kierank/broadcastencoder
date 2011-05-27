@@ -22,6 +22,7 @@
  *****************************************************************************/
 
 #include "common/common.h"
+#include "common/lavc.h"
 #include "input/input.h"
 #include "filters/video/video.h"
 #include "encoders/video/video.h"
@@ -459,6 +460,13 @@ obe_t *obe_setup( void )
     }
 
     pthread_mutex_init( &h->device_list_mutex, NULL );
+
+    if( av_lockmgr_register( obe_lavc_lockmgr ) < 0 )
+    {
+        fprintf( stderr, "Could not register lavc lock manager\n" );
+        free( h );
+        return NULL;
+    }
 
     return h;
 }

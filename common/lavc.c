@@ -52,7 +52,7 @@ void obe_release_buffer( AVCodecContext *codec, AVFrame *pic )
      memset( pic->data, 0, sizeof(pic->data) );
 }
 
-/* FFmpeg shouldn't call this */
+/* FFmpeg shouldn't call this at the moment */
 int obe_reget_buffer( AVCodecContext *codec, AVFrame *pic )
 {
     if( pic->data[0] == NULL )
@@ -67,4 +67,25 @@ int obe_reget_buffer( AVCodecContext *codec, AVFrame *pic )
     return 0;
 }
 
+int obe_lavc_lockmgr( void **mutex, enum AVLockOp op )
+{
+    if( op == AV_LOCK_CREATE )
+    {
+        *mutex = malloc( sizeof(pthread_mutex_t) );
+        if( !*mutex )
+            return -1;
 
+        pthread_mutex_init( *mutex, NULL );
+    }
+    else if( op == AV_LOCK_OBTAIN )
+        pthread_mutex_lock( *mutex );
+    else if( op == AV_LOCK_RELEASE )
+        pthread_mutex_unlock( *mutex );
+    else /* AV_LOCK_DESTROY */
+    {
+        pthread_mutex_destroy( *mutex );
+        free( *mutex );
+    }
+
+    return 0;
+}
