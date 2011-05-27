@@ -26,6 +26,8 @@
 
 #include <libavutil/samplefmt.h>
 
+#define OBE_MAX_CHANNELS 8
+
 typedef struct
 {
     void* (*start_encoder)( void *ptr );
@@ -36,6 +38,8 @@ typedef struct
     obe_t *h;
     obe_encoder_t *encoder;
 
+    int sample_format;
+    int output_format;
     int bitrate;
     int sample_rate;
     int num_channels;

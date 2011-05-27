@@ -25,7 +25,6 @@
 #include "encoders/audio/audio.h"
 #include <twolame.h>
 
-#define MP2_FRAME_SIZE 1152
 #define MP2_AUDIO_BUFFER_SIZE 50000
 
 void *start_encoder( void *ptr )
@@ -65,7 +64,7 @@ void *start_encoder( void *ptr )
 
     twolame_init_params( tl_opts );
 
-    frame_size = (double)MP2_FRAME_SIZE * 125 * enc_params->bitrate / enc_params->sample_rate;
+    frame_size = (double)MP2_NUM_SAMPLES * 125 * enc_params->bitrate / enc_params->sample_rate;
 
     encoder->is_ready = 1;
     /* Broadcast because input and muxer can be stuck waiting for encoder */
@@ -103,7 +102,7 @@ void *start_encoder( void *ptr )
         else if( raw_frame->sample_fmt == AV_SAMPLE_FMT_S32 )
         {
             s32_data = (int32_t*)raw_frame->data;
-            num_channels = av_get_channel_layout_nb_channels( raw_frame->channel_map );
+            num_channels = av_get_channel_layout_nb_channels( raw_frame->channel_layout );
             s16_data = malloc( num_channels * raw_frame->num_samples * sizeof(short) );
             if( !s16_data )
             {
@@ -148,7 +147,7 @@ void *start_encoder( void *ptr )
             add_to_mux_queue( h, coded_frame );
 
             /* We need to generate PTS because frame sizes have changed */
-            cur_pts += (double)MP2_FRAME_SIZE * 90000 / enc_params->sample_rate;
+            cur_pts += (double)MP2_NUM_SAMPLES * 90000 / enc_params->sample_rate;
             output_size -= frame_size;
             output_pos += frame_size;
         }

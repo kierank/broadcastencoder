@@ -366,7 +366,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         }
 
         raw_frame->num_samples = audioframe->GetSampleFrameCount();
-        raw_frame->channel_map = AV_CH_LAYOUT_STEREO;
+        raw_frame->channel_layout = AV_CH_LAYOUT_STEREO;
         raw_frame->sample_fmt = AV_SAMPLE_FMT_S32;
 
         bytes = raw_frame->num_samples * decklink_opts_->num_channels * sizeof(int32_t);

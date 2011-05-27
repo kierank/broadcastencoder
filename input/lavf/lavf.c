@@ -593,7 +593,7 @@ void *open_input( void *ptr )
                     raw_frame->data = raw_frame->cur_pos = (uint8_t*)audio_buffer;
                     raw_frame->num_samples = audio_size / ( codec->channels * sizeof(int16_t) ); // FIXME
                     raw_frame->sample_fmt = codec->sample_fmt;
-                    raw_frame->channel_map = codec->channel_layout;
+                    raw_frame->channel_layout = codec->channel_layout;
                     raw_frame->release_data = obe_release_other_data;
                     raw_frame->release_frame = obe_release_frame;
                     raw_frame->pts = -1;

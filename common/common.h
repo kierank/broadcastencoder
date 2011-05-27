@@ -260,8 +260,9 @@ typedef struct
     /* Audio */
     int num_samples;
     int sample_fmt;
-    int channel_map;
+    int64_t channel_layout;
     // TODO channel order
+    // TODO audio metadata
 } obe_raw_frame_t;
 
 typedef struct
