@@ -27,7 +27,7 @@
 
 #define MP2_AUDIO_BUFFER_SIZE 50000
 
-void *start_encoder( void *ptr )
+static void *start_encoder( void *ptr )
 {
     twolame_options *tl_opts = NULL;
     obe_aud_enc_params_t *enc_params = ptr;
