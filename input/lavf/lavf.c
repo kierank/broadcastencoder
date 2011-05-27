@@ -22,10 +22,9 @@
  *****************************************************************************/
 
 #include "common/common.h"
+#include "common/lavc.h"
 #include "input/input.h"
-#include "input/lavc.h"
 #include <libavformat/avformat.h>
-#include <libswscale/swscale.h>
 
 /* TODO: add support for choosing programs */
 #define MAX_PROGRAMS 1

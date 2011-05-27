@@ -26,7 +26,7 @@
 extern "C"
 {
 #include "common/common.h"
-#include "input/lavc.h"
+#include "common/lavc.h"
 #include "input/input.h"
 #include "input/sdi/sdi.h"
 #include "input/sdi/vbi.h"
