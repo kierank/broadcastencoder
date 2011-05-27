@@ -6,8 +6,6 @@ all: default
 
 SRCS = obe.c common/lavc.c \
        input/lavf/lavf.c input/sdi/vbi.c \
-SRCS = obe.c \
-       input/lavc.c input/lavf/lavf.c input/sdi/vbi.c \
        filters/video/video.c filters/video/cc.c \
        encoders/video/avc/x264.c \
        mux/ts/ts.c \
