@@ -50,5 +50,6 @@ typedef struct
 } obe_aud_enc_params_t;
 
 extern const obe_aud_enc_func_t twolame_encoder;
+extern const obe_aud_enc_func_t lavc_encoder;
 
 #endif

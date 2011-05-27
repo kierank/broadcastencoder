@@ -766,6 +766,7 @@ int obe_start( obe_t *h )
     obe_output_params_t  *out_params;
 
     obe_input_func_t  input;
+    obe_aud_enc_func_t audio_encoder;
     obe_output_func_t output;
 
     /* TODO: a lot of sanity checks */
@@ -845,8 +846,13 @@ int obe_start( obe_t *h )
                     goto fail;
                 }
             }
-            else if( h->output_streams[i].stream_format == AUDIO_MP2 )
+            else if( h->output_streams[i].stream_format == AUDIO_MP2 || h->output_streams[i].stream_format == AUDIO_AC_3 )
             {
+                if( h->output_streams[i].stream_format == AUDIO_MP2 )
+                    audio_encoder = twolame_encoder;
+                else
+                    audio_encoder = lavc_encoder;
+
                 aud_enc_params = calloc( 1, sizeof(*aud_enc_params) );
                 if( !aud_enc_params )
                 {
@@ -857,10 +863,12 @@ int obe_start( obe_t *h )
                 aud_enc_params->encoder = h->encoders[h->num_encoders];
 
                 input_stream = get_input_stream( h, h->output_streams[i].stream_id );
+                aud_enc_params->sample_format = input_stream->sample_format;
+                aud_enc_params->output_format = h->output_streams[i].stream_format;
                 aud_enc_params->bitrate = h->output_streams[i].bitrate;
                 aud_enc_params->sample_rate = input_stream->sample_rate;
                 aud_enc_params->num_channels = av_get_channel_layout_nb_channels( input_stream->channel_layout );
-                if( pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, twolame_encoder.start_encoder, (void*)aud_enc_params ) < 0 )
+                if( pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, audio_encoder.start_encoder, (void*)aud_enc_params ) < 0 )
                 {
                     fprintf( stderr, "Couldn't create encode thread \n" );
                     goto fail;

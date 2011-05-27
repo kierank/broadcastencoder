@@ -53,7 +53,7 @@ static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50"
 static const char * const input_video_connections[]  = { "sdi", "hdmi", "optical-sdi", "component", "composite", "s-video", 0 };
 static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", "analogue", 0 };
 static const char * const stream_actions[]           = { "passthrough", "encode", 0 };
-static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", 0 };
+static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", NULL };
@@ -413,9 +413,8 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 if( action )
                     parse_enum_value( action, stream_actions, &output_streams[stream_id].stream_action );
-
-                /* MP2 is all we support right now */
-                output_streams[stream_id].stream_format = AUDIO_MP2;
+                if( format )
+                    parse_enum_value( format, encode_formats, &output_streams[stream_id].stream_format );
                 output_streams[stream_id].bitrate = obe_otoi( bitrate, 0 );
             }
 
