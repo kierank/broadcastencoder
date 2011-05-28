@@ -308,8 +308,6 @@ void *open_muxer( void *ptr )
                 vbi_services[j].lines[0].field_parity = 1;
                 vbi_services[j].lines[0].line_offset = input_stream->frame_data[j].line_number;
             }
-            /* TODO: Handle teletext */
-
             if( ts_setup_dvb_vbi( w, stream->pid, input_stream->num_frame_data, vbi_services ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup VBI stream\n" );
