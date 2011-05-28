@@ -24,7 +24,8 @@
 #include "common/common.h"
 #include "vbi.h"
 
-#define DVB_VBI_DATA_IDENTIFIER 0x10
+#define DVB_VBI_DATA_IDENTIFIER  0x10
+#define SCTE_VBI_DATA_IDENTIFIER 0x99
 /* libzvbi input buffer must be mod 46... */
 #define DVB_VBI_MAX_SIZE 69967
 
