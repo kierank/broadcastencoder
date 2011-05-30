@@ -29,18 +29,17 @@
 
 static void *start_encoder( void *ptr )
 {
-    twolame_options *tl_opts = NULL;
     obe_aud_enc_params_t *enc_params = ptr;
     obe_t *h = enc_params->h;
     obe_encoder_t *encoder = enc_params->encoder;
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
+    twolame_options *tl_opts = NULL;
     int output_size, frame_size, num_channels;
     int64_t cur_pts = -1;
     int32_t *s32_data;
     short   *s16_data;
-    uint8_t output_buffer[MP2_AUDIO_BUFFER_SIZE];
-    uint8_t *output_pos;
+    uint8_t *output_buffer = NULL, *output_pos;
 
     /* Lock the mutex until we verify parameters */
     pthread_mutex_lock( &encoder->encoder_mutex );
@@ -71,6 +70,12 @@ static void *start_encoder( void *ptr )
     pthread_cond_broadcast( &encoder->encoder_cv );
     pthread_mutex_unlock( &encoder->encoder_mutex );
 
+    output_buffer = malloc( MP2_AUDIO_BUFFER_SIZE );
+    if( !output_buffer )
+    {
+        fprintf( stderr, "Malloc failed\n" );
+        goto end;
+    }
     while( 1 )
     {
         pthread_mutex_lock( &encoder->encoder_mutex );
@@ -158,6 +163,9 @@ static void *start_encoder( void *ptr )
     }
 
 end:
+    if( output_buffer )
+        free( output_buffer );
+
     if( tl_opts )
         twolame_close( &tl_opts );
     free( enc_params );
