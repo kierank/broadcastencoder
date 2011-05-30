@@ -63,4 +63,8 @@ const obe_non_display_data_location_t non_display_data_locations[] =
     { -1, -1 },
 };
 
+void v210_line_to_nv20_c( uint32_t *src, uint16_t *dst, int width );
+void v210_line_to_uyvy_c( uint32_t *src, uint16_t *dst, int width );
+void downscale_line_c( uint16_t *src, uint8_t *dst, int lines );
+
 #endif
