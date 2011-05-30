@@ -31,15 +31,14 @@ typedef struct
 {
     int obe_name;
     int lavc_name;
-    int frame_samples;
 } lavc_encoder_t;
 
 static const lavc_encoder_t lavc_encoders[] =
 {
-    { AUDIO_AC_3, CODEC_ID_AC3, AC3_NUM_SAMPLES },
-    /* TODO: E-AC3 */
-    //{ AUDIO_AAC,  CODEC_ID_AAC, AAC_NUM_SAMPLES },
-    { -1, -1, -1 },
+    { AUDIO_AC_3, CODEC_ID_AC3 },
+    //{ AUDIO_E_AC_3, CODEC_ID_EAC3 },
+    //{ AUDIO_AAC,  CODEC_ID_AAC },
+    { -1, -1 },
 };
 
 static void *start_encoder( void *ptr )
@@ -212,7 +211,7 @@ static void *start_encoder( void *ptr )
             add_to_mux_queue( h, coded_frame );
 
             /* We need to generate PTS because frame sizes have changed */
-            cur_pts += (double)lavc_encoders[i].frame_samples * 90000 / enc_params->sample_rate;
+            cur_pts += (double)codec->frame_size * 90000 / enc_params->sample_rate;
         }
 
         raw_frame->release_data( raw_frame );
