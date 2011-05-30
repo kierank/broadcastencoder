@@ -124,7 +124,7 @@ void *open_muxer( void *ptr )
 
     program.streams = calloc( 1, mux_params->num_output_streams * sizeof(*program.streams) );
     if( !program.streams )
-        goto fail;
+        goto end;
 
     program.num_streams = mux_params->num_output_streams;
 
@@ -209,6 +209,7 @@ void *open_muxer( void *ptr )
             stream->audio_frame_size = (double)AC3_NUM_SAMPLES * 90000LL / input_stream->sample_rate;
         else if( stream_format == AUDIO_AAC )
             stream->audio_frame_size = (double)AAC_NUM_SAMPLES * 90000LL / input_stream->sample_rate;
+        /* TODO: E-AC3 frame size */
     }
 
     /* Video stream isn't guaranteed to be first so populate program parameters here */
@@ -218,7 +219,7 @@ void *open_muxer( void *ptr )
     if( ts_setup_transport_stream( w, &params ) < 0 )
     {
         fprintf( stderr, "[ts] Transport stream setup failed\n" );
-        goto fail;
+        goto end;
     }
 
     /* setup any streams if necessary */
@@ -245,7 +246,7 @@ void *open_muxer( void *ptr )
                                            p_param->rc.i_vbv_max_bitrate_actual, p_param->rc.i_vbv_buffer_size_actual, 0 ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup video stream\n" );
-                goto fail;
+                goto end;
             }
         }
         else if( stream_format == AUDIO_AAC )
@@ -255,7 +256,7 @@ void *open_muxer( void *ptr )
             if( ts_setup_mpeg4_aac_stream( w, stream->pid, LIBMPEGTS_MPEG4_AAC_PROFILE_LEVEL_5, 5 ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup AAC stream\n" );
-                goto fail;
+                goto end;
             }
         }
         else if( stream_format == SUBTITLES_DVB )
@@ -269,7 +270,7 @@ void *open_muxer( void *ptr )
             if( ts_setup_dvb_subtitles( w, stream->pid, has_dds, 1, &subtitles ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup DVB Subtitle stream\n" );
-                goto fail;
+                goto end;
             }
         }
         else if( stream_format == MISC_TELETEXT )
@@ -281,14 +282,14 @@ void *open_muxer( void *ptr )
             if( ts_setup_dvb_teletext( w, stream->pid, 1, &teletext ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup Teletext stream\n" );
-                goto fail;
+                goto end;
             }
         }
         else if( stream_format == VBI_RAW )
         {
             vbi_services = calloc( 1, input_stream->num_frame_data * sizeof(*vbi_services) );
             if( !vbi_services )
-                goto fail;
+                goto end;
 
             for( int j = 0; j < input_stream->num_frame_data; j++ )
             {
@@ -299,25 +300,23 @@ void *open_muxer( void *ptr )
                 }
 
                 if( !vbi_services[j].data_service_id )
-                    goto fail;
+                    goto end;
 
                 vbi_services[j].num_lines = 1;
                 vbi_services[j].lines = malloc( sizeof(*vbi_services[j].lines) );
                 if( !vbi_services[j].lines )
-                    goto fail;
+                    goto end;
                 vbi_services[j].lines[0].field_parity = 1;
                 vbi_services[j].lines[0].line_offset = input_stream->frame_data[j].line_number;
             }
             if( ts_setup_dvb_vbi( w, stream->pid, input_stream->num_frame_data, vbi_services ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup VBI stream\n" );
-                goto fail;
+                goto end;
             }
             free( vbi_services );
         }
     }
-
-    FILE *fp = fopen( "test.ts", "wb" );
 
     while( 1 )
     {
@@ -326,6 +325,12 @@ void *open_muxer( void *ptr )
         int64_t lowest_pts = -1, largest_pts = -1;
 
         pthread_mutex_lock( &h->mux_mutex );
+
+        if( h->cancel_mux_thread )
+        {
+            pthread_mutex_unlock( &h->mux_mutex );
+            goto end;
+        }
 
         while( !video_found )
         {
@@ -349,13 +354,19 @@ void *open_muxer( void *ptr )
 
             if( !video_found )
                 pthread_cond_wait( &h->mux_cv, &h->mux_mutex );
+
+            if( h->cancel_mux_thread )
+            {
+                pthread_mutex_unlock( &h->mux_mutex );
+                goto end;
+            }
         }
 
         frames = calloc( 1, h->num_coded_frames * sizeof(*frames) );
         if( !frames )
         {
             pthread_mutex_unlock( &h->mux_mutex );
-            goto fail;
+            goto end;
         }
 
         //printf("\n START - queuelen %i \n", h->num_coded_frames);
@@ -405,7 +416,7 @@ void *open_muxer( void *ptr )
             if( !muxed_data )
             {
                 syslog( LOG_ERR, "Malloc failed\n" );
-                goto fail;
+                goto end;
             }
 
             memcpy( muxed_data->data, output, len );
@@ -414,7 +425,7 @@ void *open_muxer( void *ptr )
             {
                 syslog( LOG_ERR, "Malloc failed\n" );
                 destroy_muxed_data( muxed_data );
-                goto fail;
+                goto end;
             }
             memcpy( muxed_data->pcr_list, pcr_list, (len / 188) * sizeof(int64_t) );
             add_to_output_queue( h, muxed_data );
@@ -429,7 +440,7 @@ void *open_muxer( void *ptr )
         free( frames );
     }
 
-fail:
+end:
     ts_close_writer( w );
 
     /* TODO: clean more */
