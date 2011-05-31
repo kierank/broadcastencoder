@@ -24,6 +24,7 @@
 #include "common/common.h"
 #include "encoders/audio/audio.h"
 #include <twolame.h>
+#include <libavcodec/audioconvert.h>
 
 #define MP2_AUDIO_BUFFER_SIZE 50000
 
@@ -35,11 +36,11 @@ static void *start_encoder( void *ptr )
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
     twolame_options *tl_opts = NULL;
-    int output_size, frame_size, num_channels;
+    int output_size, frame_size;
     int64_t cur_pts = -1;
-    int32_t *s32_data;
-    short   *s16_data;
-    uint8_t *output_buffer = NULL, *output_pos;
+    uint8_t *output_buf = NULL, *output_pos;
+    void *audio_buf = NULL;
+    AVAudioConvert *audio_conv = NULL;
 
     /* Lock the mutex until we verify parameters */
     pthread_mutex_lock( &encoder->encoder_mutex );
@@ -70,12 +71,24 @@ static void *start_encoder( void *ptr )
     pthread_cond_broadcast( &encoder->encoder_cv );
     pthread_mutex_unlock( &encoder->encoder_mutex );
 
-    output_buffer = malloc( MP2_AUDIO_BUFFER_SIZE );
-    if( !output_buffer )
+    output_buf = malloc( MP2_AUDIO_BUFFER_SIZE );
+    if( !output_buf )
     {
         fprintf( stderr, "Malloc failed\n" );
         goto end;
     }
+
+    int in_stride = av_get_bits_per_sample_fmt( enc_params->sample_format ) / 8;
+    int out_stride = av_get_bits_per_sample_fmt( AV_SAMPLE_FMT_FLT ) / 8;
+
+    /* This works on "planar" audio so pretend it's just one audio plane */
+    audio_conv = av_audio_convert_alloc( AV_SAMPLE_FMT_FLT, 1, enc_params->sample_format, 1, NULL, 0 );
+    if( !audio_conv )
+    {
+        fprintf( stderr, "Malloc failed\n" );
+        goto end;
+    }
+
     while( 1 )
     {
         pthread_mutex_lock( &encoder->encoder_mutex );
@@ -101,34 +114,28 @@ static void *start_encoder( void *ptr )
         if( cur_pts == -1 )
             cur_pts = raw_frame->pts;
 
-        if( raw_frame->sample_fmt == AV_SAMPLE_FMT_S16 )
-            s16_data = (short*)raw_frame->data;
-        /* FIXME: is there a better way than dropping LSBs */
-        else if( raw_frame->sample_fmt == AV_SAMPLE_FMT_S32 )
+        in_stride = av_get_bits_per_sample_fmt( raw_frame->sample_fmt ) / 8;
+        int num_samples = raw_frame->len / in_stride;
+        int sample_bytes = num_samples * out_stride;
+        int istride[6] = { in_stride };
+        int ostride[6] = { out_stride };
+        const void *ibuf[6] = { raw_frame->data };
+
+        audio_buf = malloc( sample_bytes );
+        if( !audio_buf )
         {
-            s32_data = (int32_t*)raw_frame->data;
-            num_channels = av_get_channel_layout_nb_channels( raw_frame->channel_layout );
-            s16_data = malloc( num_channels * raw_frame->num_samples * sizeof(short) );
-            if( !s16_data )
-            {
-                syslog( LOG_ERR, "Malloc failed" );
-                goto end;
-            }
-            for( int i = 0; i < num_channels * raw_frame->num_samples; i++ )
-                s16_data[i] = s32_data[i] >> 16;
+            syslog( LOG_ERR, "Malloc failed\n" );
+            goto end;
         }
-        else //if( raw_frame->sample_fmt == AV_SAMPLE_FMT_AES )
+        void *obuf[6] = { audio_buf };
+
+        if( av_audio_convert( audio_conv, obuf, ostride, ibuf, istride, num_samples ) < 0 )
         {
-            // TODO
+            syslog( LOG_ERR, "[lavf] Could not convert audio sample format\n" );
+            goto end;
         }
 
-        output_size = twolame_encode_buffer_interleaved( tl_opts, s16_data, raw_frame->num_samples, output_buffer, MP2_AUDIO_BUFFER_SIZE );
-
-        if( raw_frame->sample_fmt != AV_SAMPLE_FMT_S16 && s16_data )
-        {
-            free( s16_data );
-            s16_data = NULL;
-        }
+        output_size = twolame_encode_buffer_float32_interleaved( tl_opts, audio_buf, raw_frame->num_samples, output_buf, MP2_AUDIO_BUFFER_SIZE );
 
         if( output_size < 0 )
         {
@@ -136,7 +143,7 @@ static void *start_encoder( void *ptr )
             goto end;
         }
 
-        output_pos = output_buffer;
+        output_pos = output_buf;
 
         /* Sometimes multiple frames will be output so split them up if necessary */
         while( output_size > 0 )
@@ -163,8 +170,14 @@ static void *start_encoder( void *ptr )
     }
 
 end:
-    if( output_buffer )
-        free( output_buffer );
+    if( output_buf )
+        free( output_buf );
+
+    if( audio_buf )
+        free( audio_buf );
+
+    if( audio_conv )
+        av_audio_convert_free( audio_conv );
 
     if( tl_opts )
         twolame_close( &tl_opts );
