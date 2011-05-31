@@ -139,6 +139,7 @@ void destroy_muxed_data( obe_muxed_data_t *muxed_data )
     free( muxed_data );
 }
 
+/** Add/Remove misc **/
 /**  Add/Remove misc **/
 void add_device( obe_t *h, obe_device_t *device )
 {
@@ -670,8 +671,12 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     if( param->b_interlaced )
         param->b_tff = stream->tff;
 
-    param->vui.i_sar_width  = stream->sar_num;
-    param->vui.i_sar_height = stream->sar_den;
+    if( stream->sar_num && stream->sar_den )
+    {
+        param->vui.i_sar_width  = stream->sar_num;
+        param->vui.i_sar_height = stream->sar_den;
+    }
+    /* TODO: use common PAL/NTSC SARs */
 
     param->vui.i_overscan = 2;
 
