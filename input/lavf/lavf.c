@@ -34,12 +34,6 @@
 
 /* FIXME: make 302M work */
 
-#define obe_free_packet( pkt )\
-{\
-    av_free_packet( pkt );\
-    av_init_packet( pkt );\
-}
-
 typedef struct
 {
     int stream_id;
