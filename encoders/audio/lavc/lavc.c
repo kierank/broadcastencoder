@@ -22,10 +22,11 @@
  ******************************************************************************/
 
 #include "common/common.h"
+#include "common/lavc.h"
 #include "encoders/audio/audio.h"
 #include <libavutil/fifo.h>
 #include <libavcodec/audioconvert.h>
-#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
 
 typedef struct
 {
@@ -37,7 +38,7 @@ static const lavc_encoder_t lavc_encoders[] =
 {
     { AUDIO_AC_3, CODEC_ID_AC3 },
     //{ AUDIO_E_AC_3, CODEC_ID_EAC3 },
-    //{ AUDIO_AAC,  CODEC_ID_AAC },
+    { AUDIO_AAC,  CODEC_ID_AAC },
     { -1, -1 },
 };
 
@@ -49,20 +50,55 @@ static void *start_encoder( void *ptr )
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
     int64_t cur_pts = -1;
-    int i, frame_size, frame_samples_size;
+    int i, frame_size, frame_samples_size, first_aac = 0;
     void *audio_buf = NULL, *samples = NULL;
     AVFifoBuffer *fifo = NULL;
-    uint8_t *output_buffer = NULL;
+    uint8_t *output_buf = NULL, *avio_buf = NULL;
     AVAudioConvert *audio_conv = NULL;
+    AVFormatContext *fmt = NULL;
+    AVStream *st = NULL;
+    AVPacket pkt;
+    AVIOContext *avio = NULL;
+    AVCodecContext *codec = NULL;
 
     avcodec_init();
     avcodec_register_all();
 
-    AVCodecContext *codec = avcodec_alloc_context();
-    if( !codec )
+    /* AAC audio needs ADTS encapsulation */
+    if( enc_params->output_format == AUDIO_AAC )
     {
-        fprintf( stderr, "Malloc failed\n" );
-        goto finish;
+        av_register_all();
+
+        fmt = avformat_alloc_context();
+        if( !fmt )
+        {
+            fprintf( stderr, "Malloc failed\n" );
+            goto finish;
+        }
+
+        fmt->oformat = av_guess_format( "adts", NULL, NULL );
+        if( !fmt->oformat )
+        {
+            fprintf( stderr, "ADTS muxer not found\n" );
+            goto finish;
+        }
+
+        st = av_new_stream( fmt, 0 );
+        if( !st )
+        {
+            fprintf( stderr, "Malloc failed\n" );
+            goto finish;
+        }
+        codec = st->codec;
+    }
+    else
+    {
+        codec = avcodec_alloc_context();
+        if( !codec )
+        {
+            fprintf( stderr, "Malloc failed\n" );
+            goto finish;
+        }
     }
 
     for( i = 0; lavc_encoders[i].obe_name != -1; i++ )
@@ -84,9 +120,15 @@ static void *start_encoder( void *ptr )
         goto finish;
     }
 
+    if( enc->sample_fmts[0] == -1 )
+    {
+        fprintf( stderr, "[lavc] No valid sample formats\n" );
+        goto finish;
+    }
+
     codec->sample_rate = enc_params->sample_rate;
     codec->bit_rate = enc_params->bitrate * 1000;
-    codec->sample_fmt = AV_SAMPLE_FMT_FLT;
+    codec->sample_fmt = enc->sample_fmts[0];
     codec->channels = enc_params->num_channels;
     codec->channel_layout = AV_CH_LAYOUT_STEREO;
 
@@ -97,7 +139,7 @@ static void *start_encoder( void *ptr )
     }
 
     int in_stride = av_get_bits_per_sample_fmt( enc_params->sample_format ) / 8;
-    int out_stride = av_get_bits_per_sample_fmt( AV_SAMPLE_FMT_FLT ) / 8;
+    int out_stride = av_get_bits_per_sample_fmt( enc->sample_fmts[0] ) / 8;
 
     fifo = av_fifo_alloc( OBE_MAX_CHANNELS * codec->frame_size * in_stride * 2 );
     if( !fifo )
@@ -107,15 +149,15 @@ static void *start_encoder( void *ptr )
     }
 
     /* This works on "planar" audio so pretend it's just one audio plane */
-    audio_conv = av_audio_convert_alloc( AV_SAMPLE_FMT_FLT, 1, enc_params->sample_format, 1, NULL, 0 );
+    audio_conv = av_audio_convert_alloc( enc->sample_fmts[0], 1, enc_params->sample_format, 1, NULL, 0 );
     if( !audio_conv )
     {
         fprintf( stderr, "Malloc failed\n" );
         goto finish;
     }
 
-    output_buffer = malloc( FF_MIN_BUFFER_SIZE );
-    if( !output_buffer )
+    output_buf = malloc( FF_MIN_BUFFER_SIZE );
+    if( !output_buf )
     {
         fprintf( stderr, "Malloc failed\n" );
         goto finish;
@@ -192,11 +234,31 @@ static void *start_encoder( void *ptr )
         {
             av_fifo_generic_read( fifo, samples, frame_samples_size, NULL );
 
-            frame_size = avcodec_encode_audio( codec, output_buffer, FF_MIN_BUFFER_SIZE, samples );
+            frame_size = avcodec_encode_audio( codec, output_buf, FF_MIN_BUFFER_SIZE, samples );
             if( frame_size < 0 )
             {
                 syslog( LOG_ERR, "[lavf] Audio encoding failed\n" );
                 goto finish;
+            }
+
+            /* Encapsulate AAC frames in ADTS */
+            if( enc_params->output_format == AUDIO_AAC )
+            {
+                pkt.size = frame_size;
+                pkt.data = output_buf;
+
+                /* Allocate a dynamic memory buffer with avio */
+                if( avio_open_dyn_buf( &avio ) )
+                {
+                    syslog( LOG_ERR, "Malloc failed\n" );
+                    goto finish;
+                }
+                fmt->pb = avio;
+                /* TODO: handle fails */
+                av_write_header( fmt );
+                av_write_frame( fmt, &pkt );
+                obe_free_packet( &pkt );
+                frame_size = avio_close_dyn_buf( avio, &avio_buf );
             }
 
             coded_frame = new_coded_frame( encoder->stream_id, frame_size );
@@ -206,7 +268,14 @@ static void *start_encoder( void *ptr )
                 goto finish;
             }
 
-            memcpy( coded_frame->data, output_buffer, frame_size );
+            if( enc_params->output_format == AUDIO_AAC )
+            {
+                memcpy( coded_frame->data, avio_buf, frame_size );
+                av_free( avio_buf );
+            }
+            else
+                memcpy( coded_frame->data, output_buf, frame_size );
+
             coded_frame->pts = cur_pts;
             add_to_mux_queue( h, coded_frame );
 
@@ -220,25 +289,38 @@ static void *start_encoder( void *ptr )
     }
 
 finish:
+    if( audio_buf )
+        free( audio_buf );
+
+    if( samples )
+        free( samples );
+
     if( fifo )
         av_fifo_free( fifo );
 
-    if( output_buffer )
-        free( output_buffer );
+    if( output_buf )
+        free( output_buf );
+
+    if( avio_buf )
+        av_free( avio_buf );
 
     if( audio_conv )
         av_audio_convert_free( audio_conv );
 
-    if( audio_buf )
-
-    if( samples )
-        free( samples );
+    if( fmt )
+        avformat_free_context( fmt );
 
     if( codec )
     {
         avcodec_close( codec );
         av_free( codec );
     }
+
+    if( st )
+        av_free( st );
+
+    if( fmt )
+        av_free( fmt );
 
     free( enc_params );
 

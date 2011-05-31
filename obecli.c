@@ -53,7 +53,7 @@ static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50"
 static const char * const input_video_connections[]  = { "sdi", "hdmi", "optical-sdi", "component", "composite", "s-video", 0 };
 static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", "analogue", 0 };
 static const char * const stream_actions[]           = { "passthrough", "encode", 0 };
-static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", 0 };
+static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", "", "aac-experimental", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", NULL };
@@ -672,7 +672,9 @@ static int start_encode( char *command, obecli_command_t *child )
         }
         else if( program.streams[i].stream_type == STREAM_TYPE_AUDIO )
         {
-            if( output_streams[i].stream_action == STREAM_PASSTHROUGH && program.streams[i].stream_format == AUDIO_PCM )
+            if( output_streams[i].stream_action == STREAM_PASSTHROUGH && program.streams[i].stream_format == AUDIO_PCM &&
+                output_streams[i].stream_format != AUDIO_MP2 && output_streams[i].stream_format != AUDIO_AC_3 &&
+                output_streams[i].stream_format != AUDIO_AAC )
             {
                 fprintf( stderr, "Uncompressed audio cannot yet be placed in TS\n" );
                 return -1;
