@@ -47,7 +47,7 @@ void v210_line_to_nv20_c( uint32_t *src, uint16_t *dst, int width )
         READ_PIXELS( dst, uv, dst );
     }
 
-    if( w < width - 1)
+    if( w < width - 1 )
     {
         READ_PIXELS(uv, dst, uv);
 
