@@ -713,6 +713,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
 
     x264_param_apply_profile( param, "high" );
     param->sc.f_speed = 1.0;
+    param->sc.b_alt_timer = 1;
     param->b_aud = 1;
     param->i_nal_hrd = X264_NAL_HRD_FAKE_VBR;
     //param->i_log_level = X264_LOG_NONE;
