@@ -140,7 +140,6 @@ void destroy_muxed_data( obe_muxed_data_t *muxed_data )
 }
 
 /** Add/Remove misc **/
-/**  Add/Remove misc **/
 void add_device( obe_t *h, obe_device_t *device )
 {
     pthread_mutex_lock( &h->device_list_mutex );
@@ -848,7 +847,8 @@ int obe_start( obe_t *h )
                     goto fail;
                 }
             }
-            else if( h->output_streams[i].stream_format == AUDIO_MP2 || h->output_streams[i].stream_format == AUDIO_AC_3 )
+            else if( h->output_streams[i].stream_format == AUDIO_MP2 || h->output_streams[i].stream_format == AUDIO_AC_3 ||
+                     h->output_streams[i].stream_format == AUDIO_AAC )
             {
                 if( h->output_streams[i].stream_format == AUDIO_MP2 )
                     audio_encoder = twolame_encoder;
