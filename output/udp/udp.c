@@ -25,6 +25,7 @@
 #include "common/common.h"
 #include "output/output.h"
 #include "udp.h"
+#include <libavutil/fifo.h>
 
 typedef struct
 {
@@ -322,7 +323,7 @@ int udp_write( hnd_t handle, uint8_t *buf, int size )
 
     if( ret < 0 )
     {
-        // TODO syslog
+        syslog( LOG_WARNING, "UDP packet failed to send" );
         return -1;
     }
 
@@ -356,10 +357,30 @@ static void *open_output( void *ptr )
     int num_muxed_data = 0;
     obe_muxed_data_t **muxed_data;
     int64_t last_pcr = -1, last_clock = -1, delta, mpegtime;
+    AVFifoBuffer *fifo_data = NULL, *fifo_pcr = NULL;
+    uint8_t udp_buf[TS_PACKETS_SIZE];
+
+    struct sched_param param = {0};
+    param.sched_priority = 50;
+    pthread_setschedparam( pthread_self(), SCHED_RR, &param );
 
     status.output_params = output_params;
     status.udp_handle = &udp_handle;
     pthread_cleanup_push( close_output, (void*)&status );
+
+    fifo_data = av_fifo_alloc( TS_PACKETS_SIZE );
+    if( !fifo_data )
+    {
+        fprintf( stderr, "[udp] Could not allocate data fifo" );
+        return NULL;
+    }
+
+    fifo_pcr = av_fifo_alloc( 7 * sizeof(int64_t) );
+    if( !fifo_pcr )
+    {
+        fprintf( stderr, "[udp] Could not allocate pcr fifo" );
+        return NULL;
+    }
 
     if( udp_open( &udp_handle, target ) < 0 )
     {
@@ -369,8 +390,6 @@ static void *open_output( void *ptr )
 
     while( 1 )
     {
-        int64_t wait = get_wallclock_in_mpeg_ticks();
-
         pthread_mutex_lock( &h->output_mutex );
         if( !h->num_muxed_data )
             pthread_cond_wait( &h->output_cv, &h->output_mutex );
@@ -380,42 +399,46 @@ static void *open_output( void *ptr )
         muxed_data = malloc( num_muxed_data * sizeof(*muxed_data) );
         if( !muxed_data )
         {
-            // TODO fail
             pthread_mutex_unlock( &h->output_mutex );
+            syslog( LOG_ERR, "Malloc failed\n" );
+            return NULL;
         }
         memcpy( muxed_data, h->muxed_data, num_muxed_data * sizeof(*muxed_data) );
         pthread_mutex_unlock( &h->output_mutex );
 
-        //printf("\n START \n");
+        printf("\n START \n" );
 
         for( int i = 0; i < num_muxed_data; i++ )
         {
-            while( muxed_data[i]->bytes_left > 0 )
+            if( av_fifo_realloc2( fifo_data, av_fifo_size( fifo_data ) + muxed_data[i]->len ) < 0 )
             {
-                if( last_clock != -1 )
-                {
-                    delta = muxed_data[i]->pcr_list_pos[0] - last_pcr;
-                    mpegtime = get_wallclock_in_mpeg_ticks();
-                    if( last_clock + delta >= mpegtime )
-                        sleep_mpeg_ticks( mpegtime - delta - last_clock );
-#if 0
-                    else
-                        printf("\n behind1 %f \n", (double)(last_clock + delta - mpegtime)/27000000 );
-#endif
-                }
-                last_pcr = muxed_data[i]->pcr_list_pos[0];
-                last_clock = get_wallclock_in_mpeg_ticks();
-                udp_write( udp_handle, muxed_data[i]->cur_pos, MIN( muxed_data[i]->bytes_left, TS_PACKETS_SIZE ) ); // handle fail
-                muxed_data[i]->cur_pos += TS_PACKETS_SIZE;
-                muxed_data[i]->bytes_left -= TS_PACKETS_SIZE;
-                muxed_data[i]->pcr_list_pos += 7;
+                syslog( LOG_ERR, "Malloc failed\n" );
+                return NULL;
             }
+
+            av_fifo_generic_write( fifo_data, muxed_data[i]->data, muxed_data[i]->len, NULL );
+
+            if( av_fifo_realloc2( fifo_pcr, av_fifo_size( fifo_pcr ) + ((muxed_data[i]->len * sizeof(int64_t)) / 188) ) < 0 )
+            {
+                syslog( LOG_ERR, "Malloc failed\n" );
+                return NULL;
+            }
+
+            av_fifo_generic_write( fifo_pcr, muxed_data[i]->pcr_list, (muxed_data[i]->len * sizeof(int64_t)) / 188, NULL );
 
             remove_from_output_queue( h );
             destroy_muxed_data( muxed_data[i] );
         }
 
         free( muxed_data );
+        num_muxed_data = 0;
+
+        while( av_fifo_size( fifo_data ) >= TS_PACKETS_SIZE )
+        {
+            av_fifo_generic_read( fifo_data, udp_buf, TS_PACKETS_SIZE, NULL );
+            av_fifo_generic_read( fifo_pcr, pcrs, 7 * sizeof(int64_t), NULL );
+            udp_write( udp_handle, udp_buf, TS_PACKETS_SIZE ); // TODO handle fail
+        }
     }
 
     pthread_cleanup_pop( 1 );

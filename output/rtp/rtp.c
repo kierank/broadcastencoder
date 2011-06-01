@@ -29,6 +29,7 @@
 #include "output/output.h"
 #include "output/udp/udp.h"
 #include "common/bitstream.h"
+#include <libavutil/fifo.h>
 
 #define RTP_VERSION 2
 #define MPEG_TS_PAYLOAD_TYPE 33
@@ -175,10 +176,31 @@ static void *open_output( void *ptr )
     int num_muxed_data = 0;
     obe_muxed_data_t **muxed_data;
     int64_t last_pcr = -1, last_clock = -1, delta, mpegtime;
+    AVFifoBuffer *fifo_data = NULL, *fifo_pcr = NULL;
+    uint8_t rtp_buf[TS_PACKETS_SIZE];
+    int64_t pcrs[TS_PACKETS_SIZE/188];
+
+    struct sched_param param = {0};
+    param.sched_priority = 50;
+    pthread_setschedparam( pthread_self(), SCHED_RR, &param );
 
     status.output_params = output_params;
     status.rtp_handle = &rtp_handle;
     pthread_cleanup_push( close_output, (void*)&status );
+
+    fifo_data = av_fifo_alloc( TS_PACKETS_SIZE );
+    if( !fifo_data )
+    {
+        fprintf( stderr, "[udp] Could not allocate data fifo" );
+        return NULL;
+    }
+
+    fifo_pcr = av_fifo_alloc( 7 * sizeof(int64_t) );
+    if( !fifo_pcr )
+    {
+        fprintf( stderr, "[udp] Could not allocate pcr fifo" );
+        return NULL;
+    }
 
     if( rtp_open( &rtp_handle, target ) < 0 )
         return NULL;
@@ -194,36 +216,45 @@ static void *open_output( void *ptr )
         muxed_data = malloc( num_muxed_data * sizeof(*muxed_data) );
         if( !muxed_data )
         {
-            // TODO fail
+            // FIXME fail
+            pthread_mutex_unlock( &h->output_mutex );
         }
         memcpy( muxed_data, h->muxed_data, num_muxed_data * sizeof(*muxed_data) );
         pthread_mutex_unlock( &h->output_mutex );
 
+        //printf("\n START \n" );
+
         for( int i = 0; i < num_muxed_data; i++ )
         {
-            while( muxed_data[i]->bytes_left > 0 )
+            if( av_fifo_realloc2( fifo_data, av_fifo_size( fifo_data ) + muxed_data[i]->len ) < 0 )
             {
-                if( last_clock != -1 )
-                {
-                    delta = muxed_data[i]->pcr_list_pos[0] - last_pcr;
-                    mpegtime = get_wallclock_in_mpeg_ticks();
-                    if( last_clock + delta >= mpegtime )
-                        sleep_mpeg_ticks( mpegtime - delta - last_clock );
-                }
-                last_pcr = muxed_data[i]->pcr_list_pos[0];
-                last_clock = get_wallclock_in_mpeg_ticks();
-                write_rtp_pkt( rtp_handle, muxed_data[i]->cur_pos, MIN( muxed_data[i]->bytes_left, TS_PACKETS_SIZE ),
-                               muxed_data[i]->pcr_list_pos[0] / 300 ); // handle fail
-                muxed_data[i]->cur_pos += MIN( muxed_data[i]->bytes_left, TS_PACKETS_SIZE );
-                muxed_data[i]->bytes_left -= MIN( muxed_data[i]->bytes_left, TS_PACKETS_SIZE );
-                muxed_data[i]->pcr_list_pos += 7;
+                syslog( LOG_ERR, "Malloc failed\n" );
+                return NULL;
             }
+
+            av_fifo_generic_write( fifo_data, muxed_data[i]->data, muxed_data[i]->len, NULL );
+
+            if( av_fifo_realloc2( fifo_pcr, av_fifo_size( fifo_pcr ) + ((muxed_data[i]->len * sizeof(int64_t)) / 188) ) < 0 )
+            {
+                syslog( LOG_ERR, "Malloc failed\n" );
+                return NULL;
+            }
+
+            av_fifo_generic_write( fifo_pcr, muxed_data[i]->pcr_list, (muxed_data[i]->len * sizeof(int64_t)) / 188, NULL );
 
             remove_from_output_queue( h );
             destroy_muxed_data( muxed_data[i] );
         }
 
         free( muxed_data );
+        num_muxed_data = 0;
+
+        while( av_fifo_size( fifo_data ) >= TS_PACKETS_SIZE )
+        {
+            av_fifo_generic_read( fifo_data, rtp_buf, TS_PACKETS_SIZE, NULL );
+            av_fifo_generic_read( fifo_pcr, pcrs, 7 * sizeof(int64_t), NULL );
+            write_rtp_pkt( rtp_handle, rtp_buf, TS_PACKETS_SIZE, pcrs[0] ); // TODO handle fail
+        }
     }
 
     pthread_cleanup_pop( 1 );
