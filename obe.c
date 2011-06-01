@@ -117,7 +117,7 @@ obe_muxed_data_t *new_muxed_data( int len )
     if( !muxed_data )
         return NULL;
 
-    muxed_data->bytes_left = len;
+    muxed_data->len = len;
     muxed_data->data = malloc( len );
     if( !muxed_data->data )
     {

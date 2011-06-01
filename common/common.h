@@ -314,7 +314,7 @@ typedef struct
 
 typedef struct
 {
-    int bytes_left;
+    int len;
     uint8_t *data;
     uint8_t *cur_pos;
 

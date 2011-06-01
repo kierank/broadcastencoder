@@ -359,6 +359,7 @@ static void *open_output( void *ptr )
     int64_t last_pcr = -1, last_clock = -1, delta, mpegtime;
     AVFifoBuffer *fifo_data = NULL, *fifo_pcr = NULL;
     uint8_t udp_buf[TS_PACKETS_SIZE];
+    int64_t pcrs[TS_PACKETS_SIZE/188];
 
     struct sched_param param = {0};
     param.sched_priority = 50;
@@ -406,7 +407,7 @@ static void *open_output( void *ptr )
         memcpy( muxed_data, h->muxed_data, num_muxed_data * sizeof(*muxed_data) );
         pthread_mutex_unlock( &h->output_mutex );
 
-        printf("\n START \n" );
+        //printf("\n START \n" );
 
         for( int i = 0; i < num_muxed_data; i++ )
         {
