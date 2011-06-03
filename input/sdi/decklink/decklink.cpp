@@ -42,29 +42,6 @@ const static obe_line_number_t first_line[] =
     { -1, -1 },
 };
 
-/* PCIe 1x devices can only provide data after the switching point */
-const static obe_line_number_t post_switch_point_line[] =
-{
-    { INPUT_VIDEO_FORMAT_PAL,         7 },
-    { INPUT_VIDEO_FORMAT_NTSC,       11 },
-    { INPUT_VIDEO_FORMAT_720P_50,     8 },
-    { INPUT_VIDEO_FORMAT_720P_5994,   8 },
-    { INPUT_VIDEO_FORMAT_720P_60,     8 },
-    { INPUT_VIDEO_FORMAT_1080I_50,    8 },
-    { INPUT_VIDEO_FORMAT_1080I_5994,  8 },
-    { INPUT_VIDEO_FORMAT_1080I_60,    8 },
-    { INPUT_VIDEO_FORMAT_1080P_2398,  8 },
-    { INPUT_VIDEO_FORMAT_1080P_24,    8 },
-    { INPUT_VIDEO_FORMAT_1080P_25,    8 },
-    { INPUT_VIDEO_FORMAT_1080P_2997,  8 },
-    { INPUT_VIDEO_FORMAT_1080P_30,    8 },
-    { INPUT_VIDEO_FORMAT_1080P_50,    8 },
-    { INPUT_VIDEO_FORMAT_1080P_5994,  8 },
-    { INPUT_VIDEO_FORMAT_1080P_60,    8 },
-    /* (Unsurprisingly) SMPTE RP-168 does not provide any information about 2K formats */
-    { -1, -1 },
-};
-
 struct obe_to_decklink
 {
     int obe_name;
