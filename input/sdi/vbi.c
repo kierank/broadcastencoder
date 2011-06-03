@@ -22,6 +22,7 @@
  *****************************************************************************/
 
 #include "common/common.h"
+#include "sdi.h"
 #include "vbi.h"
 
 #define DVB_VBI_DATA_IDENTIFIER  0x10

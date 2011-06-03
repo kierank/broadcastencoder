@@ -22,7 +22,6 @@
  *
  *****************************************************************************/
 
-#include "sdi.h"
 #include <libavutil/bswap.h>
 
 #define READ_PIXELS(a, b, c)         \
@@ -34,7 +33,7 @@
     } while (0)
 
 /* Convert v210 to the native HD-SDI pixel format. */
-void v210_line_to_nv20_c( uint32_t *src, uint16_t *dst, int width )
+void obe_v210_line_to_nv20_c( uint32_t *src, uint16_t *dst, int width )
 {
     int w;
     uint32_t val;
@@ -68,7 +67,7 @@ void v210_line_to_nv20_c( uint32_t *src, uint16_t *dst, int width )
 
 /* Convert v210 to the native SD-SDI pixel format.
  * Width is always 720 samples */
-void v210_line_to_uyvy_c( uint32_t *src, uint16_t *dst, int width )
+void obe_v210_line_to_uyvy_c( uint32_t *src, uint16_t *dst, int width )
 {
     uint32_t val;
     for( int i = 0; i < width; i += 6 )
@@ -82,7 +81,7 @@ void v210_line_to_uyvy_c( uint32_t *src, uint16_t *dst, int width )
 
 /* Downscale 10-bit lines to 8-bit lines for processing by libzvbi.
  * Width is always 720*2 samples */
-void downscale_line_c( uint16_t *src, uint8_t *dst, int lines )
+void obe_downscale_line_c( uint16_t *src, uint8_t *dst, int lines )
 {
     for( int i = 0; i < 720*2*lines; i++ )
         dst[i] = src[i] >> 2;

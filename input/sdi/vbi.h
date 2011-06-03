@@ -24,8 +24,6 @@
 #ifndef OBE_VBI_H
 #define OBE_VBI_H
 
-#include "input/sdi/sdi.h"
-
 #define NUM_VBI_LINES 2
 
 int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data, int ntsc );

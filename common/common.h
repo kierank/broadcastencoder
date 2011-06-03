@@ -51,6 +51,11 @@
 #define MIN(a,b) ( (a)<(b) ? (a) : (b) )
 #define MAX(a,b) ( (a)>(b) ? (a) : (b) )
 
+#define IS_SD(x) (x == INPUT_VIDEO_FORMAT_PAL || x == INPUT_VIDEO_FORMAT_NTSC)
+#define IS_INTERLACED(x) (IS_SD(x) || x == INPUT_VIDEO_FORMAT_1080I_50 || \
+                          INPUT_VIDEO_FORMAT_1080I_5994 || x == INPUT_VIDEO_FORMAT_1080I_60)
+#define IS_PROGRESSIVE(x) (!IS_INTERLACED(x))
+
 /* Audio formats */
 #define AC3_NUM_SAMPLES 1536
 #define MP2_NUM_SAMPLES 1152
