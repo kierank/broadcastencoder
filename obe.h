@@ -78,11 +78,6 @@ enum input_video_format
     INPUT_VIDEO_FORMAT_1080P_50,
     INPUT_VIDEO_FORMAT_1080P_5994,
     INPUT_VIDEO_FORMAT_1080P_60, /* NB: actually 60.00Hz */
-
-    /* 2K Modes */
-    INPUT_VIDEO_FORMAT_2K_2398,
-    INPUT_VIDEO_FORMAT_2K_24,
-    INPUT_VIDEO_FORMAT_2K_25,
 };
 
 enum input_type_e
