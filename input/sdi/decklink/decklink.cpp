@@ -387,8 +387,6 @@ static void close_card( decklink_opts_t *decklink_opts )
 {
     decklink_ctx_t *decklink_ctx = &decklink_opts->decklink_ctx;
 
-    /* FIXME: this should NOT crash when the wrong video format is chosen */
-
     if( decklink_ctx->p_config )
         decklink_ctx->p_config->Release();
 
@@ -410,7 +408,7 @@ static void close_card( decklink_opts_t *decklink_opts )
         av_free( decklink_ctx->codec );
     }
 
-    if( decklink_opts->video_format == INPUT_VIDEO_FORMAT_PAL || decklink_opts->video_format == INPUT_VIDEO_FORMAT_NTSC )
+    if( IS_SD( decklink_opts->video_format ) )
         vbi_raw_decoder_destroy( &decklink_ctx->non_display_parser.vbi_decoder );
 }
 
