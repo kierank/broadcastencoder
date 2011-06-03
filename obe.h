@@ -145,6 +145,7 @@ enum stream_formats_e
     ANC_DTV_PROGRAM_DESCRIPTION,
     ANC_DTV_DATA_BROADCAST,
     ANC_SMPTE_VBI,
+    ANC_SCTE_104,
 };
 
 typedef struct

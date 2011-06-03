@@ -28,30 +28,43 @@
 
 typedef struct
 {
-    int did;
-    int sdid;
+    uint8_t did;
+    uint8_t sdid;
     int type;
 } obe_anc_identifier_t;
 
-obe_anc_identifier_t anc_identifiers =
+const obe_anc_identifier_t vanc_identifiers[] =
 {
-    { 0x41, 0x5, MISC_AFD },
-    { 0x41, 0x6, MISC_PAN_SCAN },
-    { 0x41, 0x8, ANC_DVB_SCTE_VBI },
+    /* SMPTE 2016 */
+    { 0x41, 0x05, MISC_AFD },
+    { 0x41, 0x06, MISC_PAN_SCAN },
 
-    { 0x43, 0x1, ANC_OP47_SDP },
-    { 0x43, 0x2, ANC_OP47_MULTI_PACKET },
+    /* SMPTE 2010 */
+    { 0x41, 0x07, ANC_SCTE_104 },
 
+    /* SMPTE 2031 */
+    { 0x41, 0x08, ANC_DVB_SCTE_VBI },
+
+    /* OP-47 / SMPTE RDD-8 */
+    { 0x43, 0x01, ANC_OP47_SDP },
+    { 0x43, 0x02, ANC_OP47_MULTI_PACKET },
+
+    /* SMPTE 12M */
     { 0x60, 0x60, ANC_ATC },
 
-    { 0x61, 0x1, SUBTITLES_CEA_708 },
-    { 0x61, 0x1, SUBTITLES_CEA_608 },
+    /* SMPTE 334 */
+    { 0x61, 0x01, CAPTIONS_CEA_708 },
+    { 0x61, 0x02, CAPTIONS_CEA_608 },
 
-    { 0x62, 0x1, ANC_DTV_PROGRAM_DESCRIPTION },
-    { 0x62, 0x2, ANC_DTV_DATA_BROADCAST },
-    { 0x62, 0x3, ANC_SMPTE_VBI },
+    /* SMPTE RP-207 */
+    { 0x62, 0x01, ANC_DTV_PROGRAM_DESCRIPTION },
+
+    { 0x62, 0x02, ANC_DTV_DATA_BROADCAST },
+
+    /* SMPTE RP-208 (legacy) */
+    { 0x62, 0x03, ANC_SMPTE_VBI },
 
     { 0, 0, 0 },
-}
+};
 
 #endif
