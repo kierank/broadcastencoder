@@ -35,10 +35,12 @@ extern "C"
 #include "include/DeckLinkAPI.h"
 #include "include/DeckLinkAPIDispatch.cpp"
 
-const static obe_line_number_t first_line[] =
+
+/* FIXME: is the first active line consistent among cards? */
+const static obe_line_number_t decklink_sd_first_active_line[] =
 {
-    { INPUT_VIDEO_FORMAT_PAL,         23 },
-    { INPUT_VIDEO_FORMAT_NTSC,       283 },
+    { INPUT_VIDEO_FORMAT_PAL,   23 },
+    { INPUT_VIDEO_FORMAT_NTSC, 283 },
     { -1, -1 },
 };
 
@@ -739,7 +741,8 @@ static void *probe_stream( void *ptr )
             vbi_stream_services++;
     }
 
-    for( int i = 0; i < 2+!!vbi_stream_services; i++ )
+    num_streams = 2+!!vbi_stream_services;
+    for( int i = 0; i < num_streams; i++ )
     {
         streams[i] = (obe_int_input_stream_t*)calloc( 1, sizeof(*streams[i]) );
         if( !streams[i] )
@@ -763,7 +766,7 @@ static void *probe_stream( void *ptr )
             streams[i]->tff = decklink_opts->tff;
             streams[i]->sar_num = streams[i]->sar_den = 1; /* The user can choose this when encoding */
 
-            if( add_vbi_services( non_display_parser, streams[i], USER_DATA_LOCATION_FRAME ) < 0 )
+            if( add_non_display_services( non_display_parser, streams[i], USER_DATA_LOCATION_FRAME ) < 0 )
                 goto finish;
         }
         else if( i == 1 )
@@ -778,10 +781,9 @@ static void *probe_stream( void *ptr )
         {
             streams[i]->stream_type = STREAM_TYPE_MISC;
             streams[i]->stream_format = VBI_RAW;
-            if( add_vbi_services( non_display_parser, streams[i], USER_DATA_LOCATION_DVB_STREAM ) < 0 )
+            if( add_non_display_services( non_display_parser, streams[i], USER_DATA_LOCATION_DVB_STREAM ) < 0 )
                 goto finish;
         }
-        num_streams++;
     }
 
     if( non_display_parser->num_frame_data )

@@ -24,10 +24,9 @@
 #ifndef OBE_VBI_H
 #define OBE_VBI_H
 
-#define NUM_VBI_LINES 2
+#define NUM_ACTIVE_VBI_LINES 4
 
 int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data, int ntsc );
 int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, obe_raw_frame_t *raw_frame );
-int add_vbi_services( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream, int location );
 
 #endif

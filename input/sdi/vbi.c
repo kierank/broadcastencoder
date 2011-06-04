@@ -179,32 +179,3 @@ fail:
     syslog( LOG_ERR, "Malloc failed\n" );
     return -1;
 }
-
-int add_vbi_services( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream, int location )
-{
-    int idx = 0, count = 0;
-
-    for( int i = 0; i < non_display_data->num_frame_data; i++ )
-    {
-        if( non_display_data->frame_data[i].location == location )
-            count++;
-    }
-
-    stream->num_frame_data = count;
-    stream->frame_data = calloc( 1, stream->num_frame_data * sizeof(*stream->frame_data) );
-    if( !stream->frame_data && stream->num_frame_data )
-        return -1;
-
-    for( int i = 0; i < non_display_data->num_frame_data; i++ )
-    {
-        if( non_display_data->frame_data[i].location == location )
-        {
-            stream->frame_data[idx].type = non_display_data->frame_data[i].type;
-            stream->frame_data[idx].source = non_display_data->frame_data[i].source;
-            stream->frame_data[idx].line_number = non_display_data->frame_data[i].line_number;
-            idx++;
-        }
-    }
-
-    return 0;
-}

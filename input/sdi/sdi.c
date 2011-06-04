@@ -26,10 +26,10 @@
 
 #define READ_PIXELS(a, b, c)         \
     do {                             \
-        val  = av_le2ne32(*src++);   \
-        *a++ =  val & 0x3FF;         \
-        *b++ = (val >> 10) & 0x3FF;  \
-        *c++ = (val >> 20) & 0x3FF;  \
+        val  = av_le2ne32( *src++ );   \
+        *a++ =  val & 0x3ff;         \
+        *b++ = (val >> 10) & 0x3ff;  \
+        *c++ = (val >> 20) & 0x3ff;  \
     } while (0)
 
 /* Convert v210 to the native HD-SDI pixel format. */
@@ -50,7 +50,7 @@ void obe_v210_line_to_nv20_c( uint32_t *src, uint16_t *dst, int width )
     {
         READ_PIXELS(uv, dst, uv);
 
-        val    = av_le2ne32(*src++);
+        val    = av_le2ne32( *src++ );
         *dst++ =  val & 0x3ff;
     }
 
@@ -59,7 +59,7 @@ void obe_v210_line_to_nv20_c( uint32_t *src, uint16_t *dst, int width )
         *uv++  = (val >> 10) & 0x3ff;
         *dst++ = (val >> 20) & 0x3ff;
 
-        val    = av_le2ne32(*src++);
+        val    = av_le2ne32( *src++ );
         *uv++  =  val & 0x3ff;
         *dst++ = (val >> 10) & 0x3ff;
     }
@@ -86,3 +86,35 @@ void obe_downscale_line_c( uint16_t *src, uint8_t *dst, int lines )
     for( int i = 0; i < 720*2*lines; i++ )
         dst[i] = src[i] >> 2;
 }
+
+int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream, int location )
+{
+    int idx = 0, count = 0;
+
+    for( int i = 0; i < non_display_data->num_frame_data; i++ )
+    {
+        if( non_display_data->frame_data[i].location == location )
+            count++;
+    }
+
+    stream->num_frame_data = count;
+    stream->frame_data = calloc( 1, stream->num_frame_data * sizeof(*stream->frame_data) );
+    if( !stream->frame_data && stream->num_frame_data )
+        return -1;
+
+    for( int i = 0; i < non_display_data->num_frame_data; i++ )
+    {
+        if( non_display_data->frame_data[i].location == location )
+        {
+            stream->frame_data[idx].type = non_display_data->frame_data[i].type;
+            stream->frame_data[idx].source = non_display_data->frame_data[i].source;
+            stream->frame_data[idx].line_number = non_display_data->frame_data[i].line_number;
+            idx++;
+        }
+    }
+
+    return 0;
+}
+
+/* TODO: write function for API that converts between SMPTE notation (e.g. Line 284)
+ * and analogue notation (e.g Line 21 Field 2) */

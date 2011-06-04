@@ -25,6 +25,7 @@
 #define OBE_SDI_H
 
 #include "common/common.h"
+#undef ZVBI_DEBUG
 #include <libzvbi.h>
 
 typedef struct
@@ -40,7 +41,9 @@ typedef struct
     /* Decoding */
     obe_coded_frame_t *dvb_frame;
 
-    /* TODO: start/end lines etc */
+    /* VBI */
+    int vbi_start;
+    int vbi_end;
 } obe_sdi_non_display_data_t;
 
 /* NB: Lines start from 1 */
@@ -98,5 +101,6 @@ const obe_non_display_data_location_t non_display_data_locations[] =
 void obe_v210_line_to_nv20_c( uint32_t *src, uint16_t *dst, int width );
 void obe_v210_line_to_uyvy_c( uint32_t *src, uint16_t *dst, int width );
 void obe_downscale_line_c( uint16_t *src, uint8_t *dst, int lines );
+int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream, int location );
 
 #endif
