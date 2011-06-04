@@ -318,6 +318,7 @@ static int write_afd( obe_user_data_t *user_data, obe_int_input_stream_t *input_
     const int country_code      = 0xb5;
     const int provider_code     = 0x31;
     const char *user_identifier = "DTG1";
+    int active_format_flag;
 
     /* TODO: when MPEG-2 is added make this do the right thing */
 
@@ -329,12 +330,13 @@ static int write_afd( obe_user_data_t *user_data, obe_int_input_stream_t *input_
     for( int i = 0; i < 4; i++ )
         bs_write( &r, 8, user_identifier[i] ); // user_identifier
 
+    active_format_flag = (user_data->data[0] >> 2) & 1;
     // afd_data()
     bs_write1( &r, 0 );   // '0'
-    bs_write1( &r, (user_data->data[0] >> 2) & 1 ); // active_format_flag
+    bs_write1( &r, active_format_flag ); // active_format_flag
     bs_write( &r, 6, 1 ); // reserved
 
-    if( (user_data->data[0] >> 2) & 1 )
+    if( active_format_flag )
     {
         bs_write( &r, 4, 0xf ); // reserved
         bs_write( &r, 4, ( user_data->data[0] >> 3) & 0xf ); // active_format
