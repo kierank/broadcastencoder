@@ -297,6 +297,16 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
         ancillary->Release();
 
+        if( !decklink_opts_->probe )
+        {
+            raw_frame = new_raw_frame();
+            if( !raw_frame )
+            {
+                syslog( LOG_ERR, "Malloc failed\n" );
+                goto end;
+            }
+        }
+
         anc_buf_pos = anc_buf;
         for( int i = 0; i < num_anc_lines; i++ )
         {
@@ -329,13 +339,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
         if( !decklink_opts_->probe )
         {
-            raw_frame = new_raw_frame();
-            if( !raw_frame )
-            {
-                syslog( LOG_ERR, "Malloc failed\n" );
-                goto end;
-            }
-
             decklink_ctx->codec->width = width;
             decklink_ctx->codec->height = height;
             decklink_ctx->codec->custom_stride = stride;
