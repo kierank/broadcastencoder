@@ -36,7 +36,7 @@ typedef struct
 const obe_anc_identifier_t vanc_identifiers[] =
 {
     /* SMPTE 2016 */
-    { 0x41, 0x05, MISC_AFD },
+    { 0x41, 0x05, MISC_AFD }, /* Includes Bar-Data */
     { 0x41, 0x06, MISC_PAN_SCAN },
 
     /* SMPTE 2010 */

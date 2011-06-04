@@ -132,12 +132,14 @@ enum stream_formats_e
     CAPTIONS_CEA_608,
     CAPTIONS_CEA_708,
     MISC_AFD,
+    MISC_BAR_DATA,
     MISC_PAN_SCAN,
 
     /* VBI */
     VBI_RAW,
 
     /* Ancillary */
+    ANC_GENERIC,
     ANC_DVB_SCTE_VBI,
     ANC_OP47_SDP,
     ANC_OP47_MULTI_PACKET,
