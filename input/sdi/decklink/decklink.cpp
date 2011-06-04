@@ -806,6 +806,8 @@ finish:
     if( decklink_opts )
         free( decklink_opts );
 
+    free( probe_ctx );
+
     return NULL;
 }
 

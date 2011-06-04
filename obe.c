@@ -513,7 +513,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     else
     {
         fprintf( stderr, "Invalid input device \n" );
-        goto fail;
+        return -1;
     }
 
     if( input_device->input_type == INPUT_URL && !input_device->location )
@@ -526,7 +526,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     if( !args )
     {
         fprintf( stderr, "Malloc failed \n" );
-        goto fail;
+        return -1;
     }
 
     args->h = h;
@@ -584,7 +584,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     if( !program->streams )
     {
         fprintf( stderr, "Malloc failed \n" );
-        goto fail;
+        return -1;
     }
 
     h->devices[h->num_devices-1]->probed_streams = program->streams;
