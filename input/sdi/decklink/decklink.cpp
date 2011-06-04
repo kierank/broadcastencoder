@@ -279,14 +279,14 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             }
 
             /* Convert from 10-bit YUV422P to 8-bit UYVY */
-            vbi_buf = (uint8_t*)malloc( raw_frame->img.width * 2 * NUM_VBI_LINES );
+            vbi_buf = (uint8_t*)malloc( raw_frame->img.width * 2 * NUM_ACTIVE_VBI_LINES );
             if( !vbi_buf )
             {
                 syslog( LOG_ERR, "Malloc failed\n" );
                 goto fail;
             }
             vbi_buf_pos = vbi_buf;
-            for( int i = 0; i < NUM_VBI_LINES; i++ )
+            for( int i = 0; i < NUM_ACTIVE_VBI_LINES; i++ )
             {
                 for( int j = 0; j < raw_frame->img.width/2; j++ )
                 {
