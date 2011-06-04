@@ -397,33 +397,18 @@ static int write_bar_data( obe_user_data_t *user_data, obe_int_input_stream_t *i
 
     pos = &user_data->data[1];
 
-    if( top )
-    {
-        bs_write( &r, 8, pos[0] );
-        bs_write( &r, 8, pos[1] );
-        pos += 2;
-    }
+#define WRITE_ELEMENT(x) \
+    if( (x) )\
+    {\
+        bs_write( &r, 8, pos[0] );\
+        bs_write( &r, 8, pos[1] );\
+        pos += 2;\
+    }\
 
-    if( bottom )
-    {
-        bs_write( &r, 8, pos[0] );
-        bs_write( &r, 8, pos[1] );
-        pos += 2;
-    }
-
-    if( left )
-    {
-        bs_write( &r, 8, pos[0] );
-        bs_write( &r, 8, pos[1] );
-        pos += 2;
-    }
-
-    if( right )
-    {
-        bs_write( &r, 8, pos[0] );
-        bs_write( &r, 8, pos[1] );
-        pos += 2;
-    }
+    WRITE_ELEMENT( top )
+    WRITE_ELEMENT( bottom )
+    WRITE_ELEMENT( left )
+    WRITE_ELEMENT( right )
 
     bs_flush( &r );
 
@@ -456,6 +441,8 @@ static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stre
 #endif
         else if( raw_frame->user_data[i].type == USER_DATA_AFD )
             write_afd( &raw_frame->user_data[i], input_stream );
+        else if( raw_frame->user_data[i].type == USER_DATA_BAR_DATA )
+            write_bar_data( &raw_frame->user_data[i], input_stream );
     }
 
     return 0;
