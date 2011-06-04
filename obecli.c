@@ -759,7 +759,7 @@ static int probe_device( char *command, obecli_command_t *child )
             for( int j = 0; j < stream->num_frame_data; j++ )
             {
                 format_name = get_format_name( stream->frame_data[j].type, format_names, 1 );
-                printf( "               %s:   %s\n", stream->frame_data[j].source == VBI_RAW ? "VBI" : "", format_name );
+                printf( "               %s:   %s\n", stream->frame_data[j].source == VBI_RAW ? "VBI" : "VANC", format_name );
             }
         }
         else if( stream->stream_type == STREAM_TYPE_AUDIO )
@@ -781,7 +781,7 @@ static int probe_device( char *command, obecli_command_t *child )
         }
         else if( stream->stream_format == VBI_RAW )
         {
-            printf( "Stream-id: %d - DVB-VBI: Containing:\n", stream->stream_id );
+            printf( "Stream-id: %d - DVB-VBI: \n", stream->stream_id );
             for( int j = 0; j < stream->num_frame_data; j++ )
             {
                 format_name = get_format_name( stream->frame_data[j].type, format_names, 1 );

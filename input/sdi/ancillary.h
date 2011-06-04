@@ -25,6 +25,7 @@
 #define OBE_ANCILLARY_H
 
 #include "common/common.h"
+#include "sdi.h"
 
 typedef struct
 {
@@ -67,4 +68,7 @@ const static obe_anc_identifier_t vanc_identifiers[] =
     { 0, 0, 0 },
 };
 
+
+int parse_vanc_line( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame, uint16_t *line, int width,
+                     int line_number );
 #endif
