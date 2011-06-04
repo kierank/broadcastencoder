@@ -54,7 +54,7 @@ typedef struct
     int field_two; /* where relevant */
 } obe_line_number_t;
 
-const obe_line_number_t first_active_line[] =
+const static obe_line_number_t first_active_line[] =
 {
     { INPUT_VIDEO_FORMAT_PAL,   23 },
     { INPUT_VIDEO_FORMAT_NTSC,  20 },
@@ -75,7 +75,7 @@ const obe_line_number_t first_active_line[] =
     { -1, -1 },
 };
 
-const obe_line_number_t field_start_lines[] =
+const static obe_line_number_t field_start_lines[] =
 {
     { INPUT_VIDEO_FORMAT_PAL,  1, 313 },
     { INPUT_VIDEO_FORMAT_NTSC, 4, 266 },
@@ -91,7 +91,7 @@ typedef struct
     int location;
 } obe_non_display_data_location_t;
 
-const obe_non_display_data_location_t non_display_data_locations[] =
+const static obe_non_display_data_location_t non_display_data_locations[] =
 {
     { CAPTIONS_CEA_608, USER_DATA_LOCATION_FRAME },
     { MISC_WSS,         USER_DATA_LOCATION_DVB_STREAM },

@@ -22,6 +22,7 @@
  *
  *****************************************************************************/
 
+#include "sdi.h"
 #include <libavutil/bswap.h>
 
 #define READ_PIXELS(a, b, c)         \
