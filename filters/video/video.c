@@ -361,6 +361,89 @@ static int write_afd( obe_user_data_t *user_data, obe_int_input_stream_t *input_
     return 0;
 }
 
+static int write_bar_data( obe_user_data_t *user_data, obe_int_input_stream_t *input_stream )
+{
+    bs_t r;
+    uint8_t temp[100];
+    const int country_code      = 0xb5;
+    const int provider_code     = 0x31;
+    const char *user_identifier = "GA94";
+    const int user_data_type_code = 0x06;
+    int top, bottom, left, right;
+    uint8_t *pos;
+
+    /* TODO: when MPEG-2 is added make this do the right thing */
+
+    bs_init( &r, temp, 100 );
+
+    bs_write( &r,  8, country_code );  // itu_t_t35_country_code
+    bs_write( &r, 16, provider_code ); // itu_t_t35_provider_code
+
+    for( int i = 0; i < 4; i++ )
+        bs_write( &r, 8, user_identifier[i] ); // user_identifier
+
+    bs_write( &r, 8, user_data_type_code ); // user_data_type_code
+
+    top    =  user_data->data[0] >> 7;
+    bottom = (user_data->data[0] >> 6) & 1;
+    left   = (user_data->data[0] >> 5) & 1;
+    right  = (user_data->data[0] >> 4) & 1;
+
+    bs_write1( &r, top );    // top_bar_flag
+    bs_write1( &r, bottom ); // bottom_bar_flag
+    bs_write1( &r, left );   // left_bar_flag
+    bs_write1( &r, right );  // right_bar_flag
+    bs_write( &r, 4, 0xf );  // reserved
+
+    pos = &user_data->data[1];
+
+    if( top )
+    {
+        bs_write( &r, 8, pos[0] );
+        bs_write( &r, 8, pos[1] );
+        pos += 2;
+    }
+
+    if( bottom )
+    {
+        bs_write( &r, 8, pos[0] );
+        bs_write( &r, 8, pos[1] );
+        pos += 2;
+    }
+
+    if( left )
+    {
+        bs_write( &r, 8, pos[0] );
+        bs_write( &r, 8, pos[1] );
+        pos += 2;
+    }
+
+    if( right )
+    {
+        bs_write( &r, 8, pos[0] );
+        bs_write( &r, 8, pos[1] );
+        pos += 2;
+    }
+
+    bs_flush( &r );
+
+    user_data->type = USER_DATA_AVC_REGISTERED_ITU_T35;
+    user_data->len = bs_pos( &r ) >> 3;
+
+    free( user_data->data );
+
+    user_data->data = malloc( user_data->len );
+    if( !user_data->data )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+
+    memcpy( user_data->data, temp, user_data->len );
+
+    return 0;
+}
+
 static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stream_t *input_stream )
 {
     /* Encapsulate user-data */
