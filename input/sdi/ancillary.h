@@ -33,7 +33,7 @@ typedef struct
     int type;
 } obe_anc_identifier_t;
 
-const obe_anc_identifier_t vanc_identifiers[] =
+const static obe_anc_identifier_t vanc_identifiers[] =
 {
     /* SMPTE 2016 */
     { 0x41, 0x05, MISC_AFD }, /* Includes Bar-Data */
