@@ -24,6 +24,7 @@
 #include <libavutil/cpu.h>
 #include <libswscale/swscale.h>
 #include "common/common.h"
+#include "common/bitstream.h"
 #include "video.h"
 #include "cc.h"
 #include "dither.h"
@@ -309,13 +310,67 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     return 0;
 }
 
-int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stream_t *input_stream )
+/** User-data encapsulation **/
+static int write_afd( obe_user_data_t *user_data, obe_int_input_stream_t *input_stream )
+{
+    bs_t r;
+    uint8_t temp[100];
+    const int country_code      = 0xb5;
+    const int provider_code     = 0x31;
+    const char *user_identifier = "DTG1";
+
+    /* TODO: when MPEG-2 is added make this do the right thing */
+
+    bs_init( &r, temp, 100 );
+
+    bs_write( &r,  8, country_code );  // itu_t_t35_country_code
+    bs_write( &r, 16, provider_code ); // itu_t_t35_provider_code
+
+    for( int i = 0; i < 4; i++ )
+        bs_write( &r, 8, user_identifier[i] ); // user_identifier
+
+    // afd_data()
+    bs_write1( &r, 0 );   // '0'
+    bs_write1( &r, (user_data->data[0] >> 2) & 1 ); // active_format_flag
+    bs_write( &r, 6, 1 ); // reserved
+
+    if( (user_data->data[0] >> 2) & 1 )
+    {
+        bs_write( &r, 4, 0xf ); // reserved
+        bs_write( &r, 4, ( user_data->data[0] >> 3) & 0xf ); // active_format
+    }
+
+    bs_flush( &r );
+
+    user_data->type = USER_DATA_AVC_REGISTERED_ITU_T35;
+    user_data->len = bs_pos( &r ) >> 3;
+
+    free( user_data->data );
+
+    user_data->data = malloc( user_data->len );
+    if( !user_data->data )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+
+    memcpy( user_data->data, temp, user_data->len );
+
+    return 0;
+}
+
+static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stream_t *input_stream )
 {
     /* Encapsulate user-data */
     for( int i = 0; i < raw_frame->num_user_data; i++ )
     {
         if( raw_frame->user_data[i].type == USER_DATA_CEA_608 )
             write_cc( &raw_frame->user_data[i], input_stream );
+#if 0
+	else if( raw_frame->user_data[i].type == USER_DATA_CEA_708 )
+#endif
+        else if( raw_frame->user_data[i].type == USER_DATA_AFD )
+            write_afd( &raw_frame->user_data[i], input_stream );
     }
 
     return 0;

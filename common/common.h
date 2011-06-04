@@ -203,14 +203,16 @@ enum user_data_types_e
 {
     /* Encapsulated frame data formats */
     USER_DATA_AVC_REGISTERED_ITU_T35 = 4,
-    USER_DATA_AVC_UNREGISTERED       = 5,
+    USER_DATA_AVC_UNREGISTERED,
 
     /* Encapsulated stream data formats */
     USER_DATA_DVB_VBI                = 32, /* VBI packets */
 
     /* Raw data formats */
     USER_DATA_CEA_608                = 64, /* Raw CEA-608 data 4 bytes */
-    USER_DATA_CEA_708                = 65, /* Caption Distribution Packet */
+    USER_DATA_CEA_708,                     /* Caption Distribution Packet */
+    USER_DATA_AFD,                         /* AFD word 1 from SMPTE 2016-3 */
+
 };
 
 enum user_data_location_e
