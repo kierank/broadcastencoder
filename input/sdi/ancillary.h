@@ -41,29 +41,29 @@ const static obe_anc_identifier_t vanc_identifiers[] =
     { 0x41, 0x06, MISC_PAN_SCAN },
 
     /* SMPTE 2010 */
-    { 0x41, 0x07, ANC_SCTE_104 },
+    { 0x41, 0x07, VANC_SCTE_104 },
 
     /* SMPTE 2031 */
-    { 0x41, 0x08, ANC_DVB_SCTE_VBI },
+    { 0x41, 0x08, VANC_DVB_SCTE_VBI },
 
     /* OP-47 / SMPTE RDD-8 */
-    { 0x43, 0x01, ANC_OP47_SDP },
-    { 0x43, 0x02, ANC_OP47_MULTI_PACKET },
+    { 0x43, 0x01, VANC_OP47_SDP },
+    { 0x43, 0x02, VANC_OP47_MULTI_PACKET },
 
     /* SMPTE 12M */
-    { 0x60, 0x60, ANC_ATC },
+    { 0x60, 0x60, VANC_ATC },
 
     /* SMPTE 334 */
     { 0x61, 0x01, CAPTIONS_CEA_708 },
     { 0x61, 0x02, CAPTIONS_CEA_608 },
 
     /* SMPTE RP-207 */
-    { 0x62, 0x01, ANC_DTV_PROGRAM_DESCRIPTION },
+    { 0x62, 0x01, VANC_DTV_PROGRAM_DESCRIPTION },
 
-    { 0x62, 0x02, ANC_DTV_DATA_BROADCAST },
+    { 0x62, 0x02, VANC_DTV_DATA_BROADCAST },
 
     /* SMPTE RP-208 (legacy) */
-    { 0x62, 0x03, ANC_SMPTE_VBI },
+    { 0x62, 0x03, VANC_SMPTE_VBI },
 
     { 0, 0, 0 },
 };

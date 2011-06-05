@@ -24,7 +24,6 @@
 #include "common/common.h"
 #include "ancillary.h"
 #include "sdi.h"
-#include <libavutil/common.h>
 
 #define READ_8(x) ((x) & 0xff)
 
@@ -45,7 +44,7 @@ static int parse_afd( obe_sdi_non_display_data_t *non_display_data, obe_raw_fram
     obe_user_data_t *tmp2, *user_data;
 
     /* Skip DC word
-     * FIXME: should we skip a malformed packet? */
+     * FIXME: should we skip a packet with the wrong length */
     line++;
 
     /* FIXME: make Bar Data optional */
@@ -70,14 +69,14 @@ static int parse_afd( obe_sdi_non_display_data_t *non_display_data, obe_raw_fram
 
         /* AFD */
         frame_data->type = MISC_AFD;
-        frame_data->source = ANC_GENERIC;
+        frame_data->source = VANC_GENERIC;
         frame_data->line_number = line_number;
         frame_data->location = USER_DATA_LOCATION_FRAME;
 
         /* Bar data */
         frame_data++;
         frame_data->type = MISC_BAR_DATA;
-        frame_data->source = ANC_GENERIC;
+        frame_data->source = VANC_GENERIC;
         frame_data->line_number = line_number;
         frame_data->location = USER_DATA_LOCATION_FRAME;
 
@@ -101,7 +100,7 @@ static int parse_afd( obe_sdi_non_display_data_t *non_display_data, obe_raw_fram
     /* Read AFD */
     user_data->len = 1;
     user_data->type = USER_DATA_AFD;
-    user_data->source = ANC_GENERIC;
+    user_data->source = VANC_GENERIC;
     user_data->data = malloc( user_data->len );
     if( !user_data->data )
         goto fail;
@@ -115,7 +114,7 @@ static int parse_afd( obe_sdi_non_display_data_t *non_display_data, obe_raw_fram
     /* Read Bar Data */
     user_data->len = 5;
     user_data->type = USER_DATA_BAR_DATA;
-    user_data->source = ANC_GENERIC;
+    user_data->source = VANC_GENERIC;
     user_data->data = malloc( user_data->len );
     if( !user_data->data )
         goto fail;
@@ -159,6 +158,8 @@ int parse_vanc_line( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame
                 case MISC_AFD:
                     parse_afd( non_display_data, raw_frame, &line[i+2], line_number );
                     break;
+		case CAPTIONS_CEA_708:
+                    parse_cdp( non_display_data, raw_frame, &line[i+2], line_number );
                 default:
                     break;
             }

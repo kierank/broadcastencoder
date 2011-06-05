@@ -138,16 +138,16 @@ enum stream_formats_e
     /* VBI */
     VBI_RAW,
 
-    /* Ancillary */
-    ANC_GENERIC,
-    ANC_DVB_SCTE_VBI,
-    ANC_OP47_SDP,
-    ANC_OP47_MULTI_PACKET,
-    ANC_ATC,
-    ANC_DTV_PROGRAM_DESCRIPTION,
-    ANC_DTV_DATA_BROADCAST,
-    ANC_SMPTE_VBI,
-    ANC_SCTE_104,
+    /* Vertical Ancillary */
+    VANC_GENERIC,
+    VANC_DVB_SCTE_VBI,
+    VANC_OP47_SDP,
+    VANC_OP47_MULTI_PACKET,
+    VANC_ATC,
+    VANC_DTV_PROGRAM_DESCRIPTION,
+    VANC_DTV_DATA_BROADCAST,
+    VANC_SMPTE_VBI,
+    VANC_SCTE_104,
 };
 
 typedef struct
