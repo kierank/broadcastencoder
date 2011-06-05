@@ -209,8 +209,8 @@ enum user_data_types_e
     USER_DATA_DVB_VBI                = 32, /* VBI packets */
 
     /* Raw data formats */
-    USER_DATA_CEA_608                = 64, /* Raw CEA-608 data 4 bytes */
-    USER_DATA_CEA_708,                     /* Caption Distribution Packet */
+    USER_DATA_CEA_608                = 64, /* Raw CEA-608 data 4 bytes, 2 bytes per field */
+    USER_DATA_CEA_708_CDP,                 /* CEA-708 Caption Distribution Packet */
     USER_DATA_AFD,                         /* AFD word 1 from SMPTE 2016-3 */
     USER_DATA_BAR_DATA,                    /* Bar Data 5 words from SMPTE 2016-3 */
 
