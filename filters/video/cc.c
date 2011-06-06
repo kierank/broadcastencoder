@@ -67,7 +67,8 @@ static void write_invalid( bs_t *s )
     bs_write( s, 8, 0 );   // c_data_2
 }
 
-int write_cc( obe_user_data_t *user_data, obe_int_input_stream_t *input_stream )
+/* TODO: factor shared code out from 608 and 708 */
+int write_608_cc( obe_user_data_t *user_data, obe_int_input_stream_t *input_stream )
 {
     bs_t q, r;
     uint8_t temp[1000];
@@ -76,7 +77,7 @@ int write_cc( obe_user_data_t *user_data, obe_int_input_stream_t *input_stream )
     const int provider_code     = 0x31;
     const char *user_identifier = "GA94";
     const int data_type_code    = 0x03;
-    int cc_count          = 0;
+    int cc_count                = 0;
     const int echostar_captions = 0;
 
     /* TODO: when MPEG-2 is added make this do the right thing */

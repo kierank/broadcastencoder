@@ -435,7 +435,7 @@ static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stre
     for( int i = 0; i < raw_frame->num_user_data; i++ )
     {
         if( raw_frame->user_data[i].type == USER_DATA_CEA_608 )
-            write_cc( &raw_frame->user_data[i], input_stream );
+            write_608_cc( &raw_frame->user_data[i], input_stream );
 #if 0
 	else if( raw_frame->user_data[i].type == USER_DATA_CEA_708 )
 #endif

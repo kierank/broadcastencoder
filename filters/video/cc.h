@@ -24,6 +24,6 @@
 #ifndef OBE_FILTERS_VIDEO_CC_H
 #define OBE_FILTERS_VIDEO_CC_H
 
-int write_cc( obe_user_data_t *user_data, obe_int_input_stream_t *input_stream );
+int write_608_cc( obe_user_data_t *user_data, obe_int_input_stream_t *input_stream );
 
 #endif
