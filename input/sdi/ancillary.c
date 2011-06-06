@@ -129,7 +129,7 @@ fail:
     return -1;
 }
 
-static int parse_cdp( uint16_t *line )
+static int parse_cdp( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame, uint16_t *line, int line_number )
 {
     // unpack and use bitstream reader
 }
