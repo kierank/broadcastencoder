@@ -178,11 +178,11 @@ static void *open_output( void *ptr )
     int64_t last_pcr = -1, last_clock = -1, delta, mpegtime;
     AVFifoBuffer *fifo_data = NULL, *fifo_pcr = NULL;
     uint8_t rtp_buf[TS_PACKETS_SIZE];
-    int64_t pcrs[TS_PACKETS_SIZE/188];
+    int64_t pcrs[7];
 
     struct sched_param param = {0};
-    param.sched_priority = 50;
-    pthread_setschedparam( pthread_self(), SCHED_RR, &param );
+    param.sched_priority = 99;
+    pthread_setschedparam( pthread_self(), SCHED_FIFO, &param );
 
     status.output_params = output_params;
     status.rtp_handle = &rtp_handle;
@@ -191,14 +191,14 @@ static void *open_output( void *ptr )
     fifo_data = av_fifo_alloc( TS_PACKETS_SIZE );
     if( !fifo_data )
     {
-        fprintf( stderr, "[udp] Could not allocate data fifo" );
+        fprintf( stderr, "[rtp] Could not allocate data fifo" );
         return NULL;
     }
 
     fifo_pcr = av_fifo_alloc( 7 * sizeof(int64_t) );
     if( !fifo_pcr )
     {
-        fprintf( stderr, "[udp] Could not allocate pcr fifo" );
+        fprintf( stderr, "[rtp] Could not allocate pcr fifo" );
         return NULL;
     }
 
