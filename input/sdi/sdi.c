@@ -27,7 +27,7 @@
 
 #define READ_PIXELS(a, b, c)         \
     do {                             \
-        val  = av_le2ne32( *src++ );   \
+        val  = av_le2ne32( *src++ ); \
         *a++ =  val & 0x3ff;         \
         *b++ = (val >> 10) & 0x3ff;  \
         *c++ = (val >> 20) & 0x3ff;  \

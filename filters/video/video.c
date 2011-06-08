@@ -283,7 +283,7 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
 
         for( int j = 0; j < height; j++ )
         {
-            const uint8_t *dither = obe_dithers[j&7];
+            const uint16_t *dither = obe_dithers[j&7];
             int k;
             for (k = 0; k < width-7; k+=8)
             {
