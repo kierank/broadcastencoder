@@ -73,6 +73,16 @@ static obe_output_stream_t *get_output_stream( obe_mux_params_t *mux_params, int
     return NULL;
 }
 
+static void encoder_wait( obe_t *h, int stream_id )
+{
+    /* Wait for encoder to be ready */
+    obe_encoder_t *encoder = get_encoder( h, stream_id );
+    pthread_mutex_lock( &encoder->encoder_mutex );
+    if( !encoder->is_ready )
+        pthread_cond_wait( &encoder->encoder_cv, &encoder->encoder_mutex );
+    pthread_mutex_unlock( &encoder->encoder_mutex );
+}
+
 void *open_muxer( void *ptr )
 {
     obe_mux_params_t *mux_params = ptr;
@@ -160,7 +170,7 @@ void *open_muxer( void *ptr )
             j++;
 
         /* OBE does not distinguish between ADTS and LATM but MPEG-TS does */
-        if( input_stream->is_latm )
+        if( output_stream->stream_action == STREAM_PASSTHROUGH && input_stream->is_latm )
             j++;
 
         stream->stream_format = mpegts_stream_info[j][1];
@@ -192,12 +202,7 @@ void *open_muxer( void *ptr )
 
         if( stream_format == VIDEO_AVC )
         {
-            /* Wait for encoder to be ready */
-            encoder = get_encoder( h, output_stream->stream_id );
-            pthread_mutex_lock( &encoder->encoder_mutex );
-            if( !encoder->is_ready )
-                pthread_cond_wait( &encoder->encoder_cv, &encoder->encoder_mutex );
-            pthread_mutex_unlock( &encoder->encoder_mutex );
+            encoder_wait( h, output_stream->stream_id );
 
             width = output_stream->avc_param.i_width;
             height = output_stream->avc_param.i_height;
@@ -209,7 +214,11 @@ void *open_muxer( void *ptr )
             stream->audio_frame_size = (double)AC3_NUM_SAMPLES * 90000LL / input_stream->sample_rate;
         else if( stream_format == AUDIO_AAC )
             stream->audio_frame_size = (double)AAC_NUM_SAMPLES * 90000LL / input_stream->sample_rate;
-        /* TODO: E-AC3 frame size */
+        else if( stream_format == AUDIO_E_AC_3 )
+        {
+            encoder_wait( h, output_stream->stream_id );
+            stream->audio_frame_size = (double)encoder->num_samples * 90000LL / input_stream->sample_rate;
+        }
     }
 
     /* Video stream isn't guaranteed to be first so populate program parameters here */
