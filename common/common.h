@@ -193,7 +193,7 @@ typedef struct
 
 typedef struct
 {
-     int type;
+     int type;  /* For VBI (including VANC VBI) during input this uses stream_formats_e, otherwise user_data_types_e */
      int source;
      int line_number; /* Line number of frame starting from line 1 */
      int location;
@@ -213,7 +213,7 @@ enum user_data_types_e
     USER_DATA_CEA_708_CDP,                 /* CEA-708 Caption Distribution Packet */
     USER_DATA_AFD,                         /* AFD word 1 from SMPTE 2016-3 */
     USER_DATA_BAR_DATA,                    /* Bar Data 5 words from SMPTE 2016-3 */
-
+    USER_DATA_WSS,                         /* 3 bits of WSS to be converted to AFD */
 };
 
 enum user_data_location_e
