@@ -107,6 +107,8 @@ void obe_release_other_data( void *ptr )
 void obe_release_frame( void *ptr )
 {
      obe_raw_frame_t *raw_frame = ptr;
+     if( raw_frame->user_data )
+         free( raw_frame->user_data );
      free( raw_frame );
 }
 

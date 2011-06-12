@@ -28,6 +28,7 @@
 static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_frame )
 {
     obe_image_t *img = &raw_frame->img;
+    int idx = 0, count = 0;
 
     memcpy( pic->img.i_stride, img->stride, sizeof(img->stride) );
     memcpy( pic->img.plane, img->plane, sizeof(img->plane) );
@@ -35,17 +36,36 @@ static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_fr
     pic->img.i_csp = X264_CSP_I420;
 
     pic->extra_sei.sei_free = free;
-    pic->extra_sei.num_payloads = raw_frame->num_user_data;
-    pic->extra_sei.payloads = calloc( 1, raw_frame->num_user_data * sizeof(*pic->extra_sei.payloads) );
+
+    for( int i = 0; i < raw_frame->num_user_data; i++ )
+    {
+        /* Only give correctly formatted data to the encoder */
+        if( raw_frame->user_data[i].type == USER_DATA_AVC_REGISTERED_ITU_T35 ||
+            raw_frame->user_data[i].type == USER_DATA_AVC_UNREGISTERED )
+        {
+            count++;
+        }
+    }
+
+    pic->extra_sei.num_payloads = count;
+    pic->extra_sei.payloads = malloc( pic->extra_sei.num_payloads * sizeof(*pic->extra_sei.payloads) );
 
     if( !pic->extra_sei.payloads )
         return -1;
 
     for( int i = 0; i < raw_frame->num_user_data; i++ )
     {
-        pic->extra_sei.payloads[i].payload_type = raw_frame->user_data[i].type;
-        pic->extra_sei.payloads[i].payload_size = raw_frame->user_data[i].len;
-        pic->extra_sei.payloads[i].payload = raw_frame->user_data[i].data;
+        /* Only give correctly formatted data to the encoder */
+        if( raw_frame->user_data[i].type == USER_DATA_AVC_REGISTERED_ITU_T35 ||
+            raw_frame->user_data[i].type == USER_DATA_AVC_UNREGISTERED )
+        {
+            pic->extra_sei.payloads[idx].payload_type = raw_frame->user_data[i].type;
+            pic->extra_sei.payloads[idx].payload_size = raw_frame->user_data[i].len;
+            pic->extra_sei.payloads[idx].payload = raw_frame->user_data[i].data;
+            idx++;
+        }
+        else
+            free( raw_frame->user_data[i].data );
     }
 
     return 0;
