@@ -175,7 +175,7 @@ int write_608_cc( obe_user_data_t *user_data, obe_int_input_stream_t *input_stre
     return 0;
 }
 
-static int write_708_cc( obe_user_data_t *user_data, uint8_t *start, int len )
+static int write_708_cc( obe_user_data_t *user_data, uint8_t *start, int cc_count )
 {
     bs_t s;
     uint8_t temp[1000];
@@ -196,8 +196,18 @@ static int write_708_cc( obe_user_data_t *user_data, uint8_t *start, int len )
         bs_write( &s, 8, user_identifier[i] ); // user_identifier
 
     bs_write( &s, 8, data_type_code ); // user_data_type_code
-    write_bytes( &s, start, len );
 
+    // user_data_type_structure (echostar)
+    // cc_data
+    bs_write1( &s, 1 );     // reserved
+    bs_write1( &s, 1 );     // process_cc_data_flag
+    bs_write1( &s, 0 );     // zero_bit / additional_data_flag
+    bs_write( &s, 5, cc_count ); // cc_count
+    bs_write( &s, 8, 0xff ); // reserved
+
+    write_bytes( &s, start, cc_count*3 );
+
+    bs_write( &s, 8, 0xff ); // marker_bits
     bs_flush( &s );
 
     user_data->type = USER_DATA_AVC_REGISTERED_ITU_T35;
@@ -220,7 +230,7 @@ static int write_708_cc( obe_user_data_t *user_data, uint8_t *start, int len )
 int write_cdp( obe_user_data_t *user_data )
 {
     uint8_t *start = NULL;
-    int len = 0;
+    int cc_count = 0;
     bs_read_t s;
     bs_read_init( &s, user_data->data, user_data->len );
 
@@ -237,8 +247,9 @@ int write_cdp( obe_user_data_t *user_data )
     bs_skip( &s, 1 ); // svc_info_start
     bs_skip( &s, 1 ); // svc_info_change
     bs_skip( &s, 1 ); // svc_info_complete
-    if( !bs_read( &s, 1 ) ) // caption_service_active
-        return 0;
+
+    /* caption_service_active seemingly unreliable */
+    bs_skip( &s, 1 ); // caption_service_active
     bs_skip( &s, 1 ); // reserved
     bs_skip( &s, 16 ); // cdp_hdr_sequence_cntr
 
@@ -264,9 +275,8 @@ int write_cdp( obe_user_data_t *user_data )
         }
         else if( section_id == CDP_CC_DATA_SECTION_ID )
         {
+            cc_count = bs_read( &s, 8 ) & 0x1f;
             start = &user_data->data[bs_read_pos( &s ) / 8];
-            int cc_count = bs_read( &s, 8 ) & 0x1f;
-            len = 3*cc_count + 1;
             for( int i = 0; i < cc_count; i++ )
             {
                 bs_skip( &s, 5 ); // marker_bits
@@ -312,13 +322,10 @@ int write_cdp( obe_user_data_t *user_data )
         }
     }
 
-    if( !len )
+    if( !cc_count )
         return 0;
 
-    /* Clear the third bit of the marker bits in the CDP packet to comply with the ATSC spec */
-    start[0] &= ~(1 << 5);
-
-    if( write_708_cc( user_data, start, len ) < 0 )
+    if( write_708_cc( user_data, start, cc_count ) < 0 )
         return -1;
 
     return 0;
