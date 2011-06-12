@@ -125,6 +125,7 @@ enum stream_formats_e
 
     SUBTITLES_DVB,
     MISC_TELETEXT,
+    MISC_TELETEXT_INVERTED,
     MISC_WSS,
     MISC_VPS,
 
@@ -135,10 +136,17 @@ enum stream_formats_e
     MISC_BAR_DATA,
     MISC_PAN_SCAN,
 
-    /* VBI */
-    VBI_RAW,
+    /* VBI data services */
+    VBI_RAW,         /* location flag */
+    VBI_AMOL_48,
+    VBI_AMOL_96,
+    VBI_NABTS,
+    VBI_TVG2X,
+    VBI_CP,
+    VBI_VITC,
+    VBI_VIDEO_INDEX, /* location flag */
 
-    /* Vertical Ancillary */
+    /* Vertical Ancillary (location flags) */
     VANC_GENERIC,
     VANC_DVB_SCTE_VBI,
     VANC_OP47_SDP,

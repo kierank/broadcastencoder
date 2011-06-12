@@ -29,6 +29,40 @@
 #define PAL_VIDEO_INDEX_LINE  11
 #define NTSC_VIDEO_INDEX_LINE 14
 
+enum dvb_vbi_data_unit_id_e
+{
+    DATA_UNIT_ID_EBU_TTX_NON_SUB = 0x02,
+    DATA_UNIT_ID_EBU_TTX_SUB,
+    DATA_UNIT_ID_TTX_INVERTED    = 0xc0,
+    DATA_UNIT_ID_VPS             = 0xc3,
+    DATA_UNIT_ID_WSS,
+    DATA_UNIT_ID_CEA_608,
+    DATA_UNIT_ID_AMOL_48         = 0xd0,
+    DATA_UNIT_ID_AMOL_96,
+    DATA_UNIT_ID_NABTS           = 0xd5,
+    DATA_UNIT_ID_TVG2X,
+    DATA_UNIT_ID_CP,
+    DATA_UNIT_ID_VITC            = 0xd9,
+};
+
+/* Convert DVB/SCTE data indentifier to OBE internal format */
+const static int data_indentifier_table[][2] =
+{
+    { DATA_UNIT_ID_EBU_TTX_NON_SUB, MISC_TELETEXT },
+    { DATA_UNIT_ID_EBU_TTX_SUB,     MISC_TELETEXT },
+    { DATA_UNIT_ID_TTX_INVERTED,    MISC_TELETEXT_INVERTED },
+    { DATA_UNIT_ID_VPS,             MISC_VPS },
+    { DATA_UNIT_ID_WSS,             MISC_WSS },
+    { DATA_UNIT_ID_CEA_608,         CAPTIONS_CEA_608 },
+    { DATA_UNIT_ID_AMOL_48,         VBI_AMOL_48 },
+    { DATA_UNIT_ID_AMOL_96,         VBI_AMOL_96 },
+    { DATA_UNIT_ID_NABTS,           VBI_NABTS },
+    { DATA_UNIT_ID_TVG2X,           VBI_TVG2X },
+    { DATA_UNIT_ID_CP,              VBI_CP },
+    { DATA_UNIT_ID_VITC,            VBI_VITC },
+    { -1, -1 },
+};
+
 int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data, int ntsc );
 int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, obe_raw_frame_t *raw_frame );
 
