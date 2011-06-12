@@ -26,6 +26,9 @@
 
 #define NUM_ACTIVE_VBI_LINES 4
 
+#define PAL_VIDEO_INDEX_LINE  11
+#define NTSC_VIDEO_INDEX_LINE 14
+
 int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data, int ntsc );
 int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, obe_raw_frame_t *raw_frame );
 

@@ -27,6 +27,15 @@
 #include "common/common.h"
 #undef ZVBI_DEBUG
 #include <libzvbi.h>
+#include <libavutil/crc.h>
+
+typedef struct
+{
+    int identifier;
+    int unit_id;
+    int len;
+    uint8_t *data;
+} obe_anc_vbi_t;
 
 typedef struct
 {
@@ -42,8 +51,19 @@ typedef struct
     obe_coded_frame_t *dvb_frame;
 
     /* VBI */
+    int num_vbi;
+    vbi_sliced vbi[100];
     int vbi_start;
     int vbi_end;
+
+    /* Ancillary VBI */
+    int num_anc_vbi;
+    obe_anc_vbi_t anc_vbi[100];
+
+    /* Video Index Information */
+    AVCRC crc[257];
+    AVCRC crc_broken[257];
+
 } obe_sdi_non_display_data_t;
 
 /* NB: Lines start from 1 */

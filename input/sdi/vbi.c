@@ -24,11 +24,26 @@
 #include "common/common.h"
 #include "sdi.h"
 #include "vbi.h"
+#include <libavutil/common.h>
+#include "common/bitstream.h"
 
 #define DVB_VBI_DATA_IDENTIFIER  0x10
 #define SCTE_VBI_DATA_IDENTIFIER 0x99
 /* libzvbi input buffer must be mod 46... */
 #define DVB_VBI_MAX_SIZE 69967
+#define VIDEO_INDEX_CRC_POLY 0x1d
+#define VIDEO_INDEX_CRC_POLY_BROKEN 0x1c
+
+#define DVB_VBI_MAXIMUM_SIZE      65536
+
+#define DVB_VBI_DATA_IDENTIFIER   0x10
+#define SCTE_VBI_DATA_IDENTIFIER  0x99
+
+#define TTX_FRAMING_CODE          0xe4
+#define TTX_INVERTED_FRAMING_CODE 0x1b
+#define NABTS_FRAMING_CODE        0xe7
+
+#define REVERSE(x) av_reverse[(x)]
 
 int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data, int ntsc )
 {
@@ -176,6 +191,82 @@ fail:
     if( sliced )
         free( sliced );
 
+    syslog( LOG_ERR, "Malloc failed\n" );
+    return -1;
+}
+
+int decode_video_index_information( obe_sdi_non_display_data_t *non_display_data, uint16_t *line, obe_raw_frame_t *raw_frame, int line_number )
+{
+    /* Video index information is only in the chroma samples */
+    uint8_t data[90];
+    obe_int_frame_data_t *tmp, *frame_data;
+    obe_user_data_t *tmp2, *user_data;
+
+    for( int i = 0; i < 90; i++ )
+    {
+        data[i] |= (line[0]  == 0x204) << 0;
+        data[i] |= (line[2]  == 0x204) << 1;
+        data[i] |= (line[4]  == 0x204) << 2;
+        data[i] |= (line[6]  == 0x204) << 3;
+        data[i] |= (line[8]  == 0x204) << 4;
+        data[i] |= (line[10] == 0x204) << 5;
+        data[i] |= (line[12] == 0x204) << 6;
+        data[i] |= (line[14] == 0x204) << 7;
+        line += 16;
+    }
+
+    /* Check the CRC of the first three octets */
+    if( av_crc( non_display_data->crc, 0, data, 3 ) == data[3] || av_crc( non_display_data->crc_broken, 0, data, 3 ) == data[3] )
+    {
+        /* We only care about AFD */
+        if( non_display_data->probe )
+        {
+            /* TODO: output both AFD sources and let user choose */
+            for( int i = 0; i < non_display_data->num_frame_data; i++ )
+            {
+               if( non_display_data->frame_data[i].type == MISC_AFD )
+                   return 0;
+            }
+
+            tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+1) * sizeof(*non_display_data->frame_data) );
+            if( !tmp )
+                goto fail;
+
+            frame_data = &non_display_data->frame_data[non_display_data->num_frame_data++];
+            frame_data->location = USER_DATA_LOCATION_FRAME;
+            frame_data->type = MISC_AFD;
+            frame_data->source = VBI_VIDEO_INDEX;
+            frame_data->line_number = line_number;
+	}
+        else
+        {
+            /* TODO: follow user instructions and/or fallback */
+            for( int i = 0; i < raw_frame->num_user_data; i++ )
+            {
+                if( raw_frame->user_data[i].type == USER_DATA_AFD )
+                    return 0;
+            }
+
+            tmp2 = realloc( raw_frame->user_data, (raw_frame->num_user_data+1) * sizeof(*raw_frame->user_data) );
+            if( !tmp2 )
+                goto fail;
+
+            raw_frame->user_data = tmp2;
+            user_data = &raw_frame->user_data[raw_frame->num_user_data++];
+            user_data->data = malloc( 1 );
+            if( !user_data->data )
+                goto fail;
+
+            user_data->len  = 1;
+            user_data->type = USER_DATA_AFD;
+            user_data->source = VBI_VIDEO_INDEX;
+            user_data->data[0] = (data[0] & 0x78) | (1 << 2);
+        }
+    }
+
+    return 0;
+
+fail:
     syslog( LOG_ERR, "Malloc failed\n" );
     return -1;
 }
