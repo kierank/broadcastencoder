@@ -203,7 +203,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     AVPacket pkt;
     AVFrame frame;
     void *frame_bytes, *anc_line;
-    int finished = 0, ret, bytes, field_one, field_two, num_anc_lines = 0, anc_line_stride,
+    int finished = 0, ret, bytes, field_one = 0, field_two = 0, num_anc_lines = 0, anc_line_stride,
     lines_read = 0, first_line = 0, last_line = 0;
     uint32_t line, *frame_ptr;
     uint16_t *anc_buf, *anc_buf_pos;
