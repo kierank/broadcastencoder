@@ -117,5 +117,52 @@ int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_
     return 0;
 }
 
-/* TODO: write function for API that converts between SMPTE notation (e.g. Line 284)
- * and analogue notation (e.g Line 21 Field 2) */
+int convert_smpte_to_analogue( int format, int line_smpte, int *line_analogue, int *field )
+{
+    int i;
+
+    if( !IS_INTERLACED( format ) )
+        return -1;
+
+    for( i = 0; field_start_lines[i].format != -1; i++ )
+    {
+        if( format == field_start_lines[i].format )
+            break;
+    }
+
+    if( line_smpte >= field_start_lines[i].line && line_smpte < field_start_lines[i].field_two )
+    {
+        *line_analogue = line_smpte;
+        *field = 1;
+    }
+    else
+    {
+        *line_analogue = line_smpte - field_start_lines[i].field_two + field_start_lines[i].line  - 1;
+        *field = 2;
+    }
+
+    return 0;
+}
+
+int convert_analogue_to_smpte( int format, int line_analogue, int field, int *line_smpte )
+{
+    int i;
+
+    if( !IS_INTERLACED( format ) )
+        return -1;
+
+    if( field == 1 )
+        *line_smpte = line_analogue;
+    else
+    {
+        for( i = 0; field_start_lines[i].format != -1; i++ )
+        {
+            if( format == field_start_lines[i].format )
+                break;
+        }
+
+	*line_smpte = field_start_lines[i].field_two - field_start_lines[i].line + line_analogue + 1;
+    }
+
+    return 0;
+}
