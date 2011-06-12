@@ -72,6 +72,18 @@ static obe_cli_csp_t obe_cli_csps[] =
     [PIX_FMT_YUV420P16] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 16 },
 };
 
+const static int wss_to_afd[] =
+{
+    [0x0] = 0x9,
+    [0x1] = 0xb,
+    [0x2] = 0x3,
+    [0x3] = 0xa,
+    [0x4] = 0x2,
+    [0x5] = 0x4,
+    [0x6] = 0xd,
+    [0x7] = 0x8,
+};
+
 static void scale_plane( uint16_t *src, int stride, int width, int height, int lshift, int rshift )
 {
     for( int i = 0; i < height; i++ )
@@ -311,7 +323,7 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
 }
 
 /** User-data encapsulation **/
-static int write_afd( obe_user_data_t *user_data, obe_int_input_stream_t *input_stream )
+static int write_afd( obe_user_data_t *user_data )
 {
     bs_t r;
     uint8_t temp[100];
@@ -361,7 +373,7 @@ static int write_afd( obe_user_data_t *user_data, obe_int_input_stream_t *input_
     return 0;
 }
 
-static int write_bar_data( obe_user_data_t *user_data, obe_int_input_stream_t *input_stream )
+static int write_bar_data( obe_user_data_t *user_data )
 {
     bs_t r;
     uint8_t temp[100];
@@ -429,6 +441,15 @@ static int write_bar_data( obe_user_data_t *user_data, obe_int_input_stream_t *i
     return 0;
 }
 
+static int convert_afd_to_wss( obe_user_data_t *user_data )
+{
+    user_data->data[0] = (wss_to_afd[user_data->data[0]] << 3) | (1 << 2);
+    if( write_afd( user_data ) < 0 )
+        return -1;
+
+    return 0;
+}
+
 static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stream_t *input_stream )
 {
     /* Encapsulate user-data */
@@ -440,9 +461,11 @@ static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stre
 	else if( raw_frame->user_data[i].type == USER_DATA_CEA_708 )
 #endif
         else if( raw_frame->user_data[i].type == USER_DATA_AFD )
-            write_afd( &raw_frame->user_data[i], input_stream );
+            write_afd( &raw_frame->user_data[i] );
         else if( raw_frame->user_data[i].type == USER_DATA_BAR_DATA )
-            write_bar_data( &raw_frame->user_data[i], input_stream );
+            write_bar_data( &raw_frame->user_data[i] );
+        else if( raw_frame->user_data[i].type == USER_DATA_WSS )
+            convert_afd_to_wss( &raw_frame->user_data[i] );
     }
 
     return 0;
