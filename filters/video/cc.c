@@ -23,6 +23,17 @@
 
 #include "common/common.h"
 #include "common/bitstream.h"
+#include "common/bs_read.h"
+
+#define CDP_IDENTIFIER 0x9669
+
+enum cdp_section_id_e
+{
+    CDP_TC_SECTION_ID = 0x71,
+    CDP_CC_DATA_SECTION_ID,
+    CDP_CC_SVC_INFO_SECTION_ID,
+    CDP_FOOTER_SECTION_ID,
+};
 
 typedef struct
 {
@@ -160,6 +171,155 @@ int write_608_cc( obe_user_data_t *user_data, obe_int_input_stream_t *input_stre
     }
 
     memcpy( user_data->data, temp, user_data->len );
+
+    return 0;
+}
+
+static int write_708_cc( obe_user_data_t *user_data, uint8_t *start, int len )
+{
+    bs_t s;
+    uint8_t temp[1000];
+    const int country_code      = 0xb5;
+    const int provider_code     = 0x31;
+    const char *user_identifier = "GA94";
+    const int data_type_code    = 0x03;
+
+    /* TODO: when MPEG-2 is added make this do the right thing */
+    /* FIXME: enable echostar captions and add more types */
+
+    bs_init( &s, temp, 1000 );
+
+    bs_write( &s,  8, country_code );  // itu_t_t35_country_code
+    bs_write( &s, 16, provider_code ); // itu_t_t35_provider_code
+
+    for( int i = 0; i < 4; i++ )
+        bs_write( &s, 8, user_identifier[i] ); // user_identifier
+
+    bs_write( &s, 8, data_type_code ); // user_data_type_code
+    write_bytes( &s, start, len );
+
+    bs_flush( &s );
+
+    user_data->type = USER_DATA_AVC_REGISTERED_ITU_T35;
+    user_data->len = bs_pos( &s ) >> 3;
+
+    free( user_data->data );
+
+    user_data->data = malloc( user_data->len );
+    if( !user_data->data )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+
+    memcpy( user_data->data, temp, user_data->len );
+
+    return 0;
+}
+
+int write_cdp( obe_user_data_t *user_data )
+{
+    uint8_t *start = NULL;
+    int len = 0;
+    bs_read_t s;
+    bs_read_init( &s, user_data->data, user_data->len );
+
+    // cdp_header
+    if( bs_read( &s, 16 ) != CDP_IDENTIFIER )
+        return 0;
+
+    bs_skip( &s, 8 ); // cdp_length
+    bs_skip( &s, 4 ); // cdp_frame_rate
+    bs_skip( &s, 4 ); // reserved
+    bs_skip( &s, 1 ); // time_code_present
+    bs_skip( &s, 1 ); // ccdata_present
+    bs_skip( &s, 1 ); // svcinfo_present
+    bs_skip( &s, 1 ); // svc_info_start
+    bs_skip( &s, 1 ); // svc_info_change
+    bs_skip( &s, 1 ); // svc_info_complete
+    if( !bs_read( &s, 1 ) ) // caption_service_active
+        return 0;
+    bs_skip( &s, 1 ); // reserved
+    bs_skip( &s, 16 ); // cdp_hdr_sequence_cntr
+
+    while( !bs_read_eof( &s ) )
+    {
+        uint8_t section_id = bs_read( &s, 8 );
+        if( section_id == CDP_TC_SECTION_ID )
+        {
+            /* Is this timecode guaranteed to match VITC? */
+            bs_skip( &s, 2 ); // reserved
+            bs_skip( &s, 2 ); // tc_10hrs
+            bs_skip( &s, 4 ); // tc_1hrs
+            bs_skip( &s, 1 ); // reserved
+            bs_skip( &s, 3 ); // tc_10min
+            bs_skip( &s, 4 ); // tc_1min
+            bs_skip( &s, 1 ); // tc_field_flag
+            bs_skip( &s, 3 ); // tc_10sec
+            bs_skip( &s, 4 ); // tc_1sec
+            bs_skip( &s, 1 ); // drop_frame_flag
+            bs_skip( &s, 1 ); // zero
+            bs_skip( &s, 2 ); // tc_10fr
+            bs_skip( &s, 4 ); // tc_1fr
+        }
+        else if( section_id == CDP_CC_DATA_SECTION_ID )
+        {
+            start = &user_data->data[bs_read_pos( &s ) / 8];
+            int cc_count = bs_read( &s, 8 ) & 0x1f;
+            len = 3*cc_count + 1;
+            for( int i = 0; i < cc_count; i++ )
+            {
+                bs_skip( &s, 5 ); // marker_bits
+                bs_skip( &s, 1 ); // cc_valid
+                bs_skip( &s, 2 ); // cc_type
+                bs_skip( &s, 8 ); // cc_data_1
+                bs_skip( &s, 8 ); // cc_data_2
+            }
+        }
+        else if( section_id == CDP_CC_SVC_INFO_SECTION_ID )
+        {
+            /* TODO: pass this to muxer when user requests */
+            bs_skip( &s, 1 ); // reserved
+            bs_skip( &s, 1 ); // svc_info_start
+            bs_skip( &s, 1 ); // svc_info_change
+            bs_skip( &s, 1 ); // svc_info_complete
+            int svc_count = bs_read( &s, 4 );
+            for( int i = 0; i < svc_count; i++ )
+            {
+                bs_skip( &s, 1 ); // reserved
+                bs_skip( &s, 1 ); // csn_size
+                bs_skip( &s, 6 ); // caption_service_number (note: csn_size branch in spec)
+                bs_skip( &s, 8 ); // svc_data_byte_1
+                bs_skip( &s, 8 ); // svc_data_byte_2
+                bs_skip( &s, 8 ); // svc_data_byte_3
+                bs_skip( &s, 8 ); // svc_data_byte_4
+                bs_skip( &s, 8 ); // svc_data_byte_5
+                bs_skip( &s, 8 ); // svc_data_byte_6
+            }
+        }
+        else if( section_id == CDP_FOOTER_SECTION_ID )
+        {
+            /* TODO: use these for packet verification? */
+            bs_skip( &s, 16 ); // cdp_ftr_sequence_cntr
+            bs_skip( &s, 8 );  // packet_checksum
+            break;
+        }
+        else // future_section
+        {
+            int future_len = bs_read( &s, 8 );
+            for( int i = 0; i < future_len; i++ )
+                bs_skip( &s, 8 );
+        }
+    }
+
+    if( !len )
+        return 0;
+
+    /* Clear the third bit of the marker bits in the CDP packet to comply with the ATSC spec */
+    start[0] &= ~(1 << 5);
+
+    if( write_708_cc( user_data, start, len ) < 0 )
+        return -1;
 
     return 0;
 }
