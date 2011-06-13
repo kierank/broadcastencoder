@@ -301,6 +301,9 @@ typedef struct
 
     int num_raw_frames;
     obe_raw_frame_t **frames;
+
+    /* E-AC3 */
+    int num_samples;
 } obe_encoder_t;
 
 typedef struct
