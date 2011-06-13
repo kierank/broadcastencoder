@@ -78,8 +78,8 @@ static void *start_encoder( void *ptr )
         goto end;
     }
 
-    int in_stride = av_get_bits_per_sample_fmt( enc_params->sample_format ) / 8;
-    int out_stride = av_get_bits_per_sample_fmt( AV_SAMPLE_FMT_FLT ) / 8;
+    int in_stride = av_get_bytes_per_sample( enc_params->sample_format );
+    int out_stride = av_get_bytes_per_sample( AV_SAMPLE_FMT_FLT );
 
     /* This works on "planar" audio so pretend it's just one audio plane */
     audio_conv = av_audio_convert_alloc( AV_SAMPLE_FMT_FLT, 1, enc_params->sample_format, 1, NULL, 0 );
@@ -114,7 +114,7 @@ static void *start_encoder( void *ptr )
         if( cur_pts == -1 )
             cur_pts = raw_frame->pts;
 
-        in_stride = av_get_bits_per_sample_fmt( raw_frame->sample_fmt ) / 8;
+        in_stride = av_get_bytes_per_sample( raw_frame->sample_fmt );
         int num_samples = raw_frame->len / in_stride;
         int sample_bytes = num_samples * out_stride;
         int istride[6] = { in_stride };
