@@ -50,6 +50,7 @@ typedef struct
     enum PixelFormat dst_pix_fmt;
 
     /* dither */
+    void (*dither_row_10_to_8)( uint16_t *src, uint8_t *dst, const uint16_t *dithers, int width, int stride )
     int16_t *error_buf;
 } obe_vid_filter_ctx_t;
 
@@ -84,15 +85,37 @@ const static int wss_to_afd[] =
     [0x7] = 0x8,
 };
 
-static void scale_plane( uint16_t *src, int stride, int width, int height, int lshift, int rshift )
+static void scale_plane_c( uint16_t *src, int stride, int width, int height, int lshift, int rshift )
 {
     for( int i = 0; i < height; i++ )
     {
         for( int j = 0; j < width; j++ )
             src[j] = (src[j] << lshift) + (src[j] >> rshift);
 
-        src += stride >> 1;
+        src += stride / 2;
     }
+}
+
+static void dither_row_10_to_8_c( uint16_t *src, uint8_t *dst, const uint16_t *dither, int width, int stride )
+{
+    const int scale = 511;
+    const uint16_t shift = 11;
+
+    int k;
+    for (k = 0; k < width-7; k+=8)
+    {
+        dst[k+0] = (src[k+0] + dither[0])*scale>>shift;
+        dst[k+1] = (src[k+1] + dither[1])*scale>>shift;
+        dst[k+2] = (src[k+2] + dither[2])*scale>>shift;
+        dst[k+3] = (src[k+3] + dither[3])*scale>>shift;
+        dst[k+4] = (src[k+4] + dither[4])*scale>>shift;
+        dst[k+5] = (src[k+5] + dither[5])*scale>>shift;
+        dst[k+6] = (src[k+6] + dither[6])*scale>>shift;
+        dst[k+7] = (src[k+7] + dither[7])*scale>>shift;
+    }
+    for (; k < width; k++)\
+        dst[k] = (src[k] + dither[k&7])*scale>>shift;
+
 }
 
 static void init_filter( obe_vid_filter_ctx_t *vfilt )
@@ -100,7 +123,7 @@ static void init_filter( obe_vid_filter_ctx_t *vfilt )
     vfilt->avutil_cpu = av_get_cpu_flags();
 
 #if 0
-    vfilt->scale_plane = scale_plane;
+    vfilt->scale_plane = scale_plane_c;
 
     if( vfilt->avutil_cpu & AV_CPU_FLAG_MMX2 )
         vfilt->scale_plane = obe_scale_plane_mmxext;
@@ -111,6 +134,15 @@ static void init_filter( obe_vid_filter_ctx_t *vfilt )
     if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX )
         vfilt->scale_plane = obe_scale_plane_avx;
 #endif
+
+    vfilt->dither_row_10_to_8 = dither_row_10_to_8_c;
+
+    if( vfilt->avutil_cpu & AV_CPU_FLAG_SSE4 )
+        vfilt->dither_row_10_to_8 = obe_scale_plane_sse4;
+
+    if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX )
+        vfilt->dither_row_10_to_8 = obe_scale_plane_avx;
+
 }
 
 static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
