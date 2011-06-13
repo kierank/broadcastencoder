@@ -60,15 +60,9 @@ cglobal dither_row_10_to_8_%1, 5, 5
     psrld     m0, m4
 
     packusdw  m1, m0
+    packuswb  m1, m5
 
-    pextrb    [r1],   m1, 0
-    pextrb    [r1+1], m1, 2
-    pextrb    [r1+2], m1, 4
-    pextrb    [r1+3], m1, 6
-    pextrb    [r1+4], m1, 8
-    pextrb    [r1+5], m1, 10
-    pextrb    [r1+6], m1, 12
-    pextrb    [r1+7], m1, 14
+    movq      [r1], m1
 
     add       r0, mmsize
     add       r1, 8
