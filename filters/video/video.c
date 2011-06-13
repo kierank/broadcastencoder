@@ -50,7 +50,7 @@ typedef struct
     enum PixelFormat dst_pix_fmt;
 
     /* dither */
-    void (*dither_row_10_to_8)( uint16_t *src, uint8_t *dst, const uint16_t *dithers, int width, int stride )
+    void (*dither_row_10_to_8)( uint16_t *src, uint8_t *dst, const uint16_t *dithers, int width, int stride );
     int16_t *error_buf;
 } obe_vid_filter_ctx_t;
 
@@ -138,10 +138,10 @@ static void init_filter( obe_vid_filter_ctx_t *vfilt )
     vfilt->dither_row_10_to_8 = dither_row_10_to_8_c;
 
     if( vfilt->avutil_cpu & AV_CPU_FLAG_SSE4 )
-        vfilt->dither_row_10_to_8 = obe_scale_plane_sse4;
+        vfilt->dither_row_10_to_8 = obe_dither_row_10_to_8_sse4;
 
     if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX )
-        vfilt->dither_row_10_to_8 = obe_scale_plane_avx;
+        vfilt->dither_row_10_to_8 = obe_dither_row_10_to_8_avx;
 
 }
 
@@ -189,7 +189,6 @@ static int downconvert_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_
             fprintf( stderr, "Video scaling failed\n" );
             return -1;
         }
-
     }
 
     tmp_image.csp = vfilt->dst_pix_fmt;
@@ -197,7 +196,7 @@ static int downconvert_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_
     tmp_image.height = raw_frame->img.height;
     tmp_image.planes = av_pix_fmt_descriptors[vfilt->dst_pix_fmt].nb_components;
 
-    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height,
+    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
                         vfilt->dst_pix_fmt, 16 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
@@ -304,7 +303,7 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     tmp_image.width = raw_frame->img.width;
     tmp_image.height = raw_frame->img.height;
 
-    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height,
+    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
                         tmp_image.csp, 16 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
@@ -313,11 +312,11 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
 
     for( int i = 0; i < img->planes; i++ )
     {
-        const int src_depth = av_pix_fmt_descriptors[img->csp].comp[i].depth_minus1+1;
-        const int dst_depth = av_pix_fmt_descriptors[out->csp].comp[i].depth_minus1+1;
+        //const int src_depth = av_pix_fmt_descriptors[img->csp].comp[i].depth_minus1+1;
+        //const int dst_depth = av_pix_fmt_descriptors[out->csp].comp[i].depth_minus1+1;
 
-        uint16_t scale = obe_dither_scale[dst_depth-1][src_depth-1];
-        int shift = src_depth-dst_depth + obe_dither_scale[src_depth-2][dst_depth-1];
+        //uint16_t scale = obe_dither_scale[dst_depth-1][src_depth-1];
+        //int shift = src_depth-dst_depth + obe_dither_scale[src_depth-2][dst_depth-1];
 
         int num_interleaved = csp_num_interleaved( img->csp, i );
         int height = obe_cli_csps[img->csp].height[i] * img->height;
@@ -328,24 +327,12 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
         for( int j = 0; j < height; j++ )
         {
             const uint16_t *dither = obe_dithers[j&7];
-            int k;
-            for (k = 0; k < width-7; k+=8)
-            {
-                dst[k+0] = (src[k+0] + dither[0])*scale>>shift;
-                dst[k+1] = (src[k+1] + dither[1])*scale>>shift;
-                dst[k+2] = (src[k+2] + dither[2])*scale>>shift;
-                dst[k+3] = (src[k+3] + dither[3])*scale>>shift;
-                dst[k+4] = (src[k+4] + dither[4])*scale>>shift;
-                dst[k+5] = (src[k+5] + dither[5])*scale>>shift;
-                dst[k+6] = (src[k+6] + dither[6])*scale>>shift;
-                dst[k+7] = (src[k+7] + dither[7])*scale>>shift;
-            }
-            for (; k < width; k++)\
-                dst[k] = (src[k] + dither[k&7])*scale>>shift;
+
+            vfilt->dither_row_10_to_8( src, dst, dither, width, img->stride[i] );
 
             src += img->stride[i] / 2;
             dst += out->stride[i];
-	}
+        }
     }
 
     raw_frame->release_data( raw_frame );
@@ -489,7 +476,7 @@ static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stre
     {
         if( raw_frame->user_data[i].type == USER_DATA_CEA_608 )
             write_608_cc( &raw_frame->user_data[i], input_stream );
-	else if( raw_frame->user_data[i].type == USER_DATA_CEA_708_CDP )
+        else if( raw_frame->user_data[i].type == USER_DATA_CEA_708_CDP )
             write_cdp( &raw_frame->user_data[i] );
         else if( raw_frame->user_data[i].type == USER_DATA_AFD )
             write_afd( &raw_frame->user_data[i] );
@@ -544,7 +531,7 @@ void *start_filter( void *ptr )
         raw_frame = filter->frames[0];
         pthread_mutex_unlock( &filter->filter_mutex );
 
-        /* TODO: scale 8-bit to 16-bit */
+        /* TODO: scale 8-bit to 10-bit */
 
         if( raw_frame->img.csp == PIX_FMT_YUV422P || raw_frame->img.csp == PIX_FMT_YUV422P10 )
         {
