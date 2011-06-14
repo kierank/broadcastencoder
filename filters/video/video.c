@@ -178,7 +178,7 @@ static int downconvert_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_
 
     if( !vfilt->sws_ctx )
     {
-        vfilt->sws_ctx_flags |= SWS_FULL_CHR_H_INT | SWS_FULL_CHR_H_INP | SWS_ACCURATE_RND | SWS_SPLINE;
+        vfilt->sws_ctx_flags |= SWS_FULL_CHR_H_INT | SWS_FULL_CHR_H_INP | SWS_ACCURATE_RND | SWS_LANCZOS;
         vfilt->dst_pix_fmt = raw_frame->img.csp == PIX_FMT_YUV422P10 ? PIX_FMT_YUV420P10 : PIX_FMT_YUV420P;
 
         vfilt->sws_ctx = sws_getContext( raw_frame->img.width, raw_frame->img.height, raw_frame->img.csp,
