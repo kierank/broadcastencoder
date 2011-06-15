@@ -285,10 +285,10 @@ int parse_vanc_line( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame
                 case MISC_AFD:
                     parse_afd( non_display_data, raw_frame, &line[i+2], line_number );
                     break;
-		case VANC_DVB_SCTE_VBI:
+                case VANC_DVB_SCTE_VBI:
                     parse_dvb_scte_vbi( non_display_data, raw_frame, &line[i+2], line_number );
                     break;
-		case CAPTIONS_CEA_708:
+                case CAPTIONS_CEA_708:
                     parse_cdp( non_display_data, raw_frame, &line[i+2], line_number );
                     break;
                 default:
