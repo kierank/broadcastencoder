@@ -29,12 +29,17 @@
 #include "cc.h"
 #include "dither.h"
 #include "x86/vfilter.h"
+#include "input/sdi/sdi.h"
+
 
 #if X264_BIT_DEPTH > 8
 typedef uint16_t pixel;
 #else
 typedef uint8_t pixel;
 #endif
+
+#define PAL_LAST_BLANK_LINE  338
+#define NTSC_LAST_BLANK_LINE 284
 
 typedef struct
 {
@@ -143,6 +148,38 @@ static void init_filter( obe_vid_filter_ctx_t *vfilt )
     if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX )
         vfilt->dither_row_10_to_8 = obe_dither_row_10_to_8_avx;
 
+}
+
+static void blank_lines( obe_raw_frame_t *raw_frame )
+{
+    /* All SDI input is 10-bit 4:2:2 */
+    /* FIXME: assumes planar, non-interleaved format */
+    uint16_t *y, *u, *v;
+    int last_line, cur_line;
+
+    y = raw_frame->img.plane[0];
+    u = raw_frame->img.plane[1];
+    v = raw_frame->img.plane[2];
+
+    cur_line = raw_frame->img.first_line;
+    last_line = raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL ? PAL_LAST_BLANK_LINE : NTSC_LAST_BLANK_LINE;
+
+    while( cur_line != last_line )
+    {
+        for( int i = 0; i < raw_frame->img.width; i++ )
+            y[i] = 0x40;
+
+        for( int i = 0; i < raw_frame->img.width/2; i++ )
+        {
+            u[i] = 0x200;
+            v[i] = 0x200;
+        }
+
+        cur_line = sdi_next_line( raw_frame->img.format, cur_line );
+        y += raw_frame->img.stride[0] / 2;
+        u += raw_frame->img.stride[1] / 2;
+        v += raw_frame->img.stride[2] / 2;
+    }
 }
 
 static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
@@ -532,6 +569,9 @@ void *start_filter( void *ptr )
         pthread_mutex_unlock( &filter->filter_mutex );
 
         /* TODO: scale 8-bit to 10-bit */
+
+        if( raw_frame->img.first_line )
+            blank_lines( raw_frame );
 
         if( raw_frame->img.csp == PIX_FMT_YUV422P || raw_frame->img.csp == PIX_FMT_YUV422P10 )
         {

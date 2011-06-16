@@ -314,10 +314,11 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             anc_buf_pos += anc_line_stride / 2;
         }
 
-        // TODO output last parsed ancillary line
 #if 0
         if( IS_SD( decklink_opts_->video_format ) && first_line != last_line )
         {
+            // TODO line 20 is missing from NTSC
+
             /* Add a some VBI lines to the ancillary buffer */
             frame_ptr = (uint32_t*)frame_bytes;
             for( int i = 0; i < NUM_ACTIVE_VBI_LINES; i++ )
@@ -363,6 +364,11 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             raw_frame->img.planes = av_pix_fmt_descriptors[raw_frame->img.csp].nb_components;
             raw_frame->img.width = width;
             raw_frame->img.height = height;
+            if( IS_SD( decklink_opts_->video_format ) )
+            {
+                raw_frame->img.format     = decklink_opts_->video_format;
+                raw_frame->img.first_line = decklink_sd_first_active_line[decklink_opts_->video_format].line;
+            }
 
             BMDTimeValue stream_time, frame_duration;
             videoframe->GetStreamTime( &stream_time, &frame_duration, 90000 );

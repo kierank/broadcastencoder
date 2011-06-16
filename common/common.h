@@ -189,6 +189,8 @@ typedef struct
     int     planes;    /* number of planes */
     uint8_t *plane[4]; /* pointers for each plane */
     int     stride[4]; /* strides for each plane */
+    int     format;    /* image format (SD SDI only) */
+    int     first_line; /* first line of image (SD from SDI only) */
 } obe_image_t;
 
 typedef struct
