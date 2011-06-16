@@ -122,5 +122,6 @@ void obe_v210_line_to_nv20_c( uint32_t *src, uint16_t *dst, int width );
 void obe_v210_line_to_uyvy_c( uint32_t *src, uint16_t *dst, int width );
 void obe_downscale_line_c( uint16_t *src, uint8_t *dst, int lines );
 int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream, int location );
+int sdi_next_line( int format, int line_smpte );
 
 #endif

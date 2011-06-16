@@ -117,7 +117,26 @@ int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_
     return 0;
 }
 
-int convert_smpte_to_analogue( int format, int line_smpte, int *line_analogue, int *field )
+int sdi_next_line( int format, int line_smpte )
+{
+    int i;
+
+    if( !IS_INTERLACED( format ) )
+        return line_smpte+1;
+
+    for( i = 0; field_start_lines[i].format != -1; i++ )
+    {
+        if( format == field_start_lines[i].format )
+            break;
+    }
+
+    if( line_smpte >= field_start_lines[i].line && line_smpte < field_start_lines[i].field_two )
+        return field_start_lines[i].field_two - field_start_lines[i].line + line_smpte + 1;
+    else
+        return line_smpte - field_start_lines[i].field_two + field_start_lines[i].line;
+}
+
+int obe_convert_smpte_to_analogue( int format, int line_smpte, int *line_analogue, int *field )
 {
     int i;
 
@@ -137,14 +156,14 @@ int convert_smpte_to_analogue( int format, int line_smpte, int *line_analogue, i
     }
     else
     {
-        *line_analogue = line_smpte - field_start_lines[i].field_two + field_start_lines[i].line  - 1;
+        *line_analogue = line_smpte - field_start_lines[i].field_two + field_start_lines[i].line - 1;
         *field = 2;
     }
 
     return 0;
 }
 
-int convert_analogue_to_smpte( int format, int line_analogue, int field, int *line_smpte )
+int obe_convert_analogue_to_smpte( int format, int line_analogue, int field, int *line_smpte )
 {
     int i;
 
@@ -161,7 +180,7 @@ int convert_analogue_to_smpte( int format, int line_analogue, int field, int *li
                 break;
         }
 
-	*line_smpte = field_start_lines[i].field_two - field_start_lines[i].line + line_analogue + 1;
+        *line_smpte = field_start_lines[i].field_two - field_start_lines[i].line + line_analogue + 1;
     }
 
     return 0;

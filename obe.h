@@ -247,12 +247,12 @@ typedef struct
 /* Convert from SMPTE line notation (e.g. Line 284) to analogue line notation (e.g Line 21 Field 2)
  * Note: field is either 1 or 2. This function will not check the validity of the line.
  * Returns -1 if format is a progressive format */
-int convert_smpte_to_analogue( int format, int line_smpte, int *line_analogue, int *field );
+int obe_convert_smpte_to_analogue( int format, int line_smpte, int *line_analogue, int *field );
 
 /* Convert from analogue line notation (e.g Line 21 Field 2) to SMPTE line notation (e.g. Line 284)
  * Note: field is either 1 or 2. This function will not check the validity of the line
  * Returns -1 if format is a progressive format */
-int convert_analogue_to_smpte( int format, int line_analogue, int field, int *line_smpte );
+int obe_convert_analogue_to_smpte( int format, int line_analogue, int field, int *line_smpte );
 
 /**** AVC Encoding ****/
 /* Use this function to let OBE guess the encoding profile.
