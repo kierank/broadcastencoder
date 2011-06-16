@@ -38,8 +38,8 @@ typedef uint16_t pixel;
 typedef uint8_t pixel;
 #endif
 
-#define PAL_LAST_BLANK_LINE  336
-#define NTSC_LAST_BLANK_LINE 284
+#define PAL_FIRST_NON_BLANKED  24
+#define NTSC_FIRST_NON_BLANKED 22
 
 typedef struct
 {
@@ -155,16 +155,16 @@ static void blank_lines( obe_raw_frame_t *raw_frame )
     /* All SDI input is 10-bit 4:2:2 */
     /* FIXME: assumes planar, non-interleaved format */
     uint16_t *y, *u, *v;
-    int last_line, cur_line;
+    int cur_line, first_nonblank_line;
 
-    y = raw_frame->img.plane[0];
-    u = raw_frame->img.plane[1];
-    v = raw_frame->img.plane[2];
+    y = (uint16_t*)raw_frame->img.plane[0];
+    u = (uint16_t*)raw_frame->img.plane[1];
+    v = (uint16_t*)raw_frame->img.plane[2];
 
     cur_line = raw_frame->img.first_line;
-    last_line = raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL ? PAL_LAST_BLANK_LINE : NTSC_LAST_BLANK_LINE;
+    first_nonblank_line = raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL ? PAL_FIRST_NON_BLANKED : NTSC_FIRST_NON_BLANKED;
 
-    while( cur_line != last_line )
+    while( cur_line != first_nonblank_line )
     {
         for( int i = 0; i < raw_frame->img.width; i++ )
             y[i] = 0x40;
