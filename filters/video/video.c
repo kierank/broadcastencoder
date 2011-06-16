@@ -38,7 +38,7 @@ typedef uint16_t pixel;
 typedef uint8_t pixel;
 #endif
 
-#define PAL_LAST_BLANK_LINE  338
+#define PAL_LAST_BLANK_LINE  337
 #define NTSC_LAST_BLANK_LINE 284
 
 typedef struct
