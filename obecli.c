@@ -54,6 +54,7 @@ static const char * const input_video_connections[]  = { "sdi", "hdmi", "optical
 static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", "analogue", 0 };
 static const char * const stream_actions[]           = { "passthrough", "encode", 0 };
 static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", "", "aac-experimental", 0 };
+static const char * const frame_packing_modes[]      = { "none", "checkerboard", "column", "row", "side-by-side", "top-bottom", "temporal" };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", NULL };
@@ -61,7 +62,7 @@ static const char * stream_opts[] = { "action", "format",
                                       /* Encoding options */
                                       "vbv-maxrate", "vbv-bufsize", "bitrate", "sar-width", "sar-height",
                                       "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", "weightp",
-                                      "interlaced", "tff",
+                                      "interlaced", "tff", "frame-packing"
                                       /* TS options */
                                       "pid", "lang",
                                       NULL };
@@ -368,10 +369,11 @@ static int set_stream( char *command, obecli_command_t *child )
             char *weightp     = obe_get_option( stream_opts[14], opts );
             char *interlaced  = obe_get_option( stream_opts[15], opts );
             char *tff         = obe_get_option( stream_opts[16], opts );
+            char *frame_packing = obe_get_option( stream_opts[18], opts );
 
             /* NB: remap these if more encoding options are added */
-            char *pid         = obe_get_option( stream_opts[17], opts );
-            char *lang        = obe_get_option( stream_opts[18], opts );
+            char *pid         = obe_get_option( stream_opts[18], opts );
+            char *lang        = obe_get_option( stream_opts[19], opts );
 
             if( program.streams[stream_id].stream_type == STREAM_TYPE_VIDEO )
             {
@@ -405,6 +407,13 @@ static int set_stream( char *command, obecli_command_t *child )
                 avc_param->analyse.i_weighted_pred = obe_otoi( weightp, avc_param->analyse.i_weighted_pred );
                 avc_param->b_interlaced        = obe_otob( interlaced, avc_param->b_interlaced );
                 avc_param->b_tff               = obe_otob( tff, avc_param->b_tff );
+                if( frame_packing )
+                    parse_enum_value( frame_packing, frame_packing_modes, &avc_param->i_frame_packing );
+
+                /* Turn on the 3DTV mux option automatically */
+                if( avc_param->i_frame_packing >= 0 )
+                    mux_opts.is_3dtv = 1;
+
             }
             else if( program.streams[stream_id].stream_type == STREAM_TYPE_AUDIO )
             {

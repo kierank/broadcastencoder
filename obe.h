@@ -265,6 +265,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
 /* Arrangements - Frame Packing */
 enum frame_packing_arrangement_e
 {
+    FRAME_PACKING_NONE          = -1,
     FRAME_PACKING_CHECKERBOARD,
     FRAME_PACKING_COLUMN,
     FRAME_PACKING_ROW,
