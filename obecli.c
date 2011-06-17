@@ -62,7 +62,7 @@ static const char * stream_opts[] = { "action", "format",
                                       /* Encoding options */
                                       "vbv-maxrate", "vbv-bufsize", "bitrate", "sar-width", "sar-height",
                                       "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", "weightp",
-                                      "interlaced", "tff", "frame-packing"
+                                      "interlaced", "tff", "frame-packing",
                                       /* TS options */
                                       "pid", "lang",
                                       NULL };
