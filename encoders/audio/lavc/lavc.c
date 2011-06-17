@@ -138,6 +138,16 @@ static void *start_encoder( void *ptr )
         goto finish;
     }
 
+    /* The number of samples per E-AC3 frame is unknown until the encoder is ready */
+    if( enc_params->output_format == AUDIO_E_AC_3 )
+    {
+        pthread_mutex_lock( &encoder->encoder_mutex );
+        encoder->is_ready = 1;
+        encoder->num_samples = codec->frame_size;
+        /* Broadcast because input and muxer can be stuck waiting for encoder */
+        pthread_cond_broadcast( &encoder->encoder_cv );
+        pthread_mutex_unlock( &encoder->encoder_mutex );
+    }
 
     int in_stride = av_get_bytes_per_sample( enc_params->sample_format );
     int out_stride = av_get_bytes_per_sample( enc->sample_fmts[0] );
