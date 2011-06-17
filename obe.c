@@ -850,8 +850,8 @@ int obe_start( obe_t *h )
                     goto fail;
                 }
             }
-            else if( h->output_streams[i].stream_format == AUDIO_MP2 || h->output_streams[i].stream_format == AUDIO_AC_3 ||
-                     h->output_streams[i].stream_format == AUDIO_AAC )
+            else if( h->output_streams[i].stream_format == AUDIO_AC_3 || h->output_streams[i].stream_format == AUDIO_E_AC_3 ||
+	             h->output_streams[i].stream_format == AUDIO_AAC  || h->output_streams[i].stream_format == AUDIO_MP2 )
             {
                 if( h->output_streams[i].stream_format == AUDIO_MP2 )
                     audio_encoder = twolame_encoder;

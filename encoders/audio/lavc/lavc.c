@@ -37,7 +37,7 @@ typedef struct
 static const lavc_encoder_t lavc_encoders[] =
 {
     { AUDIO_AC_3, CODEC_ID_AC3 },
-    //{ AUDIO_E_AC_3, CODEC_ID_EAC3 },
+    { AUDIO_E_AC_3, CODEC_ID_EAC3 },
     { AUDIO_AAC,  CODEC_ID_AAC },
     { -1, -1 },
 };
