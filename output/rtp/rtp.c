@@ -253,6 +253,18 @@ static void *open_output( void *ptr )
         {
             av_fifo_generic_read( fifo_data, rtp_buf, TS_PACKETS_SIZE, NULL );
             av_fifo_generic_read( fifo_pcr, pcrs, 7 * sizeof(int64_t), NULL );
+            if( last_clock != -1 )
+            {
+                delta = pcrs[0] - last_pcr;
+                mpegtime = get_wallclock_in_mpeg_ticks();
+                if( last_clock + delta >= mpegtime )
+                    sleep_mpeg_ticks( last_clock + delta - mpegtime );
+ //               else
+ //                   printf("\n behind %f \n", (double)(last_clock + delta - mpegtime)/27000000 );
+            }
+            last_pcr = pcrs[0];
+            last_clock = get_wallclock_in_mpeg_ticks();
+
             write_rtp_pkt( rtp_handle, rtp_buf, TS_PACKETS_SIZE, pcrs[0] ); // TODO handle fail
         }
     }

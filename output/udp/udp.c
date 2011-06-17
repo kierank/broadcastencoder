@@ -438,19 +438,18 @@ static void *open_output( void *ptr )
         {
             av_fifo_generic_read( fifo_data, udp_buf, TS_PACKETS_SIZE, NULL );
             av_fifo_generic_read( fifo_pcr, pcrs, 7 * sizeof(int64_t), NULL );
-#if 0
             if( last_clock != -1 )
             {
                 delta = pcrs[0] - last_pcr;
                 mpegtime = get_wallclock_in_mpeg_ticks();
                 if( last_clock + delta >= mpegtime )
-                    sleep_mpeg_ticks( mpegtime - delta - last_clock );
-                else
-                    printf("\n behind %f \n", (double)(last_clock + delta - mpegtime)/27000000 );
+                    sleep_mpeg_ticks( last_clock + delta - mpegtime );
+ //               else
+ //                   printf("\n behind %f \n", (double)(last_clock + delta - mpegtime)/27000000 );
             }
             last_pcr = pcrs[0];
             last_clock = get_wallclock_in_mpeg_ticks();
-#endif
+
             udp_write( udp_handle, udp_buf, TS_PACKETS_SIZE ); // TODO handle fail
         }
     }
