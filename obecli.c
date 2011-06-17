@@ -369,7 +369,7 @@ static int set_stream( char *command, obecli_command_t *child )
             char *weightp     = obe_get_option( stream_opts[14], opts );
             char *interlaced  = obe_get_option( stream_opts[15], opts );
             char *tff         = obe_get_option( stream_opts[16], opts );
-            char *frame_packing = obe_get_option( stream_opts[18], opts );
+            char *frame_packing = obe_get_option( stream_opts[17], opts );
 
             /* NB: remap these if more encoding options are added */
             char *pid         = obe_get_option( stream_opts[18], opts );
