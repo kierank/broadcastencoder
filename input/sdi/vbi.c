@@ -198,7 +198,7 @@ fail:
 int decode_video_index_information( obe_sdi_non_display_data_t *non_display_data, uint16_t *line, obe_raw_frame_t *raw_frame, int line_number )
 {
     /* Video index information is only in the chroma samples */
-    uint8_t data[90];
+    uint8_t data[90] = {0};
     obe_int_frame_data_t *tmp, *frame_data;
     obe_user_data_t *tmp2, *user_data;
 
