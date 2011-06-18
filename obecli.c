@@ -480,6 +480,7 @@ static int set_muxer( char *command, obecli_command_t *child )
         mux_opts.pcr_pid    = obe_otoi( pcr_pid, mux_opts.pcr_pid  );
         mux_opts.pcr_period = obe_otoi( pcr_period, mux_opts.pcr_period );
         mux_opts.pat_period = obe_otoi( pat_period, mux_opts.pat_period );
+        free( opts );
     }
 
     return 0;
@@ -511,6 +512,7 @@ static int set_output( char *command, obecli_command_t *child )
              FAIL_IF_ERROR( !output.target, "malloc failed\n" );
              strcpy( output.target, target );
         }
+        free( opts );
     }
     else
     {
@@ -805,6 +807,9 @@ static int probe_device( char *command, obecli_command_t *child )
 
     if( program.num_streams )
     {
+        if( output_streams )
+            free( output_streams );
+
         output_streams = calloc( 1, program.num_streams * sizeof(*output_streams) );
         if( !output_streams )
         {
@@ -888,7 +893,10 @@ int main( int argc, char **argv )
         if( line_read && *line_read )
         {
             if( !strcasecmp( line_read, "exit" ) )
+            {
+                free( line_read );
                 break;
+            }
 
             add_history( line_read );
 
@@ -900,6 +908,9 @@ int main( int argc, char **argv )
 
     write_history( history_filename );
     free( history_filename );
+
+    if( output_streams )
+        free( output_streams );
 
     return 0;
 }
