@@ -432,7 +432,6 @@ static void *open_output( void *ptr )
         }
 
         free( muxed_data );
-        num_muxed_data = 0;
 
         while( av_fifo_size( fifo_data ) >= TS_PACKETS_SIZE )
         {
