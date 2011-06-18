@@ -3,6 +3,7 @@
 
 SECTION .rodata
 
+align 32
 scale: times 4 dd 511
 shift: dd 11
 
