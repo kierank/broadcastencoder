@@ -899,6 +899,7 @@ int main( int argc, char **argv )
     }
 
     write_history( history_filename );
+    free( history_filename );
 
     return 0;
 }
