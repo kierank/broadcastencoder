@@ -36,7 +36,7 @@ static void *start_encoder( void *ptr )
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
     twolame_options *tl_opts = NULL;
-    int output_size, frame_size;
+    int output_size, frame_size, in_stride;
     int64_t cur_pts = -1;
     uint8_t *output_buf = NULL, *output_pos;
     void *audio_buf = NULL;
@@ -78,7 +78,6 @@ static void *start_encoder( void *ptr )
         goto end;
     }
 
-    int in_stride = av_get_bytes_per_sample( enc_params->sample_format );
     int out_stride = av_get_bytes_per_sample( AV_SAMPLE_FMT_FLT );
 
     /* This works on "planar" audio so pretend it's just one audio plane */
