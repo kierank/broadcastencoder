@@ -227,6 +227,32 @@ enum user_data_location_e
 
 typedef struct
 {
+    int service;
+    int location;
+} obe_non_display_data_location_t;
+
+const static obe_non_display_data_location_t non_display_data_locations[] =
+{
+    { MISC_TELETEXT,    USER_DATA_LOCATION_DVB_STREAM },
+    { MISC_TELETEXT_INVERTED, USER_DATA_LOCATION_DVB_STREAM },
+    { MISC_WSS,         USER_DATA_LOCATION_DVB_STREAM },
+    { MISC_VPS,         USER_DATA_LOCATION_DVB_STREAM },
+    { CAPTIONS_CEA_608, USER_DATA_LOCATION_FRAME },
+    { CAPTIONS_CEA_708, USER_DATA_LOCATION_FRAME },
+    { MISC_AFD,         USER_DATA_LOCATION_FRAME },
+    { MISC_BAR_DATA,    USER_DATA_LOCATION_FRAME },
+    { MISC_PAN_SCAN,    USER_DATA_LOCATION_FRAME },
+    { VBI_AMOL_48,      USER_DATA_LOCATION_FRAME },
+    { VBI_AMOL_96,      USER_DATA_LOCATION_FRAME },
+    { VBI_NABTS,        USER_DATA_LOCATION_FRAME },
+    { VBI_TVG2X,        USER_DATA_LOCATION_FRAME },
+    { VBI_CP,           USER_DATA_LOCATION_FRAME },
+    /* Does VITC go in the codec or in the VBI? */
+    { -1, -1 },
+};
+
+typedef struct
+{
     int type;
     int source;
     int len;

@@ -52,7 +52,7 @@ typedef struct
 
     /* VBI */
     int num_vbi;
-    vbi_sliced vbi[100];
+    vbi_sliced vbi_slices[100];
     int vbi_start;
     int vbi_end;
 
@@ -102,19 +102,6 @@ const static obe_line_number_t field_start_lines[] =
     { INPUT_VIDEO_FORMAT_1080I_50,   1, 564 },
     { INPUT_VIDEO_FORMAT_1080I_5994, 1, 564 },
     { INPUT_VIDEO_FORMAT_1080I_60,   1, 564 },
-    { -1, -1 },
-};
-
-typedef struct
-{
-    int service;
-    int location;
-} obe_non_display_data_location_t;
-
-const static obe_non_display_data_location_t non_display_data_locations[] =
-{
-    { CAPTIONS_CEA_608, USER_DATA_LOCATION_FRAME },
-    { MISC_WSS,         USER_DATA_LOCATION_DVB_STREAM },
     { -1, -1 },
 };
 

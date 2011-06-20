@@ -45,6 +45,19 @@
 
 #define REVERSE(x) av_reverse[(x)]
 
+const static int vbi_type_tab[][2] =
+{
+    { VBI_SLICED_TELETEXT_B,         MISC_TELETEXT },
+    { VBI_SLICED_TELETEXT_B_L10_625, MISC_TELETEXT },
+    { VBI_SLICED_TELETEXT_B_L25_625, MISC_TELETEXT },
+    { VBI_SLICED_TELETEXT_C_625,     VBI_NABTS },
+    { VBI_SLICED_WSS_625,            MISC_WSS },
+    { VBI_SLICED_VPS,                MISC_VPS },
+    { VBI_SLICED_CAPTION_525_F1,     CAPTIONS_CEA_608 },
+    { VBI_SLICED_NABTS,              VBI_NABTS },
+    { -1, -1 }
+};
+
 int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data, int ntsc )
 {
     int ret;
