@@ -118,7 +118,7 @@ static void dither_row_10_to_8_c( uint16_t *src, uint8_t *dst, const uint16_t *d
         dst[k+6] = (src[k+6] + dither[6])*scale>>shift;
         dst[k+7] = (src[k+7] + dither[7])*scale>>shift;
     }
-    for (; k < width; k++)\
+    for (; k < width; k++)
         dst[k] = (src[k] + dither[k&7])*scale>>shift;
 
 }
