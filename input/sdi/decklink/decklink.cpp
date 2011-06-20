@@ -36,7 +36,7 @@ extern "C"
 #include "include/DeckLinkAPI.h"
 #include "include/DeckLinkAPIDispatch.cpp"
 
-#define DECKLINK_VANC_LINES 75
+#define DECKLINK_VANC_LINES 100
 
 /* FIXME: is the first active line consistent among cards? */
 const static obe_line_number_t decklink_sd_first_active_line[] =
@@ -203,10 +203,11 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     AVPacket pkt;
     AVFrame frame;
     void *frame_bytes, *anc_line;
-    int finished = 0, ret, bytes, field_one = 0, field_two = 0, num_anc_lines = 0, anc_line_stride,
-    lines_read = 0, first_line = 0, last_line = 0;
-    uint32_t line, *frame_ptr;
+    int finished = 0, ret, bytes, num_anc_lines = 0, anc_line_stride,
+    lines_read = 0, first_line = 0, last_line = 0, line, vbi_lines;
+    uint32_t *frame_ptr;
     uint16_t *anc_buf, *anc_buf_pos;
+    uint8_t *vbi_buf, *vbi_buf_ptr;
     int anc_lines[DECKLINK_VANC_LINES];
     IDeckLinkVideoFrameAncillary *ancillary;
 
@@ -230,23 +231,11 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         videoframe->GetBytes( &frame_bytes );
 
         /* TODO: support format switching (rare in SDI) */
-        int j, k;
+        int j;
         for( j = 0; first_active_line[j].format != -1; j++ )
         {
             if( decklink_opts_->video_format == first_active_line[j].format )
                 break;
-        }
-
-        if( IS_INTERLACED( decklink_opts_->video_format ) )
-        {
-            for( k = 0; field_start_lines[k].format != -1; k++ )
-            {
-                if( decklink_opts_->video_format == field_start_lines[k].format )
-                    break;
-            }
-
-            field_one = field_start_lines[k].line;
-            field_two = field_start_lines[k].field_two;
         }
 
         videoframe->GetAncillaryData( &ancillary );
@@ -258,28 +247,12 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
         /* Overallocate slightly for VANC buffer
          * Some VBI services stray into the active picture so allocate some extra space */
-        if( IS_SD( decklink_opts_->video_format ) )
-            anc_buf = (uint16_t*)av_malloc( (DECKLINK_VANC_LINES + NUM_ACTIVE_VBI_LINES) * anc_line_stride );
-        else
-            anc_buf = (uint16_t*)av_malloc( DECKLINK_VANC_LINES * anc_line_stride );
+        anc_buf = (uint16_t*)av_malloc( DECKLINK_VANC_LINES * anc_line_stride );
 
         anc_buf_pos = anc_buf;
         /* FIXME: will the card ever skip lines? */
         while( 1 )
         {
-            if( IS_INTERLACED( decklink_opts_->video_format ) )
-            {
-                if( lines_read & 1 ) /* even line (line numbers start from 1) */
-                    line = field_two++;
-                else
-                    line = field_one++;
-            }
-            else
-                 line++;
-
-            if( line == first_active_line[j].line )
-                break;
-
             /* Some cards have restrictions on what lines can be accessed so try them all */
             if( ancillary->GetBufferForVerticalBlankingLine( line, &anc_line ) == S_OK )
             {
@@ -293,6 +266,15 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             }
 
             lines_read++;
+            line = sdi_next_line( decklink_opts_->video_format, line );
+
+            if( IS_SD( decklink_opts_->video_format ) )
+            {
+                if( decklink_sd_first_active_line[decklink_opts_->video_format].line == line )
+                    break;
+            }
+            else if( line == first_active_line[j].line )
+                break;
         }
 
         ancillary->Release();
