@@ -497,7 +497,7 @@ static int write_bar_data( obe_user_data_t *user_data )
     return 0;
 }
 
-static int convert_afd_to_wss( obe_user_data_t *user_data )
+static int convert_wss_to_afd( obe_user_data_t *user_data )
 {
     user_data->data[0] = (wss_to_afd[user_data->data[0]] << 3) | (1 << 2);
     if( write_afd( user_data ) < 0 )
@@ -520,7 +520,7 @@ static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stre
         else if( raw_frame->user_data[i].type == USER_DATA_BAR_DATA )
             write_bar_data( &raw_frame->user_data[i] );
         else if( raw_frame->user_data[i].type == USER_DATA_WSS )
-            convert_afd_to_wss( &raw_frame->user_data[i] );
+            convert_wss_to_afd( &raw_frame->user_data[i] );
     }
 
     return 0;
