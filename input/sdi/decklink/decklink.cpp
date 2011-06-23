@@ -338,13 +338,15 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 first_line = sdi_next_line( decklink_opts_->video_format, first_line );
             }
 
-            decklink_ctx->non_display_parser.vbi_decoder.start[0] = first_line;
-            decklink_ctx->non_display_parser.vbi_decoder.start[1] = sdi_next_line( decklink_opts_->video_format, first_line );
-            decklink_ctx->non_display_parser.vbi_decoder.count[0] = last_line - decklink_ctx->non_display_parser.vbi_decoder.start[1] + 1;
-            decklink_ctx->non_display_parser.vbi_decoder.count[1] = decklink_ctx->non_display_parser.vbi_decoder.count[0];
-
             if( !decklink_ctx->has_setup_vbi )
             {
+                vbi_raw_decoder_init( &non_display_data->vbi_decoder );
+
+                decklink_ctx->non_display_parser.vbi_decoder.start[0] = first_line;
+                decklink_ctx->non_display_parser.vbi_decoder.start[1] = sdi_next_line( decklink_opts_->video_format, first_line );
+                decklink_ctx->non_display_parser.vbi_decoder.count[0] = last_line - decklink_ctx->non_display_parser.vbi_decoder.start[1] + 1;
+                decklink_ctx->non_display_parser.vbi_decoder.count[1] = decklink_ctx->non_display_parser.vbi_decoder.count[0];
+
                 if( setup_vbi_parser( &decklink_ctx->non_display_parser, decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC ) < 0 )
                     goto fail;
 

@@ -70,8 +70,6 @@ int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data, int ntsc )
 {
     int ret, services;
 
-    vbi_raw_decoder_init( &non_display_data->vbi_decoder );
-
     non_display_data->vbi_decoder.sampling_format = VBI_PIXFMT_UYVY;
     non_display_data->vbi_decoder.sampling_rate   = 13.5e6;
     non_display_data->vbi_decoder.bytes_per_line  = 720 * 2;
@@ -95,7 +93,7 @@ int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data, int ntsc )
 
         non_display_data->vbi_decoder.offset      = 118;
         non_display_data->vbi_decoder.scanning    = 525;
-        ret = vbi_raw_decoder_add_services( &non_display_data->vbi_decoder, VBI_SLICED_CAPTION_525, 2 );
+        ret = vbi_raw_decoder_add_services( &non_display_data->vbi_decoder, services, 2 );
     }
 
     if( !ret )
