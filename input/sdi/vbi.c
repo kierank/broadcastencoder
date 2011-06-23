@@ -174,7 +174,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             /* Don't duplicate services */
             for( int k = 0; k < non_display_data->num_frame_data; k++ )
             {
-                if( vbi_type_tab[0][j] == non_display_data->frame_data[k].type )
+                if( vbi_type_tab[1][j] == non_display_data->frame_data[k].type )
                 {
                     found = 1;
                     break;
@@ -190,7 +190,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
 
             non_display_data->frame_data = tmp;
             frame_data = &non_display_data->frame_data[non_display_data->num_frame_data++];
-            frame_data->type = vbi_type_tab[0][j];
+            frame_data->type = vbi_type_tab[1][j];
             frame_data->source = VBI_RAW;
             frame_data->line_number = sliced[i].line;
 
