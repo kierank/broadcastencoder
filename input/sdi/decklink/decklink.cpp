@@ -118,6 +118,9 @@ typedef struct
     AVCodec         *dec;
     AVCodecContext  *codec;
 
+    /* VBI */
+    int has_setup_vbi;
+
     /* Ancillary */
     void (*unpack_line) ( uint32_t *src, uint16_t *dst, int width );
     void (*downscale_line) ( uint16_t *src, uint8_t *dst, int lines );
@@ -339,6 +342,14 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             decklink_ctx->non_display_parser.vbi_decoder.start[1] = sdi_next_line( decklink_opts_->video_format, first_line );
             decklink_ctx->non_display_parser.vbi_decoder.count[0] = last_line - decklink_ctx->non_display_parser.vbi_decoder.start[1] + 1;
             decklink_ctx->non_display_parser.vbi_decoder.count[1] = decklink_ctx->non_display_parser.vbi_decoder.count[0];
+
+            if( !decklink_ctx->has_setup_vbi )
+            {
+                if( setup_vbi_parser( &decklink_ctx->non_display_parser, decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC ) < 0 )
+                    goto fail;
+
+                decklink_ctx->has_setup_vbi = 1;
+            }
 
             if( decode_vbi( &decklink_ctx->non_display_parser, vbi_buf_ptr, raw_frame ) < 0 )
                 goto fail;
@@ -722,18 +733,11 @@ static int open_card( decklink_opts_t *decklink_opts )
     /* Setup VBI and VANC unpack functions */
     if( IS_SD( decklink_opts->video_format ) )
     {
-        ret = setup_vbi_parser( &decklink_ctx->non_display_parser, decklink_opts->video_format == INPUT_VIDEO_FORMAT_NTSC );
         decklink_ctx->unpack_line = obe_v210_line_to_uyvy_c;
         decklink_ctx->downscale_line = obe_downscale_line_c;
     }
     else
         decklink_ctx->unpack_line = obe_v210_line_to_nv20_c;
-
-    if( ret < 0 )
-    {
-        fprintf( stderr, "[decklink] Failed to enable VBI parsing\n" );
-        goto finish;
-    }
 
     result = decklink_ctx->p_input->EnableVideoInput( wanted_mode_id, bmdFormat10BitYUV, 0 );
     if( result != S_OK )
