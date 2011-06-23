@@ -315,6 +315,8 @@ static int set_input( char *command, obecli_command_t *child )
             parse_enum_value( video_connection, input_video_connections, &input.video_connection );
         if( audio_connection )
             parse_enum_value( audio_connection, input_audio_connections, &input.audio_connection );
+
+        free( opts );
     }
 
     return 0;
@@ -434,6 +436,7 @@ static int set_stream( char *command, obecli_command_t *child )
                 memcpy( output_streams[stream_id].ts_opts.lang_code, lang, 3 );
                 output_streams[stream_id].ts_opts.lang_code[3] = 0;
             }
+            free( opts );
         }
     }
 
