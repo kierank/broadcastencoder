@@ -139,13 +139,13 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
         }
         else
         {
-            for( j = 0; vbi_type_tab[0][j] != -1; j++ )
+            for( j = 0; vbi_type_tab[j][0] != -1; j++ )
             {
-                if( sliced[i].id == vbi_type_tab[0][j] )
+                if( sliced[i].id == vbi_type_tab[j][0] )
                     break;
             }
 
-            if( vbi_type_tab[0][j] == -1 )
+            if( vbi_type_tab[j][0] == -1 )
                 remove_vbi = 1;
         }
 
@@ -165,16 +165,16 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
         for( int i = 0; i < decoded_lines; i++ )
         {
             found = 0;
-            for( j = 0; vbi_type_tab[0][j] != -1; j++ )
+            for( j = 0; vbi_type_tab[j][0] != -1; j++ )
             {
-                if( sliced[i].id == vbi_type_tab[0][j] )
+                if( sliced[i].id == vbi_type_tab[j][0] )
                     break;
             }
 
             /* Don't duplicate services */
             for( int k = 0; k < non_display_data->num_frame_data; k++ )
             {
-                if( vbi_type_tab[1][j] == non_display_data->frame_data[k].type )
+                if( vbi_type_tab[j][1] == non_display_data->frame_data[k].type )
                 {
                     found = 1;
                     break;
@@ -190,7 +190,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
 
             non_display_data->frame_data = tmp;
             frame_data = &non_display_data->frame_data[non_display_data->num_frame_data++];
-            frame_data->type = vbi_type_tab[1][j];
+            frame_data->type = vbi_type_tab[j][1];
             frame_data->source = VBI_RAW;
             frame_data->line_number = sliced[i].line;
 
