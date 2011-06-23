@@ -340,7 +340,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
             if( !decklink_ctx->has_setup_vbi )
             {
-                vbi_raw_decoder_init( &non_display_data->vbi_decoder );
+                vbi_raw_decoder_init( &decklink_ctx->non_display_parser.vbi_decoder );
 
                 decklink_ctx->non_display_parser.vbi_decoder.start[0] = first_line;
                 decklink_ctx->non_display_parser.vbi_decoder.start[1] = sdi_next_line( decklink_opts_->video_format, first_line );
