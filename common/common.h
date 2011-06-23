@@ -195,7 +195,7 @@ typedef struct
 
 typedef struct
 {
-     int type;  /* For VBI (including VANC VBI) during input this uses stream_formats_e, otherwise user_data_types_e */
+     int type;  /* For VBI (including VANC VBI) during input this uses stream_formats_e */
      int source;
      int line_number; /* Line number of frame starting from line 1 */
      int location;
@@ -242,11 +242,11 @@ const static obe_non_display_data_location_t non_display_data_locations[] =
     { MISC_AFD,         USER_DATA_LOCATION_FRAME },
     { MISC_BAR_DATA,    USER_DATA_LOCATION_FRAME },
     { MISC_PAN_SCAN,    USER_DATA_LOCATION_FRAME },
-    { VBI_AMOL_48,      USER_DATA_LOCATION_FRAME },
-    { VBI_AMOL_96,      USER_DATA_LOCATION_FRAME },
-    { VBI_NABTS,        USER_DATA_LOCATION_FRAME },
-    { VBI_TVG2X,        USER_DATA_LOCATION_FRAME },
-    { VBI_CP,           USER_DATA_LOCATION_FRAME },
+    { VBI_AMOL_48,      USER_DATA_LOCATION_DVB_STREAM },
+    { VBI_AMOL_96,      USER_DATA_LOCATION_DVB_STREAM },
+    { VBI_NABTS,        USER_DATA_LOCATION_DVB_STREAM },
+    { VBI_TVG2X,        USER_DATA_LOCATION_DVB_STREAM },
+    { VBI_CP,           USER_DATA_LOCATION_DVB_STREAM },
     /* Does VITC go in the codec or in the VBI? */
     { -1, -1 },
 };
@@ -255,6 +255,7 @@ typedef struct
 {
     int type;
     int source;
+    int field; /* for single line of CEA-608 data, 0 if both lines, otherwise field number */
     int len;
     uint8_t *data;
 } obe_user_data_t;
