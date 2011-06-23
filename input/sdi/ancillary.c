@@ -162,6 +162,13 @@ static int parse_dvb_scte_vbi( obe_sdi_non_display_data_t *non_display_data, obe
 
     if( non_display_data->probe )
     {
+        /* Don't duplicate VBI streams */
+        for( int i = 0; i < non_display_data->num_frame_data; i++ )
+        {
+            if( non_display_data->frame_data[i].type == data_indentifier_table[i][1] )
+                return 0;
+        }
+
         tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+1) * sizeof(*non_display_data->frame_data) );
         if( !tmp )
             goto fail;
@@ -181,8 +188,8 @@ static int parse_dvb_scte_vbi( obe_sdi_non_display_data_t *non_display_data, obe
     line++;
 
     anc_vbi = &non_display_data->anc_vbi[non_display_data->num_anc_vbi++];
-    anc_vbi->len = len - 1;
-    anc_vbi->unit_id = data_indentifier_table[i][1];
+    anc_vbi->len = len - 3;
+    anc_vbi->unit_id = data_unit_id;
     anc_vbi->data = malloc( anc_vbi->len );
     if( !anc_vbi->data )
         goto fail;
