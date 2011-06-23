@@ -165,7 +165,7 @@ static int parse_dvb_scte_vbi( obe_sdi_non_display_data_t *non_display_data, obe
         /* Don't duplicate VBI streams */
         for( int j = 0; j < non_display_data->num_frame_data; j++ )
         {
-            if( non_display_data->frame_data[j].type == data_indentifier_table[i][1] )
+            if( data_indentifier_table[i][1] == non_display_data->frame_data[j].type )
                 return 0;
         }
 

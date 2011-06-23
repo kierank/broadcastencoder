@@ -54,10 +54,6 @@ typedef struct
     int num_vbi;
     vbi_sliced vbi_slices[100];
 
-    int vbi_start_line_f1;
-    int vbi_start_line_f2;
-    int vbi_field_pairs;
-
     /* Ancillary VBI */
     int num_anc_vbi;
     obe_anc_vbi_t anc_vbi[100];

@@ -24,7 +24,7 @@
 #ifndef OBE_VBI_H
 #define OBE_VBI_H
 
-#define NUM_ACTIVE_VBI_LINES 4
+#define NUM_ACTIVE_VBI_LINES  2
 
 #define PAL_VIDEO_INDEX_LINE  11
 #define NTSC_VIDEO_INDEX_LINE 14
