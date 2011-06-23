@@ -53,8 +53,10 @@ typedef struct
     /* VBI */
     int num_vbi;
     vbi_sliced vbi_slices[100];
-    int vbi_start;
-    int vbi_end;
+
+    int vbi_start_line_f1;
+    int vbi_start_line_f2;
+    int vbi_field_pairs;
 
     /* Ancillary VBI */
     int num_anc_vbi;
@@ -97,8 +99,8 @@ const static obe_line_number_t first_active_line[] =
 
 const static obe_line_number_t field_start_lines[] =
 {
-    { INPUT_VIDEO_FORMAT_PAL,  1, 313 },
-    { INPUT_VIDEO_FORMAT_NTSC, 4, 266 },
+    { INPUT_VIDEO_FORMAT_PAL,  1, 314 }, /* Skip middle line */
+    { INPUT_VIDEO_FORMAT_NTSC, 4, 267 }, /* Skip middle line */
     { INPUT_VIDEO_FORMAT_1080I_50,   1, 564 },
     { INPUT_VIDEO_FORMAT_1080I_5994, 1, 564 },
     { INPUT_VIDEO_FORMAT_1080I_60,   1, 564 },
