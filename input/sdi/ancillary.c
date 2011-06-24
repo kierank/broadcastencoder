@@ -184,15 +184,15 @@ static int parse_dvb_scte_vbi( obe_sdi_non_display_data_t *non_display_data, obe
         return 0;
     }
 
-    /* TODO: pass through data identifier */
-    line++;
-
     anc_vbi = &non_display_data->anc_vbi[non_display_data->num_anc_vbi++];
-    anc_vbi->len = len - 3;
+    anc_vbi->identifier = READ_8( line[0] );
     anc_vbi->unit_id = data_unit_id;
+    anc_vbi->len = READ_8( line[1] );
     anc_vbi->data = malloc( anc_vbi->len );
     if( !anc_vbi->data )
         goto fail;
+
+    line += 2;
 
     for( i = 0; i < anc_vbi->len; i++ )
         anc_vbi->data[i] = READ_8( line[i] );

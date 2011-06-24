@@ -51,6 +51,7 @@ typedef struct
     obe_coded_frame_t *dvb_frame;
 
     /* VBI */
+    int ntsc;
     int num_vbi;
     vbi_sliced vbi_slices[100];
 
