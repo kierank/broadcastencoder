@@ -80,14 +80,14 @@ static obe_cli_csp_t obe_cli_csps[] =
 
 const static int wss_to_afd[] =
 {
-    [0x0] = 0x9,
-    [0x1] = 0xb,
-    [0x2] = 0x3,
-    [0x3] = 0xa,
-    [0x4] = 0x2,
-    [0x5] = 0x4,
-    [0x6] = 0xd,
-    [0x7] = 0x8,
+    [0x0] = 0x9, /* 4:3 (centre) */
+    [0x1] = 0xb, /* 14:9 (centre) */
+    [0x2] = 0x3, /* box 14:9 (top) */
+    [0x3] = 0xa, /* 16:9 (centre) */
+    [0x4] = 0x2, /* box 16:9 (top) */
+    [0x5] = 0x4, /* box > 16:9 (centre) */
+    [0x6] = 0xd, /* 4:3 (shoot and protect 14:9 centre)*/
+    [0x7] = 0x8, /* same as the coded frame */
 };
 
 static void scale_plane_c( uint16_t *src, int stride, int width, int height, int lshift, int rshift )
