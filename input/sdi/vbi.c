@@ -216,6 +216,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
     {
         for( int i = 0; i < decoded_lines; i++ )
         {
+            /* TODO: factor out some of this code */
             /* TODO: handle other non dvb-vbi formats */
             if( sliced[i].id == VBI_SLICED_CAPTION_525_F1 )
             {
@@ -239,11 +240,11 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                     raw_frame->user_data = tmp2;
                     user_data = &raw_frame->user_data[raw_frame->num_user_data++];
 
-                    user_data->data = malloc( 4 );
+                    user_data->len  = 4;
+                    user_data->data = malloc( user_data->len );
                     if( !user_data->data )
                         goto fail;
 
-                    user_data->len  = 4;
                     user_data->type = USER_DATA_CEA_608;
                     user_data->source = VBI_RAW;
 
@@ -257,6 +258,38 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                 if( decoded_lines >= 2 )
                     decoded_lines -= 2;
                 i--;
+            }
+            else if( sliced[i].id == VBI_SLICED_WSS_625 )
+            {
+                /* Don't duplicate AFD data */
+                found = 0;
+                for( j = 0; j < raw_frame->num_user_data; j++ )
+                {
+                    if( raw_frame->user_data[j].type == USER_DATA_AFD )
+                    {
+                        found = 1;
+                        break;
+                    }
+                }
+
+                if( !found )
+                {
+                    tmp2 = realloc( raw_frame->user_data, (raw_frame->num_user_data+1) * sizeof(*raw_frame->user_data) );
+                    if( !tmp2 )
+                        goto fail;
+
+                    raw_frame->user_data = tmp2;
+                    user_data = &raw_frame->user_data[raw_frame->num_user_data++];
+
+                    user_data->len  = 1;
+                    user_data->data = malloc( user_data->len );
+                    if( !user_data->data )
+                        goto fail;
+
+                    user_data->data[0] = sliced[i].data & 0x7;
+                    user_data->type = USER_DATA_WSS;
+                    user_data->source = VBI_RAW;
+                }
             }
         }
         non_display_data->num_vbi = decoded_lines;
