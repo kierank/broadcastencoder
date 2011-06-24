@@ -342,12 +342,13 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             {
                 vbi_raw_decoder_init( &decklink_ctx->non_display_parser.vbi_decoder );
 
+                decklink_ctx->non_display_parser.ntsc = decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC;
                 decklink_ctx->non_display_parser.vbi_decoder.start[0] = first_line;
                 decklink_ctx->non_display_parser.vbi_decoder.start[1] = sdi_next_line( decklink_opts_->video_format, first_line );
                 decklink_ctx->non_display_parser.vbi_decoder.count[0] = last_line - decklink_ctx->non_display_parser.vbi_decoder.start[1] + 1;
                 decklink_ctx->non_display_parser.vbi_decoder.count[1] = decklink_ctx->non_display_parser.vbi_decoder.count[0];
 
-                if( setup_vbi_parser( &decklink_ctx->non_display_parser, decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC ) < 0 )
+                if( setup_vbi_parser( &decklink_ctx->non_display_parser ) < 0 )
                     goto fail;
 
                 decklink_ctx->has_setup_vbi = 1;
@@ -402,17 +403,20 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             add_to_filter_queue( decklink_ctx->h, raw_frame );
 
             /* Send any DVB-VBI frames */
-            if( decklink_ctx->non_display_parser.dvb_frame )
+            if( decklink_ctx->non_display_parser.num_vbi || decklink_ctx->non_display_parser.num_anc_vbi )
             {
+                if( encapsulate_dvb_vbi( &decklink_ctx->non_display_parser ) < 0 )
+                    goto fail;
+
                 decklink_ctx->non_display_parser.dvb_frame->stream_id = 2; // FIXME
                 decklink_ctx->non_display_parser.dvb_frame->pts = stream_time;
 
                 add_to_mux_queue( decklink_ctx->h, decklink_ctx->non_display_parser.dvb_frame );
                 decklink_ctx->non_display_parser.dvb_frame = NULL;
-            }
 
-            decklink_ctx->non_display_parser.num_vbi = 0;
-            decklink_ctx->non_display_parser.num_anc_vbi = 0;
+                decklink_ctx->non_display_parser.num_vbi = 0;
+                decklink_ctx->non_display_parser.num_anc_vbi = 0;
+            }
         }
     }
 

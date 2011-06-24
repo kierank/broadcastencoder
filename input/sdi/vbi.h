@@ -63,7 +63,8 @@ const static int data_indentifier_table[][2] =
     { -1, -1 },
 };
 
-int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data, int ntsc );
+int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data );
 int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, obe_raw_frame_t *raw_frame );
+int encapsulate_dvb_vbi( obe_sdi_non_display_data_t *non_display_data );
 
 #endif
