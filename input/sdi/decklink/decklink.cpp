@@ -816,7 +816,8 @@ static void *probe_stream( void *ptr )
 
     decklink_opts->probe = non_display_parser->probe = 1;
 
-    open_card( decklink_opts );
+    if( open_card( decklink_opts ) < 0 )
+        goto finish;
 
     sleep( 1 );
 
@@ -867,6 +868,7 @@ static void *probe_stream( void *ptr )
             streams[i]->stream_format = AUDIO_PCM;
             streams[i]->channel_layout = AV_CH_LAYOUT_STEREO;
             streams[i]->sample_format = AV_SAMPLE_FMT_S32;
+            /* TODO: support other sample rates */
             streams[i]->sample_rate = 48000;
         }
         else /* VBI stream */
@@ -930,7 +932,8 @@ static void *open_input( void *ptr )
 
     /* TODO: wait for encoder */
 
-    open_card( decklink_opts );
+    if( open_card( decklink_opts ) < 0 )
+        goto finish;
 
     sleep( INT_MAX );
 
