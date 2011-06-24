@@ -469,7 +469,6 @@ int encapsulate_dvb_vbi( obe_sdi_non_display_data_t *non_display_data )
 
     /* Stuffing bytes */
 
-    free( non_display_data->anc_vbi );
     bs_flush( &s );
 
     return 0;
