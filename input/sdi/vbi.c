@@ -171,7 +171,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             found = 0;
             for( j = 0; vbi_type_tab[j][0] != -1; j++ )
             {
-                if( sliced[i].id == vbi_type_tab[j][0] )
+                if( vbi_type_tab[j][0] == sliced[i].id )
                     break;
             }
 
@@ -426,7 +426,7 @@ int encapsulate_dvb_vbi( obe_sdi_non_display_data_t *non_display_data )
         type = found = identifier = 0;
         for( j = 0; vbi_type_tab[j][0] != -1; j++ )
         {
-            if( vbi_type_tab[j][1] == non_display_data->vbi_slices[i].id )
+            if( vbi_type_tab[j][0] == non_display_data->vbi_slices[i].id )
                 type = vbi_type_tab[j][1];
         }
 
