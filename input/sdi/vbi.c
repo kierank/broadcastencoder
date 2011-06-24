@@ -286,7 +286,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                     if( !user_data->data )
                         goto fail;
 
-                    user_data->data[0] = sliced[i].data & 0x7;
+                    user_data->data[0] = sliced[i].data[0] & 0x7;
                     user_data->type = USER_DATA_WSS;
                     user_data->source = VBI_RAW;
                 }
