@@ -471,5 +471,7 @@ int encapsulate_dvb_vbi( obe_sdi_non_display_data_t *non_display_data )
 
     bs_flush( &s );
 
+    non_display_data->dvb_frame->len = bs_pos( &s ) / 8;
+
     return 0;
 }
