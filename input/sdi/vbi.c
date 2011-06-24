@@ -464,7 +464,7 @@ int encapsulate_dvb_vbi( obe_sdi_non_display_data_t *non_display_data )
         bs_flush( &t );
 
         bs_write( &s, 8, bs_pos( &t ) / 8 ); // data_unit_length
-        write_bytes( &t, tmp, bs_pos( &t ) / 8 );
+        write_bytes( &s, tmp, bs_pos( &t ) / 8 );
     }
 
     /* Stuffing bytes */
