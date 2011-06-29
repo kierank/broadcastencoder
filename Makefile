@@ -94,16 +94,14 @@ clean:
 	- sed -e 's/ *-fprofile-\(generate\|use\)//g' config.mak > config.mak2 && mv config.mak2 config.mak
 
 distclean: clean
-	rm -f config.mak config.h config.log obe.pc
+	rm -f config.mak config.h config.log
 	rm -rf test/
 
 install: obecli$(EXE) $(SONAME)
 	install -d $(DESTDIR)$(bindir)
 	install -d $(DESTDIR)$(includedir)
 	install -d $(DESTDIR)$(libdir)
-	install -d $(DESTDIR)$(libdir)/pkgconfig
 	install -m 644 libobe.a $(DESTDIR)$(libdir)
-	install -m 644 obe.pc $(DESTDIR)$(libdir)/pkgconfig
 	install obecli$(EXE) $(DESTDIR)$(bindir)
 	$(RANLIB) $(DESTDIR)$(libdir)/libobe.a
 ifeq ($(SYS),MINGW)
@@ -116,7 +114,7 @@ endif
 
 uninstall:
 	rm -f $(DESTDIR)$(includedir)/obe.h $(DESTDIR)$(libdir)/libobe.a
-	rm -f $(DESTDIR)$(bindir)/obecli$(EXE) $(DESTDIR)$(libdir)/pkgconfig/obe.pc
+	rm -f $(DESTDIR)$(bindir)/obecli$(EXE)
 	$(if $(SONAME), rm -f $(DESTDIR)$(libdir)/$(SONAME) $(DESTDIR)$(libdir)/libobe.$(SOSUFFIX))
 
 etags: TAGS
