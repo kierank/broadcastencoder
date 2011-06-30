@@ -451,6 +451,12 @@ obe_t *obe_setup( void )
 {
     openlog( "obe", LOG_NDELAY | LOG_PID, LOG_USER );
 
+    if( X264_BIT_DEPTH == 9 || X264_BIT_DEPTH > 10 )
+    {
+        fprintf( stderr, "x264 bit-depth of %i not supported\n", X264_BIT_DEPTH );
+        return NULL;
+    }
+
     obe_t *h = calloc( 1, sizeof(*h) );
     if( !h )
     {
@@ -713,7 +719,8 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         param->vui.i_colmatrix = 1;
     }
 
-    x264_param_apply_profile( param, "high" );
+    x264_param_apply_profile( param, X264_BIT_DEPTH == 10 ? "high10" : "high" );
+
     param->sc.f_speed = 1.0;
     param->sc.b_alt_timer = 1;
     param->b_aud = 1;

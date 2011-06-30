@@ -35,6 +35,9 @@ static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_fr
     pic->img.i_plane = img->planes;
     pic->img.i_csp = X264_CSP_I420;
 
+    if( X264_BIT_DEPTH == 10 )
+        pic->img.i_csp |= X264_CSP_HIGH_DEPTH;
+
     pic->extra_sei.sei_free = free;
 
     for( int i = 0; i < raw_frame->num_user_data; i++ )
