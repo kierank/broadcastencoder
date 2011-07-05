@@ -26,9 +26,6 @@
 #include "sdi.h"
 #include "vbi.h"
 
-#define VIDEO_INDEX_CRC_POLY 0x1D
-#define VIDEO_INDEX_CRC_POLY_BROKEN 0x1C
-
 #define READ_8(x) ((x) & 0xff)
 
 static int get_vanc_type( uint8_t did, uint8_t sdid )
