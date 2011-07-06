@@ -540,7 +540,10 @@ static int show_decoders( char *command, obecli_command_t *child )
     printf( "\nSupported Decoders: \n" );
 
     for( int i = 0; format_names[i].decoder_name != 0; i++ )
-        printf( "       %-*s %-*s - %s \n", 7, format_names[i].format_name, 22, format_names[i].long_name, format_names[i].decoder_name );
+    {
+        if( strcmp( format_names[i].decoder_name, "N/A" ) )
+            printf( "       %-*s %-*s - %s \n", 7, format_names[i].format_name, 22, format_names[i].long_name, format_names[i].decoder_name );
+    }
 
     return 0;
 }
@@ -550,7 +553,10 @@ static int show_encoders( char *command, obecli_command_t *child )
     printf( "\nSupported Encoders: \n" );
 
     for( int i = 0; format_names[i].encoder_name != 0; i++ )
-        printf( "       %-*s %-*s - %s \n", 7, format_names[i].format_name, 22, format_names[i].long_name, format_names[i].encoder_name );
+    {
+        if( strcmp( format_names[i].encoder_name, "N/A" ) )
+            printf( "       %-*s %-*s - %s \n", 7, format_names[i].format_name, 22, format_names[i].long_name, format_names[i].encoder_name );
+    }
 
     return 0;
 }
