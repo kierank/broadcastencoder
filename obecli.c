@@ -401,7 +401,6 @@ static int set_stream( char *command, obecli_command_t *child )
                         avc_param->i_level_idc = obe_otoi( level, avc_param->i_level_idc );
                 }
                 avc_param->i_keyint_max        = obe_otoi( keyint, avc_param->i_keyint_max );
-                avc_param->i_sync_lookahead    = obe_otoi( lookahead, avc_param->i_sync_lookahead );
                 avc_param->rc.i_lookahead      = obe_otoi( lookahead, avc_param->rc.i_lookahead );
                 avc_param->i_threads           = obe_otoi( threads, avc_param->i_threads );
                 avc_param->i_bframe            = obe_otoi( bframes, avc_param->i_bframe );
