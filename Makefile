@@ -4,12 +4,12 @@ include config.mak
 
 all: default
 
-SRCS = obe.c common/lavc.c \
+SRCS = obe.c common/lavc.c common/linsys/util.c common/network/network.c common/network/udp/udp.c \
        input/lavf/lavf.c input/sdi/sdi.c input/sdi/ancillary.c input/sdi/vbi.c \
        filters/video/video.c filters/video/cc.c \
        encoders/audio/lavc/lavc.c encoders/video/avc/x264.c \
        mux/ts/ts.c \
-       output/network.c output/rtp/rtp.c output/udp/udp.c
+       output/udp/udp.c output/rtp/rtp.c
 
 SRCCXX =
 

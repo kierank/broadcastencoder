@@ -23,7 +23,6 @@
 
 #include "common/common.h"
 #include "encoders/video/video.h"
-#include "output/network.h"
 
 static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_frame )
 {

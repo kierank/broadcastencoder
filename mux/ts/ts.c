@@ -23,7 +23,6 @@
 
 #include "common/common.h"
 #include "mux/mux.h"
-#include "output/network.h"
 #include <libmpegts.h>
 
 #define MIN_PID 0x30
@@ -131,6 +130,7 @@ void *open_muxer( void *ptr )
     params.num_programs = 1;
     params.programs = &program;
     program.is_3dtv = !!mux_opts->is_3dtv;
+    // TODO more mux opts
 
     program.streams = calloc( 1, mux_params->num_output_streams * sizeof(*program.streams) );
     if( !program.streams )
@@ -285,6 +285,7 @@ void *open_muxer( void *ptr )
         }
         else if( stream_format == MISC_TELETEXT )
         {
+            // FIXME make user selectable
             memcpy( teletext.lang_code, input_stream->lang_code, 4 );
             teletext.teletext_type = input_stream->dvb_teletext_type;
             teletext.teletext_magazine_number = input_stream->dvb_teletext_magazine_number;
@@ -316,6 +317,7 @@ void *open_muxer( void *ptr )
                 vbi_services[j].lines = malloc( sizeof(*vbi_services[j].lines) );
                 if( !vbi_services[j].lines )
                     goto end;
+                // FIXME use the converter
                 vbi_services[j].lines[0].field_parity = 1;
                 vbi_services[j].lines[0].line_offset = input_stream->frame_data[j].line_number;
             }
@@ -327,6 +329,8 @@ void *open_muxer( void *ptr )
             free( vbi_services );
         }
     }
+
+    FILE *fp = fopen( "test.ts", "wb" );
 
     while( 1 )
     {
@@ -422,6 +426,8 @@ void *open_muxer( void *ptr )
 
         if( len )
         {
+            fwrite( output, 1, len, fp );
+#if 0
             muxed_data = new_muxed_data( len );
             if( !muxed_data )
             {
@@ -439,6 +445,7 @@ void *open_muxer( void *ptr )
             }
             memcpy( muxed_data->pcr_list, pcr_list, (len / 188) * sizeof(int64_t) );
             add_to_output_queue( h, muxed_data );
+#endif
         }
 
         for( int i = 0; i < num_frames; i++ )
