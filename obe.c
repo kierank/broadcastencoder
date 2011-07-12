@@ -850,6 +850,7 @@ int obe_start( obe_t *h )
                 }
                 vid_enc_params->h = h;
                 vid_enc_params->encoder = h->encoders[h->num_encoders];
+                h->encoders[h->num_encoders]->is_video = 1;
 
                 memcpy( &vid_enc_params->avc_param, &h->output_streams[i].avc_param, sizeof(x264_param_t) );
                 if( pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, x264_encoder.start_encoder, (void*)vid_enc_params ) < 0 )
@@ -859,7 +860,7 @@ int obe_start( obe_t *h )
                 }
             }
             else if( h->output_streams[i].stream_format == AUDIO_AC_3 || h->output_streams[i].stream_format == AUDIO_E_AC_3 ||
-	             h->output_streams[i].stream_format == AUDIO_AAC  || h->output_streams[i].stream_format == AUDIO_MP2 )
+                     h->output_streams[i].stream_format == AUDIO_AAC  || h->output_streams[i].stream_format == AUDIO_MP2 )
             {
                 if( h->output_streams[i].stream_format == AUDIO_MP2 )
                     audio_encoder = twolame_encoder;

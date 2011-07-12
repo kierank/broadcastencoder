@@ -323,6 +323,7 @@ typedef struct
 {
     int stream_id;
     int is_ready;
+    int is_video;
 
     pthread_t encoder_thread;
     pthread_mutex_t encoder_mutex;
