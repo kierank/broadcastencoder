@@ -26,7 +26,6 @@
 #include "common/network/network.h"
 #include "output/output.h"
 #include "udp.h"
-#include <libavutil/fifo.h>
 
 typedef struct
 {
