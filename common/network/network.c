@@ -33,11 +33,11 @@ int64_t get_wallclock_in_mpeg_ticks( void )
     return ((int64_t)ts.tv_sec * (int64_t)27000000) + (int64_t)(ts.tv_nsec * 27 / 1000);
 }
 
-void sleep_mpeg_ticks( int64_t i_delay )
+void sleep_mpeg_ticks( int64_t i_time )
 {
     struct timespec ts;
-    ts.tv_sec = i_delay / 27000000;
-    ts.tv_nsec = (i_delay % 27000000) * 1000 / 27;
+    ts.tv_sec = i_time / 27000000;
+    ts.tv_nsec = ((i_time % 27000000) * 1000) / 27;
 
-    clock_nanosleep( CLOCK_MONOTONIC, 0, &ts, &ts );
+    clock_nanosleep( CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, &ts );
 }
