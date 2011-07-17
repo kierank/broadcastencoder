@@ -142,6 +142,8 @@ static void *start_encoder( void *ptr )
             goto end;
         }
 
+        free( audio_buf );
+        audio_buf = NULL;
         output_pos = output_buf;
 
         /* Sometimes multiple frames will be output so split them up if necessary */
