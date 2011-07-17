@@ -330,7 +330,7 @@ void *open_muxer( void *ptr )
         }
     }
 
-    FILE *fp = fopen( "test.ts", "wb" );
+    //FILE *fp = fopen( "test.ts", "wb" );
 
     while( 1 )
     {
@@ -426,8 +426,6 @@ void *open_muxer( void *ptr )
 
         if( len )
         {
-            fwrite( output, 1, len, fp );
-#if 0
             muxed_data = new_muxed_data( len );
             if( !muxed_data )
             {
@@ -445,7 +443,6 @@ void *open_muxer( void *ptr )
             }
             memcpy( muxed_data->pcr_list, pcr_list, (len / 188) * sizeof(int64_t) );
             add_to_output_queue( h, muxed_data );
-#endif
         }
 
         for( int i = 0; i < num_frames; i++ )
