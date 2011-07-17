@@ -154,7 +154,7 @@ static void *start_encoder( void *ptr )
             syslog( LOG_ERR, "Malloc failed\n" );
             goto end;
         }
-        *pts2 = raw_frame->pts;
+        pts2[0] = raw_frame->pts;
         pic.passthrough_opaque = pts2;
 
         frame_size = x264_encoder_encode( s, &nal, &i_nal, &pic, &pic_out );
@@ -182,7 +182,8 @@ static void *start_encoder( void *ptr )
             coded_frame->len = frame_size;
             coded_frame->real_dts = (int64_t)((pic_out.hrd_timing.cpb_removal_time * 90000LL) + 0.5);
             coded_frame->real_pts = (int64_t)((pic_out.hrd_timing.dpb_output_time * 90000LL) + 0.5);
-            coded_frame->pts = *(int64_t*)pic_out.passthrough_opaque;
+            pts2 = pic_out.passthrough_opaque;
+            coded_frame->pts = pts2[0];
             coded_frame->random_access = pic_out.b_keyframe;
             coded_frame->priority = IS_X264_TYPE_I( pic_out.i_type );
             free( pic_out.passthrough_opaque );
