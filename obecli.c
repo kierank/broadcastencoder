@@ -920,5 +920,8 @@ int main( int argc, char **argv )
     if( output_streams )
         free( output_streams );
 
+    if( h )
+        obe_close( h );
+
     return 0;
 }
