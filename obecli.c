@@ -426,15 +426,16 @@ static int set_stream( char *command, obecli_command_t *child )
                 if( format )
                     parse_enum_value( format, encode_formats, &output_streams[stream_id].stream_format );
                 output_streams[stream_id].bitrate = obe_otoi( bitrate, 0 );
+
+                if( lang && strlen( lang ) >= 3 )
+                {
+                    output_streams[stream_id].ts_opts.write_lang_code = 1;
+                    memcpy( output_streams[stream_id].ts_opts.lang_code, lang, 3 );
+                    output_streams[stream_id].ts_opts.lang_code[3] = 0;
+                }
             }
 
             output_streams[stream_id].ts_opts.pid = obe_otoi( pid, output_streams[stream_id].ts_opts.pid );
-            if( lang && strlen( lang ) >= 3 )
-            {
-                output_streams[stream_id].ts_opts.write_lang_code = 1;
-                memcpy( output_streams[stream_id].ts_opts.lang_code, lang, 3 );
-                output_streams[stream_id].ts_opts.lang_code[3] = 0;
-            }
             free( opts );
         }
     }
