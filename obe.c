@@ -30,6 +30,14 @@
 #include "mux/mux.h"
 #include "output/output.h"
 
+/** Utilities **/
+int64_t obe_mdate( void )
+{
+    struct timespec ts_current;
+    clock_gettime( CLOCK_MONOTONIC, &ts_current );
+    return (int64_t)ts_current.tv_sec * 1000000 + (int64_t)ts_current.tv_nsec / 1000;
+}
+
 /** Create/Destroy **/
 /* Input device */
 obe_device_t *new_device( void )

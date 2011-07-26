@@ -421,6 +421,8 @@ struct obe_t
     /* Statistics and Monitoring */
 };
 
+int64_t obe_mdate( void );
+
 obe_device_t *new_device( void );
 void destroy_device( obe_device_t *device );
 obe_raw_frame_t *new_raw_frame( void );
