@@ -24,6 +24,12 @@
 #include "common/common.h"
 #include "encoders/video/video.h"
 
+static void x264_logger( void *p_unused, int i_level, const char *psz_fmt, va_list arg )
+{
+    if( i_level <= X264_LOG_WARNING )
+        vsyslog( LOG_ERR, "x264: %s \n", arg );
+}
+
 static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_frame )
 {
     obe_image_t *img = &raw_frame->img;
@@ -88,11 +94,11 @@ static void *start_encoder( void *ptr )
     obe_coded_frame_t *coded_frame;
 
     /* TODO: check for width, height changes */
-    /* TODO: send messages from x264 to syslog */
 
     /* Lock the mutex until we verify and fetch new parameters */
     pthread_mutex_lock( &encoder->encoder_mutex );
 
+    enc_params->avc_param.pf_log = x264_logger;
     s = x264_encoder_open( &enc_params->avc_param );
     if( !s )
     {
