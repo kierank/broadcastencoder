@@ -174,9 +174,9 @@ static void *open_output( void *ptr )
     char *target = output_params->target;
     struct rtp_status status;
     hnd_t rtp_handle = NULL;
-    int num_muxed_data = 0;
+    int num_muxed_data = 0, buffer_frames = 0, ready = 0;
     obe_muxed_data_t **muxed_data;
-    int64_t last_pcr = -1, last_clock = -1, delta, mpegtime;
+    int64_t last_pcr = -1, last_clock = -1, delta;
     AVFifoBuffer *fifo_data = NULL, *fifo_pcr = NULL;
     uint8_t rtp_buf[TS_PACKETS_SIZE];
     int64_t pcrs[7];
@@ -206,24 +206,59 @@ static void *open_output( void *ptr )
     if( rtp_open( &rtp_handle, target ) < 0 )
         return NULL;
 
+    for( int i = 0; i < h->num_encoders; i++ )
+    {
+        if( h->encoders[i]->is_video )
+        {
+            pthread_mutex_lock( &h->encoders[i]->encoder_mutex );
+            if( !h->encoders[i]->is_ready )
+                pthread_cond_wait( &h->encoders[i]->encoder_cv, &h->encoders[i]->encoder_mutex );
+            x264_param_t *params = h->encoders[i]->encoder_params;
+            /* Two extra frames to buffer to account for mux */
+            buffer_frames = params->sc.i_buffer_size + 2;
+            pthread_mutex_unlock( &h->encoders[i]->encoder_mutex );
+            break;
+        }
+    }
+
+    int64_t start_mpeg_time = 0, start_pcr_time = 0;
+
     while( 1 )
     {
         pthread_mutex_lock( &h->output_mutex );
-        if( !h->num_muxed_data )
+        if( h->num_muxed_data == num_muxed_data )
+        {
+            if( !h->num_muxed_data && ready )
+            {
+                printf("\n udp underflow \n");
+            }
             pthread_cond_wait( &h->output_cv, &h->output_mutex );
+        }
 
         num_muxed_data = h->num_muxed_data;
+
+        if( !ready )
+        {
+            if( num_muxed_data >= buffer_frames )
+                ready = 1;
+            else
+            {
+                pthread_mutex_unlock( &h->output_mutex );
+                continue;
+            }
+        }
 
         muxed_data = malloc( num_muxed_data * sizeof(*muxed_data) );
         if( !muxed_data )
         {
-            // FIXME fail
             pthread_mutex_unlock( &h->output_mutex );
+            syslog( LOG_ERR, "Malloc failed\n" );
+            return NULL;
         }
         memcpy( muxed_data, h->muxed_data, num_muxed_data * sizeof(*muxed_data) );
         pthread_mutex_unlock( &h->output_mutex );
 
-        //printf("\n START \n" );
+//        printf("\n START %i \n", num_muxed_data );
 
         for( int i = 0; i < num_muxed_data; i++ )
         {
@@ -256,15 +291,27 @@ static void *open_output( void *ptr )
             if( last_clock != -1 )
             {
                 delta = pcrs[0] - last_pcr;
-                mpegtime = get_wallclock_in_mpeg_ticks();
-                if( last_clock + delta >= mpegtime )
-                    sleep_mpeg_ticks( last_clock + delta - mpegtime );
- //               else
- //                   printf("\n behind %f \n", (double)(last_clock + delta - mpegtime)/27000000 );
-            }
-            last_pcr = pcrs[0];
-            last_clock = get_wallclock_in_mpeg_ticks();
+#if 0
+                int64_t mpegtime = get_wallclock_in_mpeg_ticks();
 
+                sleep_mpeg_ticks( pcrs[0] - start_pcr_time + start_mpeg_time );
+
+                if( last_clock + delta < mpegtime )
+                {
+                    printf("\n behind %f \n", (double)(last_clock + delta - mpegtime)/27000000 );
+                }
+#endif
+                sleep_mpeg_ticks( pcrs[0] - start_pcr_time + start_mpeg_time );
+            }
+
+            if( last_clock == -1 )
+            {
+                start_mpeg_time = get_wallclock_in_mpeg_ticks();
+                start_pcr_time = pcrs[0];
+            }
+
+            last_clock = get_wallclock_in_mpeg_ticks();
+            last_pcr = pcrs[0];
             write_rtp_pkt( rtp_handle, rtp_buf, TS_PACKETS_SIZE, pcrs[0] ); // TODO handle fail
         }
     }
