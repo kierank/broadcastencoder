@@ -83,8 +83,7 @@ int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data )
     if( non_display_data->ntsc == 0 )
     {
         /* FIXME: can Teletext System D be encapsulated in DVB-VBI? */
-        services = VBI_SLICED_VPS | VBI_SLICED_TELETEXT_B | VBI_SLICED_TELETEXT_C_625 |
-                   VBI_SLICED_WSS_625 | VBI_SLICED_CAPTION_625;
+        services = VBI_SLICED_VPS | VBI_SLICED_WSS_625 | VBI_SLICED_CAPTION_625; /* | VBI_SLICED_TELETEXT_B | VBI_SLICED_TELETEXT_C_625 | */
 
         non_display_data->vbi_decoder.offset      = 128;
         non_display_data->vbi_decoder.scanning    = 625;
@@ -281,7 +280,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                     raw_frame->user_data = tmp2;
                     user_data = &raw_frame->user_data[raw_frame->num_user_data++];
 
-                    user_data->len  = 1;
+                    user_data->len = 1;
                     user_data->data = malloc( user_data->len );
                     if( !user_data->data )
                         goto fail;
