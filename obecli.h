@@ -162,7 +162,7 @@ static const obecli_format_name_t format_names[] =
     { AUDIO_AAC,    "AAC",       "Advanced Audio Coding", "FFmpeg AAC decoder",        "FFmpeg AAC encoder" },
     { SUBTITLES_DVB, "DVB-SUB",  "DVB Subtitles",         "N/A",                       "N/A" },
     { MISC_TELETEXT, "DVB-TTX",  "DVB Teletext",          "N/A",                       "N/A" },
-    { MISC_WSS,      "WSS",      "Active Format Description",        "N/A",            "N/A" },
+    { MISC_WSS,      "WSS",      "Wide Screen Signalling",           "N/A",            "N/A" },
     { MISC_VPS,      "VPS",      "Video Programming System",         "N/A",            "N/A" },
     { CAPTIONS_CEA_608, "CEA-608",  "CEA-608 Captions",              "N/A",            "N/A" },
     { CAPTIONS_CEA_708, "CEA-708",  "CEA-708 Captions",              "N/A",            "N/A" },
