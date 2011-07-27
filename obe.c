@@ -670,6 +670,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     }
 
     x264_param_default( param );
+    param->b_deterministic = 0;
     param->b_vfr_input = 0;
     param->b_pic_struct = 1;
     param->b_open_gop = 1;
