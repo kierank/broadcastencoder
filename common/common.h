@@ -39,6 +39,8 @@
 #include <stddef.h>
 #include <errno.h>
 #include <syslog.h>
+#include <sys/time.h>
+#include <time.h>
 #include "obe.h"
 
 #define MAX_DEVICES 1
