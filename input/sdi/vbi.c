@@ -177,7 +177,9 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             /* Don't duplicate services */
             for( int k = 0; k < non_display_data->num_frame_data; k++ )
             {
-                if( vbi_type_tab[j][1] == non_display_data->frame_data[k].type )
+                /* AFD is a superset of WSS so don't duplicate it */
+                if( vbi_type_tab[j][1] == non_display_data->frame_data[k].type ||
+                    ( vbi_type_tab[j][1] == MISC_WSS && non_display_data->frame_data[k].type == MISC_AFD ) )
                 {
                     found = 1;
                     break;
@@ -206,6 +208,22 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             }
 
             frame_data->location = non_display_data_locations[l].location;
+
+            /* WSS is converted to AFD so tell the user this.
+             * TODO: make this user-settable */
+            if( frame_data->type == MISC_WSS )
+            {
+                tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+1) * sizeof(*non_display_data->frame_data) );
+                if( !tmp )
+                    goto fail;
+
+                non_display_data->frame_data = tmp;
+                frame_data = &non_display_data->frame_data[non_display_data->num_frame_data++];
+                frame_data->type = MISC_AFD;
+                frame_data->source = MISC_WSS;
+                frame_data->line_number = sliced[i].line;
+                frame_data->location = USER_DATA_LOCATION_FRAME;
+            }
         }
 
         /* FIXME: should we probe more frames? */
