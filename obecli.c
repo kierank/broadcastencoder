@@ -418,6 +418,8 @@ static int set_stream( char *command, obecli_command_t *child )
             }
             else if( program.streams[stream_id].stream_type == STREAM_TYPE_AUDIO )
             {
+                int default_bitrate = 0;
+
                 /* Set it to encode by default */
                 output_streams[stream_id].stream_action = STREAM_ENCODE;
 
@@ -425,7 +427,17 @@ static int set_stream( char *command, obecli_command_t *child )
                     parse_enum_value( action, stream_actions, &output_streams[stream_id].stream_action );
                 if( format )
                     parse_enum_value( format, encode_formats, &output_streams[stream_id].stream_format );
-                output_streams[stream_id].bitrate = obe_otoi( bitrate, 0 );
+
+                if( output_streams[stream_id].stream_format == AUDIO_MP2 )
+                    default_bitrate = 256;
+                else if( output_streams[stream_id].stream_format == AUDIO_AC_3 )
+                    default_bitrate = 192;
+                else if( output_streams[stream_id].stream_format == AUDIO_E_AC_3 )
+                    default_bitrate = 192;
+                else // AAC
+                    default_bitrate = 128;
+
+                output_streams[stream_id].bitrate = obe_otoi( bitrate, default_bitrate );
 
                 if( lang && strlen( lang ) >= 3 )
                 {
