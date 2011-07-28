@@ -329,7 +329,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
             /* Scale the lines from 10-bit to 8-bit */
             decklink_ctx->downscale_line( anc_buf, vbi_buf, num_anc_lines );
-            anc_buf_pos = anc_buf_ptr;
+            anc_buf_pos = anc_buf;
 
             /* Check that the card doesn't start on field two (unlikely) */
             obe_convert_smpte_to_analogue( decklink_opts_->video_format, first_line, &tmp_line, &field_num );
@@ -350,7 +350,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 tmp_line++;
             }
 
-            if( decode_video_index_information( &decklink_ctx->non_display_parser, anc_buf_pos, raw_frames, vii_line ) < 0 )
+            if( decode_video_index_information( &decklink_ctx->non_display_parser, anc_buf_pos, raw_frame, vii_line ) < 0 )
                     goto fail;
 
             if( !decklink_ctx->has_setup_vbi )
