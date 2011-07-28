@@ -223,7 +223,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     {
         if( videoframe->GetFlags() & bmdFrameHasNoInputSource )
         {
-            syslog( LOG_ERR, "No input signal detected" );
+            syslog( LOG_ERR, "Decklink card index %i: No input signal detected", decklink_opts_->card_idx );
             return S_OK;
         }
 
