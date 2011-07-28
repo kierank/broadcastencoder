@@ -207,9 +207,9 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     AVFrame frame;
     void *frame_bytes, *anc_line;
     int finished = 0, ret, bytes, num_anc_lines = 0, anc_line_stride,
-    lines_read = 0, first_line = 0, last_line = 0, line, vbi_lines;
+    lines_read = 0, first_line = 0, last_line = 0, line, vbi_lines, vii_line;
     uint32_t *frame_ptr;
-    uint16_t *anc_buf, *anc_buf_pos;
+    uint16_t *anc_buf, *anc_buf_pos, *vii_buf_ptr;
     uint8_t *vbi_buf, *vbi_buf_ptr;
     int anc_lines[DECKLINK_VANC_LINES];
     IDeckLinkVideoFrameAncillary *ancillary;
@@ -329,14 +329,29 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
             /* Scale the lines from 10-bit to 8-bit */
             decklink_ctx->downscale_line( anc_buf, vbi_buf, num_anc_lines );
+            anc_buf_pos = anc_buf_ptr;
 
-            /* Check that the card doesn't start on field two */
+            /* Check that the card doesn't start on field two (unlikely) */
             obe_convert_smpte_to_analogue( decklink_opts_->video_format, first_line, &tmp_line, &field_num );
             if( field_num == 2 )
             {
                 vbi_buf_ptr += width * 2;
+                anc_buf_pos += width * 2;
                 first_line = sdi_next_line( decklink_opts_->video_format, first_line );
             }
+
+            /* Handle Video Index information */
+            vii_buf_ptr = anc_buf_pos;
+            tmp_line = first_line;
+            vii_line = decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC ? NTSC_VIDEO_INDEX_LINE : PAL_VIDEO_INDEX_LINE;
+            while( tmp_line < vii_line )
+            {
+                anc_buf_pos += width * 4;
+                tmp_line++;
+            }
+
+            if( decode_video_index_information( &decklink_ctx->non_display_parser, anc_buf_pos, raw_frames, vii_line ) < 0 )
+                    goto fail;
 
             if( !decklink_ctx->has_setup_vbi )
             {
@@ -356,8 +371,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
             if( decode_vbi( &decklink_ctx->non_display_parser, vbi_buf_ptr, raw_frame ) < 0 )
                 goto fail;
-
-            /* TODO: handle Video Index information */
 
             av_free( vbi_buf );
         }
