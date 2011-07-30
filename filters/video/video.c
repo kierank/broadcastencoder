@@ -31,7 +31,6 @@
 #include "x86/vfilter.h"
 #include "input/sdi/sdi.h"
 
-
 #if X264_BIT_DEPTH > 8
 typedef uint16_t pixel;
 #else
@@ -90,17 +89,6 @@ const static int wss_to_afd[] =
     [0x7] = 0xf, /* 16:9 (shoot and protect 4:3 centre) */
 };
 
-static void scale_plane_c( uint16_t *src, int stride, int width, int height, int lshift, int rshift )
-{
-    for( int i = 0; i < height; i++ )
-    {
-        for( int j = 0; j < width; j++ )
-            src[j] = (src[j] << lshift) + (src[j] >> rshift);
-
-        src += stride / 2;
-    }
-}
-
 static void dither_row_10_to_8_c( uint16_t *src, uint8_t *dst, const uint16_t *dither, int width, int stride )
 {
     const int scale = 511;
@@ -126,19 +114,6 @@ static void dither_row_10_to_8_c( uint16_t *src, uint8_t *dst, const uint16_t *d
 static void init_filter( obe_vid_filter_ctx_t *vfilt )
 {
     vfilt->avutil_cpu = av_get_cpu_flags();
-
-#if 0
-    vfilt->scale_plane = scale_plane_c;
-
-    if( vfilt->avutil_cpu & AV_CPU_FLAG_MMX2 )
-        vfilt->scale_plane = obe_scale_plane_mmxext;
-
-    if( vfilt->avutil_cpu & AV_CPU_FLAG_SSE2 )
-        vfilt->scale_plane = obe_scale_plane_sse2;
-
-    if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX )
-        vfilt->scale_plane = obe_scale_plane_avx;
-#endif
 
     vfilt->dither_row_10_to_8 = dither_row_10_to_8_c;
 
@@ -186,13 +161,6 @@ static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
 {
     obe_image_t *img = &raw_frame->img;
 
-    /* TODO: when frames are needed for reference we can't scale in-place */
-
-    /* this function mimics how swscale does upconversion. 8-bit is converted
-     * to 16-bit through left shifting the orginal value with 8 and then adding
-     * the original value to that. This effectively keeps the full color range
-     * while also being fast. for n-bit we basically do the same thing, but we
-     * discard the lower 16-n bits. */
     const int lshift = 16-obe_cli_csps[img->csp].bit_depth;
     const int rshift = 2*obe_cli_csps[img->csp].bit_depth - 16;
     for( int i = 0; i < img->planes; i++ )

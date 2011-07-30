@@ -24,10 +24,6 @@
 #ifndef OBE_X86_VFILTER
 #define OBE_X86_VFILTER
 
-void obe_scale_plane_mmxext( uint16_t *src, int stride, int width, int height, int lshift, int rshift );
-void obe_scale_plane_sse2( uint16_t *src, int stride, int width, int height, int lshift, int rshift );
-void obe_scale_plane_avx( uint16_t *src, int stride, int width, int height, int lshift, int rshift );
-
 void obe_dither_row_10_to_8_sse4( uint16_t *src, uint8_t *dst, const uint16_t *dither, int width, int stride );
 void obe_dither_row_10_to_8_avx( uint16_t *src, uint8_t *dst, const uint16_t *dither, int width, int stride );
 
