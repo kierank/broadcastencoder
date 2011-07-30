@@ -215,7 +215,8 @@ static int downconvert_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_
                0, tmp_image.height, tmp_image.plane, tmp_image.stride );
 
     raw_frame->release_data( raw_frame );
-    memcpy( &raw_frame->img, &tmp_image, sizeof(obe_image_t) );
+    memcpy( &raw_frame->alloc_img, &tmp_image, sizeof(obe_image_t) );
+    memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
 
     return 0;
 }
@@ -294,7 +295,8 @@ static int dither_image( obe_raw_frame_t *raw_frame, int16_t *error_buf )
     }
 
     raw_frame->release_data( raw_frame );
-    memcpy( &raw_frame->img, out, sizeof(obe_image_t) );
+    memcpy( &raw_frame->alloc_img, out, sizeof(obe_image_t) );
+    memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
 
     return 0;
 }
@@ -344,7 +346,8 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     }
 
     raw_frame->release_data( raw_frame );
-    memcpy( &raw_frame->img, out, sizeof(obe_image_t) );
+    memcpy( &raw_frame->alloc_img, &tmp_image, sizeof(obe_image_t) );
+    memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
 
     return 0;
 }

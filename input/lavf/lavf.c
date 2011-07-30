@@ -525,25 +525,27 @@ void *open_input( void *ptr )
                             break;
                         }
                         raw_frame->stream_id = out_lut->stream_id;
-                        raw_frame->img.csp = codec->pix_fmt;
+                        raw_frame->alloc_img.csp = codec->pix_fmt;
 
                         /* full_range_flag is almost always wrong so ignore it */
-                        if( raw_frame->img.csp == PIX_FMT_YUVJ420P )
-                            raw_frame->img.csp = PIX_FMT_YUV420P;
+                        if( raw_frame->alloc_img.csp == PIX_FMT_YUVJ420P )
+                            raw_frame->alloc_img.csp = PIX_FMT_YUV420P;
 
-                        raw_frame->img.width = width = codec->width;
-                        raw_frame->img.height = height = codec->height;
+                        raw_frame->alloc_img.width = width = codec->width;
+                        raw_frame->alloc_img.height = height = codec->height;
 
                         /* FIXME: get rid of this ugly memcpy */
                         avcodec_align_dimensions2( codec, &width, &height, stride );
-                        if( av_image_alloc( raw_frame->img.plane, raw_frame->img.stride, width, height, raw_frame->img.csp, 16 ) < 0 )
+                        if( av_image_alloc( raw_frame->alloc_img.plane, raw_frame->alloc_img.stride, width, height, raw_frame->alloc_img.csp, 16 ) < 0 )
                         {
                             syslog( LOG_ERR, "Malloc failed\n" );
                             obe_free_packet( &pkt );
                             break;
                         }
-                        av_image_copy( raw_frame->img.plane, raw_frame->img.stride, (const uint8_t**)&frame.data,
+                        av_image_copy( raw_frame->alloc_img.plane, raw_frame->alloc_img.stride, (const uint8_t**)&frame.data,
                                        frame.linesize, codec->pix_fmt, width, height );
+
+                        memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
 
                         raw_frame->release_data = obe_release_video_data;
                         raw_frame->release_frame = obe_release_frame;

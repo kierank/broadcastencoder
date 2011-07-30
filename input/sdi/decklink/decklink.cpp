@@ -397,17 +397,18 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             raw_frame->release_data = obe_release_video_data;
             raw_frame->release_frame = obe_release_frame;
 
-            memcpy( raw_frame->img.stride, frame.linesize, sizeof(raw_frame->img.stride) );
-            memcpy( raw_frame->img.plane, frame.data, sizeof(raw_frame->img.plane) );
-            raw_frame->img.csp = (int)decklink_ctx->codec->pix_fmt;
-            raw_frame->img.planes = av_pix_fmt_descriptors[raw_frame->img.csp].nb_components;
-            raw_frame->img.width = width;
-            raw_frame->img.height = height;
+            memcpy( raw_frame->alloc_img.stride, frame.linesize, sizeof(raw_frame->alloc_img.stride) );
+            memcpy( raw_frame->alloc_img.plane, frame.data, sizeof(raw_frame->alloc_img.plane) );
+            raw_frame->alloc_img.csp = (int)decklink_ctx->codec->pix_fmt;
+            raw_frame->alloc_img.planes = av_pix_fmt_descriptors[raw_frame->img.csp].nb_components;
+            raw_frame->alloc_img.width = width;
+            raw_frame->alloc_img.height = height;
             if( IS_SD( decklink_opts_->video_format ) )
             {
                 raw_frame->img.format     = decklink_opts_->video_format;
                 raw_frame->img.first_line = decklink_sd_first_active_line[decklink_opts_->video_format].line;
             }
+            memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
 
             BMDTimeValue stream_time, frame_duration;
             videoframe->GetStreamTime( &stream_time, &frame_duration, 90000 );
