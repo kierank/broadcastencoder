@@ -10,6 +10,35 @@ shift: dd 11
 SECTION .text
 
 ;
+; obe_scale_plane( uint16_t *src, int stride, int width, int height, int lshift, int rshift )
+;
+
+%macro SCALE_plane 1
+
+cglobal scale_plane_%1, 6,6
+    imul   r1d, r3d
+    movd    m2, r4d
+    movd    m3, r5d
+.loop
+    mova    m0, [r0]
+    psllw   m1, m0, m2
+    psrlw   m0, m3
+    paddw   m0, m1
+    mova   [r0], m0
+    sub     r1d, mmsize
+    lea     r0, [r0+mmsize]
+    jg .loop
+    REP_RET
+%endmacro
+
+INIT_MMX
+SCALE_plane mmxext
+INIT_XMM
+SCALE_plane sse2
+INIT_AVX
+SCALE_plane avx
+
+;
 ; obe_dither_row_10_to_8( uint16_t *src, uint8_t *dst, const uint16_t *dithers, int width, int stride )
 ;
 
