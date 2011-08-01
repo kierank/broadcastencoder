@@ -228,10 +228,12 @@ static void *open_output( void *ptr )
         pthread_mutex_lock( &h->output_mutex );
         if( h->num_muxed_data == num_muxed_data )
         {
+#if 0
             if( !h->num_muxed_data && ready )
             {
                 printf("\n udp underflow \n");
             }
+#endif
             pthread_cond_wait( &h->output_cv, &h->output_mutex );
         }
 
