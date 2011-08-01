@@ -899,7 +899,7 @@ int main( int argc, char **argv )
     }
 
     printf( "\nOpen Broadcast Encoder command line interface.\n" );
-    printf( "Version 0.1-alpha \n" );
+    printf( "Version 0.1-beta \n" );
     printf( "\n" );
 
     while( 1 )
