@@ -1,13 +1,18 @@
-OBE-RT 0.1-Alpha Release Notes
+OBE-RT 0.1-Beta Release Notes
 
 ** Suitability **
 
-This release is suitable for testing SD/HD SDI input encoded to IP out.
-Much of the features are not yet documented. Only obecli use is recommended. API use is not recommended.
+This release is suitable for long term testing in an IPTV lab or production environment.
+It has been tested on SD/HD streams on a production IPTV network. Only obecli use is recommended. API use is not recommended.
 
 ** Known issues **
 
-Output jitter on IP out can be unacceptable - this needs further investigation
-Encoder shutdown fails currently. Ctrl-C will suffice.
+Handling of SDI drops is not optimal. This will be fixed in a later release.
+
+There is a condition with x264's lookahead that can cause some small speedcontrol underflows.
+(A speedcontrol underflow is when the encoder runs slower than realtime for a short period).
+The total underflow time is generally very small and within ip jitter tolerances. This will
+be fixed in a later release.
+
 IP-in -> IP-out transcoding is an experimental feature
 
