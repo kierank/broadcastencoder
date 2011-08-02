@@ -239,6 +239,12 @@ static void *open_output( void *ptr )
 
         num_muxed_data = h->num_muxed_data;
 
+        /* Refill the buffer after a drop */
+        pthread_mutex_lock( &h->drop_mutex );
+        if( h->output_drop )
+            ready = h->output_drop = 0;
+        pthread_mutex_unlock( &h->drop_mutex );
+
         if( !ready )
         {
             if( num_muxed_data >= buffer_frames )

@@ -29,6 +29,9 @@
 #include <libzvbi.h>
 #include <libavutil/crc.h>
 
+/* In microseconds */
+#define SDI_MAX_DELAY 100000
+
 typedef struct
 {
     int identifier;

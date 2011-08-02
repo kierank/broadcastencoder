@@ -21,6 +21,7 @@
  *
  *****************************************************************************/
 
+#define __STDC_FORMAT_MACROS   1
 #define __STDC_CONSTANT_MACROS 1
 
 extern "C"
@@ -118,6 +119,8 @@ typedef struct
     AVCodec         *dec;
     AVCodecContext  *codec;
 
+    int64_t last_frame_time;
+
     /* VBI */
     int has_setup_vbi;
 
@@ -206,6 +209,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     AVPacket pkt;
     AVFrame frame;
     void *frame_bytes, *anc_line;
+    obe_t *h = decklink_ctx->h;
     int finished = 0, ret, bytes, num_anc_lines = 0, anc_line_stride,
     lines_read = 0, first_line = 0, last_line = 0, line, vbi_lines, vii_line;
     uint32_t *frame_ptr;
@@ -225,6 +229,23 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         {
             syslog( LOG_ERR, "Decklink card index %i: No input signal detected", decklink_opts_->card_idx );
             return S_OK;
+        }
+
+        if( decklink_ctx->last_frame_time == -1 )
+            decklink_ctx->last_frame_time = obe_mdate();
+        else
+        {
+            int64_t cur_frame_time = obe_mdate();
+            if( cur_frame_time - decklink_ctx->last_frame_time >= SDI_MAX_DELAY )
+            {
+                syslog( LOG_WARNING, "Decklink card index %i: No frame received for %"PRIi64" ms", decklink_opts_->card_idx,
+                       (cur_frame_time - decklink_ctx->last_frame_time) / 1000 );
+                pthread_mutex_lock( &h->drop_mutex );
+                h->encoder_drop = h->output_drop = 1;
+                pthread_mutex_unlock( &h->drop_mutex );
+            }
+
+            decklink_ctx->last_frame_time = cur_frame_time;
         }
 
         const int width = videoframe->GetWidth();
@@ -414,7 +435,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             videoframe->GetStreamTime( &stream_time, &frame_duration, 90000 );
 
             raw_frame->pts = stream_time;
-            add_to_filter_queue( decklink_ctx->h, raw_frame );
+            add_to_filter_queue( h, raw_frame );
 
             /* Send any DVB-VBI frames */
             if( decklink_ctx->non_display_parser.num_vbi || decklink_ctx->non_display_parser.num_anc_vbi )
@@ -425,7 +446,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 decklink_ctx->non_display_parser.dvb_frame->stream_id = 2; // FIXME
                 decklink_ctx->non_display_parser.dvb_frame->pts = stream_time;
 
-                add_to_mux_queue( decklink_ctx->h, decklink_ctx->non_display_parser.dvb_frame );
+                add_to_mux_queue( h, decklink_ctx->non_display_parser.dvb_frame );
                 decklink_ctx->non_display_parser.dvb_frame = NULL;
 
                 decklink_ctx->non_display_parser.num_vbi = 0;
@@ -811,6 +832,7 @@ static void *probe_stream( void *ptr )
     obe_int_input_stream_t *streams[MAX_STREAMS];
     int num_streams = 0, vbi_stream_services = 0;
     obe_sdi_non_display_data_t *non_display_parser;
+    decklink_ctx_t *decklink_ctx;
 
     decklink_opts_t *decklink_opts = (decklink_opts_t*)calloc( 1, sizeof(*decklink_opts) );
     if( !decklink_opts )
@@ -829,6 +851,12 @@ static void *probe_stream( void *ptr )
     decklink_opts->video_format = user_opts->video_format;
 
     decklink_opts->probe = non_display_parser->probe = 1;
+
+    decklink_ctx = &decklink_opts->decklink_ctx;
+    decklink_ctx->h = h;
+    decklink_ctx->last_frame_time = -1;
+
+    decklink_ctx = &decklink_opts->decklink_ctx;
 
     if( open_card( decklink_opts ) < 0 )
         goto finish;
@@ -943,6 +971,7 @@ static void *open_input( void *ptr )
     decklink_ctx = &decklink_opts->decklink_ctx;
 
     decklink_ctx->h = h;
+    decklink_ctx->last_frame_time = -1;
 
     /* TODO: wait for encoder */
 

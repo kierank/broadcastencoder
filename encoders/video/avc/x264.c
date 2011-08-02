@@ -143,6 +143,16 @@ static void *start_encoder( void *ptr )
             goto end;
         }
 
+        /* Reset the speedcontrol buffer if the source has dropped frames. Otherwise speedcontrol
+	 * stays in an underflow state and is locked to the fastest preset */
+        pthread_mutex_lock( &h->drop_mutex );
+        if( h->encoder_drop )
+        {
+            x264_speedcontrol_sync( h, 12, 0.75 );
+            h->encoder_drop = 0;
+        }
+        pthread_mutex_unlock( &h->drop_mutex );
+
         raw_frame = encoder->frames[0];
         pthread_mutex_unlock( &encoder->encoder_mutex );
 

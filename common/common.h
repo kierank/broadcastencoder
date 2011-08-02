@@ -392,6 +392,12 @@ struct obe_t
     obe_device_t *devices[MAX_DEVICES];
     int cur_stream_id;
 
+    /* Frame drop flags
+     * TODO: make this work for multiple inputs and outputs */
+    pthread_mutex_t drop_mutex;
+    int encoder_drop;
+    int output_drop;
+
     /* Streams */
     int num_output_streams;
     obe_output_stream_t *output_streams;
