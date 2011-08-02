@@ -148,7 +148,7 @@ static void *start_encoder( void *ptr )
         pthread_mutex_lock( &h->drop_mutex );
         if( h->encoder_drop )
         {
-            x264_speedcontrol_sync( h, 12, 0.75 );
+            x264_speedcontrol_sync( s, 12, 0.75 );
             h->encoder_drop = 0;
         }
         pthread_mutex_unlock( &h->drop_mutex );
