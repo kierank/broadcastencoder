@@ -792,6 +792,7 @@ int obe_start( obe_t *h )
 
     /* Setup mutexes and cond vars */
     pthread_mutex_init( &h->devices[0]->device_mutex, NULL );
+    pthread_mutex_init( &h->drop_mutex, NULL );
     pthread_mutex_init( &h->mux_mutex, NULL );
     pthread_cond_init( &h->mux_cv, NULL );
     pthread_mutex_init( &h->output_mutex, NULL );
