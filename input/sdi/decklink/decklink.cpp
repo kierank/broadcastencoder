@@ -421,7 +421,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             memcpy( raw_frame->alloc_img.stride, frame.linesize, sizeof(raw_frame->alloc_img.stride) );
             memcpy( raw_frame->alloc_img.plane, frame.data, sizeof(raw_frame->alloc_img.plane) );
             raw_frame->alloc_img.csp = (int)decklink_ctx->codec->pix_fmt;
-            raw_frame->alloc_img.planes = av_pix_fmt_descriptors[raw_frame->img.csp].nb_components;
+            raw_frame->alloc_img.planes = av_pix_fmt_descriptors[raw_frame->alloc_img.csp].nb_components;
             raw_frame->alloc_img.width = width;
             raw_frame->alloc_img.height = height;
             if( IS_SD( decklink_opts_->video_format ) )
