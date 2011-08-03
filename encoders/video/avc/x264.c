@@ -148,7 +148,8 @@ static void *start_encoder( void *ptr )
         pthread_mutex_lock( &h->drop_mutex );
         if( h->encoder_drop )
         {
-            x264_speedcontrol_sync( s, 12, 0.75 );
+            syslog( LOG_INFO, "Speedcontrol reset\n" );
+            x264_speedcontrol_sync( s, enc_params->avc_param.sc.i_buffer_size, enc_params->avc_param.sc.f_buffer_init );
             h->encoder_drop = 0;
         }
         pthread_mutex_unlock( &h->drop_mutex );

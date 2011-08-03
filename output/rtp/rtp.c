@@ -242,7 +242,10 @@ static void *open_output( void *ptr )
         /* Refill the buffer after a drop */
         pthread_mutex_lock( &h->drop_mutex );
         if( h->output_drop )
+        {
+            syslog( LOG_INFO, "RTP output buffer reset\n" );
             ready = h->output_drop = 0;
+        }
         pthread_mutex_unlock( &h->drop_mutex );
 
         if( !ready )
