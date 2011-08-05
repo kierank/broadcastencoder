@@ -356,6 +356,7 @@ int decode_video_index_information( obe_sdi_non_display_data_t *non_display_data
             if( !tmp )
                 goto fail;
 
+            non_display_data->frame_data = tmp;
             frame_data = &non_display_data->frame_data[non_display_data->num_frame_data++];
             frame_data->location = USER_DATA_LOCATION_FRAME;
             frame_data->type = MISC_AFD;
