@@ -53,7 +53,7 @@ const static int vbi_type_tab[][2] =
     { VBI_SLICED_TELETEXT_C_625,     VBI_NABTS },
     { VBI_SLICED_WSS_625,            MISC_WSS },
     { VBI_SLICED_VPS,                MISC_VPS },
-    { VBI_SLICED_CAPTION_525_F1,     CAPTIONS_CEA_608 },
+    { VBI_SLICED_CAPTION_525,        CAPTIONS_CEA_608 },
     { VBI_SLICED_NABTS,              VBI_NABTS },
     { -1, -1 }
 };
@@ -123,6 +123,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
     int j, l, found;
 
     sliced = non_display_data->vbi_slices;
+    memset( sliced, 0, sizeof(non_display_data->vbi_slices) );
     decoded_lines = vbi_raw_decode( &non_display_data->vbi_decoder, lines, sliced );
 
     /* Remove from the queue if unsupported */
@@ -130,16 +131,14 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
     {
         int remove_vbi = 0;
 
+        /* Bizzarely, libzvbi can use VBI_SLICED_CAPTION_525, VBI_SLICED_CAPTION_525_F1 or VBI_SLICED_CAPTION_525_F2
+         * whenever it likes */
+
         /* TODO: support single field captions. Is Field 2 on its own legal? */
-        if( sliced[i].id == VBI_SLICED_CAPTION_525_F2 )
+        if( (sliced[i].id & VBI_SLICED_CAPTION_525) && !(sliced[i+1].id & VBI_SLICED_CAPTION_525) )
             remove_vbi = 1;
-        else if( sliced[i].id == VBI_SLICED_CAPTION_525_F1 )
-        {
-             if( i == decoded_lines-1 || sliced[i+1].id != VBI_SLICED_CAPTION_525_F2 )
-                 remove_vbi = 1;
-             else
-                 i++; /* Skip field two */
-        }
+        else if( (sliced[i].id & VBI_SLICED_CAPTION_525) && (sliced[i+1].id & VBI_SLICED_CAPTION_525) )
+            i++; /* skip field two */
         else
         {
             for( j = 0; vbi_type_tab[j][0] != -1; j++ )
@@ -235,7 +234,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
         {
             /* TODO: factor out some of this code */
             /* TODO: handle other non dvb-vbi formats */
-            if( sliced[i].id == VBI_SLICED_CAPTION_525_F1 )
+            if( (sliced[i].id & VBI_SLICED_CAPTION_525) && (sliced[i+1].id & VBI_SLICED_CAPTION_525) )
             {
                 /* Don't duplicate caption data that already exists */
                 found = 0;
