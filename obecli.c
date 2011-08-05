@@ -792,7 +792,7 @@ static int probe_device( char *command, obecli_command_t *child )
             {
                 format_name = get_format_name( stream->frame_data[j].type, format_names, 1 );
                 printf( "               %s:   %s\n", stream->frame_data[j].source == MISC_WSS ? "WSS (converted)" :
-                        stream->frame_data[j].source == VBI_RAW ? "VBI" : "VANC", format_name );
+                        stream->frame_data[j].source == VBI_RAW ? "VBI" : stream->frame_data[j].source == VBI_VIDEO_INDEX ? "VII" : "VANC", format_name );
             }
         }
         else if( stream->stream_type == STREAM_TYPE_AUDIO )
