@@ -339,6 +339,9 @@ int decode_video_index_information( obe_sdi_non_display_data_t *non_display_data
         line += 16;
     }
 
+    if( data[0] == 0 && data[1] == 0 && data[2] == 0 )
+        return 0;
+
     /* Check the CRC of the first three bytes (aka. octets) */
     if( av_crc( non_display_data->crc, 0, data, 3 ) == data[3] || av_crc( non_display_data->crc_broken, 0, data, 3 ) == data[3] )
     {
