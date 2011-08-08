@@ -39,14 +39,6 @@ extern "C"
 
 #define DECKLINK_VANC_LINES 100
 
-/* FIXME: is the first active line consistent among cards? */
-const static obe_line_number_t decklink_sd_first_active_line[] =
-{
-    { INPUT_VIDEO_FORMAT_PAL,   23 },
-    { INPUT_VIDEO_FORMAT_NTSC, 283 },
-    { -1, -1 },
-};
-
 struct obe_to_decklink
 {
     int obe_name;
@@ -213,7 +205,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     int finished = 0, ret, bytes, num_anc_lines = 0, anc_line_stride,
     lines_read = 0, first_line = 0, last_line = 0, line, vbi_lines, vii_line;
     uint32_t *frame_ptr;
-    uint16_t *anc_buf, *anc_buf_pos, *vii_buf_ptr;
+    uint16_t *anc_buf, *anc_buf_pos;
     uint8_t *vbi_buf, *vbi_buf_ptr;
     int anc_lines[DECKLINK_VANC_LINES];
     IDeckLinkVideoFrameAncillary *ancillary;
@@ -295,12 +287,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             lines_read++;
             line = sdi_next_line( decklink_opts_->video_format, line );
 
-            if( IS_SD( decklink_opts_->video_format ) )
-            {
-                if( decklink_sd_first_active_line[decklink_opts_->video_format].line == line )
-                    break;
-            }
-            else if( line == first_active_line[j].line )
+            if( line == first_active_line[j].line )
                 break;
         }
 
@@ -357,22 +344,21 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             if( field_num == 2 )
             {
                 vbi_buf_ptr += width * 2;
-                anc_buf_pos += width * 2;
+                anc_buf_pos += anc_line_stride / 2;
                 first_line = sdi_next_line( decklink_opts_->video_format, first_line );
             }
 
             /* Handle Video Index information */
-            vii_buf_ptr = anc_buf_pos;
             tmp_line = first_line;
             vii_line = decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC ? NTSC_VIDEO_INDEX_LINE : PAL_VIDEO_INDEX_LINE;
             while( tmp_line < vii_line )
             {
-                anc_buf_pos += width * 4;
+                anc_buf_pos += anc_line_stride / 2;
                 tmp_line++;
             }
 
             if( decode_video_index_information( &decklink_ctx->non_display_parser, anc_buf_pos, raw_frame, vii_line ) < 0 )
-                    goto fail;
+                goto fail;
 
             if( !decklink_ctx->has_setup_vbi )
             {
@@ -427,7 +413,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             if( IS_SD( decklink_opts_->video_format ) )
             {
                 raw_frame->img.format     = decklink_opts_->video_format;
-                raw_frame->img.first_line = decklink_sd_first_active_line[decklink_opts_->video_format].line;
+                raw_frame->img.first_line = first_active_line[j].line;
             }
             memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
 
