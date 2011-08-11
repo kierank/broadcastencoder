@@ -317,7 +317,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             /* Add a some VBI lines to the ancillary buffer */
             frame_ptr = (uint32_t*)frame_bytes;
 
-            /* Decklink cards start from NTSC line 283 so add an extra line */
+            /* NTSC starts from line 283 so add an extra line */
             vbi_lines = NUM_ACTIVE_VBI_LINES + ( decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC );
             for( int i = 0; i < vbi_lines; i++ )
             {
