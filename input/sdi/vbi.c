@@ -87,7 +87,7 @@ int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data )
 
         non_display_data->vbi_decoder.offset      = 128;
         non_display_data->vbi_decoder.scanning    = 625;
-        ret = vbi_raw_decoder_add_services( &non_display_data->vbi_decoder, services, 2 );
+        ret = vbi_raw_decoder_add_services( &non_display_data->vbi_decoder, services, 0 );
     }
     else
     {
@@ -96,7 +96,7 @@ int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data )
 
         non_display_data->vbi_decoder.offset      = 118;
         non_display_data->vbi_decoder.scanning    = 525;
-        ret = vbi_raw_decoder_add_services( &non_display_data->vbi_decoder, services, 2 );
+        ret = vbi_raw_decoder_add_services( &non_display_data->vbi_decoder, services, 0 );
     }
 
     if( !ret )
