@@ -88,6 +88,25 @@ void obe_downscale_line_c( uint16_t *src, uint8_t *dst, int lines )
         dst[i] = src[i] >> 2;
 }
 
+void obe_blank_line_nv20_c( uint16_t *dst, int width )
+{
+    uint16_t *uv = dst + width;
+    for( int i = 0; i < width; i++ )
+    {
+        *dst++ = 0x40;
+        *uv++  = 0x200;
+    }
+}
+
+void obe_blank_line_uyvy_c( uint16_t *dst, int width )
+{
+    for( int i = 0; i < width; i++ )
+    {
+        *dst++ = 0x200;
+        *dst++ = 0x40;
+    }
+}
+
 int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream, int location )
 {
     int idx = 0, count = 0;
