@@ -810,7 +810,7 @@ static int probe_device( char *command, obecli_command_t *child )
         }
         else if( stream->stream_format == MISC_TELETEXT )
         {
-            printf( "Stream-id: %d - Teletext: Language: %s \n", stream->stream_id, stream->lang_code );
+            printf( "Stream-id: %d - DVB Teletext: \n", stream->stream_id );
         }
         else if( stream->stream_format == VBI_RAW )
         {
