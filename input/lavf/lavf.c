@@ -409,7 +409,7 @@ void *open_input( void *ptr )
 
     status.status = 1;
 
-    stream_lut = calloc( 1, (input->num_output_streams+1) * sizeof(lavf_stream_lut) );
+    stream_lut = calloc( (input->num_output_streams+1), sizeof(lavf_stream_lut) );
     if( !stream_lut )
         return (void*)-1;
 

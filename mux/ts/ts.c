@@ -132,9 +132,12 @@ void *open_muxer( void *ptr )
     program.is_3dtv = !!mux_opts->is_3dtv;
     // TODO more mux opts
 
-    program.streams = calloc( 1, mux_params->num_output_streams * sizeof(*program.streams) );
+    program.streams = calloc( mux_params->num_output_streams, sizeof(*program.streams) );
     if( !program.streams )
+    {
+        fprintf( stderr, "malloc failed\n" );
         goto end;
+    }
 
     program.num_streams = mux_params->num_output_streams;
 
@@ -376,9 +379,10 @@ void *open_muxer( void *ptr )
             }
         }
 
-        frames = calloc( 1, h->num_coded_frames * sizeof(*frames) );
+        frames = calloc( h->num_coded_frames, sizeof(*frames) );
         if( !frames )
         {
+            syslog( LOG_ERR, "Malloc failed\n" );
             pthread_mutex_unlock( &h->mux_mutex );
             goto end;
         }

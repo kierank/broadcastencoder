@@ -118,7 +118,7 @@ int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_
     }
 
     stream->num_frame_data = count;
-    stream->frame_data = calloc( 1, stream->num_frame_data * sizeof(*stream->frame_data) );
+    stream->frame_data = calloc( stream->num_frame_data, sizeof(*stream->frame_data) );
     if( !stream->frame_data && stream->num_frame_data )
         return -1;
 
