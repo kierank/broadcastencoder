@@ -119,6 +119,7 @@ typedef struct
     /* Ancillary */
     void (*unpack_line) ( uint32_t *src, uint16_t *dst, int width );
     void (*downscale_line) ( uint16_t *src, uint8_t *dst, int lines );
+    void (*blank_line) ( uint16_t *dst, int width );
     obe_sdi_non_display_data_t non_display_parser;
 
     obe_t *h;
@@ -269,20 +270,22 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             goto end;
         }
 
-        /* FIXME: will the card ever skip lines? */
         while( 1 )
         {
-            /* Some cards have restrictions on what lines can be accessed so try them all */
+            /* Some cards have restrictions on what lines can be accessed so try them all
+             * Some buggy decklink cards will randomly refuse access to a particular line so
+             * work around this issue by blanking the line */
             if( ancillary->GetBufferForVerticalBlankingLine( line, &anc_line ) == S_OK )
-            {
                 decklink_ctx->unpack_line( (uint32_t*)anc_line, anc_buf_pos, width );
-                anc_buf_pos += anc_line_stride / 2;
-                anc_lines[num_anc_lines++] = line;
+            else
+                decklink_ctx->blank_line( anc_buf_pos, width );
 
-                if( !first_line )
-                    first_line = line;
-                last_line = line;
-            }
+            anc_buf_pos += anc_line_stride / 2;
+            anc_lines[num_anc_lines++] = line;
+
+            if( !first_line )
+                first_line = line;
+            last_line = line;
 
             lines_read++;
             line = sdi_next_line( decklink_opts_->video_format, line );
@@ -312,8 +315,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
         if( IS_SD( decklink_opts_->video_format ) && first_line != last_line )
         {
-            int tmp_line, field_num;
-
             /* Add a some VBI lines to the ancillary buffer */
             frame_ptr = (uint32_t*)frame_bytes;
 
@@ -339,17 +340,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             decklink_ctx->downscale_line( anc_buf, vbi_buf, num_anc_lines );
             anc_buf_pos = anc_buf;
 
-            /* Check that the card doesn't start on field two (unlikely) */
-            obe_convert_smpte_to_analogue( decklink_opts_->video_format, first_line, &tmp_line, &field_num );
-            if( field_num == 2 )
-            {
-                vbi_buf_ptr += width * 2;
-                anc_buf_pos += anc_line_stride / 2;
-                first_line = sdi_next_line( decklink_opts_->video_format, first_line );
-            }
-
             /* Handle Video Index information */
-            tmp_line = first_line;
+            int tmp_line = first_line;
             vii_line = decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC ? NTSC_VIDEO_INDEX_LINE : PAL_VIDEO_INDEX_LINE;
             while( tmp_line < vii_line )
             {
