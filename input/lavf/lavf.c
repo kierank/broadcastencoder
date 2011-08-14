@@ -234,9 +234,12 @@ void *probe_stream( void *ptr )
                 {
                     streams[num_streams]->stream_type = STREAM_TYPE_MISC;
                     streams[num_streams]->stream_format = MISC_TELETEXT;
+                    /* FIXME: make lavf output all the teletexts */
+#if 0
                     streams[num_streams]->dvb_teletext_type = codec->dvb_teletext_type;
                     streams[num_streams]->dvb_teletext_magazine_number = codec->dvb_teletext_magazine_number;
                     streams[num_streams]->dvb_teletext_page_number = codec->dvb_teletext_page_number;
+#endif
                 }
                 num_streams++;
             }
