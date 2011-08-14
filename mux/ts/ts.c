@@ -62,7 +62,7 @@ static const int avc_profiles[][2] =
     { 0, 0 },
 };
 
-static obe_output_stream_t *get_output_stream( obe_mux_params_t *mux_params, int stream_id )
+static obe_output_stream_t *get_output_mux_stream( obe_mux_params_t *mux_params, int stream_id )
 {
     for( int i = 0; i < mux_params->num_output_streams; i++ )
     {
@@ -388,7 +388,7 @@ void *open_muxer( void *ptr )
         num_frames = 0;
         for( int i = 0; i < h->num_coded_frames; i++ )
         {
-            output_stream = get_output_stream( mux_params, h->coded_frames[i]->stream_id );
+            output_stream = get_output_mux_stream( mux_params, h->coded_frames[i]->stream_id );
             // FIXME name
             int64_t rescaled_dts = h->coded_frames[i]->pts - first_video_pts + first_video_real_pts;
             if( h->coded_frames[i]->is_video )

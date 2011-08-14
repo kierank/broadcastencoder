@@ -463,5 +463,6 @@ int remove_from_output_queue( obe_t *h );
 
 obe_int_input_stream_t *get_input_stream( obe_t *h, int input_stream_id );
 obe_encoder_t *get_encoder( obe_t *h, int stream_id );
+obe_output_stream_t *get_output_stream( obe_t *h, int stream_id );
 
 #endif

@@ -455,6 +455,18 @@ obe_encoder_t *get_encoder( obe_t *h, int stream_id )
     return NULL;
 }
 
+/* Output */
+obe_output_stream_t *get_output_stream( obe_t *h, int stream_id )
+{
+    /* TODO lock and unlock when we can reconfig outputs */
+    for( int i = 0; i < h->num_output_streams; i++ )
+    {
+        if( h->output_streams[i].stream_id == stream_id )
+            return &h->output_streams[i];
+    }
+    return NULL;
+}
+
 obe_t *obe_setup( void )
 {
     openlog( "obe", LOG_NDELAY | LOG_PID, LOG_USER );
