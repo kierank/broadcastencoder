@@ -55,6 +55,7 @@ static int parse_afd( obe_sdi_non_display_data_t *non_display_data, obe_raw_fram
     {
         for( int i = 0; i < non_display_data->num_frame_data; i++ )
         {
+            /* TODO: mention existence of second line of AFD */
             if( non_display_data->frame_data[i].type == MISC_AFD )
                 return 0;
         }
@@ -71,14 +72,16 @@ static int parse_afd( obe_sdi_non_display_data_t *non_display_data, obe_raw_fram
         /* AFD */
         frame_data->type = MISC_AFD;
         frame_data->source = VANC_GENERIC;
-        frame_data->line_number = line_number;
+        frame_data->num_lines = 0;
+        frame_data->lines[frame_data->num_lines++] = line_number;
         frame_data->location = USER_DATA_LOCATION_FRAME;
 
         /* Bar data */
         frame_data++;
         frame_data->type = MISC_BAR_DATA;
         frame_data->source = VANC_GENERIC;
-        frame_data->line_number = line_number;
+        frame_data->num_lines = 0;
+        frame_data->lines[frame_data->num_lines++] = line_number;
         frame_data->location = USER_DATA_LOCATION_FRAME;
 
         return 0;
@@ -162,6 +165,7 @@ static int parse_dvb_scte_vbi( obe_sdi_non_display_data_t *non_display_data, obe
         /* Don't duplicate VBI streams */
         for( int j = 0; j < non_display_data->num_frame_data; j++ )
         {
+            /* TODO: mention existence of multiple lines of VBI */
             if( data_indentifier_table[i][1] == non_display_data->frame_data[j].type )
                 return 0;
         }
@@ -175,7 +179,8 @@ static int parse_dvb_scte_vbi( obe_sdi_non_display_data_t *non_display_data, obe
         frame_data = &non_display_data->frame_data[non_display_data->num_frame_data++];
         frame_data->type = data_indentifier_table[i][1];
         frame_data->source = VANC_DVB_SCTE_VBI;
-        frame_data->line_number = line_number;
+        frame_data->num_lines = 0;
+        frame_data->lines[frame_data->num_lines++] = line_number;
         frame_data->location = USER_DATA_LOCATION_DVB_STREAM;
 
         return 0;
@@ -228,7 +233,8 @@ static int parse_cdp( obe_sdi_non_display_data_t *non_display_data, obe_raw_fram
         frame_data = &non_display_data->frame_data[non_display_data->num_frame_data++];
         frame_data->type = CAPTIONS_CEA_708;
         frame_data->source = VANC_GENERIC;
-        frame_data->line_number = line_number;
+        frame_data->num_lines = 0;
+        frame_data->lines[frame_data->num_lines++] = line_number;
         frame_data->location = USER_DATA_LOCATION_FRAME;
 
         return 0;

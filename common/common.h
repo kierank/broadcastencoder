@@ -82,13 +82,6 @@ typedef struct
 
 typedef struct
 {
-    int dvb_teletext_type;
-    int dvb_teletext_magazine_number;
-    int dvb_teletext_page_number;
-} obe_dvb_ttx_info_t;
-
-typedef struct
-{
     int stream_id;
     int stream_type;
     int stream_format;
@@ -156,6 +149,9 @@ typedef struct
     int dvb_teletext_magazine_number;
     int dvb_teletext_page_number;
 
+    /* VBI */
+    int vbi_ntsc;
+
     /** Misc **/
     int source;
 } obe_int_input_stream_t;
@@ -202,7 +198,8 @@ typedef struct
 {
      int type;  /* For VBI (including VANC VBI) during input this uses stream_formats_e */
      int source;
-     int line_number; /* Line number of frame starting from line 1 */
+     int num_lines;
+     int lines[100];
      int location;
 } obe_int_frame_data_t;
 
@@ -226,7 +223,7 @@ enum user_data_types_e
 enum user_data_location_e
 {
     USER_DATA_LOCATION_FRAME,      /* e.g. AFD, Captions */
-    USER_DATA_LOCATION_DVB_STREAM, /* e.g. DVB-VBI */
+    USER_DATA_LOCATION_DVB_STREAM, /* e.g. DVB-VBI, DVB-TTX */
     /* TODO: various other minor locations */
 };
 

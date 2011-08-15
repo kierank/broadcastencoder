@@ -31,6 +31,8 @@
 #define VIDEO_INDEX_CRC_POLY_BROKEN 0x1c
 
 #define DVB_VBI_MAXIMUM_SIZE      65536
+#define DVB_VBI_UNIT_SIZE         44
+#define DVB_VBI_PES_HEADER_SIZE   45
 
 #define DVB_VBI_DATA_IDENTIFIER   0x10
 #define SCTE_VBI_DATA_IDENTIFIER  0x99
@@ -50,7 +52,7 @@ const static int vbi_type_tab[][2] =
     { VBI_SLICED_TELETEXT_B,         MISC_TELETEXT },
     { VBI_SLICED_TELETEXT_B_L10_625, MISC_TELETEXT },
     { VBI_SLICED_TELETEXT_B_L25_625, MISC_TELETEXT },
-    { VBI_SLICED_TELETEXT_C_625,     VBI_NABTS },
+    { VBI_SLICED_TELETEXT_C_625,     VBI_NABTS }, /* TODO: inverted teletext */
     { VBI_SLICED_WSS_625,            MISC_WSS },
     { VBI_SLICED_VPS,                MISC_VPS },
     { VBI_SLICED_CAPTION_525,        CAPTIONS_CEA_608 },
@@ -83,7 +85,7 @@ int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data )
     if( non_display_data->ntsc == 0 )
     {
         /* FIXME: can Teletext System D be encapsulated in DVB-VBI? */
-        services = VBI_SLICED_VPS | VBI_SLICED_WSS_625 | VBI_SLICED_CAPTION_625; /* | VBI_SLICED_TELETEXT_B | VBI_SLICED_TELETEXT_C_625 | */
+        services = VBI_SLICED_VPS | VBI_SLICED_WSS_625 | VBI_SLICED_CAPTION_625 | VBI_SLICED_TELETEXT_B | VBI_SLICED_TELETEXT_C_625;
 
         non_display_data->vbi_decoder.offset      = 128;
         non_display_data->vbi_decoder.scanning    = 625;
@@ -176,9 +178,16 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             /* Don't duplicate services */
             for( int k = 0; k < non_display_data->num_frame_data; k++ )
             {
+                if( vbi_type_tab[j][1] == non_display_data->frame_data[k].type )
+                {
+                    /* FIXME: deal with ANC VBI */
+                    non_display_data->frame_data[k].lines[non_display_data->frame_data[k].num_lines++]= sliced[i].line;
+                    found = 1;
+                    break;
+                }
+
                 /* AFD is a superset of WSS so don't duplicate it */
-                if( vbi_type_tab[j][1] == non_display_data->frame_data[k].type ||
-                    ( vbi_type_tab[j][1] == MISC_WSS && non_display_data->frame_data[k].type == MISC_AFD ) )
+                if( vbi_type_tab[j][1] == MISC_WSS && non_display_data->frame_data[k].type == MISC_AFD )
                 {
                     found = 1;
                     break;
@@ -188,7 +197,17 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             if( found )
                 continue;
 
-            /* TODO: split up teletext and VBI if user requests it */
+            if( vbi_type_tab[j][1] == MISC_TELETEXT )
+            {
+                if( non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX || non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX_AND_VBI )
+                    non_display_data->has_ttx_frame = 1;
+
+                if( non_display_data->teletext_location == TELETEXT_LOCATION_DVB_VBI || non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX_AND_VBI )
+                    non_display_data->has_vbi_frame = 1;
+            }
+            else
+                non_display_data->has_vbi_frame = 1;
+
             tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+1) * sizeof(*non_display_data->frame_data) );
             if( !tmp )
                 goto fail;
@@ -197,7 +216,8 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             frame_data = &non_display_data->frame_data[non_display_data->num_frame_data++];
             frame_data->type = vbi_type_tab[j][1];
             frame_data->source = VBI_RAW;
-            frame_data->line_number = sliced[i].line;
+            frame_data->num_lines = 0;
+            frame_data->lines[frame_data->num_lines++] = sliced[i].line;
 
             /* Set the appropriate location */
             for( l = 0; non_display_data_locations[l].service != -1; l++ )
@@ -220,7 +240,8 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                 frame_data = &non_display_data->frame_data[non_display_data->num_frame_data++];
                 frame_data->type = MISC_AFD;
                 frame_data->source = MISC_WSS;
-                frame_data->line_number = sliced[i].line;
+                frame_data->num_lines = 0;
+                frame_data->lines[frame_data->num_lines++] = sliced[i].line;
                 frame_data->location = USER_DATA_LOCATION_FRAME;
             }
         }
@@ -232,12 +253,12 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
     {
         for( int i = 0; i < decoded_lines; i++ )
         {
-            /* TODO: factor out some of this code */
-            /* TODO: handle other non dvb-vbi formats */
+            found = 0;
+            /* Deal with the special cases first
+             * TODO: factor out some of this code */
             if( (sliced[i].id & VBI_SLICED_CAPTION_525) && (sliced[i+1].id & VBI_SLICED_CAPTION_525) )
             {
                 /* Don't duplicate caption data that already exists */
-                found = 0;
                 for( j = 0; j < raw_frame->num_user_data; j++ )
                 {
                     if( raw_frame->user_data[j].type == USER_DATA_CEA_608 || raw_frame->user_data[j].type == USER_DATA_CEA_708_CDP )
@@ -247,6 +268,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                     }
                 }
 
+                /* Attach the caption data to the frame's user data to be converted later to AFD */
                 if( !found )
                 {
                     tmp2 = realloc( raw_frame->user_data, (raw_frame->num_user_data+1) * sizeof(*raw_frame->user_data) );
@@ -278,7 +300,6 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             else if( sliced[i].id == VBI_SLICED_WSS_625 )
             {
                 /* Don't duplicate AFD data */
-                found = 0;
                 for( j = 0; j < raw_frame->num_user_data; j++ )
                 {
                     if( raw_frame->user_data[j].type == USER_DATA_AFD )
@@ -288,6 +309,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                     }
                 }
 
+                /* Attach the WSS data to the frame's user data to be converted later to AFD */
                 if( !found )
                 {
                     tmp2 = realloc( raw_frame->user_data, (raw_frame->num_user_data+1) * sizeof(*raw_frame->user_data) );
@@ -306,7 +328,18 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                     user_data->type = USER_DATA_WSS;
                     user_data->source = VBI_RAW;
                 }
+                non_display_data->has_vbi_frame = 1;
             }
+            else if( sliced[i].id & VBI_SLICED_TELETEXT_B )
+            {
+                if( non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX || non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX_AND_VBI )
+                    non_display_data->has_ttx_frame = 1;
+
+                if( non_display_data->teletext_location == TELETEXT_LOCATION_DVB_VBI || non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX_AND_VBI )
+                    non_display_data->has_vbi_frame = 1;
+            }
+            else
+                non_display_data->has_vbi_frame = 1;
         }
         non_display_data->num_vbi = decoded_lines;
     }
@@ -363,7 +396,8 @@ int decode_video_index_information( obe_sdi_non_display_data_t *non_display_data
             frame_data->location = USER_DATA_LOCATION_FRAME;
             frame_data->type = MISC_AFD;
             frame_data->source = VBI_VIDEO_INDEX;
-            frame_data->line_number = line_number;
+            frame_data->num_lines = 0;
+            frame_data->lines[frame_data->num_lines++] = line_number;
         }
         else
         {
@@ -445,19 +479,37 @@ static void write_wss_field( bs_t *s, uint8_t *data )
     bs_write( s, 2, 0x3 ); // reserved_future_use
 }
 
+static void write_stuffing( bs_t *s )
+{
+    int count;
+
+    if( ((bs_pos( s ) / 8) + DVB_VBI_PES_HEADER_SIZE) % 184 )
+    {
+        bs_write( s, 8, 0xff ); // data_unit_id
+        /* add one to account for the length byte */
+        count = (((bs_pos( s ) / 8) + DVB_VBI_PES_HEADER_SIZE + 1) % 184);
+
+        if( count )
+            count = 184 - count;
+        bs_write( s, 8, count );    // data_unit_length
+        for( int i = 0; i < count; i++ )
+            bs_write( s, 8, 0xff ); // stuffing_byte
+    }
+}
+
 int encapsulate_dvb_vbi( obe_sdi_non_display_data_t *non_display_data )
 {
     bs_t s, t;
-    int type = 0, j, found, identifier;
+    int type = 0, j, skip, identifier, data_unit_id = 0, stuffing;
     uint8_t tmp[100];
-    non_display_data->dvb_frame = new_coded_frame( 0, DVB_VBI_MAXIMUM_SIZE );
-    if( !non_display_data->dvb_frame )
+    non_display_data->dvb_vbi_frame = new_coded_frame( 0, DVB_VBI_MAXIMUM_SIZE );
+    if( !non_display_data->dvb_vbi_frame )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
     }
 
-    bs_init( &s, non_display_data->dvb_frame->data, DVB_VBI_MAXIMUM_SIZE );
+    bs_init( &s, non_display_data->dvb_vbi_frame->data, DVB_VBI_MAXIMUM_SIZE );
 
     // PES_data_field
     bs_write( &s, 8, DVB_VBI_DATA_IDENTIFIER ); // data_identifier (FIXME let user choose or passthrough from vanc)
@@ -466,17 +518,19 @@ int encapsulate_dvb_vbi( obe_sdi_non_display_data_t *non_display_data )
      * We currently prioritise VANC over VBI */
     for( int i = 0; i < non_display_data->num_anc_vbi; i++ )
     {
+#if 0
         /* Ancillary VBI is already pre-packed */
         bs_write( &s, 8, non_display_data->anc_vbi[i].unit_id ); // data_unit_id
         bs_write( &s, 8, non_display_data->anc_vbi[i].len );     // data_unit_length
         write_bytes( &s, non_display_data->anc_vbi[i].data, non_display_data->anc_vbi[i].len );
+#endif
         free( non_display_data->anc_vbi[i].data );
     }
 
     /* Don't duplicate VBI data from VANC */
     for( int i = 0; i < non_display_data->num_vbi; i++ )
     {
-        type = found = identifier = 0;
+        type = skip = identifier = 0;
         for( j = 0; vbi_type_tab[j][0] != -1; j++ )
         {
             if( vbi_type_tab[j][0] == non_display_data->vbi_slices[i].id )
@@ -486,33 +540,44 @@ int encapsulate_dvb_vbi( obe_sdi_non_display_data_t *non_display_data )
         for( j = 0; j < non_display_data->num_anc_vbi; j++ )
         {
             if( non_display_data->anc_vbi[j].identifier == type )
-                found = 1;
+                skip = 1;
         }
 
-        if( found )
+        /* Don't write teletext stream in DVB-VBI unless the user has requested it */
+        if( type == MISC_TELETEXT && non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX )
+            skip = 1;
+
+        if( skip )
             continue;
 
         for( j = 0; data_indentifier_table[j][0] != -1; j++ )
         {
             if( type == data_indentifier_table[j][1] )
-                identifier = data_indentifier_table[j][0];
+                data_unit_id = data_indentifier_table[j][0];
         }
 
         /* TODO: allow user to choose SUB or NON-SUB teletext */
-        bs_write( &s, 8, identifier ); // data_unit_id
+        bs_write( &s, 8, data_unit_id ); // data_unit_id
         bs_flush( &s );
 
         /* Write data unit to temporary buffer */
         bs_init( &t, tmp, 100 );
         write_header_byte( &t, non_display_data->vbi_slices[i].line, non_display_data->vbi_decoder.scanning == 525 );
 
-        /* TODO: let the user choose inverted */
         if( type == MISC_TELETEXT || type == VBI_NABTS )
             write_ttx_field( &t, non_display_data->vbi_slices[i].data, type );
         else if( type == MISC_VPS )
             write_generic_field( &t, non_display_data->vbi_slices[i].data, type );
         else if( type == MISC_WSS )
             write_wss_field( &t, non_display_data->vbi_slices[i].data );
+
+        /* Some DVB data units require stuffing */
+        if( identifier >= 0x10 && identifier <= 0x1f )
+        {
+            stuffing = DVB_VBI_UNIT_SIZE - (bs_pos( &t ) / 8);
+            for( int k = 0; k < stuffing; k++ )
+                bs_write( &t, 8, 0xff ); // stuffing_byte
+        }
 
         bs_flush( &t );
 
@@ -521,10 +586,47 @@ int encapsulate_dvb_vbi( obe_sdi_non_display_data_t *non_display_data )
     }
 
     /* Stuffing bytes */
-
+    write_stuffing( &s );
     bs_flush( &s );
 
-    non_display_data->dvb_frame->len = bs_pos( &s ) / 8;
+    non_display_data->dvb_vbi_frame->len = bs_pos( &s ) / 8;
+
+    return 0;
+}
+
+int encapsulate_dvb_ttx( obe_sdi_non_display_data_t *non_display_data )
+{
+    bs_t s;
+
+    non_display_data->dvb_ttx_frame = new_coded_frame( 0, DVB_VBI_MAXIMUM_SIZE );
+    if( !non_display_data->dvb_ttx_frame )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+
+    bs_init( &s, non_display_data->dvb_ttx_frame->data, DVB_VBI_MAXIMUM_SIZE );
+
+    // PES_data_field
+    bs_write( &s, 8, DVB_VBI_DATA_IDENTIFIER ); // data_identifier (FIXME let user choose or passthrough from vanc)
+
+    for( int i = 0; i < non_display_data->num_vbi; i++ )
+    {
+        if( non_display_data->vbi_slices[i].id & VBI_SLICED_TELETEXT_B )
+        {
+            /* TODO: allow user to choose SUB or NON-SUB teletext */
+            bs_write( &s, 8, DATA_UNIT_ID_EBU_TTX_NON_SUB ); // data_unit_id
+            bs_write( &s, 8, DVB_VBI_UNIT_SIZE ); // data_unit_length
+            write_header_byte( &s, non_display_data->vbi_slices[i].line, non_display_data->vbi_decoder.scanning == 525 );
+            write_ttx_field( &s, non_display_data->vbi_slices[i].data, VBI_SLICED_TELETEXT_B );
+        }
+    }
+
+    /* Stuffing bytes */
+    write_stuffing( &s );
+    bs_flush( &s );
+
+    non_display_data->dvb_ttx_frame->len = bs_pos( &s ) / 8;
 
     return 0;
 }

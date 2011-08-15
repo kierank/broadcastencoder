@@ -52,19 +52,22 @@ static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50"
                                                          "1080p60", 0 };
 static const char * const input_video_connections[]  = { "sdi", "hdmi", "optical-sdi", "component", "composite", "s-video", 0 };
 static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", "analogue", 0 };
+static const char * const ttx_locations[]            = { "dvb-ttx", "dvb-vbi", "both", 0 };
 static const char * const stream_actions[]           = { "passthrough", "encode", 0 };
 static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", "e-ac3", "aac-experimental", 0 };
 static const char * const frame_packing_modes[]      = { "none", "checkerboard", "column", "row", "side-by-side", "top-bottom", "temporal" };
+static const char * const teletext_types[]           = { "", "initial", "subtitle", "additional-info", "program-schedule", "hearing-imp" };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 
-static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", NULL };
+static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", "ttx-location", NULL };
+/* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
                                       /* Encoding options */
                                       "vbv-maxrate", "vbv-bufsize", "bitrate", "sar-width", "sar-height",
                                       "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", "weightp",
                                       "interlaced", "tff", "frame-packing",
                                       /* TS options */
-                                      "pid", "lang",
+                                      "pid", "lang", "num-ttx", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page",
                                       NULL };
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrough", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", NULL };
@@ -297,6 +300,7 @@ static int set_input( char *command, obecli_command_t *child )
         char *video_format = obe_get_option( input_opts[2], opts );
         char *video_connection = obe_get_option( input_opts[3], opts );
         char *audio_connection = obe_get_option( input_opts[4], opts );
+        char *ttx_location = obe_get_option( input_opts[5], opts );
 
         if( location )
         {
@@ -315,6 +319,8 @@ static int set_input( char *command, obecli_command_t *child )
             parse_enum_value( video_connection, input_video_connections, &input.video_connection );
         if( audio_connection )
             parse_enum_value( audio_connection, input_audio_connections, &input.audio_connection );
+        if( ttx_location )
+            parse_enum_value( ttx_location, ttx_locations, &input.teletext_location );
 
         free( opts );
     }
@@ -355,7 +361,6 @@ static int set_stream( char *command, obecli_command_t *child )
 
             char *action      = obe_get_option( stream_opts[0], opts );
             char *format      = obe_get_option( stream_opts[1], opts );
-
             char *vbv_maxrate = obe_get_option( stream_opts[2], opts );
             char *vbv_bufsize = obe_get_option( stream_opts[3], opts );
             char *bitrate     = obe_get_option( stream_opts[4], opts );
@@ -373,7 +378,7 @@ static int set_stream( char *command, obecli_command_t *child )
             char *tff         = obe_get_option( stream_opts[16], opts );
             char *frame_packing = obe_get_option( stream_opts[17], opts );
 
-            /* NB: remap these if more encoding options are added */
+            /* NB: remap these if more encoding options are added - TODO: split them up */
             char *pid         = obe_get_option( stream_opts[18], opts );
             char *lang        = obe_get_option( stream_opts[19], opts );
 
@@ -445,6 +450,38 @@ static int set_stream( char *command, obecli_command_t *child )
                     memcpy( output_streams[stream_id].ts_opts.lang_code, lang, 3 );
                     output_streams[stream_id].ts_opts.lang_code[3] = 0;
                 }
+            }
+            else if( program.streams[stream_id].stream_format == MISC_TELETEXT ||
+                     program.streams[stream_id].stream_format == VBI_RAW )
+            {
+                /* TODO: find a nice way of supporting multiple teletexts in the CLI */
+                output_streams[stream_id].ts_opts.num_teletexts = 1;
+
+                if( output_streams[stream_id].ts_opts.teletext_opts )
+                    free( output_streams[stream_id].ts_opts.teletext_opts );
+
+                output_streams[stream_id].ts_opts.teletext_opts = calloc( 1, sizeof(*output_streams[stream_id].ts_opts.teletext_opts) );
+                if( !output_streams[stream_id].ts_opts.teletext_opts )
+                {
+                    fprintf( stderr, "malloc failed \n" );
+                    return -1;
+                }
+
+                char *ttx_lang = obe_get_option( stream_opts[21], opts );
+                char *ttx_type = obe_get_option( stream_opts[22], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[23], opts );
+                char *ttx_page = obe_get_option( stream_opts[24], opts );
+                obe_teletext_opts_t *ttx_opts = &output_streams[stream_id].ts_opts.teletext_opts[0];
+
+                if( ttx_lang && strlen( ttx_lang ) >= 3 )
+                {
+                    memcpy( ttx_opts->dvb_teletext_lang_code, ttx_lang, 3 );
+                    ttx_opts->dvb_teletext_lang_code[3] = 0;
+                }
+                if( ttx_type )
+                    parse_enum_value( ttx_type, teletext_types, &ttx_opts->dvb_teletext_type );
+                ttx_opts->dvb_teletext_magazine_number = obe_otoi( ttx_mag, ttx_opts->dvb_teletext_magazine_number );
+                ttx_opts->dvb_teletext_page_number = obe_otoi( ttx_page, ttx_opts->dvb_teletext_page_number );
             }
 
             output_streams[stream_id].ts_opts.pid = obe_otoi( pid, output_streams[stream_id].ts_opts.pid );
@@ -717,6 +754,30 @@ static int start_encode( char *command, obecli_command_t *child )
                 return -1;
             }
         }
+        else if( program.streams[i].stream_format == MISC_TELETEXT || program.streams[i].stream_format == VBI_RAW )
+        {
+            int found = program.streams[i].stream_format == MISC_TELETEXT;
+
+            /* Search the VBI streams for teletext and complain if teletext isn't set up properly */
+            if( program.streams[i].stream_format == VBI_RAW )
+            {
+                for( int j = 0; j < program.streams[i].num_frame_data; j++ )
+                {
+                    if( program.streams[i].frame_data[j].type == MISC_TELETEXT )
+                    {
+                        found = 1;
+                        break;
+                    }
+                }
+            }
+
+            if( found && !output_streams[i].ts_opts.num_teletexts )
+            {
+                fprintf( stderr, "Teletext stream setup is mandatory\n" );
+                return -1;
+            }
+        }
+
     }
 
     if( !mux_opts.ts_muxrate )
@@ -791,6 +852,7 @@ static int probe_device( char *command, obecli_command_t *child )
             for( int j = 0; j < stream->num_frame_data; j++ )
             {
                 format_name = get_format_name( stream->frame_data[j].type, format_names, 1 );
+                /* TODO make this use the proper names */
                 printf( "               %s:   %s\n", stream->frame_data[j].source == MISC_WSS ? "WSS (converted)" :
                         stream->frame_data[j].source == VBI_RAW ? "VBI" : stream->frame_data[j].source == VBI_VIDEO_INDEX ? "VII" : "VANC", format_name );
             }

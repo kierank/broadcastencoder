@@ -88,6 +88,13 @@ enum input_type_e
 //    INPUT_DEVICE_ASI,
 };
 
+enum teletext_location_e
+{
+    TELETEXT_LOCATION_DVB_TTX,
+    TELETEXT_LOCATION_DVB_VBI,
+    TELETEXT_LOCATION_DVB_TTX_AND_VBI,
+};
+
 typedef struct
 {
     int input_type;
@@ -98,6 +105,8 @@ typedef struct
     int video_format;
     int video_connection;
     int audio_connection;
+
+    int teletext_location;
 } obe_input_t;
 
 /**** Stream Formats ****/
@@ -162,7 +171,8 @@ typedef struct
 {
      int type;
      int source;
-     int line_number; /* Line number of frame starting from line 1 in SMPTE notation */
+     int num_lines;
+     int lines[100]; /* Lines are in SMPTE notation */
 } obe_frame_data_t;
 
 typedef struct
@@ -227,21 +237,34 @@ enum stream_action_e
     STREAM_ENCODE,
 };
 
+/* NOTE: this is the same structure as ts_dvb_ttx_t in libmpegts */
+typedef struct
+{
+    char dvb_teletext_lang_code[4];
+    int dvb_teletext_type;
+    int dvb_teletext_magazine_number;
+    int dvb_teletext_page_number;
+} obe_teletext_opts_t;
+
 typedef struct
 {
     int passthrough_opts;
 
     int pid;
 
+    /* Not used for teletext */
     int write_lang_code;
     char lang_code[4];
+
     int audio_type;
 
     int has_stream_identifier;
     int stream_identifier;
 
-    // TODO TTX/VBI etc
+    int num_teletexts;
+    obe_teletext_opts_t *teletext_opts;
 
+    // TODO Teletext/VBI indentifier
 } obe_ts_stream_opts_t;
 
 /* Convert from SMPTE line notation (e.g. Line 284) to analogue line notation (e.g Line 21 Field 2)

@@ -139,7 +139,9 @@ int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_
 
     for( int i = 0; i < non_display_data->num_frame_data; i++ )
     {
-        if( non_display_data->frame_data[i].location == location )
+        if( non_display_data->frame_data[i].type == MISC_TELETEXT && non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX )
+            continue;
+        else if( non_display_data->frame_data[i].location == location )
             count++;
     }
 
@@ -150,11 +152,15 @@ int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_
 
     for( int i = 0; i < non_display_data->num_frame_data; i++ )
     {
-        if( non_display_data->frame_data[i].location == location )
+        /* Teletext is a special case - don't include it if the user has asked for it separately */
+        if( non_display_data->frame_data[i].type == MISC_TELETEXT && non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX )
+            continue;
+        else if( non_display_data->frame_data[i].location == location )
         {
             stream->frame_data[idx].type = non_display_data->frame_data[i].type;
             stream->frame_data[idx].source = non_display_data->frame_data[i].source;
-            stream->frame_data[idx].line_number = non_display_data->frame_data[i].line_number;
+            stream->frame_data[idx].num_lines = non_display_data->frame_data[i].num_lines;
+            memcpy( stream->frame_data[idx].lines, non_display_data->frame_data[i].lines, non_display_data->frame_data[i].num_lines * sizeof(int) );
             idx++;
         }
     }
@@ -162,6 +168,27 @@ int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_
     return 0;
 }
 
+int add_teletext_service( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream )
+{
+    stream->frame_data = calloc( 1, sizeof(*stream->frame_data) );
+    if( !stream->frame_data )
+        return -1;
+
+    for( int i = 0; i < non_display_data->num_frame_data; i++ )
+    {
+        if( non_display_data->frame_data[i].type == MISC_TELETEXT )
+        {
+            stream->frame_data[0].type = non_display_data->frame_data[i].type;
+            stream->frame_data[0].source = non_display_data->frame_data[i].source;
+            stream->frame_data[0].num_lines = non_display_data->frame_data[i].num_lines;
+            memcpy( stream->frame_data[0].lines, non_display_data->frame_data[0].lines, non_display_data->frame_data[0].num_lines * sizeof(int) );
+        }
+    }
+
+    return 0;
+}
+
+/* FIXME: these functions don't include the centre line */
 int sdi_next_line( int format, int line_smpte )
 {
     int i;

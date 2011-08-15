@@ -122,6 +122,7 @@ typedef struct
     void (*blank_line) ( uint16_t *dst, int width );
     obe_sdi_non_display_data_t non_display_parser;
 
+    obe_device_t *device;
     obe_t *h;
 } decklink_ctx_t;
 
@@ -204,7 +205,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     void *frame_bytes, *anc_line;
     obe_t *h = decklink_ctx->h;
     int finished = 0, ret, bytes, num_anc_lines = 0, anc_line_stride,
-    lines_read = 0, first_line = 0, last_line = 0, line, vbi_lines, vii_line;
+    lines_read = 0, first_line = 0, last_line = 0, line, vbi_lines, vii_line, stream_id;
     uint32_t *frame_ptr;
     uint16_t *anc_buf, *anc_buf_pos;
     uint8_t *vbi_buf, *vbi_buf_ptr;
@@ -412,25 +413,68 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
             BMDTimeValue stream_time, frame_duration;
             videoframe->GetStreamTime( &stream_time, &frame_duration, 90000 );
-
             raw_frame->pts = stream_time;
+
+            for( int i = 0; i < decklink_ctx->device->num_input_streams; i++ )
+            {
+                if( decklink_ctx->device->streams[i]->stream_format == VIDEO_UNCOMPRESSED )
+                    raw_frame->stream_id = decklink_ctx->device->streams[i]->stream_id;
+            }
+
             add_to_filter_queue( h, raw_frame );
 
             /* Send any DVB-VBI frames */
-            if( decklink_ctx->non_display_parser.num_vbi || decklink_ctx->non_display_parser.num_anc_vbi )
+            if( decklink_ctx->non_display_parser.has_vbi_frame )
             {
-                if( encapsulate_dvb_vbi( &decklink_ctx->non_display_parser ) < 0 )
-                    goto fail;
+                stream_id = -1;
+                // FIXME when we make streams selectable
+                for( int i = 0; i < decklink_ctx->device->num_input_streams; i++ )
+                {
+                    if( decklink_ctx->device->streams[i]->stream_format == VBI_RAW )
+                        stream_id = decklink_ctx->device->streams[i]->stream_id;
+                }
 
-                decklink_ctx->non_display_parser.dvb_frame->stream_id = 2; // FIXME
-                decklink_ctx->non_display_parser.dvb_frame->pts = stream_time;
+                if( stream_id >= 0 )
+                {
+                    if( encapsulate_dvb_vbi( &decklink_ctx->non_display_parser ) < 0 )
+                        goto fail;
 
-                add_to_mux_queue( h, decklink_ctx->non_display_parser.dvb_frame );
-                decklink_ctx->non_display_parser.dvb_frame = NULL;
+                    decklink_ctx->non_display_parser.dvb_vbi_frame->stream_id = stream_id;
+                    decklink_ctx->non_display_parser.dvb_vbi_frame->pts = stream_time;
 
-                decklink_ctx->non_display_parser.num_vbi = 0;
-                decklink_ctx->non_display_parser.num_anc_vbi = 0;
+                    add_to_mux_queue( h, decklink_ctx->non_display_parser.dvb_vbi_frame );
+                }
+                decklink_ctx->non_display_parser.dvb_vbi_frame = NULL;
+                decklink_ctx->non_display_parser.has_vbi_frame = 0;
             }
+
+            /* Send any DVB-TTX frames */
+            if( decklink_ctx->non_display_parser.has_ttx_frame )
+            {
+                stream_id = -1;
+                // FIXME when we make streams selectable
+                for( int i = 0; i < decklink_ctx->device->num_input_streams; i++ )
+                {
+                    if( decklink_ctx->device->streams[i]->stream_format == MISC_TELETEXT )
+                        stream_id = decklink_ctx->device->streams[i]->stream_id;
+                }
+
+                if( stream_id >= 0 )
+                {
+                    if( encapsulate_dvb_ttx( &decklink_ctx->non_display_parser ) < 0 )
+                        goto fail;
+
+                    decklink_ctx->non_display_parser.dvb_ttx_frame->stream_id = stream_id;
+                    decklink_ctx->non_display_parser.dvb_ttx_frame->pts = stream_time;
+
+                    add_to_mux_queue( h, decklink_ctx->non_display_parser.dvb_ttx_frame );
+                }
+                decklink_ctx->non_display_parser.dvb_ttx_frame = NULL;
+                decklink_ctx->non_display_parser.has_ttx_frame = 0;
+            }
+
+            decklink_ctx->non_display_parser.num_vbi = 0;
+            decklink_ctx->non_display_parser.num_anc_vbi = 0;
         }
     }
 
@@ -468,7 +512,11 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         raw_frame->pts = packet_time;
         raw_frame->release_data = obe_release_other_data;
         raw_frame->release_frame = obe_release_frame;
-        raw_frame->stream_id = 1; // FIXME
+        for( int i = 0; i < decklink_ctx->device->num_input_streams; i++ )
+        {
+            if( decklink_ctx->device->streams[i]->stream_format == AUDIO_PCM )
+                raw_frame->stream_id = decklink_ctx->device->streams[i]->stream_id;
+        }
 
         add_to_encode_queue( decklink_ctx->h, raw_frame );
     }
@@ -755,9 +803,13 @@ static int open_card( decklink_opts_t *decklink_opts )
     {
         decklink_ctx->unpack_line = obe_v210_line_to_uyvy_c;
         decklink_ctx->downscale_line = obe_downscale_line_c;
+        decklink_ctx->blank_line = obe_blank_line_uyvy_c;
     }
     else
+    {
         decklink_ctx->unpack_line = obe_v210_line_to_nv20_c;
+        decklink_ctx->blank_line = obe_blank_line_nv20_c;
+    }
 
     result = decklink_ctx->p_input->EnableVideoInput( wanted_mode_id, bmdFormat10BitYUV, 0 );
     if( result != S_OK )
@@ -809,7 +861,7 @@ static void *probe_stream( void *ptr )
     obe_input_t *user_opts = &probe_ctx->user_opts;
     obe_device_t *device;
     obe_int_input_stream_t *streams[MAX_STREAMS];
-    int num_streams = 0, vbi_stream_services = 0;
+    int cur_stream = 2;
     obe_sdi_non_display_data_t *non_display_parser;
     decklink_ctx_t *decklink_ctx;
 
@@ -830,6 +882,7 @@ static void *probe_stream( void *ptr )
     decklink_opts->video_format = user_opts->video_format;
 
     decklink_opts->probe = non_display_parser->probe = 1;
+    non_display_parser->teletext_location = user_opts->teletext_location;
 
     decklink_ctx = &decklink_opts->decklink_ctx;
     decklink_ctx->h = h;
@@ -845,18 +898,9 @@ static void *probe_stream( void *ptr )
     close_card( decklink_opts );
 
     /* TODO: probe for SMPTE 337M */
-    /* TODO: add other streams */
+    /* TODO: factor some of the code below out */
 
-    for( int i = 0; i < non_display_parser->num_frame_data; i++ )
-    {
-        if( non_display_parser->frame_data[i].location == USER_DATA_LOCATION_DVB_STREAM )
-            vbi_stream_services++;
-    }
-
-    /* TODO: teletext */
-
-    num_streams = 2+!!vbi_stream_services;
-    for( int i = 0; i < num_streams; i++ )
+    for( int i = 0; i < 2; i++ )
     {
         streams[i] = (obe_int_input_stream_t*)calloc( 1, sizeof(*streams[i]) );
         if( !streams[i] )
@@ -892,13 +936,41 @@ static void *probe_stream( void *ptr )
             /* TODO: support other sample rates */
             streams[i]->sample_rate = 48000;
         }
-        else /* VBI stream */
-        {
-            streams[i]->stream_type = STREAM_TYPE_MISC;
-            streams[i]->stream_format = VBI_RAW;
-            if( add_non_display_services( non_display_parser, streams[i], USER_DATA_LOCATION_DVB_STREAM ) < 0 )
-                goto finish;
-        }
+    }
+
+    if( non_display_parser->has_vbi_frame )
+    {
+        streams[cur_stream] = (obe_int_input_stream_t*)calloc( 1, sizeof(*streams[cur_stream]) );
+        if( !streams[cur_stream] )
+            goto finish;
+
+        pthread_mutex_lock( &h->device_list_mutex );
+        streams[cur_stream]->stream_id = h->cur_stream_id++;
+        pthread_mutex_unlock( &h->device_list_mutex );
+
+        streams[cur_stream]->stream_type = STREAM_TYPE_MISC;
+        streams[cur_stream]->stream_format = VBI_RAW;
+        streams[cur_stream]->vbi_ntsc = decklink_opts->video_format == INPUT_VIDEO_FORMAT_NTSC;
+        if( add_non_display_services( non_display_parser, streams[cur_stream], USER_DATA_LOCATION_DVB_STREAM ) < 0 )
+            goto finish;
+        cur_stream++;
+    }
+
+    if( non_display_parser->has_ttx_frame )
+    {
+        streams[cur_stream] = (obe_int_input_stream_t*)calloc( 1, sizeof(*streams[cur_stream]) );
+        if( !streams[cur_stream] )
+            goto finish;
+
+        pthread_mutex_lock( &h->device_list_mutex );
+        streams[cur_stream]->stream_id = h->cur_stream_id++;
+        pthread_mutex_unlock( &h->device_list_mutex );
+
+        streams[cur_stream]->stream_type = STREAM_TYPE_MISC;
+        streams[cur_stream]->stream_format = MISC_TELETEXT;
+        if( add_teletext_service( non_display_parser, streams[cur_stream] ) < 0 )
+            goto finish;
+        cur_stream++;
     }
 
     if( non_display_parser->num_frame_data )
@@ -909,8 +981,8 @@ static void *probe_stream( void *ptr )
     if( !device )
         goto finish;
 
-    device->num_input_streams = num_streams;
-    memcpy( device->streams, streams, num_streams * sizeof(obe_int_input_stream_t**) );
+    device->num_input_streams = cur_stream;
+    memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
     device->device_type = INPUT_DEVICE_DECKLINK;
     memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
 
@@ -933,6 +1005,7 @@ static void *open_input( void *ptr )
     obe_device_t *device = input->device;
     obe_input_t *user_opts = &device->user_opts;
     decklink_ctx_t *decklink_ctx;
+    obe_sdi_non_display_data_t *non_display_parser;
 
     decklink_opts_t *decklink_opts = (decklink_opts_t*)calloc( 1, sizeof(*decklink_opts) );
     if( !decklink_opts )
@@ -949,8 +1022,12 @@ static void *open_input( void *ptr )
 
     decklink_ctx = &decklink_opts->decklink_ctx;
 
+    decklink_ctx->device = device;
     decklink_ctx->h = h;
     decklink_ctx->last_frame_time = -1;
+
+    non_display_parser = &decklink_ctx->non_display_parser;
+    non_display_parser->teletext_location = device->user_opts.teletext_location;
 
     /* TODO: wait for encoder */
 

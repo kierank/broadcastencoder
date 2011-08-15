@@ -34,6 +34,7 @@
 
 typedef struct
 {
+    int line;
     int identifier;
     int unit_id;
     int len;
@@ -51,12 +52,16 @@ typedef struct
     obe_int_frame_data_t *frame_data;
 
     /* Decoding */
-    obe_coded_frame_t *dvb_frame;
+    obe_coded_frame_t *dvb_vbi_frame;
+    obe_coded_frame_t *dvb_ttx_frame;
 
     /* VBI */
     int ntsc;
+    int teletext_location;
     int num_vbi;
     vbi_sliced vbi_slices[100];
+    int has_vbi_frame;
+    int has_ttx_frame;
 
     /* Ancillary VBI */
     int num_anc_vbi;
@@ -115,6 +120,7 @@ void obe_downscale_line_c( uint16_t *src, uint8_t *dst, int lines );
 void obe_blank_line_nv20_c( uint16_t *dst, int width );
 void obe_blank_line_uyvy_c( uint16_t *dst, int width );
 int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream, int location );
+int add_teletext_service( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream );
 int sdi_next_line( int format, int line_smpte );
 
 #endif
