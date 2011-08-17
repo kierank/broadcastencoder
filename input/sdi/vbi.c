@@ -205,7 +205,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                 if( non_display_data->teletext_location == TELETEXT_LOCATION_DVB_VBI || non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX_AND_VBI )
                     non_display_data->has_vbi_frame = 1;
             }
-            else
+            else if( vbi_type_tab[j][1] != CAPTIONS_CEA_608 )
                 non_display_data->has_vbi_frame = 1;
 
             tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+1) * sizeof(*non_display_data->frame_data) );
