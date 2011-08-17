@@ -245,6 +245,7 @@ static void *open_output( void *ptr )
         {
             syslog( LOG_INFO, "RTP output buffer reset\n" );
             ready = h->output_drop = 0;
+            last_clock = -1;
         }
         pthread_mutex_unlock( &h->drop_mutex );
 
