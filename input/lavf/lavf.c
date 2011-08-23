@@ -559,6 +559,8 @@ void *open_input( void *ptr )
                         else if( pkt.dts != AV_NOPTS_VALUE )
                             raw_frame->pts = pkt.dts;
 
+                        raw_frame->pts *= 300; // FIXME hack
+
                         add_to_filter_queue( h, raw_frame );
 
                         /* TODO: ancillary data */

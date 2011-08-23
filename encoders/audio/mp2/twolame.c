@@ -160,7 +160,7 @@ static void *start_encoder( void *ptr )
             add_to_mux_queue( h, coded_frame );
 
             /* We need to generate PTS because frame sizes have changed */
-            cur_pts += (double)MP2_NUM_SAMPLES * 90000 / enc_params->sample_rate;
+            cur_pts += (double)MP2_NUM_SAMPLES * OBE_CLOCK * enc_params->frames_per_pes / enc_params->sample_rate;
             output_size -= frame_size;
             output_pos += frame_size;
         }

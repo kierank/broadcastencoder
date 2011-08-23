@@ -48,6 +48,8 @@
 
 #define MAX_PROBE_TIME 20
 
+#define OBE_CLOCK 27000000LL
+
 /* Macros */
 #define BOOLIFY(x) x = !!x
 #define MIN(a,b) ( (a)<(b) ? (a) : (b) )

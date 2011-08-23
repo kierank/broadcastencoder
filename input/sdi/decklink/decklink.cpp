@@ -412,7 +412,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             }
 
             BMDTimeValue stream_time, frame_duration;
-            videoframe->GetStreamTime( &stream_time, &frame_duration, 90000 );
+            videoframe->GetStreamTime( &stream_time, &frame_duration, OBE_CLOCK );
             raw_frame->pts = stream_time;
 
             for( int i = 0; i < decklink_ctx->device->num_input_streams; i++ )
@@ -508,7 +508,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         memcpy( raw_frame->data, frame_bytes, bytes );
 
         BMDTimeValue packet_time;
-        audioframe->GetPacketTime( &packet_time, 90000 );
+        audioframe->GetPacketTime( &packet_time, OBE_CLOCK );
         raw_frame->pts = packet_time;
         raw_frame->release_data = obe_release_other_data;
         raw_frame->release_frame = obe_release_frame;

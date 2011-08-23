@@ -197,8 +197,8 @@ static void *start_encoder( void *ptr )
             memcpy( coded_frame->data, nal[0].p_payload, frame_size );
             coded_frame->is_video = 1;
             coded_frame->len = frame_size;
-            coded_frame->real_dts = (int64_t)((pic_out.hrd_timing.cpb_removal_time * 90000LL) + 0.5);
-            coded_frame->real_pts = (int64_t)((pic_out.hrd_timing.dpb_output_time * 90000LL) + 0.5);
+            coded_frame->real_dts = (int64_t)((pic_out.hrd_timing.cpb_removal_time * 27000000LL) + 0.5);
+            coded_frame->real_pts = (int64_t)((pic_out.hrd_timing.dpb_output_time  * 27000000LL) + 0.5);
             pts2 = pic_out.passthrough_opaque;
             coded_frame->pts = pts2[0];
             coded_frame->random_access = pic_out.b_keyframe;

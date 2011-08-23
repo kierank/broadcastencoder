@@ -291,7 +291,7 @@ static void *start_encoder( void *ptr )
             add_to_mux_queue( h, coded_frame );
 
             /* We need to generate PTS because frame sizes have changed */
-            cur_pts += (double)codec->frame_size * 90000 / enc_params->sample_rate;
+            cur_pts += (double)codec->frame_size * OBE_CLOCK / enc_params->sample_rate;
         }
 
         raw_frame->release_data( raw_frame );

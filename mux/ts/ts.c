@@ -445,6 +445,10 @@ void *open_muxer( void *ptr )
                     frames[num_frames].dts = h->coded_frames[i]->pts - first_video_pts + first_video_real_pts;
                     frames[num_frames].pts = h->coded_frames[i]->pts - first_video_pts + first_video_real_pts;
                 }
+
+                frames[num_frames].dts /= 300;
+                frames[num_frames].pts /= 300;
+
                 //printf("\n pid: %i ours: %"PRIi64" \n", frames[num_frames].pid, frames[num_frames].dts );
                 frames[num_frames].random_access = h->coded_frames[i]->random_access;
                 frames[num_frames].priority = h->coded_frames[i]->priority;
