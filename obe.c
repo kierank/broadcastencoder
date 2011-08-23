@@ -496,6 +496,24 @@ obe_t *obe_setup( void )
     return h;
 }
 
+/* TODO handle error conditions */
+int64_t get_wallclock_in_mpeg_ticks( void )
+{
+    struct timespec ts;
+    clock_gettime( CLOCK_MONOTONIC, &ts );
+
+    return ((int64_t)ts.tv_sec * (int64_t)27000000) + (int64_t)(ts.tv_nsec * 27 / 1000);
+}
+
+void sleep_mpeg_ticks( int64_t i_time )
+{
+    struct timespec ts;
+    ts.tv_sec = i_time / 27000000;
+    ts.tv_nsec = ((i_time % 27000000) * 1000) / 27;
+
+    clock_nanosleep( CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, &ts );
+}
+
 static int obe_validate_input_params( obe_input_t *input_device )
 {
     if( input_device->input_type == INPUT_DEVICE_DECKLINK )

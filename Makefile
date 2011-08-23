@@ -4,7 +4,7 @@ include config.mak
 
 all: default
 
-SRCS = obe.c common/lavc.c common/network/network.c common/network/udp/udp.c \
+SRCS = obe.c common/lavc.c common/network/udp/udp.c \
        input/lavf/lavf.c input/sdi/sdi.c input/sdi/ancillary.c input/sdi/vbi.c \
        filters/video/video.c filters/video/cc.c \
        encoders/audio/lavc/lavc.c encoders/video/avc/x264.c \
