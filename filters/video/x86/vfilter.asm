@@ -50,8 +50,7 @@ cglobal dither_row_10_to_8_%1, 5, 5
     movd      m4, [shift]
     pxor      m5, m5
 .loop
-    mova      m0, [r0]
-    paddw     m0, m2
+    paddw     m0, m2, [r0]
 
     punpcklwd m1, m0, m5
     punpckhwd m0, m5
