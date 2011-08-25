@@ -89,20 +89,7 @@ static void *open_output( void *ptr )
         return NULL;
     }
 
-    for( int i = 0; i < h->num_encoders; i++ )
-    {
-        if( h->encoders[i]->is_video )
-        {
-            pthread_mutex_lock( &h->encoders[i]->encoder_mutex );
-            if( !h->encoders[i]->is_ready )
-                pthread_cond_wait( &h->encoders[i]->encoder_cv, &h->encoders[i]->encoder_mutex );
-            x264_param_t *params = h->encoders[i]->encoder_params;
-            /* Two extra frames to buffer to account for mux */
-            buffer_frames = params->sc.i_buffer_size + 2;
-            pthread_mutex_unlock( &h->encoders[i]->encoder_mutex );
-            break;
-        }
-    }
+    buffer_frames = 2;
 
     int64_t start_mpeg_time = 0, start_pcr_time = 0;
 

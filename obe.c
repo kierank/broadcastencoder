@@ -25,6 +25,7 @@
 #include "common/lavc.h"
 #include "input/input.h"
 #include "filters/video/video.h"
+#include "encoders/smoothing.h"
 #include "encoders/video/video.h"
 #include "encoders/audio/audio.h"
 #include "mux/mux.h"
@@ -293,6 +294,48 @@ static void destroy_encoder( obe_encoder_t *encoder )
     pthread_cond_destroy( &encoder->encoder_cv );
 
     free( encoder );
+}
+
+/* Smoothing queue */
+int add_to_smoothing_queue( obe_t *h, obe_coded_frame_t *coded_frame )
+{
+    obe_coded_frame_t **tmp;
+
+    pthread_mutex_lock( &h->smoothing_mutex );
+    tmp = realloc( h->smoothing_frames, sizeof(*h->smoothing_frames) * (h->num_smoothing_frames+1) );
+    if( !tmp )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+    h->smoothing_frames = tmp;
+    h->smoothing_frames[h->num_smoothing_frames++] = coded_frame;
+    pthread_cond_signal( &h->smoothing_cv );
+    pthread_mutex_unlock( &h->smoothing_mutex );
+
+    return 0;
+}
+
+int remove_from_smoothing_queue( obe_t *h )
+{
+    obe_coded_frame_t **tmp;
+    pthread_mutex_lock( &h->smoothing_mutex );
+    for( int i = 0; i < h->num_smoothing_frames; i++ )
+    {
+        memmove( &h->smoothing_frames[0], &h->smoothing_frames[1], sizeof(*h->smoothing_frames) * (h->num_smoothing_frames-1) );
+        tmp = realloc( h->smoothing_frames, sizeof(*h->smoothing_frames) * (h->num_smoothing_frames-1) );
+        h->num_smoothing_frames--;
+        if( !tmp && h->num_smoothing_frames )
+        {
+            syslog( LOG_ERR, "Malloc failed\n" );
+            return -1;
+        }
+        h->smoothing_frames = tmp;
+        break;
+    }
+    pthread_mutex_unlock( &h->smoothing_mutex );
+
+    return 0;
 }
 
 /* Mux queue */
@@ -930,6 +973,13 @@ int obe_start( obe_t *h )
         }
     }
 
+    /* Open Smoothing Thread */
+    if( pthread_create( &h->smoothing_thread, NULL, x264_smoothing.start_smoothing, (void*)h ) < 0 )
+    {
+        fprintf( stderr, "Couldn't create mux thread \n" );
+        goto fail;
+    }
+
     /* Open Mux Thread */
     obe_mux_params_t *mux_params = calloc( 1, sizeof(*mux_params) );
     if( !mux_params )
@@ -1057,8 +1107,16 @@ void obe_close( obe_t *h )
 
     fprintf( stderr, "encoders cancelled \n" );
 
-    /* Cancel mux thread */
+    /* Cancel smoothing thread */
+    pthread_mutex_lock( &h->smoothing_mutex );
+    h->cancel_smoothing_thread = 1;
+    pthread_cond_signal( &h->smoothing_cv );
+    pthread_mutex_unlock( &h->smoothing_mutex );
+    pthread_join( h->smoothing_thread, &ret_ptr );
 
+    fprintf( stderr, "smoothing cancelled \n" );
+
+    /* Cancel mux thread */
     pthread_mutex_lock( &h->mux_mutex );
     h->cancel_mux_thread = 1;
     pthread_cond_signal( &h->mux_cv );
@@ -1067,7 +1125,7 @@ void obe_close( obe_t *h )
 
     fprintf( stderr, "mux cancelled \n" );
 
-    /* Cancel output_thread */
+    /* Cancel output_thread TODO */
 
     /* Destroy devices */
     for( int i = 0; i < h->num_devices; i++ )

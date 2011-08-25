@@ -395,11 +395,16 @@ struct obe_t
      * TODO: make this work for multiple inputs and outputs */
     pthread_mutex_t drop_mutex;
     int encoder_drop;
+    int smoothing_drop;
     int output_drop;
 
     /* Streams */
     int num_output_streams;
     obe_output_stream_t *output_streams;
+
+    /* Smoothing (video) */
+    pthread_t smoothing_thread;
+    int cancel_smoothing_thread;
 
     /* Mux */
     pthread_t mux_thread;
@@ -418,6 +423,12 @@ struct obe_t
     int num_encoders;
     obe_encoder_t *encoders[MAX_STREAMS];
 
+    /* Encoded video frames in smoothing buffer */
+    pthread_mutex_t smoothing_mutex;
+    pthread_cond_t  smoothing_cv;
+    int num_smoothing_frames;
+    obe_coded_frame_t **smoothing_frames;
+
     /* Encoded frames for muxing */
     pthread_mutex_t mux_mutex;
     pthread_cond_t  mux_cv;
@@ -431,6 +442,8 @@ struct obe_t
     obe_muxed_data_t **muxed_data;
 
     /* Statistics and Monitoring */
+
+
 };
 
 int64_t obe_mdate( void );
@@ -454,6 +467,8 @@ int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame );
 int remove_frame_from_filter_queue( obe_filter_t *filter );
 int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame );
 int remove_frame_from_encode_queue( obe_encoder_t *encoder );
+int add_to_smoothing_queue( obe_t *h, obe_coded_frame_t *coded_frame );
+int remove_from_smoothing_queue( obe_t *h );
 int add_to_mux_queue( obe_t *h, obe_coded_frame_t *coded_frame );
 int remove_from_mux_queue( obe_t *h, obe_coded_frame_t *coded_frame );
 int remove_early_frames( obe_t *h, int64_t pts );

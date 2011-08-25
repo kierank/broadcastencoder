@@ -205,8 +205,8 @@ static void *start_encoder( void *ptr )
             coded_frame->priority = IS_X264_TYPE_I( pic_out.i_type );
             free( pic_out.passthrough_opaque );
 
-            add_to_mux_queue( h, coded_frame );
-        }
+            add_to_smoothing_queue( h, coded_frame );
+	}
     }
 
 end:
