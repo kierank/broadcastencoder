@@ -641,6 +641,14 @@ void *start_filter( void *ptr )
         if( encapsulate_user_data( raw_frame, input_stream ) < 0 )
             goto end;
 
+        /* If SAR, on an SD stream, has not been updated, set to default 4:3
+         * TODO: make this user-choosable */
+        if( IS_SD( raw_frame->img.format ) && raw_frame->sar_width == 1 && raw_frame->sar_height == 1 )
+        {
+            raw_frame->sar_width = obe_sd_sars[raw_frame->img.format].sar_width;
+            raw_frame->sar_height = obe_sd_sars[raw_frame->img.format].sar_height;
+        }
+
         remove_frame_from_filter_queue( filter );
         add_to_encode_queue( h, raw_frame );
     }
