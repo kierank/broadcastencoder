@@ -87,7 +87,7 @@ static void *start_encoder( void *ptr )
     x264_t *s = NULL;
     x264_picture_t pic, pic_out;
     x264_nal_t *nal;
-    int i_nal, frame_size = 0;
+    int i_nal, frame_size = 0, sar_width, sar_height;
     int64_t pts = 0;
     int64_t *pts2;
     obe_raw_frame_t *raw_frame;
@@ -124,6 +124,9 @@ static void *start_encoder( void *ptr )
     pthread_cond_broadcast( &encoder->encoder_cv );
     pthread_mutex_unlock( &encoder->encoder_mutex );
 
+    sar_width = enc_params->avc_param.vui.i_sar_width;
+    sar_height = enc_params->avc_param.vui.i_sar_height;
+
     while( 1 )
     {
         pthread_mutex_lock( &encoder->encoder_mutex );
@@ -144,7 +147,7 @@ static void *start_encoder( void *ptr )
         }
 
         /* Reset the speedcontrol buffer if the source has dropped frames. Otherwise speedcontrol
-	 * stays in an underflow state and is locked to the fastest preset */
+         * stays in an underflow state and is locked to the fastest preset */
         pthread_mutex_lock( &h->drop_mutex );
         if( h->encoder_drop )
         {
@@ -174,6 +177,18 @@ static void *start_encoder( void *ptr )
         pts2[0] = raw_frame->pts;
         pic.passthrough_opaque = pts2;
 
+        /* If the AFD has changed, then change the SAR. x264 will write the SAR at the next keyframe
+         * TODO: allow user to force keyframes in order to be frame accurate */
+        if( raw_frame->sar_width != sar_width || raw_frame->sar_height != sar_height )
+        {
+            enc_params->avc_param.vui.i_sar_width = sar_width;
+            enc_params->avc_param.vui.i_sar_height = sar_height;
+
+            x264_encoder_reconfig( s, &enc_params->avc_param );
+
+            sar_width = raw_frame->sar_width;
+            sar_height = raw_frame->sar_height;
+        }
         frame_size = x264_encoder_encode( s, &nal, &i_nal, &pic, &pic_out );
 
         raw_frame->release_data( raw_frame );

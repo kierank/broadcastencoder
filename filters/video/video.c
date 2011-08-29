@@ -69,13 +69,27 @@ typedef struct
     int bit_depth;
 } obe_cli_csp_t;
 
-static obe_cli_csp_t obe_cli_csps[] =
+typedef struct
+{
+    int sar_width;
+    int sar_height;
+} obe_sd_sar_t;
+
+const static obe_cli_csp_t obe_cli_csps[] =
 {
     [PIX_FMT_YUV420P] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 8 },
     [PIX_FMT_NV12] =    { 2, { 1,  1 },     { 1, .5 },     2, 2, 8 },
     [PIX_FMT_YUV420P10] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 10 },
     [PIX_FMT_YUV422P10] = { 3, { 1, .5, .5 }, { 1, 1, 1 }, 2, 2, 10 },
     [PIX_FMT_YUV420P16] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 16 },
+};
+
+const static obe_sd_sar_t obe_sd_sars[] =
+{
+    [INPUT_VIDEO_FORMAT_PAL]    = { 12, 11 }, /* PAL 4:3 */
+    [INPUT_VIDEO_FORMAT_NTSC]   = { 10, 11 }, /* NTSC 4:3 */
+    [INPUT_VIDEO_FORMAT_PAL+2]  = { 16, 11 }, /* PAL 16:9 */
+    [INPUT_VIDEO_FORMAT_NTSC+2] = { 40, 33 }, /* NTSC 16:9 */
 };
 
 const static int wss_to_afd[] =
@@ -88,6 +102,26 @@ const static int wss_to_afd[] =
     [0x5] = 0x4, /* box > 16:9 (centre) */
     [0x6] = 0xd, /* 4:3 (shoot and protect 14:9 centre) */
     [0x7] = 0xf, /* 16:9 (shoot and protect 4:3 centre) */
+};
+
+const static uint8_t afd_is_wide[] =
+{
+    [0x0] = 0, /* reserved */
+    [0x1] = 0, /* reserved */
+    [0x2] = 1, /* box 16:9 (top) */
+    [0x3] = 0, /* box 14:9 (top) */
+    [0x4] = 1, /* box > 16:9 (centre) */
+    [0x5] = 0, /* reserved */
+    [0x6] = 0, /* reserved */
+    [0x7] = 0, /* reserved */
+    [0x8] = 0, /* as the coded frame */
+    [0x9] = 0, /* 4:3 (centre) */
+    [0xa] = 1, /* 16:9 (centre) */
+    [0xb] = 0, /* 14:9 (centre) */
+    [0xc] = 0, /* reserved */
+    [0xd] = 0, /* 4:3 (with shoot and protect 14:9 centre) */
+    [0xe] = 1, /* 16:9 (with shoot and protect 14:9 centre) */
+    [0xf] = 1, /* 16:9 (with shoot and protect 4:3 centre) */
 };
 
 static void scale_plane_c( uint16_t *src, int stride, int width, int height, int lshift, int rshift )
@@ -385,7 +419,7 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
 }
 
 /** User-data encapsulation **/
-static int write_afd( obe_user_data_t *user_data )
+static int write_afd( obe_user_data_t *user_data, obe_raw_frame_t *raw_frame )
 {
     bs_t r;
     uint8_t temp[100];
@@ -393,6 +427,7 @@ static int write_afd( obe_user_data_t *user_data )
     const int provider_code     = 0x31;
     const char *user_identifier = "DTG1";
     int active_format_flag;
+    uint8_t afd = 0;
 
     /* TODO: when MPEG-2 is added make this do the right thing */
 
@@ -413,10 +448,19 @@ static int write_afd( obe_user_data_t *user_data )
     if( active_format_flag )
     {
         bs_write( &r, 4, 0xf ); // reserved
-        bs_write( &r, 4, ( user_data->data[0] >> 3) & 0xf ); // active_format
+        afd = (user_data->data[0] >> 3) & 0xf;
+        bs_write( &r, 4, afd ); // active_format
     }
 
     bs_flush( &r );
+
+    /* Set the SAR from the AFD value */
+    if( active_format_flag && !raw_frame->sar_width && !raw_frame->sar_height && raw_frame->img.first_line )
+    {
+        int is_wide = afd_is_wide[afd] ? 2 : 0;
+        raw_frame->sar_width = obe_sd_sars[raw_frame->img.format+is_wide].sar_width;
+        raw_frame->sar_height = obe_sd_sars[raw_frame->img.format+is_wide].sar_height;
+    }
 
     user_data->type = USER_DATA_AVC_REGISTERED_ITU_T35;
     user_data->len = bs_pos( &r ) >> 3;
@@ -503,10 +547,10 @@ static int write_bar_data( obe_user_data_t *user_data )
     return 0;
 }
 
-static int convert_wss_to_afd( obe_user_data_t *user_data )
+static int convert_wss_to_afd( obe_user_data_t *user_data, obe_raw_frame_t *raw_frame )
 {
     user_data->data[0] = (wss_to_afd[user_data->data[0]] << 3) | (1 << 2);
-    if( write_afd( user_data ) < 0 )
+    if( write_afd( user_data, raw_frame ) < 0 )
         return -1;
 
     return 0;
@@ -514,7 +558,7 @@ static int convert_wss_to_afd( obe_user_data_t *user_data )
 
 static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stream_t *input_stream )
 {
-    /* Encapsulate user-data */
+    // TODO handle failures
     for( int i = 0; i < raw_frame->num_user_data; i++ )
     {
         if( raw_frame->user_data[i].type == USER_DATA_CEA_608 )
@@ -522,11 +566,11 @@ static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stre
         else if( raw_frame->user_data[i].type == USER_DATA_CEA_708_CDP )
             write_cdp( &raw_frame->user_data[i] );
         else if( raw_frame->user_data[i].type == USER_DATA_AFD )
-            write_afd( &raw_frame->user_data[i] );
+            write_afd( &raw_frame->user_data[i], raw_frame );
         else if( raw_frame->user_data[i].type == USER_DATA_BAR_DATA )
             write_bar_data( &raw_frame->user_data[i] );
         else if( raw_frame->user_data[i].type == USER_DATA_WSS )
-            convert_wss_to_afd( &raw_frame->user_data[i] );
+            convert_wss_to_afd( &raw_frame->user_data[i], raw_frame );
     }
 
     return 0;

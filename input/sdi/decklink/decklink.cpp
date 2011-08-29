@@ -411,6 +411,10 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 raw_frame->img.first_line = first_active_line[j].line;
             }
 
+            /* If AFD is present and the stream is SD this will be changed in the video filter */
+            raw_frame->sar_width = 1;
+            raw_frame->sar_height = 1;
+
             BMDTimeValue stream_time, frame_duration;
             videoframe->GetStreamTime( &stream_time, &frame_duration, OBE_CLOCK );
             raw_frame->pts = stream_time;

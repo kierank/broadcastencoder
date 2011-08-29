@@ -289,6 +289,8 @@ typedef struct
      * For most devices these are the same. */
     obe_image_t alloc_img;
     obe_image_t img;
+    int sar_width;
+    int sar_height;
 
     /* Ancillary / User-data */
     int num_user_data;
