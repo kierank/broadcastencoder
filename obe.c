@@ -669,7 +669,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     // FIXME this needs to be made to support probing whilst running
     // TODO metadata etc
     program->num_streams = h->devices[h->num_devices-1]->num_input_streams;
-    program->streams = calloc( 1, program->num_streams * sizeof(*program->streams) );
+    program->streams = calloc( program->num_streams, sizeof(*program->streams) );
     if( !program->streams )
     {
         fprintf( stderr, "Malloc failed \n" );
