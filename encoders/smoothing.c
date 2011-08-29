@@ -80,7 +80,7 @@ static void *start_smoothing( void *ptr )
         pthread_mutex_lock( &h->drop_mutex );
         if( h->smoothing_drop )
         {
-            syslog( LOG_INFO, "Smoothing buffer rest\n" );
+            syslog( LOG_INFO, "Smoothing buffer reset\n" );
             ready = h->smoothing_drop = 0;
             last_clock = -1;
         }
@@ -100,7 +100,7 @@ static void *start_smoothing( void *ptr )
         printf("\n smoothed frames %i \n", num_smoothing_frames );
 
         coded_frame = h->smoothing_frames[0];
-        
+
         pthread_mutex_unlock( &h->smoothing_mutex );
 
         if( last_clock != -1 )
@@ -117,12 +117,10 @@ static void *start_smoothing( void *ptr )
         last_clock = get_wallclock_in_mpeg_ticks();
         last_dts = coded_frame->real_dts;
 
-
         add_to_mux_queue( h, coded_frame );
 
-        printf("\n send_delta %"PRIi64" \n", x264_mdate() - send_delta );
-
-	send_delta = x264_mdate();
+        //printf("\n send_delta %"PRIi64" \n", obe_mdate() - send_delta );
+        //send_delta = obe_mdate();
 
         remove_from_smoothing_queue( h );
         num_smoothing_frames = 0;
