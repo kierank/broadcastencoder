@@ -269,6 +269,7 @@ static int downconvert_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_
     tmp_image.width = raw_frame->img.width;
     tmp_image.height = raw_frame->img.height;
     tmp_image.planes = av_pix_fmt_descriptors[vfilt->dst_pix_fmt].nb_components;
+    tmp_image.format = raw_frame->img.format;
 
     if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
                         vfilt->dst_pix_fmt, 16 ) < 0 )
@@ -378,6 +379,8 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     tmp_image.csp = PIX_FMT_YUV420P;
     tmp_image.width = raw_frame->img.width;
     tmp_image.height = raw_frame->img.height;
+    tmp_image.planes = av_pix_fmt_descriptors[tmp_image.csp].nb_components;
+    tmp_image.format = raw_frame->img.format;
 
     if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
                         tmp_image.csp, 16 ) < 0 )
@@ -455,7 +458,7 @@ static int write_afd( obe_user_data_t *user_data, obe_raw_frame_t *raw_frame )
     bs_flush( &r );
 
     /* Set the SAR from the AFD value */
-    if( active_format_flag && raw_frame->img.first_line )
+    if( active_format_flag && IS_SD( raw_frame->img.format ) )
     {
         int is_wide = afd_is_wide[afd] ? 2 : 0;
         raw_frame->sar_width = obe_sd_sars[raw_frame->img.format+is_wide].sar_width;
@@ -620,7 +623,7 @@ void *start_filter( void *ptr )
 
         /* TODO: scale 8-bit to 10-bit */
 
-        if( raw_frame->img.first_line )
+        if( IS_SD( raw_frame->img.format ) )
             blank_lines( raw_frame );
 
         if( raw_frame->img.csp == PIX_FMT_YUV422P || raw_frame->img.csp == PIX_FMT_YUV422P10 )
