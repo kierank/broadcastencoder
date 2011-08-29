@@ -181,14 +181,15 @@ static void *start_encoder( void *ptr )
          * TODO: allow user to force keyframes in order to be frame accurate */
         if( raw_frame->sar_width != sar_width || raw_frame->sar_height != sar_height )
         {
-            enc_params->avc_param.vui.i_sar_width = sar_width;
-            enc_params->avc_param.vui.i_sar_height = sar_height;
+            enc_params->avc_param.vui.i_sar_width = raw_frame->sar_width;
+            enc_params->avc_param.vui.i_sar_height = raw_frame->sar_height;
 
             x264_encoder_reconfig( s, &enc_params->avc_param );
 
             sar_width = raw_frame->sar_width;
             sar_height = raw_frame->sar_height;
         }
+
         frame_size = x264_encoder_encode( s, &nal, &i_nal, &pic, &pic_out );
 
         raw_frame->release_data( raw_frame );
