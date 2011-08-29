@@ -845,9 +845,9 @@ static int probe_device( char *command, obecli_command_t *child )
         if( stream->stream_type == STREAM_TYPE_VIDEO )
         {
             /* TODO: show profile, level, csp etc */
-            printf( "Stream-id: %d - Video: %s %dx%d%s %d/%dfps SAR: %d:%d \n", stream->stream_id,
+            printf( "Stream-id: %d - Video: %s %dx%d%s %d/%dfps \n", stream->stream_id,
                     format_name, stream->width, stream->height, stream->interlaced ? "i" : "p",
-                    stream->timebase_den, stream->timebase_num, stream->sar_num, stream->sar_den );
+                    stream->timebase_den, stream->timebase_num );
 
             for( int j = 0; j < stream->num_frame_data; j++ )
             {
