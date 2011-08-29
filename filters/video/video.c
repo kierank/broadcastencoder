@@ -455,7 +455,7 @@ static int write_afd( obe_user_data_t *user_data, obe_raw_frame_t *raw_frame )
     bs_flush( &r );
 
     /* Set the SAR from the AFD value */
-    if( active_format_flag && !raw_frame->sar_width && !raw_frame->sar_height && raw_frame->img.first_line )
+    if( active_format_flag && raw_frame->img.first_line )
     {
         int is_wide = afd_is_wide[afd] ? 2 : 0;
         raw_frame->sar_width = obe_sd_sars[raw_frame->img.format+is_wide].sar_width;
