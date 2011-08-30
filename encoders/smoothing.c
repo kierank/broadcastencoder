@@ -63,8 +63,8 @@ static void *start_smoothing( void *ptr )
 
         if( h->num_smoothing_frames == num_smoothing_frames )
         {
-            if( ready )
-                printf("\n smoothing wait underflow \n" );
+//            if( ready )
+//                printf("\n smoothing wait underflow \n" );
             pthread_cond_wait( &h->smoothing_cv, &h->smoothing_mutex );
         }
 
@@ -97,7 +97,7 @@ static void *start_smoothing( void *ptr )
             }
         }
 
-        printf("\n smoothed frames %i \n", num_smoothing_frames );
+//        printf("\n smoothed frames %i \n", num_smoothing_frames );
 
         coded_frame = h->smoothing_frames[0];
 
