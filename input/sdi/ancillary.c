@@ -111,7 +111,7 @@ static int parse_afd( obe_sdi_non_display_data_t *non_display_data, obe_raw_fram
 
     user_data->data[0] = READ_8( line[0] );
 
-    /* Skip two reserved lines */
+    /* Skip two reserved words */
     line += 2;
     user_data++;
 
