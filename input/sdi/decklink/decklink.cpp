@@ -141,6 +141,7 @@ typedef struct
 
     /* Output */
     int width;
+    int coded_height;
     int height;
 
     int timebase_num;
@@ -205,10 +206,10 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     void *frame_bytes, *anc_line;
     obe_t *h = decklink_ctx->h;
     int finished = 0, ret, bytes, num_anc_lines = 0, anc_line_stride,
-    lines_read = 0, first_line = 0, last_line = 0, line, vbi_lines, vii_line, stream_id;
+    lines_read = 0, first_line = 0, last_line = 0, line, num_vbi_lines, vii_line, stream_id;
     uint32_t *frame_ptr;
     uint16_t *anc_buf, *anc_buf_pos;
-    uint8_t *vbi_buf, *vbi_buf_ptr;
+    uint8_t *vbi_buf;
     int anc_lines[DECKLINK_VANC_LINES];
     IDeckLinkVideoFrameAncillary *ancillary;
 
@@ -320,17 +321,17 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             frame_ptr = (uint32_t*)frame_bytes;
 
             /* NTSC starts from line 283 so add an extra line */
-            vbi_lines = NUM_ACTIVE_VBI_LINES + ( decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC );
-            for( int i = 0; i < vbi_lines; i++ )
+            num_vbi_lines = NUM_ACTIVE_VBI_LINES + ( decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC );
+            for( int i = 0; i < num_vbi_lines; i++ )
             {
                 decklink_ctx->unpack_line( frame_ptr, anc_buf_pos, width );
                 anc_buf_pos += anc_line_stride / 2;
                 frame_ptr += stride / 4;
                 last_line = sdi_next_line( decklink_opts_->video_format, last_line );
             }
-            num_anc_lines += vbi_lines;
+            num_anc_lines += num_vbi_lines;
 
-            vbi_buf = vbi_buf_ptr = (uint8_t*)av_malloc( width * 2 * num_anc_lines );
+            vbi_buf = (uint8_t*)av_malloc( width * 2 * num_anc_lines );
             if( !vbi_buf )
             {
                 syslog( LOG_ERR, "Malloc failed\n" );
@@ -369,7 +370,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 decklink_ctx->has_setup_vbi = 1;
             }
 
-            if( decode_vbi( &decklink_ctx->non_display_parser, vbi_buf_ptr, raw_frame ) < 0 )
+            if( decode_vbi( &decklink_ctx->non_display_parser, vbi_buf, raw_frame ) < 0 )
                 goto fail;
 
             av_free( vbi_buf );
@@ -407,6 +408,9 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
             if( IS_SD( decklink_opts_->video_format ) )
             {
+                if( raw_frame->alloc_img.width == 486 )
+                    raw_frame->img.width = 480;
+
                 raw_frame->img.format     = decklink_opts_->video_format;
                 raw_frame->img.first_line = first_active_line[j].line;
             }
@@ -762,7 +766,7 @@ static int open_card( decklink_opts_t *decklink_opts )
         {
             found_mode = true;
             decklink_opts->width = p_display_mode->GetWidth();
-            decklink_opts->height = p_display_mode->GetHeight();
+            decklink_opts->coded_height = p_display_mode->GetHeight();
 
             switch( p_display_mode->GetFieldDominance() )
             {
@@ -794,6 +798,10 @@ static int open_card( decklink_opts_t *decklink_opts )
 
         p_display_mode->Release();
     }
+
+    decklink_opts->height = decklink_opts->coded_height;
+    if( decklink_opts->coded_height == 486 )
+        decklink_opts->height = 480;
 
     if( !found_mode )
     {
