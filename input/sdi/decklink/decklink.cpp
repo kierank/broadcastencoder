@@ -140,6 +140,8 @@ typedef struct
     int probe;
 
     /* Output */
+    int probe_success;
+
     int width;
     int coded_height;
     int height;
@@ -213,7 +215,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     int anc_lines[DECKLINK_VANC_LINES];
     IDeckLinkVideoFrameAncillary *ancillary;
 
-    if( decklink_ctx->non_display_parser.has_probed )
+    if( decklink_opts_->probe_success )
         return S_OK;
 
     av_init_packet( &pkt );
@@ -225,6 +227,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             syslog( LOG_ERR, "Decklink card index %i: No input signal detected", decklink_opts_->card_idx );
             return S_OK;
         }
+        else if( decklink_opts_->probe )
+            decklink_opts_->probe_success = 1;
 
         if( decklink_ctx->last_frame_time == -1 )
             decklink_ctx->last_frame_time = obe_mdate();
@@ -908,6 +912,12 @@ static void *probe_stream( void *ptr )
     sleep( 1 );
 
     close_card( decklink_opts );
+
+    if( !decklink_opts->probe_success )
+    {
+        fprintf( stderr, "[decklink] No valid frames received - check input format\n" );
+        goto finish;
+    }
 
     /* TODO: probe for SMPTE 337M */
     /* TODO: factor some of the code below out */
