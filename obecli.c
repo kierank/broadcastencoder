@@ -786,9 +786,9 @@ static int start_encode( char *command, obecli_command_t *child )
         return -1;
     }
 
-    if( !output.target )
+    if( ( output.output == OUTPUT_UDP || output.output == OUTPUT_RTP ) && !output.target )
     {
-        fprintf( stderr, "No output target \n" );
+        fprintf( stderr, "No output target chosen\n" );
         return -1;
     }
 
