@@ -284,7 +284,7 @@ typedef struct
 
     /* Video */
     /* Some devices output visible and VBI/VANC data together. In order
-     * to avoid memcpying raw frames, create two image structures.
+     * to avoid memcpying raw frames, we create two image structures.
      * The first one points to the allocated memory and the second points to the visible frame.
      * For most devices these are the same. */
     obe_image_t alloc_img;
