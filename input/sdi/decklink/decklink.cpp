@@ -32,6 +32,7 @@ extern "C"
 #include "input/sdi/sdi.h"
 #include "input/sdi/ancillary.h"
 #include "input/sdi/vbi.h"
+#include "input/sdi/x86/sdi.h"
 }
 
 #include "include/DeckLinkAPI.h"
@@ -584,6 +585,7 @@ static int open_card( decklink_opts_t *decklink_opts )
     int         found_mode;
     int         ret = 0;
     int         i;
+    int         cpu_flags;
     const int   sample_rate = 48000;
     const char *model_name;
     BMDDisplayMode wanted_mode_id;
@@ -814,12 +816,20 @@ static int open_card( decklink_opts_t *decklink_opts )
         goto finish;
     }
 
+    cpu_flags = av_get_cpu_flags();
+
     /* Setup VBI and VANC unpack functions */
     if( IS_SD( decklink_opts->video_format ) )
     {
         decklink_ctx->unpack_line = obe_v210_line_to_uyvy_c;
         decklink_ctx->downscale_line = obe_downscale_line_c;
         decklink_ctx->blank_line = obe_blank_line_uyvy_c;
+
+        if( cpu_flags & AV_CPU_FLAG_MMX )
+            decklink_ctx->downscale_line = obe_downscale_line_mmx;
+
+        if( cpu_flags & AV_CPU_FLAG_SSE2 )
+            decklink_ctx->downscale_line = obe_downscale_line_sse2;
     }
     else
     {

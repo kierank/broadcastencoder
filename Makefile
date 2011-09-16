@@ -31,7 +31,10 @@ endif
 # MMX/SSE optims
 ifneq ($(AS),)
 X86SRC0 = vfilter.asm
-X86SRC = $(X86SRC0:%=filters/video/x86/%)
+X86SRC  = $(X86SRC0:%=filters/video/x86/%)
+X86SRC1 = sdi.asm
+X86SRC  += $(X86SRC1:%=input/sdi/x86/%)
+
 
 ifeq ($(ARCH),X86_64)
 ARCH_X86 = yes
