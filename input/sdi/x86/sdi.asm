@@ -11,7 +11,7 @@ cglobal downscale_line_%1, 3,3
     imul r2d, 1440
 .loop
     mova   m0, [r0]
-    mova   m1, [r0+mmsize]
+    mova   m1, [r0+mmsize] 
     psrlw  m0, 2
     psrlw  m1, 2
     packuswb m0, m1
