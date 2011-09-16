@@ -59,7 +59,7 @@ cglobal dither_row_10_to_8_%1, 5, 5
     psrld     m1, m4
     psrld     m0, m4
 
-    packusdw  m1, m0
+    packssdw  m1, m0
     packuswb  m1, m5
 
     movq      [r1], m1
@@ -73,6 +73,6 @@ cglobal dither_row_10_to_8_%1, 5, 5
 %endmacro
 
 INIT_XMM
-DITHER_row sse4
+DITHER_row sse2
 INIT_AVX
 DITHER_row avx

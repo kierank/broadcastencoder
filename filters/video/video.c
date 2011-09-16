@@ -176,8 +176,8 @@ static void init_filter( obe_vid_filter_ctx_t *vfilt )
 
     vfilt->dither_row_10_to_8 = dither_row_10_to_8_c;
 
-    if( vfilt->avutil_cpu & AV_CPU_FLAG_SSE4 )
-        vfilt->dither_row_10_to_8 = obe_dither_row_10_to_8_sse4;
+    if( vfilt->avutil_cpu & AV_CPU_FLAG_SSE2 )
+        vfilt->dither_row_10_to_8 = obe_dither_row_10_to_8_sse2;
 
     if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX )
         vfilt->dither_row_10_to_8 = obe_dither_row_10_to_8_avx;
