@@ -58,6 +58,7 @@ static const int avc_profiles[][2] =
     { 77,  AVC_MAIN },
     { 100, AVC_HIGH },
     { 110, AVC_HIGH_10 },
+    { 122, AVC_HIGH_422 },
     { 244, AVC_HIGH_444_PRED },
     { 0, 0 },
 };

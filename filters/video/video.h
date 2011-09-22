@@ -34,6 +34,7 @@ typedef struct
     obe_t *h;
     obe_filter_t *filter;
     obe_int_input_stream_t *input_stream;
+    int target_csp;
 } obe_vid_filter_params_t;
 
 extern const obe_vid_filter_func_t video_filter;

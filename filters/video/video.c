@@ -627,13 +627,13 @@ void *start_filter( void *ptr )
         if( IS_SD( raw_frame->img.format ) )
             blank_lines( raw_frame );
 
-        if( raw_frame->img.csp == PIX_FMT_YUV422P || raw_frame->img.csp == PIX_FMT_YUV422P10 )
+        if( filter_params->target_csp == X264_CSP_I420 && ( raw_frame->img.csp == PIX_FMT_YUV422P || raw_frame->img.csp == PIX_FMT_YUV422P10 ) )
         {
             if( downconvert_frame( vfilt, raw_frame ) < 0 )
                 goto end;
         }
 
-        if( raw_frame->img.csp == PIX_FMT_YUV420P10 && X264_BIT_DEPTH == 8 )
+        if( ( raw_frame->img.csp == PIX_FMT_YUV420P10 || raw_frame->img.csp == PIX_FMT_YUV422P10 ) && X264_BIT_DEPTH == 8 )
         {
             if( dither_image( vfilt, raw_frame ) < 0 )
                 goto end;
