@@ -376,7 +376,7 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     obe_image_t tmp_image = {0};
     obe_image_t *out = &tmp_image;
 
-    tmp_image.csp = PIX_FMT_YUV420P;
+    tmp_image.csp = img->csp == PIX_FMT_YUV422P10 ? PIX_FMT_YUV422P : PIX_FMT_YUV420P;
     tmp_image.width = raw_frame->img.width;
     tmp_image.height = raw_frame->img.height;
     tmp_image.planes = av_pix_fmt_descriptors[tmp_image.csp].nb_components;
@@ -621,7 +621,8 @@ void *start_filter( void *ptr )
         raw_frame = filter->frames[0];
         pthread_mutex_unlock( &filter->filter_mutex );
 
-        /* TODO: scale 8-bit to 10-bit */
+        /* TODO: scale 8-bit to 10-bit
+         * TODO: convert from 4:2:0 to 4:2:2 */
 
         if( IS_SD( raw_frame->img.format ) )
             blank_lines( raw_frame );

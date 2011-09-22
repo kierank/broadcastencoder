@@ -65,7 +65,7 @@ static const char * stream_opts[] = { "action", "format",
                                       /* Encoding options */
                                       "vbv-maxrate", "vbv-bufsize", "bitrate", "sar-width", "sar-height",
                                       "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", "weightp",
-                                      "interlaced", "tff", "frame-packing",
+                                      "interlaced", "tff", "frame-packing", "csp",
                                       /* TS options */
                                       "pid", "lang", "num-ttx", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page",
                                       NULL };
@@ -377,10 +377,13 @@ static int set_stream( char *command, obecli_command_t *child )
             char *interlaced  = obe_get_option( stream_opts[15], opts );
             char *tff         = obe_get_option( stream_opts[16], opts );
             char *frame_packing = obe_get_option( stream_opts[17], opts );
+            char *csp         = obe_get_option( stream_opts[18], opts );
 
             /* NB: remap these if more encoding options are added - TODO: split them up */
-            char *pid         = obe_get_option( stream_opts[18], opts );
-            char *lang        = obe_get_option( stream_opts[19], opts );
+
+            /* NB: remap these and the ttx values below if more encoding options are added - TODO: split them up */
+            char *pid         = obe_get_option( stream_opts[20], opts );
+            char *lang        = obe_get_option( stream_opts[21], opts );
 
             if( program.streams[stream_id].stream_type == STREAM_TYPE_VIDEO )
             {
@@ -415,6 +418,8 @@ static int set_stream( char *command, obecli_command_t *child )
                 avc_param->b_tff               = obe_otob( tff, avc_param->b_tff );
                 if( frame_packing )
                     parse_enum_value( frame_packing, frame_packing_modes, &avc_param->i_frame_packing );
+                if( csp )
+                    avc_param->i_csp = obe_otoi( csp, 420 ) == 422 ? X264_CSP_I422 : X264_CSP_I420;
 
                 /* Turn on the 3DTV mux option automatically */
                 if( avc_param->i_frame_packing >= 0 )
@@ -467,10 +472,11 @@ static int set_stream( char *command, obecli_command_t *child )
                     return -1;
                 }
 
-                char *ttx_lang = obe_get_option( stream_opts[21], opts );
-                char *ttx_type = obe_get_option( stream_opts[22], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[23], opts );
-                char *ttx_page = obe_get_option( stream_opts[24], opts );
+                /* NB: remap these if more encoding options are added - TODO: split them up */
+                char *ttx_lang = obe_get_option( stream_opts[22], opts );
+                char *ttx_type = obe_get_option( stream_opts[23], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[24], opts );
+                char *ttx_page = obe_get_option( stream_opts[25], opts );
                 obe_teletext_opts_t *ttx_opts = &output_streams[stream_id].ts_opts.teletext_opts[0];
 
                 if( ttx_lang && strlen( ttx_lang ) >= 3 )
