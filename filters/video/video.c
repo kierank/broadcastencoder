@@ -641,7 +641,7 @@ void *start_filter( void *ptr )
         if( encapsulate_user_data( raw_frame, input_stream ) < 0 )
             goto end;
 
-        /* If SAR, on an SD stream, has not been updated, set to default 4:3
+        /* If SAR, on an SD stream, has not been updated by AFD or WSS, set to default 4:3
          * TODO: make this user-choosable */
         if( IS_SD( raw_frame->img.format ) && raw_frame->sar_width == 1 && raw_frame->sar_height == 1 )
         {
