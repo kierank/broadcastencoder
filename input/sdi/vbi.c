@@ -52,7 +52,11 @@ const static int vbi_type_tab[][2] =
     { VBI_SLICED_TELETEXT_B,         MISC_TELETEXT },
     { VBI_SLICED_TELETEXT_B_L10_625, MISC_TELETEXT },
     { VBI_SLICED_TELETEXT_B_L25_625, MISC_TELETEXT },
-    { VBI_SLICED_TELETEXT_C_625,     VBI_NABTS }, /* TODO: inverted teletext */
+    { VBI_SLICED_TELETEXT_C_625,     VBI_NABTS },
+    /* It's not worth failing to build for something as obscure as inverted teletext */
+#ifdef VBI_SLICED_TELETEXT_INVERTED
+    { VBI_SLICED_TELETEXT_INVERTED,  MISC_TELETEXT_INVERTED },
+#endif
     { VBI_SLICED_WSS_625,            MISC_WSS },
     { VBI_SLICED_VPS,                MISC_VPS },
     { VBI_SLICED_CAPTION_525,        CAPTIONS_CEA_608 },
@@ -466,7 +470,7 @@ static void write_ttx_field( bs_t *s, uint8_t *data, int type )
     }
     else
     {
-        bs_write( s, 8, TTX_FRAMING_CODE ); // framing_code
+        bs_write( s, 8, type == MISC_TELETEXT ? TTX_FRAMING_CODE : TTX_INVERTED_FRAMING_CODE ); // framing_code
         for( int i = 0; i < TTX_BLOCK_LEN; i++ )
             bs_write( s, 8, REVERSE( data[i] ) );
     }
@@ -564,7 +568,7 @@ int encapsulate_dvb_vbi( obe_sdi_non_display_data_t *non_display_data )
         bs_init( &t, tmp, 100 );
         write_header_byte( &t, non_display_data->vbi_slices[i].line, non_display_data->vbi_decoder.scanning == 525 );
 
-        if( type == MISC_TELETEXT || type == VBI_NABTS )
+        if( type == MISC_TELETEXT || type == MISC_TELETEXT_INVERTED || type == VBI_NABTS )
             write_ttx_field( &t, non_display_data->vbi_slices[i].data, type );
         else if( type == MISC_VPS )
             write_generic_field( &t, non_display_data->vbi_slices[i].data, type );
