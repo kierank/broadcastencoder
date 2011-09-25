@@ -458,7 +458,7 @@ static void write_generic_field( bs_t *s, uint8_t *data, int type )
 
 static void write_ttx_field( bs_t *s, uint8_t *data, int type )
 {
-    if( type == VBI_SLICED_NABTS )
+    if( type == VBI_NABTS )
     {
         bs_write( s, 8, NABTS_FRAMING_CODE ); // framing_code
         for( int i = 0; i < NABTS_BLOCK_LEN; i++ )
