@@ -764,7 +764,6 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         param->vui.i_sar_width  = stream->sar_num;
         param->vui.i_sar_height = stream->sar_den;
     }
-    /* TODO: use common PAL/NTSC SARs */
 
     param->vui.i_overscan = 2;
 
