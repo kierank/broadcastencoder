@@ -24,6 +24,7 @@
 #include "common/common.h"
 #include "encoders/audio/audio.h"
 #include <twolame.h>
+#include <libavutil/fifo.h>
 #include <libavcodec/audioconvert.h>
 
 #define MP2_AUDIO_BUFFER_SIZE 50000
@@ -38,9 +39,10 @@ static void *start_encoder( void *ptr )
     twolame_options *tl_opts = NULL;
     int output_size, frame_size, in_stride;
     int64_t cur_pts = -1;
-    uint8_t *output_buf = NULL, *output_pos;
     void *audio_buf = NULL;
+    uint8_t *output_buf = NULL;
     AVAudioConvert *audio_conv = NULL;
+    AVFifoBuffer *fifo = NULL;
 
     /* Lock the mutex until we verify parameters */
     pthread_mutex_lock( &encoder->encoder_mutex );
@@ -64,7 +66,8 @@ static void *start_encoder( void *ptr )
 
     twolame_init_params( tl_opts );
 
-    frame_size = (double)MP2_NUM_SAMPLES * 125 * enc_params->bitrate / enc_params->sample_rate;
+    /* NB: 125 = 1000 / 8 */
+    frame_size = (double)MP2_NUM_SAMPLES * 125 * enc_params->bitrate * enc_params->frames_per_pes / enc_params->sample_rate;
 
     encoder->is_ready = 1;
     /* Broadcast because input and muxer can be stuck waiting for encoder */
@@ -83,6 +86,14 @@ static void *start_encoder( void *ptr )
     /* This works on "planar" audio so pretend it's just one audio plane */
     audio_conv = av_audio_convert_alloc( AV_SAMPLE_FMT_FLT, 1, enc_params->sample_format, 1, NULL, 0 );
     if( !audio_conv )
+    {
+        fprintf( stderr, "Malloc failed\n" );
+        goto end;
+    }
+
+    /* Setup the output FIFO */
+    fifo = av_fifo_alloc( frame_size );
+    if( !fifo )
     {
         fprintf( stderr, "Malloc failed\n" );
         goto end;
@@ -144,10 +155,20 @@ static void *start_encoder( void *ptr )
 
         free( audio_buf );
         audio_buf = NULL;
-        output_pos = output_buf;
 
-        /* Sometimes multiple frames will be output so split them up if necessary */
-        while( output_size > 0 )
+        raw_frame->release_data( raw_frame );
+        raw_frame->release_frame( raw_frame );
+        remove_frame_from_encode_queue( encoder );
+
+        if( av_fifo_realloc2( fifo, av_fifo_size( fifo ) + output_size ) < 0 )
+        {
+            syslog( LOG_ERR, "Malloc failed\n" );
+            goto end;
+        }
+
+        av_fifo_generic_write( fifo, output_buf, output_size, NULL );
+
+        while( av_fifo_size( fifo ) >= frame_size )
         {
             coded_frame = new_coded_frame( encoder->stream_id, frame_size );
             if( !coded_frame )
@@ -155,19 +176,13 @@ static void *start_encoder( void *ptr )
                 syslog( LOG_ERR, "Malloc failed\n" );
                 goto end;
             }
-            memcpy( coded_frame->data, output_pos, frame_size );
+            av_fifo_generic_read( fifo, coded_frame->data, frame_size, NULL );
             coded_frame->pts = cur_pts;
+
             add_to_mux_queue( h, coded_frame );
-
             /* We need to generate PTS because frame sizes have changed */
-            output_size -= frame_size;
-            output_pos += frame_size;
-            cur_pts += (double)MP2_NUM_SAMPLES * OBE_CLOCK / enc_params->sample_rate;
+            cur_pts += (double)MP2_NUM_SAMPLES * OBE_CLOCK * enc_params->frames_per_pes / enc_params->sample_rate;
         }
-
-        raw_frame->release_data( raw_frame );
-        raw_frame->release_frame( raw_frame );
-        remove_frame_from_encode_queue( encoder );
     }
 
 end:

@@ -212,7 +212,7 @@ void *open_muxer( void *ptr )
             video_pid = stream->pid;
         }
         else if( stream_format == AUDIO_MP2 )
-            stream->audio_frame_size = (double)MP2_NUM_SAMPLES * 90000LL / input_stream->sample_rate;
+            stream->audio_frame_size = (double)MP2_NUM_SAMPLES * 90000LL * output_stream->frames_per_pes / input_stream->sample_rate;
         else if( stream_format == AUDIO_AC_3 )
             stream->audio_frame_size = (double)AC3_NUM_SAMPLES * 90000LL / input_stream->sample_rate;
         else if( stream_format == AUDIO_AAC )

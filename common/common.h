@@ -65,6 +65,11 @@
 #define MP2_NUM_SAMPLES 1152
 #define AAC_NUM_SAMPLES 1024
 
+/* T-STD buffer sizes */
+#define AC3_BS_ATSC     2592
+#define AC3_BS_DVB      5696
+#define MISC_AUDIO_BS   3584
+
 /* Network output */
 #define TS_PACKETS_SIZE 1316
 

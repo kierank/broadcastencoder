@@ -959,9 +959,26 @@ int obe_start( obe_t *h )
                 input_stream = get_input_stream( h, h->output_streams[i].stream_id );
                 aud_enc_params->sample_format = input_stream->sample_format;
                 aud_enc_params->output_format = h->output_streams[i].stream_format;
+                /* TODO: check the bitrate is allowed by the format */
                 aud_enc_params->bitrate = h->output_streams[i].bitrate;
                 aud_enc_params->sample_rate = input_stream->sample_rate;
                 aud_enc_params->num_channels = av_get_channel_layout_nb_channels( input_stream->channel_layout );
+
+                /* Choose the optimal number of audio frames per PES
+		 * TODO: AC-3, lowlatency encoding modifications */
+                if( !h->output_streams[i].ts_opts.frames_per_pes && h->output_streams[i].stream_format == AUDIO_MP2 )
+                {
+                    int single_frame_size = (double)MP2_NUM_SAMPLES * 125 * aud_enc_params->bitrate / aud_enc_params->sample_rate;
+                    int frames_per_pes = MAX( MISC_AUDIO_BS / single_frame_size, 1 );
+                    h->output_streams[i].ts_opts.frames_per_pes = aud_enc_params->frames_per_pes = frames_per_pes;
+                }
+                else
+                    h->output_streams[i].ts_opts.frames_per_pes = aud_enc_params->frames_per_pes = 1;
+
+
+                if( h->output_streams[i].stream_format == AUDIO_AAC )
+                    memcpy( &aud_enc_params->aac_opts, &h->output_streams[i].aac_opts, sizeof(h->output_streams[i].aac_opts) );
+
                 if( pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, audio_encoder.start_encoder, (void*)aud_enc_params ) < 0 )
                 {
                     fprintf( stderr, "Couldn't create encode thread \n" );

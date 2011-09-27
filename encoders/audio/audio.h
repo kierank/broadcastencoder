@@ -43,6 +43,7 @@ typedef struct
     int bitrate;
     int sample_rate;
     int num_channels;
+    int frames_per_pes;
 
     // TODO aac opts
     // TODO ac3 opts

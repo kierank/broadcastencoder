@@ -252,6 +252,9 @@ typedef struct
 
     int pid;
 
+    /* Audio */
+    int frames_per_pes;
+
     /* Not used for teletext */
     int write_lang_code;
     char lang_code[4];
