@@ -975,10 +975,6 @@ int obe_start( obe_t *h )
                 else
                     h->output_streams[i].ts_opts.frames_per_pes = aud_enc_params->frames_per_pes = 1;
 
-
-                if( h->output_streams[i].stream_format == AUDIO_AAC )
-                    memcpy( &aud_enc_params->aac_opts, &h->output_streams[i].aac_opts, sizeof(h->output_streams[i].aac_opts) );
-
                 if( pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, audio_encoder.start_encoder, (void*)aud_enc_params ) < 0 )
                 {
                     fprintf( stderr, "Couldn't create encode thread \n" );
