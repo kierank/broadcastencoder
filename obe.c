@@ -945,10 +945,7 @@ int obe_start( obe_t *h )
             else if( h->output_streams[i].stream_format == AUDIO_AC_3 || h->output_streams[i].stream_format == AUDIO_E_AC_3 ||
                      h->output_streams[i].stream_format == AUDIO_AAC  || h->output_streams[i].stream_format == AUDIO_MP2 )
             {
-                if( h->output_streams[i].stream_format == AUDIO_MP2 )
-                    audio_encoder = twolame_encoder;
-                else
-                    audio_encoder = lavc_encoder;
+                audio_encoder = h->output_streams[i].stream_format == AUDIO_MP2 ? twolame_encoder : lavc_encoder;
 
                 aud_enc_params = calloc( 1, sizeof(*aud_enc_params) );
                 if( !aud_enc_params )
