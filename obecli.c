@@ -419,7 +419,11 @@ static int set_stream( char *command, obecli_command_t *child )
                 if( frame_packing )
                     parse_enum_value( frame_packing, frame_packing_modes, &avc_param->i_frame_packing );
                 if( csp )
+                {
                     avc_param->i_csp = obe_otoi( csp, 420 ) == 422 ? X264_CSP_I422 : X264_CSP_I420;
+                    if( X264_BIT_DEPTH == 10 )
+                        avc_param->i_csp |= X264_CSP_HIGH_DEPTH;
+                }
 
                 /* Turn on the 3DTV mux option automatically */
                 if( avc_param->i_frame_packing >= 0 )
