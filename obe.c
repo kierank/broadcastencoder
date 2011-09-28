@@ -967,7 +967,7 @@ int obe_start( obe_t *h )
                 /* Choose the optimal number of audio frames per PES
 		 * TODO: E-AC3 (Needs T-STD information!), low-latency modifications */
                 if( !h->output_streams[i].ts_opts.frames_per_pes &&
-                    ( h->output_streams[i].stream_format == AUDIO_MP2 && h->output_streams[i].stream_format == AUDIO_AC3 ) )
+                    ( h->output_streams[i].stream_format == AUDIO_MP2 && h->output_streams[i].stream_format == AUDIO_AC_3 ) )
                 {
                     int num_samples = h->output_streams[i].stream_format == AUDIO_MP2 ? MP2_NUM_SAMPLES : AC3_NUM_SAMPLES;
                     int buf_size = h->output_streams[i].stream_format == AUDIO_MP2 ? MISC_AUDIO_BS : AC3_BS_DVB;
@@ -980,6 +980,8 @@ int obe_start( obe_t *h )
                 else
                     h->output_streams[i].ts_opts.frames_per_pes = aud_enc_params->frames_per_pes = 1;
 
+                if( h->output_streams[i].stream_format == AUDIO_AAC )
+                    memcpy( &aud_enc_params->aac_opts, &h->output_streams[i].aac_opts, sizeof(h->output_streams[i].aac_opts) );
                 if( pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, audio_encoder.start_encoder, (void*)aud_enc_params ) < 0 )
                 {
                     fprintf( stderr, "Couldn't create encode thread \n" );
