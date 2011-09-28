@@ -965,11 +965,16 @@ int obe_start( obe_t *h )
                 aud_enc_params->num_channels = av_get_channel_layout_nb_channels( input_stream->channel_layout );
 
                 /* Choose the optimal number of audio frames per PES
-		 * TODO: AC-3, lowlatency encoding modifications */
-                if( !h->output_streams[i].ts_opts.frames_per_pes && h->output_streams[i].stream_format == AUDIO_MP2 )
+		 * TODO: E-AC3 (Needs T-STD information!), low-latency modifications */
+                if( !h->output_streams[i].ts_opts.frames_per_pes &&
+                    ( h->output_streams[i].stream_format == AUDIO_MP2 && h->output_streams[i].stream_format == AUDIO_AC3 ) )
                 {
-                    int single_frame_size = (double)MP2_NUM_SAMPLES * 125 * aud_enc_params->bitrate / aud_enc_params->sample_rate;
-                    int frames_per_pes = MAX( MISC_AUDIO_BS / single_frame_size, 1 );
+                    int num_samples = h->output_streams[i].stream_format == AUDIO_MP2 ? MP2_NUM_SAMPLES : AC3_NUM_SAMPLES;
+                    int buf_size = h->output_streams[i].stream_format == AUDIO_MP2 ? MISC_AUDIO_BS : AC3_BS_DVB;
+                    if( buf_size == AC3_BS_DVB && ( h->mux_opts.ts_type == OBE_TS_TYPE_CABLELABS || h->mux_opts.ts_type == OBE_TS_TYPE_ATSC ) )
+                        buf_size = AC3_BS_ATSC;
+                    int single_frame_size = (double)num_samples * 125 * aud_enc_params->bitrate / aud_enc_params->sample_rate;
+                    int frames_per_pes = MAX( buf_size / single_frame_size, 1 );
                     h->output_streams[i].ts_opts.frames_per_pes = aud_enc_params->frames_per_pes = frames_per_pes;
                 }
                 else
