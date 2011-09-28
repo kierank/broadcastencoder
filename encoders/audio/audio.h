@@ -45,8 +45,8 @@ typedef struct
     int num_channels;
     int frames_per_pes;
 
-    // TODO aac opts
     // TODO ac3 opts
+    obe_aac_opts_t aac_opts;
 
 } obe_aud_enc_params_t;
 
