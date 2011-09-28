@@ -64,9 +64,10 @@ static void *start_encoder( void *ptr )
     avcodec_init();
     avcodec_register_all();
 
-    /* AAC audio needs ADTS encapsulation */
+    /* AAC audio needs ADTS or LATM encapsulation */
     if( enc_params->output_format == AUDIO_AAC )
     {
+        is_latm = enc_params->aac_opts.latm_output;
         av_register_all();
 
         fmt = avformat_alloc_context();
@@ -76,7 +77,7 @@ static void *start_encoder( void *ptr )
             goto finish;
         }
 
-        fmt->oformat = av_guess_format( "adts", NULL, NULL );
+        fmt->oformat = av_guess_format( is_latm ? "latm" : "adts", NULL, NULL );
         if( !fmt->oformat )
         {
             fprintf( stderr, "ADTS muxer not found\n" );

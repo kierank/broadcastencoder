@@ -57,6 +57,7 @@ static const char * const stream_actions[]           = { "passthrough", "encode"
 static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", "e-ac3", "aac-experimental", 0 };
 static const char * const frame_packing_modes[]      = { "none", "checkerboard", "column", "row", "side-by-side", "top-bottom", "temporal" };
 static const char * const teletext_types[]           = { "", "initial", "subtitle", "additional-info", "program-schedule", "hearing-imp" };
+static const char * const aac_encapsulations[]       = { "adts", "latm" };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", "ttx-location", NULL };
@@ -66,6 +67,8 @@ static const char * stream_opts[] = { "action", "format",
                                       "vbv-maxrate", "vbv-bufsize", "bitrate", "sar-width", "sar-height",
                                       "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", "weightp",
                                       "interlaced", "tff", "frame-packing", "csp",
+                                      /* AAC options */
+                                      "aac-encap",
                                       /* TS options */
                                       "pid", "lang", "num-ttx", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page",
                                       NULL };
@@ -379,7 +382,7 @@ static int set_stream( char *command, obecli_command_t *child )
             char *frame_packing = obe_get_option( stream_opts[17], opts );
             char *csp         = obe_get_option( stream_opts[18], opts );
 
-            /* NB: remap these if more encoding options are added - TODO: split them up */
+            char *aac_encap   = obe_get_option( stream_opts[19], opts );
 
             /* NB: remap these and the ttx values below if more encoding options are added - TODO: split them up */
             char *pid         = obe_get_option( stream_opts[20], opts );
@@ -449,7 +452,12 @@ static int set_stream( char *command, obecli_command_t *child )
                 else if( output_streams[stream_id].stream_format == AUDIO_E_AC_3 )
                     default_bitrate = 192;
                 else // AAC
+                {
                     default_bitrate = 128;
+
+                    if( aac_encap )
+                        parse_enum_value( aac_encap, aac_encapsulations, &output_streams[stream_id].aac_opts.latm_output );
+                }
 
                 output_streams[stream_id].bitrate = obe_otoi( bitrate, default_bitrate );
 

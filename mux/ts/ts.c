@@ -173,7 +173,8 @@ void *open_muxer( void *ptr )
             j++;
 
         /* OBE does not distinguish between ADTS and LATM but MPEG-TS does */
-        if( output_stream->stream_action == STREAM_PASSTHROUGH && input_stream->is_latm )
+        if( stream_format == AUDIO_AAC && ( ( output_stream->stream_action == STREAM_PASSTHROUGH && input_stream->is_latm ) ||
+            ( output_stream->stream_action == STREAM_ENCODE && output_stream->aac_opts.latm_output ) ) )
             j++;
 
         stream->stream_format = mpegts_stream_info[j][1];
