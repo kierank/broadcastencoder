@@ -313,13 +313,15 @@ typedef struct
     int override;
 
     int dialnorm;
-} obe_ac3_opts_t;
+    int dsur_mode;
+    int original;
+
+
+} obe_audio_metadata_t;
 
 /**** AAC Encoding ****/
 typedef struct
 {
-    int he_aac;
-    int capped_vbr;
 
     int latm_output;
 } obe_aac_opts_t;
@@ -341,14 +343,15 @@ typedef struct
 
     /** Encode options **/
     int stream_format;
+
     /* AVC */
     x264_param_t avc_param;
 
     /* Audio */
     int bitrate;
 
-    /* AC-3 */
-    obe_ac3_opts_t ac3_opts;
+    /* Metadata */
+    obe_audio_metadata_t audio_metadata;
 
     /* AAC */
     obe_aac_opts_t aac_opts;
