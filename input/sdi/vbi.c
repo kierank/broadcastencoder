@@ -272,7 +272,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                     }
                 }
 
-                /* Attach the caption data to the frame's user data to be converted later to AFD */
+                /* Attach the caption data to the frame's user data */
                 if( !found )
                 {
                     tmp2 = realloc( raw_frame->user_data, (raw_frame->num_user_data+1) * sizeof(*raw_frame->user_data) );
