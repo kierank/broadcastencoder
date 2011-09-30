@@ -135,15 +135,11 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
     /* Remove from the queue if unsupported */
     for( int i = 0; i < decoded_lines; i++ )
     {
-        int remove_vbi = 0;
-
         /* Bizzarely, libzvbi can use VBI_SLICED_CAPTION_525, VBI_SLICED_CAPTION_525_F1 or VBI_SLICED_CAPTION_525_F2
          * whenever it likes */
 
-        /* TODO: support single field captions. Is Field 2 on its own legal? */
-        if( (sliced[i].id & VBI_SLICED_CAPTION_525) && !(sliced[i+1].id & VBI_SLICED_CAPTION_525) )
-            remove_vbi = 1;
-        else if( (sliced[i].id & VBI_SLICED_CAPTION_525) && (sliced[i+1].id & VBI_SLICED_CAPTION_525) )
+        /* TODO: Is Field 2 on its own legal? */
+        if( (sliced[i].id & VBI_SLICED_CAPTION_525) && (sliced[i+1].id & VBI_SLICED_CAPTION_525) )
             i++; /* skip field two */
         else
         {
@@ -154,14 +150,11 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             }
 
             if( vbi_type_tab[j][0] == -1 )
-                remove_vbi = 1;
-        }
-
-        if( remove_vbi )
-        {
-            memmove( &sliced[i], &sliced[i+1], (decoded_lines-i-1) * sizeof(vbi_sliced) );
-            if( decoded_lines )
-                decoded_lines--;
+            {
+                memmove( &sliced[i], &sliced[i+1], (decoded_lines-i-1) * sizeof(vbi_sliced) );
+                if( decoded_lines )
+                    decoded_lines--;
+            }
         }
     }
 
@@ -260,7 +253,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             found = 0;
             /* Deal with the special cases first
              * TODO: factor out some of this code */
-            if( (sliced[i].id & VBI_SLICED_CAPTION_525) && (sliced[i+1].id & VBI_SLICED_CAPTION_525) )
+            if( sliced[i].id & VBI_SLICED_CAPTION_525 )
             {
                 /* Don't duplicate caption data that already exists */
                 for( j = 0; j < raw_frame->num_user_data; j++ )
@@ -272,6 +265,8 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                     }
                 }
 
+                int num_lines = 1 + !!(sliced[i+1].id & VBI_SLICED_CAPTION_525);
+
                 /* Attach the caption data to the frame's user data */
                 if( !found )
                 {
@@ -282,7 +277,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                     raw_frame->user_data = tmp2;
                     user_data = &raw_frame->user_data[raw_frame->num_user_data++];
 
-                    user_data->len  = 4;
+                    user_data->len  = num_lines * 2;
                     user_data->data = malloc( user_data->len );
                     if( !user_data->data )
                         goto fail;
@@ -292,13 +287,14 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
 
                     /* Field 1 and Field 2 */
                     memcpy( &user_data->data[0], sliced[i].data, 2 );
-                    memcpy( &user_data->data[2], sliced[i+1].data, 2 );
+                    if( num_lines > 1 )
+                        memcpy( &user_data->data[2], sliced[i+1].data, 2 );
                 }
 
                 /* Remove caption fields from the VBI list */
-                memmove( &sliced[i], &sliced[i+2], (decoded_lines-i-2) * sizeof(vbi_sliced) );
-                if( decoded_lines >= 2 )
-                    decoded_lines -= 2;
+                memmove( &sliced[i], &sliced[i+num_lines], (decoded_lines-i-num_lines) * sizeof(vbi_sliced) );
+                if( decoded_lines >= num_lines )
+                    decoded_lines -= num_lines;
                 i--;
             }
             else if( sliced[i].id == VBI_SLICED_WSS_625 )

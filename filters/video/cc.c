@@ -134,7 +134,7 @@ int write_608_cc( obe_user_data_t *user_data, obe_int_input_stream_t *input_stre
         bs_write1( &q, 1 );     // one_bit
         bs_write( &q, 4, 0xf ); // reserved
 
-        if( i <= 1 )
+        if( i <= 1 && user_data->len >= (i+1)*2 )
         {
             bs_write1( &q, 1 );   // cc_valid
             bs_write( &q, 2, i ); // cc_type
