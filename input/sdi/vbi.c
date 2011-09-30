@@ -115,7 +115,7 @@ int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data )
     {
         fprintf( stderr, "Could not setup video index information crc \n" );
         return -1;
-    };
+    }
 
     return 0;
 }
