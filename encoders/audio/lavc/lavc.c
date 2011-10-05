@@ -50,7 +50,7 @@ static void *start_encoder( void *ptr )
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
     int64_t cur_pts = -1;
-    int i, frame_size, output_frame_size, frame_samples_size, is_latm;
+    int i, frame_size = 0, output_frame_size, frame_samples_size, is_latm;
     void *audio_buf = NULL, *samples = NULL;
     AVFifoBuffer *in_fifo = NULL, *out_fifo = NULL;
     uint8_t *output_buf = NULL, *avio_buf = NULL;
