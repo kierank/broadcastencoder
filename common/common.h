@@ -73,6 +73,9 @@
 /* Network output */
 #define TS_PACKETS_SIZE 1316
 
+/* Audio sample patterns */
+#define MAX_AUDIO_SAMPLE_PATTERN 5
+
 static inline int obe_clip3( int v, int i_min, int i_max )
 {
     return ( (v < i_min) ? i_min : (v > i_max) ? i_max : v );
@@ -258,6 +261,21 @@ const static obe_non_display_data_location_t non_display_data_locations[] =
     { VBI_CP,           USER_DATA_LOCATION_DVB_STREAM },
     /* Does VITC go in the codec or in the VBI? */
     { -1, -1 },
+};
+
+typedef struct
+{
+    int format;
+    int pattern[MAX_AUDIO_SAMPLE_PATTERN];
+} obe_audio_sample_pattern_t;
+
+const static obe_audio_sample_pattern_t audio_sample_patterns[] =
+{
+    { INPUT_VIDEO_FORMAT_NTSC,       { 1602, 1601, 1602, 1601, 1602 } },
+    { INPUT_VIDEO_FORMAT_720P_5994,  {  801,  800,  801,  801,  801 } },
+    { INPUT_VIDEO_FORMAT_1080P_2997, { 1602, 1601, 1602, 1601, 1602 } },
+    { INPUT_VIDEO_FORMAT_1080P_5994, {  801,  800,  801,  801,  801 } },
+    { -1 },
 };
 
 typedef struct
