@@ -267,14 +267,15 @@ typedef struct
 {
     int format;
     int pattern[MAX_AUDIO_SAMPLE_PATTERN];
+    int max;
 } obe_audio_sample_pattern_t;
 
 const static obe_audio_sample_pattern_t audio_sample_patterns[] =
 {
-    { INPUT_VIDEO_FORMAT_NTSC,       { 1602, 1601, 1602, 1601, 1602 } },
-    { INPUT_VIDEO_FORMAT_720P_5994,  {  801,  800,  801,  801,  801 } },
-    { INPUT_VIDEO_FORMAT_1080P_2997, { 1602, 1601, 1602, 1601, 1602 } },
-    { INPUT_VIDEO_FORMAT_1080P_5994, {  801,  800,  801,  801,  801 } },
+    { INPUT_VIDEO_FORMAT_NTSC,       { 1602, 1601, 1602, 1601, 1602 }, 1602 },
+    { INPUT_VIDEO_FORMAT_720P_5994,  {  801,  800,  801,  801,  801 },  801 },
+    { INPUT_VIDEO_FORMAT_1080P_2997, { 1602, 1601, 1602, 1601, 1602 }, 1602 },
+    { INPUT_VIDEO_FORMAT_1080P_5994, {  801,  800,  801,  801,  801 },  801 },
     { -1 },
 };
 
