@@ -62,7 +62,7 @@ void	InitDeckLinkAPI (void)
 	
 	gLoadedDeckLinkAPI = true;
 	
-	gCreateIteratorFunc = (CreateIteratorFunc)dlsym(libraryHandle, "CreateDeckLinkIteratorInstance_0001");
+	gCreateIteratorFunc = (CreateIteratorFunc)dlsym(libraryHandle, "CreateDeckLinkIteratorInstance_0002");
 	if (!gCreateIteratorFunc)
 		fprintf(stderr, "%s\n", dlerror());
 	gCreateAPIInformationFunc = (CreateAPIInformationFunc)dlsym(libraryHandle, "CreateDeckLinkAPIInformationInstance_0001");
