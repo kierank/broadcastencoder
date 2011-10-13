@@ -667,14 +667,9 @@ fi
 
 if [ "$decklink" = "auto" ] ; then
     decklink="no"
-    log_check "for DeckLink API binary $prefix/lib/libDeckLinkAPI.so"
-    if [ -f "$prefix/lib/libDeckLinkAPI.so" ] ; then
-        log_ok
-        if cxx_check ; then
-            decklink="yes"
-        fi
-    else
-        log_fail
+    decklinkflags="-lDeckLinkAPI"
+    if cc_check "" "$decklinkflags" "" ; then
+        decklink="yes"
     fi
 fi
 
