@@ -1097,11 +1097,16 @@ void obe_close( obe_t *h )
 {
     void *ret_ptr;
 
+    fprintf( stderr, "closing obe \n" );
+
     /* Cancel input thread */
     for( int i = 0; i < h->num_devices; i++ )
     {
-        pthread_cancel( h->devices[i]->device_thread );
-        pthread_join( h->devices[i]->device_thread, &ret_ptr );
+        if ( h->devices[i]->device_thread )
+        {
+            pthread_cancel( h->devices[i]->device_thread );
+            pthread_join( h->devices[i]->device_thread, &ret_ptr );
+        }
     }
 
     fprintf( stderr, "input cancelled \n" );
