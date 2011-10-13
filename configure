@@ -633,10 +633,10 @@ fi
 if [ "$readline" = "auto" ] ; then
     readline="no"
     readlineflags="-lreadline"
-    if cc_check "readline/readline.h" $readlineflags "rl_initialize();" ; then
+    if cc_check "readline/readline.h" "$readlineflags" "rl_initialize();" ; then
         readline="yes"
         define HAVE_READLINE
-        LDFLAGS="$LDFLAGS $readlineflags"
+        LDFLAGSCLI="$readlineflags"
     fi
 fi
 
