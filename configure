@@ -82,6 +82,7 @@ cc_check() {
         cat conftest.log >> config.log
         log_msg "--------------------------------------------------"
     fi
+    rm conftest.c conftest.o conftest 2>/dev/null
     return $res
 }
 
@@ -103,6 +104,7 @@ cpp_check() {
         cat conftest.log >> config.log
         log_msg "--------------------------------------------------"
     fi
+    rm conftest.c conftest.o conftest 2>/dev/null
     return $res
 }
 
@@ -137,6 +139,7 @@ cxx_check() {
         cat conftest.log >> config.log
         log_msg "--------------------------------------------------"
     fi
+    rm conftest.c conftest.o conftest 2>/dev/null
     return $res
 }
 
@@ -159,6 +162,7 @@ as_check() {
         cat conftest.asm >> config.log
         log_msg "--------------------------------------------------"
     fi
+    rm conftest.asm >/dev/null
     return $res
 }
 
@@ -633,10 +637,16 @@ fi
 if [ "$readline" = "auto" ] ; then
     readline="no"
     readlineflags="-lreadline"
-    if cc_check "readline/readline.h" $readlineflags "rl_initialize();" ; then
+    if cc_check "readline/readline.h" "$readlineflags" "rl_initialize();" ; then
         readline="yes"
         define HAVE_READLINE
-        LDFLAGS="$LDFLAGS $readlineflags"
+        LDFLAGSCLI="$readlineflags"
+    fi
+    readlineflags="-lncurses -lreadline"
+    if cc_check "readline/readline.h" "$readlineflags" "rl_initialize();" ; then
+        readline="yes"
+        define HAVE_READLINE
+        LDFLAGSCLI="$readlineflags"
     fi
 fi
 
@@ -661,14 +671,9 @@ fi
 
 if [ "$decklink" = "auto" ] ; then
     decklink="no"
-    log_check "for DeckLink API binary $prefix/lib/libDeckLinkAPI.so"
-    if [ -f "$prefix/lib/libDeckLinkAPI.so" ] ; then
-        log_ok
-        if cxx_check ; then
-            decklink="yes"
-        fi
-    else
-        log_fail
+    decklinkflags="-lDeckLinkAPI"
+    if cc_check "" "$decklinkflags" "" ; then
+        decklink="yes"
     fi
 fi
 

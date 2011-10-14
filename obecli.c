@@ -994,7 +994,8 @@ int main( int argc, char **argv )
 
         if( line_read && *line_read )
         {
-            if( !strcasecmp( line_read, "exit" ) )
+            if( !strcasecmp( line_read, "exit" ) ||
+                !strcasecmp( line_read, "quit" ) )
             {
                 free( line_read );
                 break;
