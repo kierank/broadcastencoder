@@ -1136,11 +1136,14 @@ void obe_close( obe_t *h )
     fprintf( stderr, "encoders cancelled \n" );
 
     /* Cancel smoothing thread */
-    pthread_mutex_lock( &h->smoothing_mutex );
-    h->cancel_smoothing_thread = 1;
-    pthread_cond_signal( &h->smoothing_cv );
-    pthread_mutex_unlock( &h->smoothing_mutex );
-    pthread_join( h->smoothing_thread, &ret_ptr );
+    if ( h->smoothing_thread )
+    {
+        pthread_mutex_lock( &h->smoothing_mutex );
+        h->cancel_smoothing_thread = 1;
+        pthread_cond_signal( &h->smoothing_cv );
+        pthread_mutex_unlock( &h->smoothing_mutex );
+        pthread_join( h->smoothing_thread, &ret_ptr );
+    }
 
     fprintf( stderr, "smoothing cancelled \n" );
 
