@@ -259,6 +259,15 @@ static char *obe_otos( char *str, char *def )
     return str ? str : def;
 }
 
+static int check_enum_value( const char *arg, const char * const *names )
+{
+    for( int i = 0; names[i]; i++ )
+        if( !strcasecmp( arg, names[i] ) )
+            return 0;
+
+    return -1;
+}
+
 static int parse_enum_value( const char *arg, const char * const *names, int *dst )
 {
     for( int i = 0; names[i]; i++ )
@@ -304,6 +313,27 @@ static int set_input( char *command, obecli_command_t *child )
         char *video_connection = obe_get_option( input_opts[3], opts );
         char *audio_connection = obe_get_option( input_opts[4], opts );
         char *ttx_location = obe_get_option( input_opts[5], opts );
+
+        if( video_format )
+            if( check_enum_value( video_format, input_video_formats ) < 0 )
+            {
+                fprintf( stderr, "Invalid video format\n" );
+                return -1;
+            }
+
+        if( video_connection )
+            if( check_enum_value( video_connection, input_video_connections ) < 0 )
+            {
+                 fprintf( stderr, "Invalid video connection\n" );
+                return -1;
+            }
+
+        if( audio_connection )
+            if( check_enum_value( audio_connection, input_audio_connections ) < 0 )
+            {
+                fprintf( stderr, "Invalid video connection\n" );
+                return -1;
+            }
 
         if( location )
         {
@@ -351,7 +381,7 @@ static int set_stream( char *command, obecli_command_t *child )
 
         if( stream_id < 0 || stream_id > program.num_streams-1 )
         {
-            fprintf( stderr, "invalid stream id\n" );
+            fprintf( stderr, "Invalid stream id\n" );
             return -1;
         }
 
@@ -392,6 +422,20 @@ static int set_stream( char *command, obecli_command_t *child )
             {
                 x264_param_t *avc_param = &output_streams[stream_id].avc_param;
 
+                if( profile )
+                    if( check_enum_value( profile, x264_profile_names ) < 0 )
+                    {
+                        fprintf( stderr, "Invalid AVC profile\n" );
+                        return -1;
+                    }
+
+                if( frame_packing )
+                    if( check_enum_value( frame_packing, frame_packing_modes ) < 0 )
+                    {
+                        fprintf( stderr, "Invalid frame packing mode\n" );
+                        return -1;
+                    }
+
                 output_streams[stream_id].stream_format = VIDEO_AVC;
                 avc_param->rc.i_vbv_max_bitrate = obe_otoi( vbv_maxrate, 0 );
                 avc_param->rc.i_vbv_buffer_size = obe_otoi( vbv_bufsize, 0 );
@@ -423,7 +467,7 @@ static int set_stream( char *command, obecli_command_t *child )
                     parse_enum_value( frame_packing, frame_packing_modes, &avc_param->i_frame_packing );
                 if( csp )
                 {
-                    avc_param->i_csp = obe_otoi( csp, 420 ) == 422 ? X264_CSP_I422 : X264_CSP_I420;
+                    avc_param->i_csp = obe_otoi( csp, 420 ) == 422 || strcasecmp( csp, "4:2:2" ) ? X264_CSP_I422 : X264_CSP_I420;
                     if( X264_BIT_DEPTH == 10 )
                         avc_param->i_csp |= X264_CSP_HIGH_DEPTH;
                 }
@@ -439,6 +483,27 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 /* Set it to encode by default */
                 output_streams[stream_id].stream_action = STREAM_ENCODE;
+
+                if( action )
+                    if( check_enum_value( action, stream_actions ) < 0 )
+                    {
+                        fprintf( stderr, "Invalid stream action\n" );
+                        return -1;
+                    }
+
+                if( format )
+                    if( check_enum_value( format, encode_formats ) < 0 )
+                    {
+                        fprintf( stderr, "Invalid stream format\n" );
+                        return -1;
+                    }
+
+                if( aac_encap )
+                    if( check_enum_value( aac_encap, aac_encapsulations ) < 0 )
+                    {
+                        fprintf( stderr, "Invalid AAC encapsulation\n" );
+                        return -1;
+                    }
 
                 if( action )
                     parse_enum_value( action, stream_actions, &output_streams[stream_id].stream_action );
@@ -471,6 +536,18 @@ static int set_stream( char *command, obecli_command_t *child )
             else if( program.streams[stream_id].stream_format == MISC_TELETEXT ||
                      program.streams[stream_id].stream_format == VBI_RAW )
             {
+                char *ttx_lang = obe_get_option( stream_opts[22], opts );
+                char *ttx_type = obe_get_option( stream_opts[23], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[24], opts );
+                char *ttx_page = obe_get_option( stream_opts[25], opts );
+
+                if( ttx_type )
+                    if( check_enum_value( ttx_type, teletext_types ) < 0 )
+                    {
+                        fprintf( stderr, "Invalid Teletext type \n" );
+                        return -1;
+                    }
+
                 /* TODO: find a nice way of supporting multiple teletexts in the CLI */
                 output_streams[stream_id].ts_opts.num_teletexts = 1;
 
@@ -485,10 +562,6 @@ static int set_stream( char *command, obecli_command_t *child )
                 }
 
                 /* NB: remap these if more encoding options are added - TODO: split them up */
-                char *ttx_lang = obe_get_option( stream_opts[22], opts );
-                char *ttx_type = obe_get_option( stream_opts[23], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[24], opts );
-                char *ttx_page = obe_get_option( stream_opts[25], opts );
                 obe_teletext_opts_t *ttx_opts = &output_streams[stream_id].ts_opts.teletext_opts[0];
 
                 if( ttx_lang && strlen( ttx_lang ) >= 3 )
@@ -538,6 +611,14 @@ static int set_muxer( char *command, obecli_command_t *child )
         char *pcr_pid     = obe_get_option( muxer_opts[7], opts );
         char *pcr_period  = obe_get_option( muxer_opts[8], opts );
         char *pat_period  = obe_get_option( muxer_opts[9], opts );
+
+        if( ts_type )
+            if( check_enum_value( ts_type, ts_types ) < 0 )
+            {
+                fprintf( stderr, "Invalid TS type \n" );
+                return -1;
+            }
+
         if( ts_type )
             parse_enum_value( ts_type, ts_types, &mux_opts.ts_type );
 
