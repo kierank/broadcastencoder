@@ -70,7 +70,8 @@ static const char * stream_opts[] = { "action", "format",
                                       /* AAC options */
                                       "aac-encap",
                                       /* TS options */
-                                      "pid", "lang", "num-ttx", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page",
+                                      /*"pid", "lang", "num-ttx", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page", */
+                                      "pid", "lang", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page",
                                       NULL };
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrough", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", NULL };
