@@ -70,8 +70,7 @@ static const char * stream_opts[] = { "action", "format",
                                       /* AAC options */
                                       "aac-encap",
                                       /* TS options */
-                                      /*"pid", "lang", "num-ttx", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page", */
-                                      "pid", "lang", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page",
+                                      "pid", "lang", "num-ttx", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page",
                                       NULL };
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrough", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", NULL };
@@ -537,10 +536,11 @@ static int set_stream( char *command, obecli_command_t *child )
             else if( program.streams[stream_id].stream_format == MISC_TELETEXT ||
                      program.streams[stream_id].stream_format == VBI_RAW )
             {
-                char *ttx_lang = obe_get_option( stream_opts[22], opts );
-                char *ttx_type = obe_get_option( stream_opts[23], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[24], opts );
-                char *ttx_page = obe_get_option( stream_opts[25], opts );
+                /* NB: remap these if more encoding options are added - TODO: split them up */
+                char *ttx_lang = obe_get_option( stream_opts[23], opts );
+                char *ttx_type = obe_get_option( stream_opts[24], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[25], opts );
+                char *ttx_page = obe_get_option( stream_opts[26], opts );
 
                 if( ttx_type )
                     if( check_enum_value( ttx_type, teletext_types ) < 0 )
@@ -562,7 +562,6 @@ static int set_stream( char *command, obecli_command_t *child )
                     return -1;
                 }
 
-                /* NB: remap these if more encoding options are added - TODO: split them up */
                 obe_teletext_opts_t *ttx_opts = &output_streams[stream_id].ts_opts.teletext_opts[0];
 
                 if( ttx_lang && strlen( ttx_lang ) >= 3 )
