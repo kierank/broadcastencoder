@@ -27,6 +27,8 @@
 #include <math.h>
 #include <assert.h>
 
+#include "config.h"
+
 #include <signal.h>
 #define _GNU_SOURCE
 
@@ -39,7 +41,18 @@
 #define FAIL_IF_ERROR( cond, ... ) FAIL_IF_ERR( cond, "obecli", __VA_ARGS__ )
 #define RETURN_IF_ERROR( cond, ... ) RETURN_IF_ERR( cond, "options", NULL, __VA_ARGS__ )
 
-obe_t *h = NULL;
+typedef struct
+{
+    obe_t *h;
+    obe_input_t input;
+    obe_input_program_t program;
+    obe_output_stream_t *output_streams;
+    obe_mux_opts_t mux_opts;
+    obe_output_opts_t output;
+    int avc_profile;
+} obecli_ctx_t;
+
+obecli_ctx_t cli;
 
 /* Ctrl-C handler */
 static volatile int b_ctrl_c = 0;
@@ -279,13 +292,6 @@ static int parse_enum_value( const char *arg, const char * const *names, int *ds
     return -1;
 }
 
-obe_input_t input = {0};
-obe_input_program_t program = {0};
-obe_output_stream_t *output_streams;
-obe_mux_opts_t mux_opts = {0};
-obe_output_opts_t output = {0};
-int avc_profile = -1;
-
 /* set functions - TODO add lots more opts */
 static int set_input( char *command, obecli_command_t *child )
 {
@@ -297,9 +303,9 @@ static int set_input( char *command, obecli_command_t *child )
     command[tok_len] = 0;
 
     if( !strcasecmp( command, "url" ) )
-        input.input_type = INPUT_URL;
+        cli.input.input_type = INPUT_URL;
     else if( !strcasecmp( command, "decklink" ) )
-        input.input_type = INPUT_DEVICE_DECKLINK;
+        cli.input.input_type = INPUT_DEVICE_DECKLINK;
     else if( !strcasecmp( command, "opts" ) && str_len > tok_len )
     {
         char *params = command + tok_len + 1;
@@ -337,23 +343,23 @@ static int set_input( char *command, obecli_command_t *child )
 
         if( location )
         {
-             if( input.location )
-                 free( input.location );
+             if( cli.input.location )
+                 free( cli.input.location );
 
-             input.location = malloc( strlen( location ) + 1 );
-             FAIL_IF_ERROR( !input.location, "malloc failed\n" );
-             strcpy( input.location, location );
+             cli.input.location = malloc( strlen( location ) + 1 );
+             FAIL_IF_ERROR( !cli.input.location, "malloc failed\n" );
+             strcpy( cli.input.location, location );
         }
 
-        input.card_idx = obe_otoi( card_idx, input.card_idx );
+        cli.input.card_idx = obe_otoi( card_idx, cli.input.card_idx );
         if( video_format )
-            parse_enum_value( video_format, input_video_formats, &input.video_format );
+            parse_enum_value( video_format, input_video_formats, &cli.input.video_format );
         if( video_connection )
-            parse_enum_value( video_connection, input_video_connections, &input.video_connection );
+            parse_enum_value( video_connection, input_video_connections, &cli.input.video_connection );
         if( audio_connection )
-            parse_enum_value( audio_connection, input_audio_connections, &input.audio_connection );
+            parse_enum_value( audio_connection, input_audio_connections, &cli.input.audio_connection );
         if( ttx_location )
-            parse_enum_value( ttx_location, ttx_locations, &input.teletext_location );
+            parse_enum_value( ttx_location, ttx_locations, &cli.input.teletext_location );
 
         free( opts );
     }
@@ -379,7 +385,7 @@ static int set_stream( char *command, obecli_command_t *child )
 
         int stream_id = obe_otoi( command, -1 );
 
-        if( stream_id < 0 || stream_id > program.num_streams-1 )
+        if( stream_id < 0 || stream_id > cli.program.num_streams-1 )
         {
             fprintf( stderr, "Invalid stream id\n" );
             return -1;
@@ -418,9 +424,9 @@ static int set_stream( char *command, obecli_command_t *child )
             char *pid         = obe_get_option( stream_opts[20], opts );
             char *lang        = obe_get_option( stream_opts[21], opts );
 
-            if( program.streams[stream_id].stream_type == STREAM_TYPE_VIDEO )
+            if( cli.program.streams[stream_id].stream_type == STREAM_TYPE_VIDEO )
             {
-                x264_param_t *avc_param = &output_streams[stream_id].avc_param;
+                x264_param_t *avc_param = &cli.output_streams[stream_id].avc_param;
 
                 if( profile )
                     if( check_enum_value( profile, x264_profile_names ) < 0 )
@@ -436,7 +442,7 @@ static int set_stream( char *command, obecli_command_t *child )
                         return -1;
                     }
 
-                output_streams[stream_id].stream_format = VIDEO_AVC;
+                cli.output_streams[stream_id].stream_format = VIDEO_AVC;
                 avc_param->rc.i_vbv_max_bitrate = obe_otoi( vbv_maxrate, 0 );
                 avc_param->rc.i_vbv_buffer_size = obe_otoi( vbv_bufsize, 0 );
                 avc_param->rc.i_bitrate         = obe_otoi( bitrate, 0 );
@@ -444,7 +450,7 @@ static int set_stream( char *command, obecli_command_t *child )
                 avc_param->vui.i_sar_height     = obe_otoi( sar_height, avc_param->vui.i_sar_width );
 
                 if( profile )
-                    parse_enum_value( profile, x264_profile_names, &avc_profile );
+                    parse_enum_value( profile, x264_profile_names, &cli.avc_profile );
 
                 if( level )
                 {
@@ -474,15 +480,15 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 /* Turn on the 3DTV mux option automatically */
                 if( avc_param->i_frame_packing >= 0 )
-                    mux_opts.is_3dtv = 1;
+                    cli.mux_opts.is_3dtv = 1;
 
             }
-            else if( program.streams[stream_id].stream_type == STREAM_TYPE_AUDIO )
+            else if( cli.program.streams[stream_id].stream_type == STREAM_TYPE_AUDIO )
             {
                 int default_bitrate = 0;
 
                 /* Set it to encode by default */
-                output_streams[stream_id].stream_action = STREAM_ENCODE;
+                cli.output_streams[stream_id].stream_action = STREAM_ENCODE;
 
                 if( action )
                     if( check_enum_value( action, stream_actions ) < 0 )
@@ -506,35 +512,35 @@ static int set_stream( char *command, obecli_command_t *child )
                     }
 
                 if( action )
-                    parse_enum_value( action, stream_actions, &output_streams[stream_id].stream_action );
+                    parse_enum_value( action, stream_actions, &cli.output_streams[stream_id].stream_action );
                 if( format )
-                    parse_enum_value( format, encode_formats, &output_streams[stream_id].stream_format );
+                    parse_enum_value( format, encode_formats, &cli.output_streams[stream_id].stream_format );
 
-                if( output_streams[stream_id].stream_format == AUDIO_MP2 )
+                if( cli.output_streams[stream_id].stream_format == AUDIO_MP2 )
                     default_bitrate = 256;
-                else if( output_streams[stream_id].stream_format == AUDIO_AC_3 )
+                else if( cli.output_streams[stream_id].stream_format == AUDIO_AC_3 )
                     default_bitrate = 192;
-                else if( output_streams[stream_id].stream_format == AUDIO_E_AC_3 )
+                else if( cli.output_streams[stream_id].stream_format == AUDIO_E_AC_3 )
                     default_bitrate = 192;
                 else // AAC
                 {
                     default_bitrate = 128;
 
                     if( aac_encap )
-                        parse_enum_value( aac_encap, aac_encapsulations, &output_streams[stream_id].aac_opts.latm_output );
+                        parse_enum_value( aac_encap, aac_encapsulations, &cli.output_streams[stream_id].aac_opts.latm_output );
                 }
 
-                output_streams[stream_id].bitrate = obe_otoi( bitrate, default_bitrate );
+                cli.output_streams[stream_id].bitrate = obe_otoi( bitrate, default_bitrate );
 
                 if( lang && strlen( lang ) >= 3 )
                 {
-                    output_streams[stream_id].ts_opts.write_lang_code = 1;
-                    memcpy( output_streams[stream_id].ts_opts.lang_code, lang, 3 );
-                    output_streams[stream_id].ts_opts.lang_code[3] = 0;
+                    cli.output_streams[stream_id].ts_opts.write_lang_code = 1;
+                    memcpy( cli.output_streams[stream_id].ts_opts.lang_code, lang, 3 );
+                    cli.output_streams[stream_id].ts_opts.lang_code[3] = 0;
                 }
             }
-            else if( program.streams[stream_id].stream_format == MISC_TELETEXT ||
-                     program.streams[stream_id].stream_format == VBI_RAW )
+            else if( cli.program.streams[stream_id].stream_format == MISC_TELETEXT ||
+                     cli.program.streams[stream_id].stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
                 char *ttx_lang = obe_get_option( stream_opts[23], opts );
@@ -550,19 +556,19 @@ static int set_stream( char *command, obecli_command_t *child )
                     }
 
                 /* TODO: find a nice way of supporting multiple teletexts in the CLI */
-                output_streams[stream_id].ts_opts.num_teletexts = 1;
+                cli.output_streams[stream_id].ts_opts.num_teletexts = 1;
 
-                if( output_streams[stream_id].ts_opts.teletext_opts )
-                    free( output_streams[stream_id].ts_opts.teletext_opts );
+                if( cli.output_streams[stream_id].ts_opts.teletext_opts )
+                    free( cli.output_streams[stream_id].ts_opts.teletext_opts );
 
-                output_streams[stream_id].ts_opts.teletext_opts = calloc( 1, sizeof(*output_streams[stream_id].ts_opts.teletext_opts) );
-                if( !output_streams[stream_id].ts_opts.teletext_opts )
+                cli.output_streams[stream_id].ts_opts.teletext_opts = calloc( 1, sizeof(*cli.output_streams[stream_id].ts_opts.teletext_opts) );
+                if( !cli.output_streams[stream_id].ts_opts.teletext_opts )
                 {
                     fprintf( stderr, "malloc failed \n" );
                     return -1;
                 }
 
-                obe_teletext_opts_t *ttx_opts = &output_streams[stream_id].ts_opts.teletext_opts[0];
+                obe_teletext_opts_t *ttx_opts = &cli.output_streams[stream_id].ts_opts.teletext_opts[0];
 
                 if( ttx_lang && strlen( ttx_lang ) >= 3 )
                 {
@@ -575,7 +581,7 @@ static int set_stream( char *command, obecli_command_t *child )
                 ttx_opts->dvb_teletext_page_number = obe_otoi( ttx_page, ttx_opts->dvb_teletext_page_number );
             }
 
-            output_streams[stream_id].ts_opts.pid = obe_otoi( pid, output_streams[stream_id].ts_opts.pid );
+            cli.output_streams[stream_id].ts_opts.pid = obe_otoi( pid, cli.output_streams[stream_id].ts_opts.pid );
             free( opts );
         }
     }
@@ -593,7 +599,7 @@ static int set_muxer( char *command, obecli_command_t *child )
     command[tok_len] = 0;
 
     if( !strcasecmp( command, "mpegts" ) )
-        mux_opts.muxer = MUXERS_MPEGTS;
+        cli.mux_opts.muxer = MUXERS_MPEGTS;
     else if( !strcasecmp( command, "opts" ) && str_len > tok_len )
     {
         char *params = command + tok_len + 1;
@@ -620,17 +626,18 @@ static int set_muxer( char *command, obecli_command_t *child )
             }
 
         if( ts_type )
-            parse_enum_value( ts_type, ts_types, &mux_opts.ts_type );
+            parse_enum_value( ts_type, ts_types, &cli.mux_opts.ts_type );
 
-        mux_opts.cbr = obe_otob( ts_cbr, mux_opts.cbr );
-        mux_opts.ts_muxrate = obe_otoi( ts_muxrate, mux_opts.ts_muxrate );
-        mux_opts.passthrough = obe_otob( passthrough, mux_opts.passthrough );
-        mux_opts.ts_id = obe_otoi( ts_id, mux_opts.ts_id );
-        mux_opts.program_num = obe_otoi( program_num, mux_opts.program_num );
-        mux_opts.pmt_pid    = obe_otoi( pmt_pid, mux_opts.pmt_pid );
-        mux_opts.pcr_pid    = obe_otoi( pcr_pid, mux_opts.pcr_pid  );
-        mux_opts.pcr_period = obe_otoi( pcr_period, mux_opts.pcr_period );
-        mux_opts.pat_period = obe_otoi( pat_period, mux_opts.pat_period );
+        cli.mux_opts.cbr = obe_otob( ts_cbr, cli.mux_opts.cbr );
+        cli.mux_opts.ts_muxrate = obe_otoi( ts_muxrate, cli.mux_opts.ts_muxrate );
+
+        cli.mux_opts.passthrough = obe_otob( passthrough, cli.mux_opts.passthrough );
+        cli.mux_opts.ts_id = obe_otoi( ts_id, cli.mux_opts.ts_id );
+        cli.mux_opts.program_num = obe_otoi( program_num, cli.mux_opts.program_num );
+        cli.mux_opts.pmt_pid    = obe_otoi( pmt_pid, cli.mux_opts.pmt_pid );
+        cli.mux_opts.pcr_pid    = obe_otoi( pcr_pid, cli.mux_opts.pcr_pid  );
+        cli.mux_opts.pcr_period = obe_otoi( pcr_period, cli.mux_opts.pcr_period );
+        cli.mux_opts.pat_period = obe_otoi( pat_period, cli.mux_opts.pat_period );
         free( opts );
     }
 
@@ -656,18 +663,18 @@ static int set_output( char *command, obecli_command_t *child )
         char *target = obe_get_option( output_opts[0], opts );
         if( target )
         {
-             if( output.target )
-                 free( output.target );
+             if( cli.output.target )
+                 free( cli.output.target );
 
-             output.target = malloc( strlen( target ) + 1 );
-             FAIL_IF_ERROR( !output.target, "malloc failed\n" );
-             strcpy( output.target, target );
+             cli.output.target = malloc( strlen( target ) + 1 );
+             FAIL_IF_ERROR( !cli.output.target, "malloc failed\n" );
+             strcpy( cli.output.target, target );
         }
         free( opts );
     }
     else
     {
-        FAIL_IF_ERROR( parse_enum_value( command, output_modules, &output.output ) < 0,
+        FAIL_IF_ERROR( parse_enum_value( command, output_modules, &cli.output.output ) < 0,
                        "Invalid output %s\n", command )
     }
 
@@ -816,53 +823,53 @@ static int start_encode( char *command, obecli_command_t *child )
         return -1;
     }
 
-    if( !program.num_streams )
+    if( !cli.program.num_streams )
     {
         fprintf( stderr, "No active devices \n" );
         return -1;
     }
 
-    for( int i = 0; i < program.num_streams; i++ )
+    for( int i = 0; i < cli.program.num_streams; i++ )
     {
-        output_streams[i].stream_id = program.streams[i].stream_id;
-        if( program.streams[i].stream_type == STREAM_TYPE_VIDEO )
+        cli.output_streams[i].stream_id = cli.program.streams[i].stream_id;
+        if( cli.program.streams[i].stream_type == STREAM_TYPE_VIDEO )
         {
-            if( !output_streams[i].avc_param.rc.i_vbv_buffer_size )
+            if( !cli.output_streams[i].avc_param.rc.i_vbv_buffer_size )
             {
                 fprintf( stderr, "No VBV buffer size chosen\n" );
                 return -1;
             }
 
-            output_streams[i].stream_action = STREAM_ENCODE;
-            output_streams[i].stream_format = VIDEO_AVC;
-            if( avc_profile >= 0 )
-                x264_param_apply_profile( &output_streams[i].avc_param, x264_profile_names[avc_profile] );
+            cli.output_streams[i].stream_action = STREAM_ENCODE;
+            cli.output_streams[i].stream_format = VIDEO_AVC;
+            if( cli.avc_profile >= 0 )
+                x264_param_apply_profile( &cli.output_streams[i].avc_param, x264_profile_names[cli.avc_profile] );
         }
-        else if( program.streams[i].stream_type == STREAM_TYPE_AUDIO )
+        else if( cli.program.streams[i].stream_type == STREAM_TYPE_AUDIO )
         {
-            if( output_streams[i].stream_action == STREAM_PASSTHROUGH && program.streams[i].stream_format == AUDIO_PCM &&
-                output_streams[i].stream_format != AUDIO_MP2 && output_streams[i].stream_format != AUDIO_AC_3 &&
-                output_streams[i].stream_format != AUDIO_AAC )
+            if( cli.output_streams[i].stream_action == STREAM_PASSTHROUGH && cli.program.streams[i].stream_format == AUDIO_PCM &&
+                cli.output_streams[i].stream_format != AUDIO_MP2 && cli.output_streams[i].stream_format != AUDIO_AC_3 &&
+                cli.output_streams[i].stream_format != AUDIO_AAC )
             {
                 fprintf( stderr, "Uncompressed audio cannot yet be placed in TS\n" );
                 return -1;
             }
-            else if( output_streams[i].stream_action == STREAM_ENCODE && !output_streams[i].bitrate )
+            else if( cli.output_streams[i].stream_action == STREAM_ENCODE && !cli.output_streams[i].bitrate )
             {
                 fprintf( stderr, "Audio stream requires bitrate\n" );
                 return -1;
             }
         }
-        else if( program.streams[i].stream_format == MISC_TELETEXT || program.streams[i].stream_format == VBI_RAW )
+        else if( cli.program.streams[i].stream_format == MISC_TELETEXT || cli.program.streams[i].stream_format == VBI_RAW )
         {
-            int found = program.streams[i].stream_format == MISC_TELETEXT;
+            int found = cli.program.streams[i].stream_format == MISC_TELETEXT;
 
             /* Search the VBI streams for teletext and complain if teletext isn't set up properly */
-            if( program.streams[i].stream_format == VBI_RAW )
+            if( cli.program.streams[i].stream_format == VBI_RAW )
             {
-                for( int j = 0; j < program.streams[i].num_frame_data; j++ )
+                for( int j = 0; j < cli.program.streams[i].num_frame_data; j++ )
                 {
-                    if( program.streams[i].frame_data[j].type == MISC_TELETEXT )
+                    if( cli.program.streams[i].frame_data[j].type == MISC_TELETEXT )
                     {
                         found = 1;
                         break;
@@ -870,7 +877,7 @@ static int start_encode( char *command, obecli_command_t *child )
                 }
             }
 
-            if( found && !output_streams[i].ts_opts.num_teletexts )
+            if( found && !cli.output_streams[i].ts_opts.num_teletexts )
             {
                 fprintf( stderr, "Teletext stream setup is mandatory\n" );
                 return -1;
@@ -879,22 +886,22 @@ static int start_encode( char *command, obecli_command_t *child )
 
     }
 
-    if( !mux_opts.ts_muxrate )
+    if( !cli.mux_opts.ts_muxrate )
     {
         fprintf( stderr, "No mux rate selected \n" );
         return -1;
     }
 
-    if( ( output.output == OUTPUT_UDP || output.output == OUTPUT_RTP ) && !output.target )
+    if( ( cli.output.output == OUTPUT_UDP || cli.output.output == OUTPUT_RTP ) && !cli.output.target )
     {
         fprintf( stderr, "No output target chosen\n" );
         return -1;
     }
 
-    obe_setup_streams( h, output_streams, program.num_streams );
-    obe_setup_muxer( h, &mux_opts );
-    obe_setup_output( h, &output );
-    if( obe_start( h ) < 0 )
+    obe_setup_streams( cli.h, cli.output_streams, cli.program.num_streams );
+    obe_setup_muxer( cli.h, &cli.mux_opts );
+    obe_setup_output( cli.h, &cli.output );
+    if( obe_start( cli.h ) < 0 )
         return -1;
 
     running = 1;
@@ -905,7 +912,7 @@ static int start_encode( char *command, obecli_command_t *child )
 
 static int stop_encode( char *command, obecli_command_t *child )
 {
-    obe_close( h );
+    obe_close( cli.h );
 
     return 0;
 }
@@ -933,13 +940,13 @@ static int probe_device( char *command, obecli_command_t *child )
 
     /* TODO check for validity */
 
-    obe_probe_device( h, &input, &program );
+    obe_probe_device( cli.h, &cli.input, &cli.program );
 
     printf("\n");
 
-    for( int i = 0; i < program.num_streams; i++ )
+    for( int i = 0; i < cli.program.num_streams; i++ )
     {
-        stream = &program.streams[i];
+        stream = &cli.program.streams[i];
         format_name = get_format_name( stream->stream_format, format_names, 0 );
         if( stream->stream_type == STREAM_TYPE_VIDEO )
         {
@@ -988,21 +995,21 @@ static int probe_device( char *command, obecli_command_t *child )
 
     printf("\n");
 
-    if( program.num_streams )
+    if( cli.program.num_streams )
     {
-        if( output_streams )
-            free( output_streams );
+        if( cli.output_streams )
+            free( cli.output_streams );
 
-        output_streams = calloc( 1, program.num_streams * sizeof(*output_streams) );
-        if( !output_streams )
+        cli.output_streams = calloc( 1, cli.program.num_streams * sizeof(*cli.output_streams) );
+        if( !cli.output_streams )
         {
             fprintf( stderr, "Malloc failed \n" );
             return -1;
         }
-        for( int i = 0; i < program.num_streams; i++ )
+        for( int i = 0; i < cli.program.num_streams; i++ )
         {
-            if( program.streams[i].stream_type == STREAM_TYPE_VIDEO )
-                obe_populate_avc_encoder_params( h, program.streams[i].stream_id, &(output_streams[i].avc_param) );
+            if( cli.program.streams[i].stream_type == STREAM_TYPE_VIDEO )
+                obe_populate_avc_encoder_params( cli.h, cli.program.streams[i].stream_id, &(cli.output_streams[i].avc_param) );
         }
     }
 
@@ -1024,12 +1031,7 @@ static int parse_command( char *command, obecli_command_t *commmand_list )
         i++;
 
     if( commmand_list[i].name )
-    {
-        if( str_len > tok_len )
-            commmand_list[i].cmd_func( command+tok_len+1, commmand_list[i].child_commands );
-        else
-            commmand_list[i].cmd_func( command+tok_len, commmand_list[i].child_commands );
-    }
+        commmand_list[i].cmd_func( command+tok_len+(str_len > tok_len), commmand_list[i].child_commands );
     else
         return -1;
 
@@ -1052,12 +1054,14 @@ int main( int argc, char **argv )
     sprintf( history_filename, "%s/.obecli_history", home_dir );
     read_history( history_filename );
 
-    h = obe_setup();
-    if( !h )
+    cli.h = obe_setup();
+    if( !cli.h )
     {
         fprintf( stderr, "obe_setup failed\n" );
         return -1;
     }
+
+    cli.avc_profile = -1;
 
     printf( "\nOpen Broadcast Encoder command line interface.\n" );
     printf( "Version 0.1-beta \n" );
@@ -1093,11 +1097,11 @@ int main( int argc, char **argv )
     write_history( history_filename );
     free( history_filename );
 
-    if( output_streams )
-        free( output_streams );
+    if( cli.output_streams )
+        free( cli.output_streams );
 
-    if( h )
-        obe_close( h );
+    if( cli.h )
+        obe_close( cli.h );
 
     return 0;
 }
