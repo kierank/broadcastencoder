@@ -783,12 +783,6 @@ static int start_encode( char *command, obecli_command_t *child )
     FAIL_IF_ERROR( running, "Encoder already running\n" );
     FAIL_IF_ERROR( !cli.program.num_streams, "No active devices\n" );
 
-    if( !cli.program.num_streams )
-    {
-        fprintf( stderr, "No active devices \n" );
-        return -1;
-    }
-
     for( int i = 0; i < cli.program.num_streams; i++ )
     {
         cli.output_streams[i].stream_id = cli.program.streams[i].stream_id;
