@@ -24,10 +24,13 @@
 #ifndef OBECLI_H
 #define OBECLI_H
 
-// FIXME
+void obe_cli_printf( const char *name, const char *fmt, ... );
+
 #define RETURN_IF_ERR( cond, name, ret, ... )\
 if( cond )\
 {\
+    obe_cli_printf( name, __VA_ARGS__ ); \
+    fprintf( stderr, "\n" ); \
     return ret;\
 }
 

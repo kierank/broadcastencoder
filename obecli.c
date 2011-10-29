@@ -90,6 +90,15 @@ static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrou
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
 static const char * output_opts[] = { "target", NULL };
 
+void obe_cli_printf( const char *name, const char *fmt, ... )
+{
+    fprintf( stderr, "%s: ", name );
+    va_list arg;
+    va_start( arg, fmt );
+    vfprintf( stderr, fmt, arg );
+    va_end( arg );
+}
+
 static char **obe_split_string( char *string, char *sep, uint32_t limit )
 {
     if( !string )
