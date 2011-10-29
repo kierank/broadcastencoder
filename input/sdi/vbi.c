@@ -612,6 +612,7 @@ int encapsulate_dvb_ttx( obe_sdi_non_display_data_t *non_display_data )
 
     for( int i = 0; i < non_display_data->num_vbi; i++ )
     {
+        /* Teletext B is the only kind of Teletext allowed in a DVB-TTX stream */
         if( non_display_data->vbi_slices[i].id & VBI_SLICED_TELETEXT_B )
         {
             /* TODO: allow user to choose SUB or NON-SUB teletext */
