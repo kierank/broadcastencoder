@@ -171,7 +171,6 @@ static void *open_output( void *ptr )
 {
     obe_output_params_t *output_params = ptr;
     obe_t *h = output_params->h;
-    char *target = output_params->target;
     struct rtp_status status;
     hnd_t rtp_handle = NULL;
     int num_muxed_data = 0, buffer_frames = 0, ready = 0;
@@ -203,7 +202,7 @@ static void *open_output( void *ptr )
         return NULL;
     }
 
-    if( rtp_open( &rtp_handle, target ) < 0 )
+    if( rtp_open( &rtp_handle, output_params->output_opts.target ) < 0 )
         return NULL;
 
     buffer_frames = 2;

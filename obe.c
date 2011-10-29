@@ -899,7 +899,17 @@ int obe_start( obe_t *h )
         goto fail;
     }
 
-    out_params->target = h->output_opts.target;
+    memcpy( &out_params->output_opts, &h->output_opts, sizeof(h->output_opts) );
+    if( h->output_opts.target )
+    {
+        out_params->output_opts.target = malloc( strlen( h->output_opts.target ) + 1 );
+        if( !out_params->output_opts.target )
+        {
+            fprintf( stderr, "Malloc failed \n" );
+            goto fail;
+        }
+        strcpy( out_params->output_opts.target, h->output_opts.target );
+    }
     out_params->h = h;
 
     if( pthread_create( &h->output_thread, NULL, output.open_output, (void*)out_params ) < 0 )
