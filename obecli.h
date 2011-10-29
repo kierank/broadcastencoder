@@ -30,7 +30,6 @@ void obe_cli_printf( const char *name, const char *fmt, ... );
 if( cond )\
 {\
     obe_cli_printf( name, __VA_ARGS__ ); \
-    fprintf( stderr, "\n" ); \
     return ret;\
 }
 
