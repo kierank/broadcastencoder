@@ -887,7 +887,8 @@ static int probe_device( char *command, obecli_command_t *child )
 
     /* TODO check for validity */
 
-    obe_probe_device( cli.h, &cli.input, &cli.program );
+    if( obe_probe_device( cli.h, &cli.input, &cli.program ) < 0 )
+        return -1;
 
     printf("\n");
 
