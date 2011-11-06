@@ -68,7 +68,7 @@ static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", 
 static const char * const ttx_locations[]            = { "dvb-ttx", "dvb-vbi", "both", 0 };
 static const char * const stream_actions[]           = { "passthrough", "encode", 0 };
 static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", "e-ac3", "aac-experimental", 0 };
-static const char * const frame_packing_modes[]      = { "checkerboard", "column", "row", "side-by-side", "top-bottom", "temporal" };
+static const char * const frame_packing_modes[]      = { "none", "checkerboard", "column", "row", "side-by-side", "top-bottom", "temporal" };
 static const char * const teletext_types[]           = { "", "initial", "subtitle", "additional-info", "program-schedule", "hearing-imp" };
 static const char * const aac_encapsulations[]       = { "adts", "latm" };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
@@ -457,7 +457,11 @@ static int set_stream( char *command, obecli_command_t *child )
                 avc_param->b_interlaced        = obe_otob( interlaced, avc_param->b_interlaced );
                 avc_param->b_tff               = obe_otob( tff, avc_param->b_tff );
                 if( frame_packing )
+                {
                     parse_enum_value( frame_packing, frame_packing_modes, &avc_param->i_frame_packing );
+                    avc_param->i_frame_packing--;
+                }
+
                 if( csp )
                 {
                     avc_param->i_csp = obe_otoi( csp, 420 ) == 422 || strcasecmp( csp, "4:2:2" ) ? X264_CSP_I422 : X264_CSP_I420;
