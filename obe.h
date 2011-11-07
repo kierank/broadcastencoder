@@ -237,6 +237,15 @@ enum stream_action_e
     STREAM_ENCODE,
 };
 
+enum dvb_teletext_type_e
+{
+    DVB_TTX_TYPE_INITIAL = 0x01,
+    DVB_TTX_TYPE_SUB,
+    DVB_TTX_TYPE_ADDITIONAL_INFO,
+    DVB_TTX_TYPE_SCHEDULE,
+    DVB_TTX_TYPE_SUB_HEARING_IMP,
+};
+
 /* NOTE: this is the same structure as ts_dvb_ttx_t in libmpegts */
 typedef struct
 {
