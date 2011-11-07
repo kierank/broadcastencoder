@@ -68,9 +68,9 @@ static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", 
 static const char * const ttx_locations[]            = { "dvb-ttx", "dvb-vbi", "both", 0 };
 static const char * const stream_actions[]           = { "passthrough", "encode", 0 };
 static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", "e-ac3", "aac-experimental", 0 };
-static const char * const frame_packing_modes[]      = { "none", "checkerboard", "column", "row", "side-by-side", "top-bottom", "temporal" };
-static const char * const teletext_types[]           = { "", "initial", "subtitle", "additional-info", "program-schedule", "hearing-imp" };
-static const char * const aac_encapsulations[]       = { "adts", "latm" };
+static const char * const frame_packing_modes[]      = { "none", "checkerboard", "column", "row", "side-by-side", "top-bottom", "temporal", 0 };
+static const char * const teletext_types[]           = { "", "initial", "subtitle", "additional-info", "program-schedule", "hearing-imp", 0 };
+static const char * const aac_encapsulations[]       = { "adts", "latm", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", "ttx-location", NULL };
