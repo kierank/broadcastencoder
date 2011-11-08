@@ -338,6 +338,9 @@ static int set_input( char *command, obecli_command_t *child )
         FAIL_IF_ERROR( audio_connection && ( check_enum_value( audio_connection, input_audio_connections ) < 0 ),
                        "Invalid audio connection\n" );
 
+        FAIL_IF_ERROR( ttx_location && ( check_enum_value( ttx_location, ttx_locations ) < 0 ),
+                       "Invalid teletext location\n" );
+
         if( location )
         {
              if( cli.input.location )
