@@ -805,7 +805,6 @@ static int start_encode( char *command, obecli_command_t *child )
 
     for( int i = 0; i < cli.program.num_streams; i++ )
     {
-        cli.output_streams[i].stream_id = cli.program.streams[i].stream_id;
         if( cli.program.streams[i].stream_type == STREAM_TYPE_VIDEO )
         {
             FAIL_IF_ERROR( !cli.output_streams[i].avc_param.rc.i_vbv_buffer_size,
@@ -972,6 +971,7 @@ static int probe_device( char *command, obecli_command_t *child )
         }
         for( int i = 0; i < cli.program.num_streams; i++ )
         {
+            cli.output_streams[i].stream_id = cli.program.streams[i].stream_id;
             if( cli.program.streams[i].stream_type == STREAM_TYPE_VIDEO )
                 obe_populate_avc_encoder_params( cli.h, cli.program.streams[i].stream_id, &(cli.output_streams[i].avc_param) );
         }
