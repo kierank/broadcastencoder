@@ -246,6 +246,14 @@ enum dvb_teletext_type_e
     DVB_TTX_TYPE_SUB_HEARING_IMP,
 };
 
+enum audio_type_e
+{
+    AUDIO_TYPE_UNDEFINED,
+    AUDIO_TYPE_CLEAN_EFFECTS,
+    AUDIO_TYPE_HEARING_IMPAIRED,
+    AUDIO_TYPE_VISUAL_IMPAIRED,
+};
+
 /* NOTE: this is the same structure as ts_dvb_ttx_t in libmpegts */
 typedef struct
 {

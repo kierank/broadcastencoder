@@ -70,6 +70,7 @@ static const char * const stream_actions[]           = { "passthrough", "encode"
 static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", "e-ac3", "aac-experimental", 0 };
 static const char * const frame_packing_modes[]      = { "none", "checkerboard", "column", "row", "side-by-side", "top-bottom", "temporal", 0 };
 static const char * const teletext_types[]           = { "", "initial", "subtitle", "additional-info", "program-schedule", "hearing-imp", 0 };
+static const char * const audio_types[]              = { "undefined", "clean-effects", "hearing-impaired", "visual-impaired", 0 };
 static const char * const aac_encapsulations[]       = { "adts", "latm", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 
@@ -83,7 +84,7 @@ static const char * stream_opts[] = { "action", "format",
                                       /* AAC options */
                                       "aac-encap",
                                       /* TS options */
-                                      "pid", "lang", "num-ttx", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page",
+                                      "pid", "lang", "audio-type", "num-ttx", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page",
                                       NULL };
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrough", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", NULL };
@@ -421,6 +422,7 @@ static int set_stream( char *command, obecli_command_t *child )
             /* NB: remap these and the ttx values below if more encoding options are added - TODO: split them up */
             char *pid         = obe_get_option( stream_opts[20], opts );
             char *lang        = obe_get_option( stream_opts[21], opts );
+            char *audio_type  = obe_get_option( stream_opts[22], opts );
 
             if( cli.program.streams[stream_id].stream_type == STREAM_TYPE_VIDEO )
             {
@@ -432,6 +434,8 @@ static int set_stream( char *command, obecli_command_t *child )
                 FAIL_IF_ERROR( frame_packing && ( check_enum_value( frame_packing, frame_packing_modes ) < 0 ),
                               "Invalid frame packing mode\n" );
 
+                /* Set it to encode by default */
+                cli.output_streams[stream_id].stream_action = STREAM_ENCODE;
                 cli.output_streams[stream_id].stream_format = VIDEO_AVC;
                 avc_param->rc.i_vbv_max_bitrate = obe_otoi( vbv_maxrate, 0 );
                 avc_param->rc.i_vbv_buffer_size = obe_otoi( vbv_bufsize, 0 );
@@ -491,12 +495,21 @@ static int set_stream( char *command, obecli_command_t *child )
                               "Invalid stream format\n" );
 
                 FAIL_IF_ERROR( aac_encap && ( check_enum_value( aac_encap, aac_encapsulations ) < 0 ),
-                              "Invalid stream format\n" );
+                              "Invalid aac encapsulation\n" );
+
+                FAIL_IF_ERROR( audio_type && check_enum_value( audio_type, audio_types ) < 0,
+                              "Invalid audio type\n" );
+
+                FAIL_IF_ERROR( audio_type && check_enum_value( audio_type, audio_types ) >= 0 &&
+                               !cli.output_streams[stream_id].ts_opts.write_lang_code && !( lang && strlen( lang ) >= 3 ),
+                               "Audio type requires setting a language\n" );
 
                 if( action )
                     parse_enum_value( action, stream_actions, &cli.output_streams[stream_id].stream_action );
                 if( format )
                     parse_enum_value( format, encode_formats, &cli.output_streams[stream_id].stream_format );
+                if( audio_type )
+                    parse_enum_value( audio_type, audio_types, &cli.output_streams[stream_id].ts_opts.audio_type );
 
                 if( cli.output_streams[stream_id].stream_format == AUDIO_MP2 )
                     default_bitrate = 256;
@@ -525,13 +538,13 @@ static int set_stream( char *command, obecli_command_t *child )
                      cli.program.streams[stream_id].stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
-                char *ttx_lang = obe_get_option( stream_opts[23], opts );
-                char *ttx_type = obe_get_option( stream_opts[24], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[25], opts );
-                char *ttx_page = obe_get_option( stream_opts[26], opts );
+                char *ttx_lang = obe_get_option( stream_opts[24], opts );
+                char *ttx_type = obe_get_option( stream_opts[25], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[26], opts );
+                char *ttx_page = obe_get_option( stream_opts[27], opts );
 
                 FAIL_IF_ERROR( ttx_type && ( check_enum_value( ttx_type, teletext_types ) < 0 ),
-                              "Invalid Teletext type\n" );
+                               "Invalid Teletext type\n" );
 
                 /* TODO: find a nice way of supporting multiple teletexts in the CLI */
                 cli.output_streams[stream_id].ts_opts.num_teletexts = 1;
