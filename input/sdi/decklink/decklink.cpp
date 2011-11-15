@@ -387,7 +387,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         {
             decklink_ctx->codec->width = width;
             decklink_ctx->codec->height = height;
-            decklink_ctx->codec->custom_stride = stride;
 
             pkt.data = (uint8_t*)frame_bytes;
             pkt.size = stride * height;
@@ -594,7 +593,6 @@ static int open_card( decklink_opts_t *decklink_opts )
     IDeckLinkIterator *decklink_iterator = NULL;
     HRESULT result;
 
-    avcodec_init();
     avcodec_register_all();
     decklink_ctx->dec = avcodec_find_decoder( CODEC_ID_V210 );
     if( !decklink_ctx->dec )
