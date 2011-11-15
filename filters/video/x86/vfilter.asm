@@ -49,8 +49,12 @@ cglobal dither_row_10_to_8_%1, 5, 5
     mova      m3, [scale]
     movd      m4, [shift]
     pxor      m5, m5
+    lea       r0, [r0+2*r3]
+    add       r1, r3
+    neg       r3
+
 .loop
-    paddw     m0, m2, [r0]
+    paddw     m0, m2, [r0+2*r3]
 
     punpcklwd m1, m0, m5
     punpckhwd m0, m5
@@ -62,13 +66,10 @@ cglobal dither_row_10_to_8_%1, 5, 5
     packusdw  m1, m0
     packuswb  m1, m5
 
-    movq      [r1], m1
+    movq      [r1+r3], m1
 
-    add       r0, mmsize
-    add       r1, 8
-
-    sub       r4d, 8
-    jg        .loop
+    add       r3, 8
+    jl        .loop
     REP_RET
 %endmacro
 
