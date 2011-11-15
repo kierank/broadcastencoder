@@ -31,7 +31,6 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <libavutil/avstring.h>
-#include <libavutil/avurl.h>
 #include <libavutil/parseutils.h>
 
 #ifndef IN_MULTICAST
