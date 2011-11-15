@@ -32,6 +32,7 @@
 #include <netdb.h>
 #include <libavutil/avstring.h>
 #include <libavutil/parseutils.h>
+#include <libavformat/avformat.h>
 
 #ifndef IN_MULTICAST
 #define IN_MULTICAST(a) ((((uint32_t)(a)) & 0xf0000000) == 0xe0000000)
