@@ -130,11 +130,12 @@ void *probe_stream( void *ptr )
     for( int i = 0; i < lavf->nb_programs && i < MAX_PROGRAMS; i++ )
     {
         cur_program = lavf->programs[i];
+#if 0
         ts_id = lavf->ts_id;
         program_num = cur_program->program_num;
         pmt_pid = cur_program->pmt_pid;
         pcr_pid = cur_program->pcr_pid;
-
+#endif
         // TODO SDT
 
         for( int j = 0; j < cur_program->nb_stream_indexes && j < MAX_STREAMS; j++ )
@@ -189,8 +190,10 @@ void *probe_stream( void *ptr )
                 }
 
                 streams[num_streams]->pid = stream->id;
+#if 0
                 streams[num_streams]->has_stream_identifier = stream->has_stream_identifier;
                 streams[num_streams]->stream_identifier = stream->stream_identifier;
+#endif
 
                 if( codec->codec_type == AVMEDIA_TYPE_VIDEO )
                 {
@@ -331,8 +334,10 @@ void *probe_stream( void *ptr )
             streams[i]->sample_format = codec->sample_fmt;
             streams[i]->sample_rate = codec->sample_rate;
         }
+#if 0
         else if( codec->codec_id == CODEC_ID_DVB_SUBTITLE )
             streams[i]->has_dds = codec->dvb_sub_has_dds;
+#endif
 
         if( codec )
             avcodec_close( codec );
