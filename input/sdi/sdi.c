@@ -33,6 +33,19 @@
         *c++ = (val >> 20) & 0x3ff;  \
     } while (0)
 
+void obe_v210_planar_unpack_c( const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int width )
+{
+    uint32_t val;
+
+    for( int i = 0; i < width - 5; i += 6 )
+    {
+        READ_PIXELS( u, y, v );
+        READ_PIXELS( y, u, y );
+        READ_PIXELS( v, y, u );
+        READ_PIXELS( y, v, y );
+    }
+}
+
 /* Convert v210 to the native HD-SDI pixel format. */
 void obe_v210_line_to_nv20_c( uint32_t *src, uint16_t *dst, int width )
 {

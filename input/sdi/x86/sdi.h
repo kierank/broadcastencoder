@@ -27,4 +27,12 @@
 void obe_downscale_line_mmx( uint16_t *src, uint8_t *dst, int lines );
 void obe_downscale_line_sse2( uint16_t *src, uint8_t *dst, int lines );
 
+void obe_v210_planar_unpack_c( const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int width );
+
+void obe_v210_planar_unpack_unaligned_ssse3( const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int width );
+void obe_v210_planar_unpack_unaligned_avx( const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int width );
+
+void obe_v210_planar_unpack_aligned_ssse3( const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int width );
+void obe_v210_planar_unpack_aligned_avx( const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int width );
+
 #endif
