@@ -201,7 +201,7 @@ typedef struct
         *c++ = (val >> 20) & 0x3FF;  \
     } while (0)
 
-static inline void obe_decode_line( linsys_ctx_t *linsys_ctx, uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v )
+static inline void obe_decode_line( linsys_ctx_t *linsys_ctx, const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v )
 {
     uint32_t val;
     int w;
@@ -369,12 +369,12 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
         {
             if( !(i & 1) )
             {
-                linsys_ctx->unpack_line( (const uint32_t*)v210_src_f1, y_dst, u_dst, v_dst, linsys_ctx->width );
+                obe_decode_line( linsys_ctx, (const uint32_t*)v210_src_f1, y_dst, u_dst, v_dst );
                 v210_src_f1 += linsys_ctx->stride;
             }
             else
             {
-                linsys_ctx->unpack_line( (const uint32_t*)v210_src_f2, y_dst, u_dst, v_dst, linsys_ctx->width );
+                obe_decode_line( linsys_ctx, (const uint32_t*)v210_src_f2, y_dst, u_dst, v_dst );
                 v210_src_f2 += linsys_ctx->stride;
             }
 
@@ -387,7 +387,7 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
     {
         for( int i = 0; i < linsys_ctx->coded_height; i++ )
         {
-            linsys_ctx->unpack_line( (const uint32_t*)data, y_dst, u_dst, v_dst, linsys_ctx->width );
+            obe_decode_line( linsys_ctx, (const uint32_t*)data, y_dst, u_dst, v_dst );
 
             data += linsys_ctx->stride;
             y_dst += output->stride[0] / 2;
