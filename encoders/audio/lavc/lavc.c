@@ -61,7 +61,6 @@ static void *start_encoder( void *ptr )
     AVIOContext *avio = NULL;
     AVCodecContext *codec = NULL;
 
-    avcodec_init();
     avcodec_register_all();
 
     /* AAC audio needs ADTS or LATM encapsulation */
@@ -84,7 +83,7 @@ static void *start_encoder( void *ptr )
             goto finish;
         }
 
-        st = av_new_stream( fmt, 0 );
+        st = avformat_new_stream( fmt, NULL );
         if( !st )
         {
             fprintf( stderr, "Malloc failed\n" );
@@ -94,7 +93,7 @@ static void *start_encoder( void *ptr )
     }
     else
     {
-        codec = avcodec_alloc_context();
+        codec = avcodec_alloc_context3( NULL );
         if( !codec )
         {
             fprintf( stderr, "Malloc failed\n" );
@@ -133,7 +132,7 @@ static void *start_encoder( void *ptr )
     codec->channels = enc_params->num_channels;
     codec->channel_layout = AV_CH_LAYOUT_STEREO;
 
-    if( avcodec_open( codec, enc ) < 0 )
+    if( avcodec_open2( codec, enc, NULL ) < 0 )
     {
         fprintf( stderr, "[lavc] Could not open encoder\n" );
         goto finish;
@@ -283,7 +282,7 @@ static void *start_encoder( void *ptr )
                 }
                 fmt->pb = avio;
                 /* TODO: handle fails */
-                av_write_header( fmt );
+                avformat_write_header( fmt, NULL );
                 av_write_frame( fmt, &pkt );
                 obe_free_packet( &pkt );
                 frame_size = output_frame_size = avio_close_dyn_buf( avio, &avio_buf );
