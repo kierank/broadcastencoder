@@ -42,11 +42,13 @@ typedef struct
     obe_device_t *device;
     int num_output_streams;
     obe_output_stream_t *output_streams;
+    int audio_samples;
 } obe_input_params_t;
 
 extern const obe_input_func_t lavf_input;
 #if HAVE_DECKLINK
 extern const obe_input_func_t decklink_input;
 #endif
+extern const obe_input_func_t linsys_sdi_input;
 
 #endif

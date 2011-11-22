@@ -60,6 +60,7 @@ static char *line_read = NULL;
 
 static int running = 0;
 
+static const char * const input_types[]              = { "url", "decklink", "linsys-sdi", 0 };
 static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50", "720p59.94", "720p60", "1080i50", "1080i59.94", "1080i60",
                                                          "1080p23.98", "1080p24", "1080p25", "1080p29.97", "1080p30", "1080p50", "1080p59.94",
                                                          "1080p60", 0 };
@@ -312,11 +313,7 @@ static int set_input( char *command, obecli_command_t *child )
     int str_len = strlen( command );
     command[tok_len] = 0;
 
-    if( !strcasecmp( command, "url" ) )
-        cli.input.input_type = INPUT_URL;
-    else if( !strcasecmp( command, "decklink" ) )
-        cli.input.input_type = INPUT_DEVICE_DECKLINK;
-    else if( !strcasecmp( command, "opts" ) && str_len > tok_len )
+    if( !strcasecmp( command, "opts" ) && str_len > tok_len )
     {
         char *params = command + tok_len + 1;
         char **opts = obe_split_options( params, input_opts );
@@ -363,6 +360,11 @@ static int set_input( char *command, obecli_command_t *child )
             parse_enum_value( ttx_location, ttx_locations, &cli.input.teletext_location );
 
         free( opts );
+    }
+    else
+    {
+        FAIL_IF_ERROR( ( check_enum_value( command, input_types ) < 0 ), "Invalid input type\n" );
+        parse_enum_value( command, input_types, &cli.input.input_type );
     }
 
     return 0;

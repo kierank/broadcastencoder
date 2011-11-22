@@ -601,6 +601,8 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     else if( input_device->input_type == INPUT_DEVICE_DECKLINK )
         input = decklink_input;
 #endif
+    else if( input_device->input_type == INPUT_DEVICE_LINSYS_SDI )
+        input = linsys_sdi_input;
     else
     {
         fprintf( stderr, "Invalid input device \n" );
@@ -644,9 +646,13 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     }
 
     if( input_device->location )
-        printf( "Probing device: \"%s\". Timeout %i seconds\n", input_device->location, probe_time );
+        printf( "Probing device: \"%s\". ", input_device->location );
+    else if( input_device->input_type == INPUT_DEVICE_LINSYS_SDI )
+        printf( "Probing device: Linsys card %i. ", input_device->card_idx );
     else
-        printf( "Probing device: Decklink card %i. Timeout %i seconds\n", input_device->card_idx, probe_time );
+        printf( "Probing device: Decklink card %i. ", input_device->card_idx );
+
+    printf( "Timeout %i seconds \n", probe_time );
 
     while( i++ < probe_time )
     {
@@ -861,6 +867,8 @@ int obe_start( obe_t *h )
     obe_aud_enc_func_t audio_encoder;
     obe_output_func_t output;
 
+    int num_samples;
+
     /* TODO: a lot of sanity checks */
     /* TODO: decide upon thread priorities */
 
@@ -880,6 +888,8 @@ int obe_start( obe_t *h )
     else if( h->devices[0]->device_type == INPUT_DEVICE_DECKLINK )
         input = decklink_input;
 #endif
+    else if( h->devices[0]->device_type == INPUT_DEVICE_LINSYS_SDI )
+        input = linsys_sdi_input;
     else
     {
         fprintf( stderr, "Invalid input device \n" );
@@ -956,6 +966,9 @@ int obe_start( obe_t *h )
                      h->output_streams[i].stream_format == AUDIO_AAC  || h->output_streams[i].stream_format == AUDIO_MP2 )
             {
                 audio_encoder = h->output_streams[i].stream_format == AUDIO_MP2 ? twolame_encoder : lavc_encoder;
+                num_samples = h->output_streams[i].stream_format == AUDIO_MP2 ? MP2_NUM_SAMPLES :
+                              h->output_streams[i].stream_format == AUDIO_AAC ? AAC_NUM_SAMPLES : AC3_NUM_SAMPLES;
+
 
                 aud_enc_params = calloc( 1, sizeof(*aud_enc_params) );
                 if( !aud_enc_params )
@@ -979,7 +992,6 @@ int obe_start( obe_t *h )
                 if( !h->output_streams[i].ts_opts.frames_per_pes &&
                     ( h->output_streams[i].stream_format == AUDIO_MP2 || h->output_streams[i].stream_format == AUDIO_AC_3 ) )
                 {
-                    int num_samples = h->output_streams[i].stream_format == AUDIO_MP2 ? MP2_NUM_SAMPLES : AC3_NUM_SAMPLES;
                     int buf_size = h->output_streams[i].stream_format == AUDIO_MP2 ? MISC_AUDIO_BS : AC3_BS_DVB;
                     if( buf_size == AC3_BS_DVB && ( h->mux_opts.ts_type == OBE_TS_TYPE_CABLELABS || h->mux_opts.ts_type == OBE_TS_TYPE_ATSC ) )
                         buf_size = AC3_BS_ATSC;
@@ -1085,6 +1097,7 @@ int obe_start( obe_t *h )
     /* TODO: in the future give it only the streams which are necessary */
     input_params->num_output_streams = h->num_output_streams;
     input_params->output_streams = h->output_streams;
+    input_params->audio_samples = num_samples;
 
     if( pthread_create( &h->devices[0]->device_thread, NULL, input.open_input, (void*)input_params ) < 0 )
     {
