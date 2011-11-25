@@ -562,7 +562,7 @@ void sleep_mpeg_ticks( int64_t i_time )
 int get_non_display_location( int type )
 {
     /* Set the appropriate location */
-    for( int i = 0; non_display_data_locations[i].service != -1; l++ )
+    for( int i = 0; non_display_data_locations[i].service != -1; i++ )
     {
         if( non_display_data_locations[i].service == type )
             return non_display_data_locations[i].location;
