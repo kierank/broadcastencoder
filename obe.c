@@ -559,6 +559,18 @@ void sleep_mpeg_ticks( int64_t i_time )
     clock_nanosleep( CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, &ts );
 }
 
+int get_non_display_location( int type )
+{
+    /* Set the appropriate location */
+    for( int i = 0; non_display_data_locations[i].service != -1; i++ )
+    {
+        if( non_display_data_locations[i].service == type )
+            return non_display_data_locations[i].location;
+    }
+
+    return -1;
+}
+
 static int obe_validate_input_params( obe_input_t *input_device )
 {
     if( input_device->input_type == INPUT_DEVICE_DECKLINK )

@@ -507,5 +507,6 @@ obe_output_stream_t *get_output_stream( obe_t *h, int stream_id );
 
 int64_t get_wallclock_in_mpeg_ticks( void );
 void sleep_mpeg_ticks( int64_t i_delay );
+int get_non_display_location( int type );
 
 #endif

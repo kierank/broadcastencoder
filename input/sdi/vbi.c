@@ -76,6 +76,15 @@ static void write_bytes( bs_t *s, uint8_t *bytes, int length )
     s->p_start = p_start;
 }
 
+static void set_teletext_flags( obe_sdi_non_display_data_t *non_display_data )
+{
+    non_display_data->has_ttx_frame = non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX ||
+                                      non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX_AND_VBI;
+
+    non_display_data->has_vbi_frame = non_display_data->teletext_location == TELETEXT_LOCATION_DVB_VBI ||
+                                      non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX_AND_VBI;
+}
+
 int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data )
 {
     int ret, services;
@@ -126,7 +135,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
     vbi_sliced *sliced;
     obe_int_frame_data_t *tmp, *frame_data;
     obe_user_data_t *tmp2, *user_data;
-    int j, l, found;
+    int j, found;
 
     sliced = non_display_data->vbi_slices;
     memset( sliced, 0, sizeof(non_display_data->vbi_slices) );
@@ -195,13 +204,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                 continue;
 
             if( vbi_type_tab[j][1] == MISC_TELETEXT )
-            {
-                if( non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX || non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX_AND_VBI )
-                    non_display_data->has_ttx_frame = 1;
-
-                if( non_display_data->teletext_location == TELETEXT_LOCATION_DVB_VBI || non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX_AND_VBI )
-                    non_display_data->has_vbi_frame = 1;
-            }
+                set_teletext_flags( non_display_data );
             else if( vbi_type_tab[j][1] != CAPTIONS_CEA_608 )
                 non_display_data->has_vbi_frame = 1;
 
@@ -215,15 +218,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             frame_data->source = VBI_RAW;
             frame_data->num_lines = 0;
             frame_data->lines[frame_data->num_lines++] = sliced[i].line;
-
-            /* Set the appropriate location */
-            for( l = 0; non_display_data_locations[l].service != -1; l++ )
-            {
-                if( frame_data->type == non_display_data_locations[l].service )
-                    break;
-            }
-
-            frame_data->location = non_display_data_locations[l].location;
+            frame_data->location = get_non_display_location( frame_data->type );
 
             /* WSS is converted to AFD so tell the user this.
              * TODO: make this user-settable */
@@ -331,13 +326,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                 non_display_data->has_vbi_frame = 1;
             }
             else if( sliced[i].id & VBI_SLICED_TELETEXT_B )
-            {
-                if( non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX || non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX_AND_VBI )
-                    non_display_data->has_ttx_frame = 1;
-
-                if( non_display_data->teletext_location == TELETEXT_LOCATION_DVB_VBI || non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX_AND_VBI )
-                    non_display_data->has_vbi_frame = 1;
-            }
+                set_teletext_flags( non_display_data );
             else
                 non_display_data->has_vbi_frame = 1;
         }
@@ -612,6 +601,7 @@ int encapsulate_dvb_ttx( obe_sdi_non_display_data_t *non_display_data )
 
     for( int i = 0; i < non_display_data->num_vbi; i++ )
     {
+        /* TODO: Teletext from VANC */
         /* Teletext B is the only kind of Teletext allowed in a DVB-TTX stream */
         if( non_display_data->vbi_slices[i].id & VBI_SLICED_TELETEXT_B )
         {
