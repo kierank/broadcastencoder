@@ -126,7 +126,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
     vbi_sliced *sliced;
     obe_int_frame_data_t *tmp, *frame_data;
     obe_user_data_t *tmp2, *user_data;
-    int j, l, found;
+    int j, found;
 
     sliced = non_display_data->vbi_slices;
     memset( sliced, 0, sizeof(non_display_data->vbi_slices) );
@@ -215,15 +215,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             frame_data->source = VBI_RAW;
             frame_data->num_lines = 0;
             frame_data->lines[frame_data->num_lines++] = sliced[i].line;
-
-            /* Set the appropriate location */
-            for( l = 0; non_display_data_locations[l].service != -1; l++ )
-            {
-                if( frame_data->type == non_display_data_locations[l].service )
-                    break;
-            }
-
-            frame_data->location = non_display_data_locations[l].location;
+            frame_data->location = get_non_display_location( frame_data->type );
 
             /* WSS is converted to AFD so tell the user this.
              * TODO: make this user-settable */
