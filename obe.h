@@ -37,7 +37,7 @@ typedef struct obe_t obe_t;
 /**** Initialisation Function ****/
 obe_t *obe_setup( void );
 
-enum input_video_connection
+enum input_video_connection_e
 {
     INPUT_VIDEO_CONNECTION_SDI,
     INPUT_VIDEO_CONNECTION_HDMI,
@@ -47,14 +47,14 @@ enum input_video_connection
     INPUT_VIDEO_CONNECTION_S_VIDEO,
 };
 
-enum input_audio_connection
+enum input_audio_connection_e
 {
     INPUT_AUDIO_EMBEDDED,
     INPUT_AUDIO_AES_EBU,
     INPUT_AUDIO_ANALOGUE,
 };
 
-enum input_video_format
+enum input_video_format_e
 {
     /* SD */
     INPUT_VIDEO_FORMAT_PAL,
