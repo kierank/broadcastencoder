@@ -541,6 +541,19 @@ obe_t *obe_setup( void )
     return h;
 }
 
+int obe_set_config( obe_t *h, int system_type )
+{
+    if( system_type < OBE_SYSTEM_TYPE_GENERIC && system_type > OBE_SYSTEM_TYPE_LOW_LATENCY )
+    {
+        fprintf( stderr, "Invalid OBE system type\n" );
+        return -1;
+    }
+
+    h->obe_system = system_type;
+
+    return 0;
+}
+
 /* TODO handle error conditions */
 int64_t get_wallclock_in_mpeg_ticks( void )
 {
@@ -763,6 +776,20 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     }
 
     x264_param_default( param );
+
+    if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
+    {
+        param->sc.f_speed = 1.0;
+        param->sc.b_alt_timer = 1;
+        param->rc.i_lookahead = param->i_keyint_max;
+        // TODO restrict threads
+    }
+    else
+    {
+        param->b_sliced_threads = 1;
+        x264_param_default_preset( param, "veryfast", "zerolatency" );
+    }
+
     param->b_deterministic = 0;
     param->b_vfr_input = 0;
     param->b_pic_struct = 1;
@@ -818,12 +845,8 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     }
 
     x264_param_apply_profile( param, X264_BIT_DEPTH == 10 ? "high10" : "high" );
-
-    param->sc.f_speed = 1.0;
-    param->sc.b_alt_timer = 1;
-    param->b_aud = 1;
     param->i_nal_hrd = X264_NAL_HRD_FAKE_VBR;
-    param->rc.i_lookahead = param->i_keyint_max;
+    param->b_aud = 1;
     param->i_log_level = X264_LOG_WARNING;
 
     return 0;

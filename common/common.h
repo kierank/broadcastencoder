@@ -410,6 +410,7 @@ typedef struct
 struct obe_t
 {
     int is_active;
+    int obe_system;
 
     /* Devices */
     pthread_mutex_t device_list_mutex;

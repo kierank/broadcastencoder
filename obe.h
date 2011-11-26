@@ -37,6 +37,15 @@ typedef struct obe_t obe_t;
 /**** Initialisation Function ****/
 obe_t *obe_setup( void );
 
+/**** OBE configuration function */
+enum obe_system_type_e
+{
+    OBE_SYSTEM_TYPE_GENERIC,
+    OBE_SYSTEM_TYPE_LOW_LATENCY,
+};
+
+int obe_set_config( obe_t *h, int system_type );
+
 enum input_video_connection_e
 {
     INPUT_VIDEO_CONNECTION_SDI,
