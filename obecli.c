@@ -59,6 +59,7 @@ static volatile int b_ctrl_c = 0;
 static char *line_read = NULL;
 
 static int running = 0;
+static int system_type_value = OBE_SYSTEM_TYPE_GENERIC;
 
 static const char * const system_types[]             = { "generic", "lowlatency", 0 };
 static const char * const input_types[]              = { "url", "decklink", "linsys-sdi", 0 };
@@ -327,9 +328,10 @@ static int set_obe( char *command, obecli_command_t *child )
         FAIL_IF_ERROR( system_type && ( check_enum_value( system_type, system_types ) < 0 ),
                        "Invalid system type\n" );
 
+        FAIL_IF_ERROR( cli.program.num_streams, "Cannot change OBE options after probing\n" )
+
         if( system_type )
         {
-            int system_type_value;
             parse_enum_value( system_type, system_types, &system_type_value );
             obe_set_config( cli.h, system_type_value );
 	}
@@ -465,10 +467,13 @@ static int set_stream( char *command, obecli_command_t *child )
                 x264_param_t *avc_param = &cli.output_streams[stream_id].avc_param;
 
                 FAIL_IF_ERROR( profile && ( check_enum_value( profile, x264_profile_names ) < 0 ),
-                              "Invalid AVC profile\n" );
+                               "Invalid AVC profile\n" );
+
+                FAIL_IF_ERROR( vbv_bufsize && system_type_value == OBE_SYSTEM_TYPE_LOW_LATENCY,
+                               "VBV buffer size is not user-settable in low-latency mode\n" );
 
                 FAIL_IF_ERROR( frame_packing && ( check_enum_value( frame_packing, frame_packing_modes ) < 0 ),
-                              "Invalid frame packing mode\n" );
+                               "Invalid frame packing mode\n" )
 
                 /* Set it to encode by default */
                 cli.output_streams[stream_id].stream_action = STREAM_ENCODE;
@@ -843,7 +848,8 @@ static int start_encode( char *command, obecli_command_t *child )
     {
         if( cli.program.streams[i].stream_type == STREAM_TYPE_VIDEO )
         {
-            FAIL_IF_ERROR( !cli.output_streams[i].avc_param.rc.i_vbv_buffer_size,
+            /* x264 calculates the single-frame VBV size later on */
+            FAIL_IF_ERROR( system_type_value == OBE_SYSTEM_TYPE_GENERIC && !cli.output_streams[i].avc_param.rc.i_vbv_buffer_size,
                            "No VBV buffer size chosen\n" );
 
             cli.output_streams[i].stream_action = STREAM_ENCODE;
