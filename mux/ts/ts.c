@@ -256,8 +256,7 @@ void *open_muxer( void *ptr )
             while( avc_profiles[j][0] && p_param->i_profile != avc_profiles[j][0] )
                 j++;
 
-            if( ts_setup_mpegvideo_stream( w, stream->pid, p_param->i_level_idc, avc_profiles[j][1],
-                                           p_param->rc.i_vbv_max_bitrate_actual, p_param->rc.i_vbv_buffer_size_actual, 0 ) < 0 )
+            if( ts_setup_mpegvideo_stream( w, stream->pid, p_param->i_level_idc, avc_profiles[j][1], 0, 0, 0 ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup video stream\n" );
                 goto end;

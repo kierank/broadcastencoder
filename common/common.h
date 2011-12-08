@@ -379,8 +379,9 @@ typedef struct
     int64_t pts;
 
     /* Video Only */
-    int64_t real_pts;
+    int64_t cpb_initial_arrival_time;
     int64_t real_dts;
+    int64_t real_pts;
     int random_access;
     int priority;
 

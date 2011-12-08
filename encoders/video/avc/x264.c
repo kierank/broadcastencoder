@@ -179,7 +179,7 @@ static void *start_encoder( void *ptr )
             goto end;
         }
         pts2[0] = raw_frame->pts;
-        pic.passthrough_opaque = pts2;
+        pic.opaque = pts2;
 
         /* If the AFD has changed, then change the SAR. x264 will write the SAR at the next keyframe
          * TODO: allow user to force keyframes in order to be frame accurate */
@@ -217,17 +217,18 @@ static void *start_encoder( void *ptr )
             memcpy( coded_frame->data, nal[0].p_payload, frame_size );
             coded_frame->is_video = 1;
             coded_frame->len = frame_size;
+            coded_frame->cpb_initial_arrival_time = pic_out.hrd_timing.cpb_initial_arrival_time;
             coded_frame->real_dts = pic_out.hrd_timing.cpb_removal_time;
             coded_frame->real_pts = pic_out.hrd_timing.dpb_output_time;
-            pts2 = pic_out.passthrough_opaque;
+            pts2 = pic_out.opaque;
             coded_frame->pts = pts2[0];
             coded_frame->random_access = pic_out.b_keyframe;
             coded_frame->priority = IS_X264_TYPE_I( pic_out.i_type );
-            free( pic_out.passthrough_opaque );
+            free( pic_out.opaque );
 
             add_to_smoothing_queue( h, coded_frame );
-	}
-    }
+        }
+     }
 
 end:
     if( s )
