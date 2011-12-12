@@ -438,6 +438,7 @@ void *open_muxer( void *ptr )
                 frames[num_frames].pid = output_stream->ts_opts.pid;
                 if( h->coded_frames[i]->is_video )
                 {
+                    frames[num_frames].cpb_initial_arrival_time = h->coded_frames[i]->cpb_initial_arrival_time;
                     frames[num_frames].dts = h->coded_frames[i]->real_dts;
                     frames[num_frames].pts = h->coded_frames[i]->real_pts;
                 }
