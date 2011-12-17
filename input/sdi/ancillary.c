@@ -160,6 +160,9 @@ static int parse_dvb_scte_vbi( obe_sdi_non_display_data_t *non_display_data, obe
     if( data_indentifier_table[i][0] == -1 )
         return 0;
 
+    /* FIXME: disabled for the time being */
+    return 0;
+
     if( non_display_data->probe )
     {
         /* Don't duplicate VBI streams */
