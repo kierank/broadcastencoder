@@ -71,6 +71,7 @@ typedef struct
     AVCRC crc[257];
     AVCRC crc_broken[257];
 
+    obe_device_t *device;
 } obe_sdi_non_display_data_t;
 
 /* NB: Lines start from 1 */
@@ -120,6 +121,9 @@ void obe_downscale_line_c( uint16_t *src, uint8_t *dst, int lines );
 void obe_blank_line_nv20_c( uint16_t *dst, int width );
 void obe_blank_line_uyvy_c( uint16_t *dst, int width );
 int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream, int location );
+int check_probed_non_display_data( obe_sdi_non_display_data_t *non_display_data, int type );
+int check_active_non_display_data( obe_raw_frame_t *raw_frame, int type );
+int non_display_data_was_probed( obe_device_t *device, int type, int source, int line_number );
 int add_teletext_service( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream );
 int sdi_next_line( int format, int line_smpte );
 

@@ -181,6 +181,64 @@ int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_
     return 0;
 }
 
+int check_probed_non_display_data( obe_sdi_non_display_data_t *non_display_data, int type )
+{
+    for( int i = 0; i < non_display_data->num_frame_data; i++ )
+    {
+        if( non_display_data->frame_data[i].type == type )
+            return 1;
+    }
+
+    return 0;
+}
+
+int check_active_non_display_data( obe_raw_frame_t *raw_frame, int type )
+{
+    for( int i = 0; i < raw_frame->num_user_data; i++ )
+    {
+        if( raw_frame->user_data[i].type == type )
+            return 1;
+    }
+
+    return 0;
+}
+
+int non_display_data_was_probed( obe_device_t *device, int type, int source, int line_number )
+{
+    /* Don't add user-data which has suddenly appeared in the SDI feed.
+     * This is because the user may not have allocated enough mux bitrate and also because
+     * we can't yet reconfigure the mux to add DVB-VBI streams in OBE */
+
+    /* FIXME: shall we be picky about changes in line number? */
+    obe_int_input_stream_t *stream;
+
+    int location = get_non_display_location( type );
+
+    if( location == USER_DATA_LOCATION_FRAME )
+    {
+        /* FIXME if for whatever reason the video stream isn't the first stream */
+        stream = device->streams[0];
+    }
+    else //if( location == USER_DATA_LOCATION_DVB_STREAM )
+    {
+        for( int i = 0; device->num_input_streams; i++ )
+        {
+            stream = device->streams[i];
+            if( stream->stream_format == MISC_TELETEXT || stream->stream_format == VBI_RAW )
+                break;
+        }
+    }
+
+    for( int i = 0; stream->num_frame_data; i++ )
+    {
+        obe_frame_data_t *frame_data = &stream->frame_data[i];
+        if( frame_data->type == type && frame_data->source == source )
+            return 1;
+    }
+
+    return 0;
+}
+
 int add_teletext_service( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream )
 {
     stream->frame_data = calloc( 1, sizeof(*stream->frame_data) );

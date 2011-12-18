@@ -50,8 +50,6 @@
 const static int vbi_type_tab[][2] =
 {
     { VBI_SLICED_TELETEXT_B,         MISC_TELETEXT },
-    { VBI_SLICED_TELETEXT_B_L10_625, MISC_TELETEXT },
-    { VBI_SLICED_TELETEXT_B_L25_625, MISC_TELETEXT },
     { VBI_SLICED_TELETEXT_C_625,     VBI_NABTS },
     /* It's not worth failing to build for something as obscure as inverted teletext */
 #ifdef VBI_SLICED_TELETEXT_INVERTED
@@ -83,6 +81,17 @@ static void set_teletext_flags( obe_sdi_non_display_data_t *non_display_data )
 
     non_display_data->has_vbi_frame = non_display_data->teletext_location == TELETEXT_LOCATION_DVB_VBI ||
                                       non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX_AND_VBI;
+}
+
+static int get_vbi_type( int sliced_type )
+{
+    for( int i = 0; vbi_type_tab[i][0] != -1; i++ )
+    {
+        if( vbi_type_tab[i][0] & sliced_type )
+            return vbi_type_tab[i][1];
+    }
+
+    return -1;
 }
 
 int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data )
@@ -129,13 +138,19 @@ int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data )
     return 0;
 }
 
+#define REMOVE_LINES( num_lines ) \
+    memmove( &sliced[i], &sliced[i+(num_lines)], (decoded_lines-i-(num_lines)) * sizeof(vbi_sliced) ); \
+    if( decoded_lines >= num_lines )  \
+        decoded_lines -= num_lines; \
+    i--; \
+
 int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, obe_raw_frame_t *raw_frame )
 {
     unsigned int decoded_lines; /* unsigned for libzvbi */
     vbi_sliced *sliced;
     obe_int_frame_data_t *tmp, *frame_data;
     obe_user_data_t *tmp2, *user_data;
-    int j, found;
+    int j, vbi_type, found;
 
     sliced = non_display_data->vbi_slices;
     memset( sliced, 0, sizeof(non_display_data->vbi_slices) );
@@ -152,17 +167,11 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             i++; /* skip field two */
         else
         {
-            for( j = 0; vbi_type_tab[j][0] != -1; j++ )
-            {
-                if( sliced[i].id == vbi_type_tab[j][0] )
-                    break;
-            }
+            vbi_type = get_vbi_type( sliced[i].id );
 
-            if( vbi_type_tab[j][0] == -1 )
+            if( vbi_type == -1 )
             {
-                memmove( &sliced[i], &sliced[i+1], (decoded_lines-i-1) * sizeof(vbi_sliced) );
-                if( decoded_lines )
-                    decoded_lines--;
+                REMOVE_LINES( 1 );
             }
         }
     }
@@ -175,37 +184,38 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
         for( int i = 0; i < decoded_lines; i++ )
         {
             found = 0;
-            for( j = 0; vbi_type_tab[j][0] != -1; j++ )
-            {
-                if( vbi_type_tab[j][0] == sliced[i].id )
-                    break;
-            }
+            vbi_type = get_vbi_type( sliced[i].id );
 
             /* Don't duplicate services */
-            for( int k = 0; k < non_display_data->num_frame_data; k++ )
+            if( check_probed_non_display_data( non_display_data, vbi_type ) )
             {
-                if( vbi_type_tab[j][1] == non_display_data->frame_data[k].type )
+                /* FIXME: deal with ANC VBI */
+                frame_data = NULL; /* shut up gcc */
+                for( j = 0; j < non_display_data->num_frame_data; j++ )
                 {
-                    /* FIXME: deal with ANC VBI */
-                    non_display_data->frame_data[k].lines[non_display_data->frame_data[k].num_lines++]= sliced[i].line;
-                    found = 1;
-                    break;
+                    frame_data = &non_display_data->frame_data[j];
+                    if( frame_data->type == vbi_type )
+                        break;
                 }
 
-                /* AFD is a superset of WSS so don't duplicate it */
-                if( vbi_type_tab[j][1] == MISC_WSS && non_display_data->frame_data[k].type == MISC_AFD )
-                {
-                    found = 1;
-                    break;
-                }
+                frame_data->lines[frame_data->num_lines++]= sliced[i].line;
+                found = 1;
+            }
+
+            /* AFD is a superset of WSS so don't duplicate it
+	     * TODO: have a user mode where WSS is converted to AFD without any DVB-VBI PID */
+            if( vbi_type == MISC_WSS && check_probed_non_display_data( non_display_data, MISC_AFD ) )
+            {
+                found = 1;
+                break;
             }
 
             if( found )
                 continue;
 
-            if( vbi_type_tab[j][1] == MISC_TELETEXT )
+            if( vbi_type == MISC_TELETEXT )
                 set_teletext_flags( non_display_data );
-            else if( vbi_type_tab[j][1] != CAPTIONS_CEA_608 )
+            else if( vbi_type != CAPTIONS_CEA_608 )
                 non_display_data->has_vbi_frame = 1;
 
             tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+1) * sizeof(*non_display_data->frame_data) );
@@ -214,7 +224,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
 
             non_display_data->frame_data = tmp;
             frame_data = &non_display_data->frame_data[non_display_data->num_frame_data++];
-            frame_data->type = vbi_type_tab[j][1];
+            frame_data->type = vbi_type;
             frame_data->source = VBI_RAW;
             frame_data->num_lines = 0;
             frame_data->lines[frame_data->num_lines++] = sliced[i].line;
@@ -243,6 +253,9 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
     }
     else
     {
+        /* When not probing extract all data that goes in MPEG user-data leaving just
+         * the array sliced[] containing data which goes in DVB-VBI */
+
         for( int i = 0; i < decoded_lines; i++ )
         {
             found = 0;
@@ -251,14 +264,8 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             if( sliced[i].id & VBI_SLICED_CAPTION_525 )
             {
                 /* Don't duplicate caption data that already exists */
-                for( j = 0; j < raw_frame->num_user_data; j++ )
-                {
-                    if( raw_frame->user_data[j].type == USER_DATA_CEA_608 || raw_frame->user_data[j].type == USER_DATA_CEA_708_CDP )
-                    {
-                        found = 1;
-                        break;
-                    }
-                }
+                found = check_active_non_display_data( raw_frame, USER_DATA_CEA_608 ) ||
+                        check_active_non_display_data( raw_frame, USER_DATA_CEA_708_CDP );
 
                 int num_lines = 1 + !!(sliced[i+1].id & VBI_SLICED_CAPTION_525);
 
@@ -287,26 +294,23 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                 }
 
                 /* Remove caption fields from the VBI list */
-                memmove( &sliced[i], &sliced[i+num_lines], (decoded_lines-i-num_lines) * sizeof(vbi_sliced) );
-                if( decoded_lines >= num_lines )
-                    decoded_lines -= num_lines;
-                i--;
+                REMOVE_LINES( num_lines );
             }
             else if( sliced[i].id == VBI_SLICED_WSS_625 )
             {
                 /* Don't duplicate AFD data */
-                for( j = 0; j < raw_frame->num_user_data; j++ )
-                {
-                    if( raw_frame->user_data[j].type == USER_DATA_AFD )
-                    {
-                        found = 1;
-                        break;
-                    }
-                }
+                found |= !non_display_data_was_probed( non_display_data->device, MISC_WSS, VBI_RAW, sliced[i].line );
+                found |= check_active_non_display_data( raw_frame, USER_DATA_AFD );
 
-                /* Attach the WSS data to the frame's user data to be converted later to AFD */
-                if( !found )
+                if( found )
                 {
+                    REMOVE_LINES( 1 );
+                }
+                else
+                {
+                    /* Attach the WSS data to the frame's user data to be converted later to AFD */
+                    non_display_data->has_vbi_frame = 1;
+
                     tmp2 = realloc( raw_frame->user_data, (raw_frame->num_user_data+1) * sizeof(*raw_frame->user_data) );
                     if( !tmp2 )
                         goto fail;
@@ -323,12 +327,23 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                     user_data->type = USER_DATA_WSS;
                     user_data->source = VBI_RAW;
                 }
-                non_display_data->has_vbi_frame = 1;
             }
-            else if( sliced[i].id & VBI_SLICED_TELETEXT_B )
-                set_teletext_flags( non_display_data );
             else
-                non_display_data->has_vbi_frame = 1;
+            {
+                vbi_type = get_vbi_type( sliced[i].id );
+
+                if( !non_display_data_was_probed( non_display_data->device, vbi_type, VBI_RAW, sliced[i].line ) )
+                {
+                    REMOVE_LINES( 1 );
+                }
+                else
+                {
+                    if( sliced[i].id & VBI_SLICED_TELETEXT_B )
+                        set_teletext_flags( non_display_data );
+                    else
+                        non_display_data->has_vbi_frame = 1;
+                }
+            }
         }
         non_display_data->num_vbi = decoded_lines;
     }
@@ -370,11 +385,8 @@ int decode_video_index_information( obe_sdi_non_display_data_t *non_display_data
         if( non_display_data->probe )
         {
             /* TODO: output both AFD sources and let user choose */
-            for( int i = 0; i < non_display_data->num_frame_data; i++ )
-            {
-               if( non_display_data->frame_data[i].type == MISC_AFD )
-                   return 0;
-            }
+            if( check_probed_non_display_data( non_display_data, MISC_AFD ) )
+                return 0;
 
             tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+1) * sizeof(*non_display_data->frame_data) );
             if( !tmp )
@@ -391,11 +403,8 @@ int decode_video_index_information( obe_sdi_non_display_data_t *non_display_data
         else
         {
             /* TODO: follow user instructions and/or fallback */
-            for( int i = 0; i < raw_frame->num_user_data; i++ )
-            {
-                if( raw_frame->user_data[i].type == USER_DATA_AFD )
-                    return 0;
-            }
+            if( check_active_non_display_data( raw_frame, USER_DATA_AFD ) )
+                return 0;
 
             tmp2 = realloc( raw_frame->user_data, (raw_frame->num_user_data+1) * sizeof(*raw_frame->user_data) );
             if( !tmp2 )
@@ -519,12 +528,8 @@ int encapsulate_dvb_vbi( obe_sdi_non_display_data_t *non_display_data )
     /* Don't duplicate VBI data from VANC */
     for( int i = 0; i < non_display_data->num_vbi; i++ )
     {
-        type = skip = identifier = 0;
-        for( j = 0; vbi_type_tab[j][0] != -1; j++ )
-        {
-            if( vbi_type_tab[j][0] == non_display_data->vbi_slices[i].id )
-                type = vbi_type_tab[j][1];
-        }
+        skip = identifier = 0;
+        type = get_vbi_type( non_display_data->vbi_slices[i].id );
 
         for( j = 0; j < non_display_data->num_anc_vbi; j++ )
         {

@@ -39,6 +39,9 @@ static int get_vanc_type( uint8_t did, uint8_t sdid )
     return -1;
 }
 
+/* TODO: check parity, ideally using x86's PF
+ *       check if the packet length is sane */
+
 static int parse_afd( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame, uint16_t *line, int line_number )
 {
     obe_int_frame_data_t *tmp, *frame_data;
@@ -53,12 +56,9 @@ static int parse_afd( obe_sdi_non_display_data_t *non_display_data, obe_raw_fram
     /* AFD is duplicated on the second field so skip it if we've already detected it */
     if( non_display_data->probe )
     {
-        for( int i = 0; i < non_display_data->num_frame_data; i++ )
-        {
-            /* TODO: mention existence of second line of AFD */
-            if( non_display_data->frame_data[i].type == MISC_AFD )
-                return 0;
-        }
+        /* TODO: mention existence of second line of AFD? */
+        if( check_probed_non_display_data( non_display_data, MISC_AFD ) )
+            return 0;
 
         tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+2) * sizeof(*non_display_data->frame_data) );
         if( !tmp )
@@ -87,11 +87,11 @@ static int parse_afd( obe_sdi_non_display_data_t *non_display_data, obe_raw_fram
         return 0;
     }
 
-    for( int i = 0; i < raw_frame->num_user_data; i++ )
-    {
-        if( raw_frame->user_data[i].type == USER_DATA_AFD )
-            return 0;
-    }
+    if( !non_display_data_was_probed( non_display_data->device, MISC_AFD, VANC_GENERIC, line_number ) )
+        return 0;
+
+    if( check_active_non_display_data( raw_frame, USER_DATA_AFD ) )
+        return 0;
 
     tmp2 = realloc( raw_frame->user_data, (raw_frame->num_user_data+2) * sizeof(*raw_frame->user_data) );
     if( !tmp2 )
@@ -166,12 +166,9 @@ static int parse_dvb_scte_vbi( obe_sdi_non_display_data_t *non_display_data, obe
     if( non_display_data->probe )
     {
         /* Don't duplicate VBI streams */
-        for( int j = 0; j < non_display_data->num_frame_data; j++ )
-        {
-            /* TODO: mention existence of multiple lines of VBI */
-            if( data_indentifier_table[i][1] == non_display_data->frame_data[j].type )
-                return 0;
-        }
+        /* TODO: mention existence of multiple lines of VBI? */
+        if( check_probed_non_display_data( non_display_data, data_indentifier_table[i][1] ) )
+            return 0;
 
         tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+1) * sizeof(*non_display_data->frame_data) );
         if( !tmp )
@@ -188,6 +185,8 @@ static int parse_dvb_scte_vbi( obe_sdi_non_display_data_t *non_display_data, obe
 
         return 0;
     }
+
+    /* TODO: verify line number of VBI */
 
     anc_vbi = &non_display_data->anc_vbi[non_display_data->num_anc_vbi++];
     anc_vbi->identifier = READ_8( line[0] );
@@ -218,14 +217,10 @@ static int parse_cdp( obe_sdi_non_display_data_t *non_display_data, obe_raw_fram
     /* Skip DC word */
     line++;
 
-    /* Don't duplicate caption data */
     if( non_display_data->probe )
     {
-        for( int i = 0; i < non_display_data->num_frame_data; i++ )
-        {
-            if( non_display_data->frame_data[i].type == CAPTIONS_CEA_708 )
-                return 0;
-        }
+        if( check_probed_non_display_data( non_display_data, CAPTIONS_CEA_708 ) )
+            return 0;
 
         tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+1) * sizeof(*non_display_data->frame_data) );
         if( !tmp )
@@ -243,11 +238,11 @@ static int parse_cdp( obe_sdi_non_display_data_t *non_display_data, obe_raw_fram
         return 0;
     }
 
-    for( int i = 0; i < raw_frame->num_user_data; i++ )
-    {
-        if( raw_frame->user_data[i].type == USER_DATA_CEA_708_CDP )
-            return 0;
-    }
+    if( !non_display_data_was_probed( non_display_data->device, CAPTIONS_CEA_708, VANC_GENERIC, line_number ) )
+        return 0;
+
+    if( check_active_non_display_data( raw_frame, USER_DATA_CEA_708_CDP ) )
+        return 0;
 
     tmp2 = realloc( raw_frame->user_data, (raw_frame->num_user_data+1) * sizeof(*raw_frame->user_data) );
     if( !tmp2 )

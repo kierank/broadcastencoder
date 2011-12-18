@@ -1058,6 +1058,7 @@ static void *open_input( void *ptr )
 
     non_display_parser = &decklink_ctx->non_display_parser;
     non_display_parser->teletext_location = device->user_opts.teletext_location;
+    non_display_parser->device = device;
 
     /* TODO: wait for encoder */
 
