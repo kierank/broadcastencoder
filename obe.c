@@ -987,7 +987,7 @@ int obe_start( obe_t *h )
                 if( h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
                 {
                     /* This doesn't need to be particularly accurate since x264 calculates the correct value internally */
-                    x264_param->rc.i_vbv_buffer_size = (double)x264_param->rc.i_vbv_max_bitrate * x264_param->i_fps_num / x264_param->i_fps_den;
+                    x264_param->rc.i_vbv_buffer_size = (double)x264_param->rc.i_vbv_max_bitrate * x264_param->i_fps_den / x264_param->i_fps_num;
                 }
 
                 vid_enc_params = calloc( 1, sizeof(*vid_enc_params) );
