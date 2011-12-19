@@ -1034,7 +1034,7 @@ int obe_start( obe_t *h )
 
                 /* Choose the optimal number of audio frames per PES
 		 * TODO: E-AC3 (Needs T-STD information!), low-latency modifications */
-                if( !h->output_streams[i].ts_opts.frames_per_pes &&
+                if( !h->output_streams[i].ts_opts.frames_per_pes && h->obe_system != OBE_SYSTEM_TYPE_LOW_LATENCY &&
                     ( h->output_streams[i].stream_format == AUDIO_MP2 || h->output_streams[i].stream_format == AUDIO_AC_3 ) )
                 {
                     int buf_size = h->output_streams[i].stream_format == AUDIO_MP2 ? MISC_AUDIO_BS : AC3_BS_DVB;
