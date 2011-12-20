@@ -535,7 +535,10 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
     av_free( anc_buf );
 
     if( linsys_opts->probe )
-        av_freep( &output->plane[0] );
+    {
+        raw_frame->release_data( raw_frame );
+        raw_frame->release_frame( raw_frame );
+    }
     else
     {
         if( linsys_ctx->has_vanc )

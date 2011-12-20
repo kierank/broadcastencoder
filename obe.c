@@ -56,6 +56,9 @@ obe_device_t *new_device( void )
 
 void destroy_device( obe_device_t *device )
 {
+    for( int i = 0; i < device->num_input_streams; i++ )
+        free( device->streams[i] );
+
     if( device->location )
         free( device->location );
     free( device );
