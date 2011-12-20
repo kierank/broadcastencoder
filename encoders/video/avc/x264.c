@@ -218,6 +218,7 @@ static void *start_encoder( void *ptr )
             coded_frame->is_video = 1;
             coded_frame->len = frame_size;
             coded_frame->cpb_initial_arrival_time = pic_out.hrd_timing.cpb_initial_arrival_time;
+            coded_frame->cpb_final_arrival_time = pic_out.hrd_timing.cpb_final_arrival_time;
             coded_frame->real_dts = pic_out.hrd_timing.cpb_removal_time;
             coded_frame->real_pts = pic_out.hrd_timing.dpb_output_time;
             pts2 = pic_out.opaque;
