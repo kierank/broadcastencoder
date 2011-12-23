@@ -173,7 +173,7 @@ static void *open_output( void *ptr )
     obe_t *h = output_params->h;
     struct rtp_status status;
     hnd_t rtp_handle = NULL;
-    int num_muxed_data = 0;
+    int num_muxed_data = 0, buffer_frames = 0, ready = 0;
     obe_muxed_data_t **muxed_data;
     int64_t last_pcr = -1, last_clock = -1, delta;
     AVFifoBuffer *fifo_data = NULL, *fifo_pcr = NULL;
@@ -205,6 +205,8 @@ static void *open_output( void *ptr )
     if( rtp_open( &rtp_handle, output_params->output_opts.target ) < 0 )
         return NULL;
 
+    buffer_frames = 2;
+
     int64_t start_mpeg_time = 0, start_pcr_time = 0;
 
     while( 1 )
@@ -218,7 +220,26 @@ static void *open_output( void *ptr )
 
         num_muxed_data = h->num_muxed_data;
 
-        // FIXME handle drops
+        /* Refill the buffer after a drop */
+        pthread_mutex_lock( &h->drop_mutex );
+        if( h->output_drop )
+        {
+            syslog( LOG_INFO, "RTP output buffer reset\n" );
+            ready = h->output_drop = 0;
+            last_clock = -1;
+        }
+        pthread_mutex_unlock( &h->drop_mutex );
+
+        if( !ready )
+        {
+            if( num_muxed_data >= buffer_frames )
+                ready = 1;
+            else
+            {
+                pthread_mutex_unlock( &h->output_mutex );
+                continue;
+            }
+        }
 
         muxed_data = malloc( num_muxed_data * sizeof(*muxed_data) );
         if( !muxed_data )

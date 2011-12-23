@@ -380,6 +380,7 @@ typedef struct
 
     /* Video Only */
     int64_t cpb_initial_arrival_time;
+    int64_t cpb_final_arrival_time;
     int64_t real_dts;
     int64_t real_pts;
     int random_access;
