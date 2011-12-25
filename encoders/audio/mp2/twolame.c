@@ -106,7 +106,7 @@ static void *start_encoder( void *ptr )
         if( encoder->cancel_thread )
         {
             pthread_mutex_unlock( &encoder->encoder_mutex );
-            goto end;
+            break;
         }
 
         if( !encoder->num_raw_frames )
@@ -115,7 +115,7 @@ static void *start_encoder( void *ptr )
         if( encoder->cancel_thread )
         {
             pthread_mutex_unlock( &encoder->encoder_mutex );
-            goto end;
+            break;
         }
 
         raw_frame = encoder->frames[0];
@@ -150,7 +150,7 @@ static void *start_encoder( void *ptr )
         if( output_size < 0 )
         {
             syslog( LOG_ERR, "[twolame] Encode failed\n" );
-            goto end;
+            break;
         }
 
         free( audio_buf );
@@ -163,7 +163,7 @@ static void *start_encoder( void *ptr )
         if( av_fifo_realloc2( fifo, av_fifo_size( fifo ) + output_size ) < 0 )
         {
             syslog( LOG_ERR, "Malloc failed\n" );
-            goto end;
+            break;
         }
 
         av_fifo_generic_write( fifo, output_buf, output_size, NULL );
@@ -194,6 +194,9 @@ end:
 
     if( audio_conv )
         av_audio_convert_free( audio_conv );
+
+    if( fifo )
+        av_fifo_free( fifo );
 
     if( tl_opts )
         twolame_close( &tl_opts );

@@ -395,7 +395,7 @@ static int set_input( char *command, obecli_command_t *child )
         if( ttx_location )
             parse_enum_value( ttx_location, ttx_locations, &cli.input.teletext_location );
 
-        free( opts );
+        obe_free_string_array( opts );
     }
     else
     {
@@ -610,7 +610,7 @@ static int set_stream( char *command, obecli_command_t *child )
             }
 
             cli.output_streams[stream_id].ts_opts.pid = obe_otoi( pid, cli.output_streams[stream_id].ts_opts.pid );
-            free( opts );
+            obe_free_string_array( opts );
         }
     }
 
@@ -662,7 +662,7 @@ static int set_muxer( char *command, obecli_command_t *child )
         cli.mux_opts.pcr_pid    = obe_otoi( pcr_pid, cli.mux_opts.pcr_pid  );
         cli.mux_opts.pcr_period = obe_otoi( pcr_period, cli.mux_opts.pcr_period );
         cli.mux_opts.pat_period = obe_otoi( pat_period, cli.mux_opts.pat_period );
-        free( opts );
+        obe_free_string_array( opts );
     }
 
     return 0;
@@ -694,7 +694,7 @@ static int set_output( char *command, obecli_command_t *child )
              FAIL_IF_ERROR( !cli.output.target, "malloc failed\n" );
              strcpy( cli.output.target, target );
         }
-        free( opts );
+        obe_free_string_array( opts );
     }
     else
     {
