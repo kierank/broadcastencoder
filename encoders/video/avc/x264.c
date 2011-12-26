@@ -138,7 +138,7 @@ static void *start_encoder( void *ptr )
         if( encoder->cancel_thread )
         {
             pthread_mutex_unlock( &encoder->encoder_mutex );
-            goto end;
+            break;
         }
 
         if( !encoder->num_raw_frames )
@@ -147,7 +147,7 @@ static void *start_encoder( void *ptr )
         if( encoder->cancel_thread )
         {
             pthread_mutex_unlock( &encoder->encoder_mutex );
-            goto end;
+            break;
         }
 
         /* Reset the speedcontrol buffer if the source has dropped frames. Otherwise speedcontrol
@@ -167,7 +167,7 @@ static void *start_encoder( void *ptr )
         if( convert_obe_to_x264_pic( &pic, raw_frame ) < 0 )
         {
             syslog( LOG_ERR, "Malloc failed\n" );
-            goto end;
+            break;
         }
 
         /* FIXME: if frames are dropped this might not be true */
@@ -176,7 +176,7 @@ static void *start_encoder( void *ptr )
         if( !pts2 )
         {
             syslog( LOG_ERR, "Malloc failed\n" );
-            goto end;
+            break;
         }
         pts2[0] = raw_frame->pts;
         pic.opaque = pts2;
@@ -203,7 +203,7 @@ static void *start_encoder( void *ptr )
         if( frame_size < 0 )
         {
             syslog( LOG_ERR, "x264_encoder_encode failed\n" );
-            goto end;
+            break;
         }
 
         if( frame_size )
@@ -212,7 +212,7 @@ static void *start_encoder( void *ptr )
             if( !coded_frame )
             {
                 syslog( LOG_ERR, "Malloc failed\n" );
-                goto end;
+                break;
             }
             memcpy( coded_frame->data, nal[0].p_payload, frame_size );
             coded_frame->is_video = 1;
