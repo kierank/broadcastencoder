@@ -57,6 +57,8 @@ struct rtp_status
 {
     obe_output_params_t *output_params;
     hnd_t *rtp_handle;
+    AVFifoBuffer *fifo_data;
+    AVFifoBuffer *fifo_pcr;
 };
 
 static int64_t obe_gettime(void)
@@ -161,6 +163,10 @@ static void close_output( void *handle )
 {
     struct rtp_status *status = handle;
 
+    if( status->fifo_data )
+        av_fifo_free( status->fifo_data );
+    if( status->fifo_pcr )
+        av_fifo_free( status->fifo_pcr );
     if( *status->rtp_handle )
         rtp_close( *status->rtp_handle );
     free( status->output_params );
@@ -184,10 +190,6 @@ static void *open_output( void *ptr )
     param.sched_priority = 99;
     pthread_setschedparam( pthread_self(), SCHED_FIFO, &param );
 
-    status.output_params = output_params;
-    status.rtp_handle = &rtp_handle;
-    pthread_cleanup_push( close_output, (void*)&status );
-
     fifo_data = av_fifo_alloc( TS_PACKETS_SIZE );
     if( !fifo_data )
     {
@@ -201,6 +203,12 @@ static void *open_output( void *ptr )
         fprintf( stderr, "[rtp] Could not allocate pcr fifo" );
         return NULL;
     }
+
+    status.output_params = output_params;
+    status.rtp_handle = &rtp_handle;
+    status.fifo_data = fifo_data;
+    status.fifo_pcr = fifo_pcr;
+    pthread_cleanup_push( close_output, (void*)&status );
 
     if( rtp_open( &rtp_handle, output_params->output_opts.target ) < 0 )
         return NULL;

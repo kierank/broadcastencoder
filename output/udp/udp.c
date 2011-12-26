@@ -33,6 +33,7 @@ struct udp_status
     obe_output_params_t *output_params;
     hnd_t *udp_handle;
     AVFifoBuffer *fifo_data;
+    AVFifoBuffer *fifo_pcr;
 };
 
 static void close_output( void *handle )
@@ -41,6 +42,8 @@ static void close_output( void *handle )
 
     if( status->fifo_data )
         av_fifo_free( status->fifo_data );
+    if( status->fifo_pcr )
+        av_fifo_free( status->fifo_pcr );
     if( *status->udp_handle )
         udp_close( *status->udp_handle );
     free( status->output_params );
@@ -70,17 +73,18 @@ static void *open_output( void *ptr )
         return NULL;
     }
 
-    status.output_params = output_params;
-    status.udp_handle = &udp_handle;
-    status.fifo_data = fifo_data;
-    pthread_cleanup_push( close_output, (void*)&status );
-
     fifo_pcr = av_fifo_alloc( 7 * sizeof(int64_t) );
     if( !fifo_pcr )
     {
         fprintf( stderr, "[udp] Could not allocate pcr fifo" );
         return NULL;
     }
+
+    status.output_params = output_params;
+    status.udp_handle = &udp_handle;
+    status.fifo_data = fifo_data;
+    status.fifo_pcr = fifo_pcr;
+    pthread_cleanup_push( close_output, (void*)&status );
 
     if( udp_open( &udp_handle, output_params->output_opts.target ) < 0 )
     {
