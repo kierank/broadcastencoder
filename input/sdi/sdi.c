@@ -210,7 +210,7 @@ int non_display_data_was_probed( obe_device_t *device, int type, int source, int
      * we can't yet reconfigure the mux to add DVB-VBI streams in OBE */
 
     /* FIXME: shall we be picky about changes in line number? */
-    obe_int_input_stream_t *stream;
+    obe_int_input_stream_t *stream = NULL;
 
     int location = get_non_display_location( type );
 
@@ -223,10 +223,15 @@ int non_display_data_was_probed( obe_device_t *device, int type, int source, int
     {
         for( int i = 0; device->num_input_streams; i++ )
         {
-            stream = device->streams[i];
-            if( stream->stream_format == MISC_TELETEXT || stream->stream_format == VBI_RAW )
+            if( device->streams[i]->stream_format == MISC_TELETEXT || device->streams[i]->stream_format == VBI_RAW )
+            {
+                stream = device->streams[i];
                 break;
+            }
         }
+
+        if( !stream )
+            return 0;
     }
 
     for( int i = 0; stream->num_frame_data; i++ )
