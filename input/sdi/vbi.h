@@ -66,7 +66,6 @@ const static int data_indentifier_table[][2] =
 int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data );
 int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, obe_raw_frame_t *raw_frame );
 int decode_video_index_information( obe_sdi_non_display_data_t *non_display_data, uint16_t *line, obe_raw_frame_t *raw_frame, int line_number );
-int encapsulate_dvb_vbi( obe_sdi_non_display_data_t *non_display_data );
-int encapsulate_dvb_ttx( obe_sdi_non_display_data_t *non_display_data );
+int send_vbi_and_ttx( obe_t *h, obe_sdi_non_display_data_t *non_display_parser, obe_device_t *device, int64_t pts );
 
 #endif

@@ -209,7 +209,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     void *frame_bytes, *anc_line;
     obe_t *h = decklink_ctx->h;
     int finished = 0, ret, bytes, num_anc_lines = 0, anc_line_stride,
-    lines_read = 0, first_line = 0, last_line = 0, line, num_vbi_lines, vii_line, stream_id;
+    lines_read = 0, first_line = 0, last_line = 0, line, num_vbi_lines, vii_line;
     uint32_t *frame_ptr;
     uint16_t *anc_buf, *anc_buf_pos;
     uint8_t *vbi_buf;
@@ -420,8 +420,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             }
 
             /* If AFD is present and the stream is SD this will be changed in the video filter */
-            raw_frame->sar_width = 1;
-            raw_frame->sar_height = 1;
+            raw_frame->sar_width = raw_frame->sar_height = 1;
 
             BMDTimeValue stream_time, frame_duration;
             videoframe->GetStreamTime( &stream_time, &frame_duration, OBE_CLOCK );
@@ -433,57 +432,11 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                     raw_frame->stream_id = decklink_ctx->device->streams[i]->stream_id;
             }
 
-            add_to_filter_queue( h, raw_frame );
+            if( add_to_filter_queue( h, raw_frame ) < 0 )
+                goto fail;
 
-            /* Send any DVB-VBI frames */
-            if( decklink_ctx->non_display_parser.has_vbi_frame )
-            {
-                stream_id = -1;
-                // FIXME when we make streams selectable
-                for( int i = 0; i < decklink_ctx->device->num_input_streams; i++ )
-                {
-                    if( decklink_ctx->device->streams[i]->stream_format == VBI_RAW )
-                        stream_id = decklink_ctx->device->streams[i]->stream_id;
-                }
-
-                if( stream_id >= 0 )
-                {
-                    if( encapsulate_dvb_vbi( &decklink_ctx->non_display_parser ) < 0 )
-                        goto fail;
-
-                    decklink_ctx->non_display_parser.dvb_vbi_frame->stream_id = stream_id;
-                    decklink_ctx->non_display_parser.dvb_vbi_frame->pts = stream_time;
-
-                    add_to_mux_queue( h, decklink_ctx->non_display_parser.dvb_vbi_frame );
-                }
-                decklink_ctx->non_display_parser.dvb_vbi_frame = NULL;
-                decklink_ctx->non_display_parser.has_vbi_frame = 0;
-            }
-
-            /* Send any DVB-TTX frames */
-            if( decklink_ctx->non_display_parser.has_ttx_frame )
-            {
-                stream_id = -1;
-                // FIXME when we make streams selectable
-                for( int i = 0; i < decklink_ctx->device->num_input_streams; i++ )
-                {
-                    if( decklink_ctx->device->streams[i]->stream_format == MISC_TELETEXT )
-                        stream_id = decklink_ctx->device->streams[i]->stream_id;
-                }
-
-                if( stream_id >= 0 )
-                {
-                    if( encapsulate_dvb_ttx( &decklink_ctx->non_display_parser ) < 0 )
-                        goto fail;
-
-                    decklink_ctx->non_display_parser.dvb_ttx_frame->stream_id = stream_id;
-                    decklink_ctx->non_display_parser.dvb_ttx_frame->pts = stream_time;
-
-                    add_to_mux_queue( h, decklink_ctx->non_display_parser.dvb_ttx_frame );
-                }
-                decklink_ctx->non_display_parser.dvb_ttx_frame = NULL;
-                decklink_ctx->non_display_parser.has_ttx_frame = 0;
-            }
+            if( send_vbi_and_ttx( h, &decklink_ctx->non_display_parser, decklink_ctx->device, raw_frame->pts ) < 0 )
+                goto fail;
 
             decklink_ctx->non_display_parser.num_vbi = 0;
             decklink_ctx->non_display_parser.num_anc_vbi = 0;
@@ -530,7 +483,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 raw_frame->stream_id = decklink_ctx->device->streams[i]->stream_id;
         }
 
-        add_to_encode_queue( decklink_ctx->h, raw_frame );
+        if( add_to_encode_queue( decklink_ctx->h, raw_frame ) < 0 )
+            goto fail;
     }
 
 end:

@@ -280,7 +280,7 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
     linsys_ctx_t *linsys_ctx = &linsys_opts->linsys_ctx;
     obe_t *h = linsys_ctx->h;
     obe_raw_frame_t *raw_frame = NULL;
-    int num_anc_lines = 0, anc_line_stride, first_line = 0, last_line = 0, cur_line, num_vbi_lines, vii_line, tmp_line, stream_id;
+    int num_anc_lines = 0, anc_line_stride, first_line = 0, last_line = 0, cur_line, num_vbi_lines, vii_line, tmp_line;
     uint16_t *anc_buf = NULL, *anc_buf_pos = NULL;
     uint16_t *y_src, *u_src, *v_src;
     uint8_t *vbi_buf;
@@ -593,62 +593,14 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
         }
 
         /* If AFD is present and the stream is SD this will be changed in the video filter */
-        raw_frame->sar_width = 1;
-        raw_frame->sar_height = 1;
-
+        raw_frame->sar_width = raw_frame->sar_height = 1;
         raw_frame->pts = pts = av_rescale_q( linsys_ctx->v_counter++, linsys_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
 
-        add_to_filter_queue( h, raw_frame );
+        if( add_to_filter_queue( h, raw_frame ) < 0 )
+            goto fail;
 
-        /* Send any DVB-VBI frames */
-        if( linsys_ctx->non_display_parser.has_vbi_frame )
-        {
-            stream_id = -1;
-            // FIXME when we make streams selectable
-            for( int i = 0; i < linsys_ctx->device->num_input_streams; i++ )
-            {
-                if( linsys_ctx->device->streams[i]->stream_format == VBI_RAW )
-                    stream_id = linsys_ctx->device->streams[i]->stream_id;
-            }
-
-            if( stream_id >= 0 )
-            {
-                if( encapsulate_dvb_vbi( &linsys_ctx->non_display_parser ) < 0 )
-                    goto fail;
-
-                linsys_ctx->non_display_parser.dvb_vbi_frame->stream_id = stream_id;
-                linsys_ctx->non_display_parser.dvb_vbi_frame->pts = pts;
-
-                add_to_mux_queue( h, linsys_ctx->non_display_parser.dvb_vbi_frame );
-            }
-            linsys_ctx->non_display_parser.dvb_vbi_frame = NULL;
-            linsys_ctx->non_display_parser.has_vbi_frame = 0;
-        }
-
-        /* Send any DVB-TTX frames */
-        if( linsys_ctx->non_display_parser.has_ttx_frame )
-        {
-            stream_id = -1;
-            // FIXME when we make streams selectable
-            for( int i = 0; i < linsys_ctx->device->num_input_streams; i++ )
-            {
-                if( linsys_ctx->device->streams[i]->stream_format == MISC_TELETEXT )
-                    stream_id = linsys_ctx->device->streams[i]->stream_id;
-            }
-
-            if( stream_id >= 0 )
-            {
-                if( encapsulate_dvb_ttx( &linsys_ctx->non_display_parser ) < 0 )
-                    goto fail;
-
-                linsys_ctx->non_display_parser.dvb_ttx_frame->stream_id = stream_id;
-                linsys_ctx->non_display_parser.dvb_ttx_frame->pts = pts;
-
-                add_to_mux_queue( h, linsys_ctx->non_display_parser.dvb_ttx_frame );
-            }
-            linsys_ctx->non_display_parser.dvb_ttx_frame = NULL;
-            linsys_ctx->non_display_parser.has_ttx_frame = 0;
-        }
+        if( send_vbi_and_ttx( h, &linsys_ctx->non_display_parser, linsys_ctx->device, pts ) < 0 )
+            goto fail;
 
         linsys_ctx->non_display_parser.num_vbi = 0;
         linsys_ctx->non_display_parser.num_anc_vbi = 0;
@@ -704,7 +656,12 @@ static int handle_audio_frame( linsys_opts_t *linsys_opts, uint8_t *data )
             raw_frame->stream_id = linsys_ctx->device->streams[i]->stream_id;
     }
 
-    add_to_encode_queue( linsys_ctx->h, raw_frame );
+    if( add_to_encode_queue( linsys_ctx->h, raw_frame ) < 0 )
+    {
+        raw_frame->release_data( raw_frame );
+        raw_frame->release_frame( raw_frame );
+        return -1;
+    }
 
     return 0;
 }

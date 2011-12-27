@@ -203,7 +203,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             }
 
             /* AFD is a superset of WSS so don't duplicate it
-	     * TODO: have a user mode where WSS is converted to AFD without any DVB-VBI PID */
+             * TODO: have a user mode where WSS is converted to AFD without any DVB-VBI PID */
             if( vbi_type == MISC_WSS && check_probed_non_display_data( non_display_data, MISC_AFD ) )
             {
                 found = 1;
@@ -495,7 +495,7 @@ static void write_stuffing( bs_t *s )
     }
 }
 
-int encapsulate_dvb_vbi( obe_sdi_non_display_data_t *non_display_data )
+static int encapsulate_dvb_vbi( obe_sdi_non_display_data_t *non_display_data )
 {
     bs_t s, t;
     int type = 0, j, skip, identifier, data_unit_id = 0, stuffing;
@@ -588,7 +588,7 @@ int encapsulate_dvb_vbi( obe_sdi_non_display_data_t *non_display_data )
     return 0;
 }
 
-int encapsulate_dvb_ttx( obe_sdi_non_display_data_t *non_display_data )
+static int encapsulate_dvb_ttx( obe_sdi_non_display_data_t *non_display_data )
 {
     bs_t s;
 
@@ -623,6 +623,71 @@ int encapsulate_dvb_ttx( obe_sdi_non_display_data_t *non_display_data )
     bs_flush( &s );
 
     non_display_data->dvb_ttx_frame->len = bs_pos( &s ) / 8;
+
+    return 0;
+}
+
+int send_vbi_and_ttx( obe_t *h, obe_sdi_non_display_data_t *non_display_parser, obe_device_t *device, int64_t pts )
+{
+    int stream_id;
+
+    /* Send any DVB-VBI frames */
+    if( non_display_parser->has_vbi_frame )
+    {
+        stream_id = -1;
+        // FIXME when we make streams selectable
+        for( int i = 0; i < device->num_input_streams; i++ )
+        {
+            if( device->streams[i]->stream_format == VBI_RAW )
+                stream_id = device->streams[i]->stream_id;
+        }
+
+        if( stream_id >= 0 )
+        {
+            if( encapsulate_dvb_vbi( non_display_parser ) < 0 )
+                return -1;
+
+            non_display_parser->dvb_vbi_frame->stream_id = stream_id;
+            non_display_parser->dvb_vbi_frame->pts = pts;
+
+            if( add_to_mux_queue( h, non_display_parser->dvb_vbi_frame ) < 0 )
+            {
+                destroy_coded_frame( non_display_parser->dvb_ttx_frame );
+                return -1;
+            }
+        }
+        non_display_parser->dvb_vbi_frame = NULL;
+        non_display_parser->has_vbi_frame = 0;
+    }
+
+    /* Send any DVB-TTX frames */
+    if( non_display_parser->has_ttx_frame )
+    {
+        stream_id = -1;
+        // FIXME when we make streams selectable
+        for( int i = 0; i < device->num_input_streams; i++ )
+        {
+            if( device->streams[i]->stream_format == MISC_TELETEXT )
+                stream_id = device->streams[i]->stream_id;
+        }
+
+        if( stream_id >= 0 )
+        {
+            if( encapsulate_dvb_ttx( non_display_parser ) < 0 )
+                return -1;
+
+            non_display_parser->dvb_ttx_frame->stream_id = stream_id;
+            non_display_parser->dvb_ttx_frame->pts = pts;
+
+            if( add_to_mux_queue( h, non_display_parser->dvb_ttx_frame ) < 0 )
+            {
+                destroy_coded_frame( non_display_parser->dvb_ttx_frame );
+                return -1;
+            }
+        }
+        non_display_parser->dvb_ttx_frame = NULL;
+        non_display_parser->has_ttx_frame = 0;
+    }
 
     return 0;
 }
