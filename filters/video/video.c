@@ -558,22 +558,23 @@ static int convert_wss_to_afd( obe_user_data_t *user_data, obe_raw_frame_t *raw_
 
 static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stream_t *input_stream )
 {
-    // TODO handle failures
+    int ret = 0;
+
     for( int i = 0; i < raw_frame->num_user_data; i++ )
     {
         if( raw_frame->user_data[i].type == USER_DATA_CEA_608 )
-            write_608_cc( &raw_frame->user_data[i], input_stream );
+            ret = write_608_cc( &raw_frame->user_data[i], input_stream );
         else if( raw_frame->user_data[i].type == USER_DATA_CEA_708_CDP )
-            write_cdp( &raw_frame->user_data[i] );
+            ret = write_cdp( &raw_frame->user_data[i] );
         else if( raw_frame->user_data[i].type == USER_DATA_AFD )
-            write_afd( &raw_frame->user_data[i], raw_frame );
+            ret = write_afd( &raw_frame->user_data[i], raw_frame );
         else if( raw_frame->user_data[i].type == USER_DATA_BAR_DATA )
-            write_bar_data( &raw_frame->user_data[i] );
+            ret = write_bar_data( &raw_frame->user_data[i] );
         else if( raw_frame->user_data[i].type == USER_DATA_WSS )
-            convert_wss_to_afd( &raw_frame->user_data[i], raw_frame );
+            ret = convert_wss_to_afd( &raw_frame->user_data[i], raw_frame );
     }
 
-    return 0;
+    return ret;
 }
 
 void *start_filter( void *ptr )
