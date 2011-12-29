@@ -572,6 +572,9 @@ static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stre
             ret = write_bar_data( &raw_frame->user_data[i] );
         else if( raw_frame->user_data[i].type == USER_DATA_WSS )
             ret = convert_wss_to_afd( &raw_frame->user_data[i], raw_frame );
+
+        if( ret < 0 )
+            break;
     }
 
     return ret;
