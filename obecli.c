@@ -81,7 +81,7 @@ static const char * stream_opts[] = { "action", "format",
                                       /* Encoding options */
                                       "vbv-maxrate", "vbv-bufsize", "bitrate", "sar-width", "sar-height",
                                       "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", "weightp",
-                                      "interlaced", "tff", "frame-packing", "csp",
+                                      "interlaced", "tff", "frame-packing", "csp", "filler",
                                       /* AAC options */
                                       "aac-encap",
                                       /* TS options */
@@ -418,13 +418,14 @@ static int set_stream( char *command, obecli_command_t *child )
             char *tff         = obe_get_option( stream_opts[16], opts );
             char *frame_packing = obe_get_option( stream_opts[17], opts );
             char *csp         = obe_get_option( stream_opts[18], opts );
+            char *filler      = obe_get_option( stream_opts[19], opts );
 
-            char *aac_encap   = obe_get_option( stream_opts[19], opts );
+            char *aac_encap   = obe_get_option( stream_opts[20], opts );
 
             /* NB: remap these and the ttx values below if more encoding options are added - TODO: split them up */
-            char *pid         = obe_get_option( stream_opts[20], opts );
-            char *lang        = obe_get_option( stream_opts[21], opts );
-            char *audio_type  = obe_get_option( stream_opts[22], opts );
+            char *pid         = obe_get_option( stream_opts[21], opts );
+            char *lang        = obe_get_option( stream_opts[22], opts );
+            char *audio_type  = obe_get_option( stream_opts[23], opts );
 
             if( cli.program.streams[stream_id].stream_type == STREAM_TYPE_VIDEO )
             {
@@ -477,6 +478,9 @@ static int set_stream( char *command, obecli_command_t *child )
                     if( X264_BIT_DEPTH == 10 )
                         avc_param->i_csp |= X264_CSP_HIGH_DEPTH;
                 }
+
+                if( filler ) 
+                    avc_param->i_nal_hrd = obe_otob( filler, 0 ) ? X264_NAL_HRD_FAKE_VBR : X264_NAL_HRD_FAKE_CBR;
 
                 /* Turn on the 3DTV mux option automatically */
                 if( avc_param->i_frame_packing >= 0 )
@@ -540,10 +544,10 @@ static int set_stream( char *command, obecli_command_t *child )
                      cli.program.streams[stream_id].stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
-                char *ttx_lang = obe_get_option( stream_opts[24], opts );
-                char *ttx_type = obe_get_option( stream_opts[25], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[26], opts );
-                char *ttx_page = obe_get_option( stream_opts[27], opts );
+                char *ttx_lang = obe_get_option( stream_opts[25], opts );
+                char *ttx_type = obe_get_option( stream_opts[26], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[27], opts );
+                char *ttx_page = obe_get_option( stream_opts[28], opts );
 
                 FAIL_IF_ERROR( ttx_type && ( check_enum_value( ttx_type, teletext_types ) < 0 ),
                                "Invalid Teletext type\n" );
