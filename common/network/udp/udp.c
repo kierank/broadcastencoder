@@ -39,28 +39,50 @@ typedef struct
     int dest_addr_len;
     int is_connected;
     int max_packet_size;
+    int miface;
 } obe_udp_ctx;
 
-static int udp_set_multicast_ttl( int sockfd, int mcast_ttl, struct sockaddr *addr )
+static int udp_set_multicast_opts( int sockfd, obe_udp_ctx *s )
 {
-#ifdef IP_MULTICAST_TTL
+    struct sockaddr *addr = (struct sockaddr *)&s->dest_addr;
+
     if( addr->sa_family == AF_INET )
     {
-        if( setsockopt( sockfd, IPPROTO_IP, IP_MULTICAST_TTL, &mcast_ttl, sizeof(mcast_ttl) ) < 0 )
+#ifdef IP_MULTICAST_TTL
+        if( setsockopt( sockfd, IPPROTO_IP, IP_MULTICAST_TTL, &s->ttl, sizeof(s->ttl) ) < 0 )
         {
-            fprintf( stderr, "[udp] Could not setup IPv4 multicast" );
+            fprintf( stderr, "[udp] Could not setup IPv4 multicast\n" );
             return -1;
         }
-    }
 #endif
-#if defined(IPPROTO_IPV6) && defined(IPV6_MULTICAST_HOPS)
+
+#ifdef IP_MULTICAST_IF
+        struct ip_mreqn req = { .imr_ifindex = s->miface };
+        if( setsockopt( sockfd, IPPROTO_IP, IP_MULTICAST_IF, &req, sizeof(req) ) < 0 )
+        {
+            fprintf( stderr, "[udp] Could not setup multicast interface\n" );
+            return -1;
+        }
+#endif
+    }
+
+#ifdef IPPROTO_IPV6
     if( addr->sa_family == AF_INET6 )
     {
-        if( setsockopt( sockfd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &mcast_ttl, sizeof(mcast_ttl) ) < 0 )
+#ifdef IPV6_MULTICAST_HOPS
+        if( setsockopt( sockfd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &s->ttl, sizeof(s->ttl) ) < 0 )
         {
-            fprintf( stderr, "[udp] Could not setup IPv6 multicast" );
+            fprintf( stderr, "[udp] Could not setup IPv6 multicast\n" );
             return -1;
         }
+#endif
+#ifdef IPV6_MULTICAST_IF
+        if( setsockopt( sockfd, IPPROTO_IPV6, IPV6_MULTICAST_IF, &s->miface, sizeof(s->miface) ) < 0 )
+        {
+            fprintf( stderr, "[udp] Could not setup IPv6 multicast interface\n" );
+            return -1;
+        }
+#endif
     }
 #endif
     return 0;
@@ -251,6 +273,9 @@ int udp_open( hnd_t *p_handle, char *uri )
 
         if( av_find_info_tag( buf, sizeof(buf), "connect", p ) )
             s->is_connected = strtol( buf, NULL, 10 );
+
+        if( av_find_info_tag( buf, sizeof(buf), "miface", p ) )
+            s->miface = if_nametoindex( buf );
     }
 
     /* fill the dest addr */
@@ -283,7 +308,7 @@ int udp_open( hnd_t *p_handle, char *uri )
     s->local_port = udp_port( &my_addr, len );
 
     /* set output multicast ttl */
-    if( s->is_multicast && udp_set_multicast_ttl( udp_fd, s->ttl, (struct sockaddr *)&s->dest_addr ) < 0 )
+    if( s->is_multicast && udp_set_multicast_opts( udp_fd, s ) < 0 )
         goto fail;
 
     /* limit the tx buf size to limit latency */
@@ -301,6 +326,7 @@ int udp_open( hnd_t *p_handle, char *uri )
  fail:
     if( udp_fd >= 0 )
         close( udp_fd );
+
     free( s );
     return -1;
 }
@@ -317,7 +343,7 @@ int udp_write( hnd_t handle, uint8_t *buf, int size )
 
     if( ret < 0 )
     {
-        syslog( LOG_WARNING, "UDP packet failed to send" );
+        syslog( LOG_WARNING, "UDP packet failed to send\n" );
         return -1;
     }
 

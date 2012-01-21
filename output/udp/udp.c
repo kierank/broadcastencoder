@@ -69,14 +69,14 @@ static void *open_output( void *ptr )
     fifo_data = av_fifo_alloc( TS_PACKETS_SIZE );
     if( !fifo_data )
     {
-        fprintf( stderr, "[udp] Could not allocate data fifo" );
+        fprintf( stderr, "[udp] Could not allocate data fifo\n" );
         return NULL;
     }
 
     fifo_pcr = av_fifo_alloc( 7 * sizeof(int64_t) );
     if( !fifo_pcr )
     {
-        fprintf( stderr, "[udp] Could not allocate pcr fifo" );
+        fprintf( stderr, "[udp] Could not allocate pcr fifo\n" );
         return NULL;
     }
 
@@ -88,7 +88,7 @@ static void *open_output( void *ptr )
 
     if( udp_open( &udp_handle, output_params->output_opts.target ) < 0 )
     {
-        fprintf( stderr, "[udp] Could not create output" );
+        fprintf( stderr, "[udp] Could not create output\n" );
         return NULL;
     }
 
