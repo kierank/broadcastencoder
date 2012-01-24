@@ -93,7 +93,7 @@ static void *start_smoothing( void *ptr )
         {
             if( num_smoothing_frames >= buffer_frames )
             {
-                if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
+                if( h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
                 {
                     /* Use a 30ms dejitter buffer. FIXME: is this enough */
                     sleep_mpeg_ticks( 810000 );
