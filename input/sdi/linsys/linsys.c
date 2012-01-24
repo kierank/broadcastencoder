@@ -326,6 +326,7 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
 
     raw_frame->release_data = obe_release_video_data;
     raw_frame->release_frame = obe_release_frame;
+    raw_frame->arrival_time = linsys_ctx->last_frame_time;
 
     output->csp = PIX_FMT_YUV422P10;
     output->planes = av_pix_fmt_descriptors[output->csp].nb_components;

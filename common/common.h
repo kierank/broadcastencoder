@@ -315,6 +315,7 @@ typedef struct
     obe_image_t img;
     int sar_width;
     int sar_height;
+    int64_t arrival_time;
 
     /* Ancillary / User-data */
     int num_user_data;
@@ -385,6 +386,7 @@ typedef struct
     int64_t real_pts;
     int random_access;
     int priority;
+    int64_t arrival_time;
 
     int len;
     uint8_t *data;
