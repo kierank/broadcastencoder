@@ -92,7 +92,7 @@ static void *open_output( void *ptr )
         return NULL;
     }
 
-    buffer_frames = 2;
+    buffer_frames = h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY ? 0 : 2;
 
     int64_t start_mpeg_time = 0, start_pcr_time = 0;
 
