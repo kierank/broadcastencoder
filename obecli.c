@@ -479,7 +479,7 @@ static int set_stream( char *command, obecli_command_t *child )
                         avc_param->i_csp |= X264_CSP_HIGH_DEPTH;
                 }
 
-                if( filler ) 
+                if( filler )
                     avc_param->i_nal_hrd = obe_otob( filler, 0 ) ? X264_NAL_HRD_FAKE_CBR : X264_NAL_HRD_FAKE_VBR;
 
                 /* Turn on the 3DTV mux option automatically */
@@ -815,6 +815,12 @@ static int start_encode( char *command, obecli_command_t *child )
         {
             FAIL_IF_ERROR( !cli.output_streams[i].avc_param.rc.i_vbv_buffer_size,
                            "No VBV buffer size chosen\n" );
+
+            FAIL_IF_ERROR( !cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate && !cli.output_streams[i].avc_param.rc.i_bitrate,
+                           "No bitrate chosen\n" );
+
+            if( cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate && !cli.output_streams[i].avc_param.rc.i_bitrate )
+                cli.output_streams[i].avc_param.rc.i_bitrate = cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate;
 
             cli.output_streams[i].stream_action = STREAM_ENCODE;
             cli.output_streams[i].stream_format = VIDEO_AVC;

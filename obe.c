@@ -770,6 +770,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     param->b_vfr_input = 0;
     param->b_pic_struct = 1;
     param->b_open_gop = 1;
+    param->rc.i_rc_method = X264_RC_ABR;
 
     param->i_width = stream->width;
     param->i_height = stream->height;
