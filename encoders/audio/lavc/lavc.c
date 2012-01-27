@@ -50,16 +50,17 @@ static void *start_encoder( void *ptr )
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
     int64_t cur_pts = -1;
-    int i, frame_size = 0, output_frame_size, frame_samples_size, is_latm;
+    int i, frame_size = 0, ret, frame_samples_size, is_latm, got_pkt;
     void *audio_buf = NULL, *samples = NULL;
     AVFifoBuffer *in_fifo = NULL, *out_fifo = NULL;
-    uint8_t *output_buf = NULL, *avio_buf = NULL;
+    uint8_t *avio_buf = NULL;
     AVAudioConvert *audio_conv = NULL;
     AVFormatContext *fmt = NULL;
     AVStream *st = NULL;
     AVPacket pkt;
     AVIOContext *avio = NULL;
     AVCodecContext *codec = NULL;
+    AVFrame frame;;
 
     avcodec_register_all();
 
@@ -131,6 +132,8 @@ static void *start_encoder( void *ptr )
     codec->sample_fmt = enc->sample_fmts[0];
     codec->channels = enc_params->num_channels;
     codec->channel_layout = AV_CH_LAYOUT_STEREO;
+    codec->time_base.num = 1;
+    codec->time_base.den = OBE_CLOCK;
 
     if( avcodec_open2( codec, enc, NULL ) < 0 )
     {
@@ -179,13 +182,6 @@ static void *start_encoder( void *ptr )
         goto finish;
     }
 
-    output_buf = malloc( FF_MIN_BUFFER_SIZE );
-    if( !output_buf )
-    {
-        fprintf( stderr, "Malloc failed\n" );
-        goto finish;
-    }
-
     frame_samples_size = codec->frame_size * enc_params->num_channels * out_stride;
 
     samples = malloc( frame_samples_size );
@@ -194,6 +190,8 @@ static void *start_encoder( void *ptr )
         fprintf( stderr, "Malloc failed\n" );
         goto finish;
     }
+
+    avcodec_get_frame_defaults( &frame );
 
     while( 1 )
     {
@@ -238,7 +236,7 @@ static void *start_encoder( void *ptr )
 
         if( av_audio_convert( audio_conv, obuf, ostride, ibuf, istride, num_samples ) < 0 )
         {
-            syslog( LOG_ERR, "[lavf] Could not convert audio sample format\n" );
+            syslog( LOG_ERR, "[lavc] Could not convert audio sample format\n" );
             goto finish;
         }
 
@@ -249,31 +247,38 @@ static void *start_encoder( void *ptr )
         }
 
         av_fifo_generic_write( in_fifo, audio_buf, sample_bytes, NULL );
-
-        free( audio_buf );
-        audio_buf = NULL;
+        av_freep( &audio_buf );
 
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
         remove_frame_from_encode_queue( encoder );
 
+        av_init_packet( &pkt );
+
         while( av_fifo_size( in_fifo ) >= frame_samples_size )
         {
             av_fifo_generic_read( in_fifo, samples, frame_samples_size, NULL );
 
-            output_frame_size = avcodec_encode_audio( codec, output_buf, FF_MIN_BUFFER_SIZE, samples );
-            if( output_frame_size < 0 )
+            frame.data[0] = samples;
+            frame.linesize[0] = frame_samples_size;
+            frame.nb_samples = codec->frame_size;
+
+            pkt.data = NULL;
+            pkt.size = 0;
+
+            ret = avcodec_encode_audio2( codec, &pkt, &frame, &got_pkt );
+            if( ret < 0 )
             {
-                syslog( LOG_ERR, "[lavf] Audio encoding failed\n" );
+                syslog( LOG_ERR, "[lavc] Audio encoding failed\n" );
                 goto finish;
             }
+
+            if( !got_pkt )
+                continue;
 
             /* Encapsulate AAC frames in ADTS or LATM */
             if( enc_params->output_format == AUDIO_AAC )
             {
-                pkt.size = output_frame_size;
-                pkt.data = output_buf;
-
                 /* Allocate a dynamic memory buffer with avio */
                 if( avio_open_dyn_buf( &avio ) )
                 {
@@ -284,17 +289,16 @@ static void *start_encoder( void *ptr )
                 /* TODO: handle fails */
                 avformat_write_header( fmt, NULL );
                 av_write_frame( fmt, &pkt );
-                obe_free_packet( &pkt );
-                frame_size = output_frame_size = avio_close_dyn_buf( avio, &avio_buf );
+                frame_size = avio_close_dyn_buf( avio, &avio_buf );
             }
             else if( enc_params->output_format == AUDIO_AC_3 )
             {
-                av_fifo_generic_write( out_fifo, output_buf, output_frame_size, NULL );
+                av_fifo_generic_write( out_fifo, pkt.data, pkt.size, NULL );
                 if( av_fifo_size( out_fifo ) < frame_size )
                     continue;
             }
             else
-                frame_size = output_frame_size;
+                frame_size = pkt.size;
 
             coded_frame = new_coded_frame( encoder->stream_id, frame_size );
             if( !coded_frame )
@@ -306,18 +310,19 @@ static void *start_encoder( void *ptr )
             if( enc_params->output_format == AUDIO_AAC )
             {
                 memcpy( coded_frame->data, avio_buf, frame_size );
-                av_free( avio_buf );
+                av_freep( &avio_buf );
             }
             else if( enc_params->output_format == AUDIO_AC_3 )
                 av_fifo_generic_read( out_fifo, coded_frame->data, frame_size, NULL );
             else
-                memcpy( coded_frame->data, output_buf, frame_size );
+                memcpy( coded_frame->data, pkt.data, pkt.size );
 
             coded_frame->pts = cur_pts;
             add_to_mux_queue( h, coded_frame );
 
             /* We need to generate PTS because frame sizes have changed */
             cur_pts += (double)codec->frame_size * OBE_CLOCK * enc_params->frames_per_pes / enc_params->sample_rate;
+            obe_free_packet( &pkt );
         }
     }
 
@@ -333,9 +338,6 @@ finish:
 
     if( out_fifo )
         av_fifo_free( out_fifo );
-
-    if( output_buf )
-        free( output_buf );
 
     if( avio_buf )
         av_free( avio_buf );
@@ -356,7 +358,7 @@ finish:
         av_free( st );
 
     if( fmt )
-        av_free( fmt );
+        avformat_free_context( fmt );
 
     free( enc_params );
 
