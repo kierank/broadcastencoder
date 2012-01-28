@@ -485,7 +485,7 @@ static int set_stream( char *command, obecli_command_t *child )
                 avc_param->rc.i_vbv_buffer_size = obe_otoi( vbv_bufsize, 0 );
                 avc_param->rc.i_bitrate         = obe_otoi( bitrate, 0 );
                 avc_param->vui.i_sar_width      = obe_otoi( sar_width, avc_param->vui.i_sar_width );
-                avc_param->vui.i_sar_height     = obe_otoi( sar_height, avc_param->vui.i_sar_width );
+                avc_param->vui.i_sar_height     = obe_otoi( sar_height, avc_param->vui.i_sar_height );
 
                 if( profile )
                     parse_enum_value( profile, x264_profile_names, &cli.avc_profile );
