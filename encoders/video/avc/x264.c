@@ -91,7 +91,7 @@ static void *start_encoder( void *ptr )
     x264_t *s = NULL;
     x264_picture_t pic, pic_out;
     x264_nal_t *nal;
-    int i_nal, frame_size = 0, sar_width, sar_height;
+    int i_nal, frame_size = 0, user_sar_width, user_sar_height;
     int64_t pts = 0;
     int64_t *pts2;
     obe_raw_frame_t *raw_frame;
@@ -128,8 +128,8 @@ static void *start_encoder( void *ptr )
     pthread_cond_broadcast( &encoder->encoder_cv );
     pthread_mutex_unlock( &encoder->encoder_mutex );
 
-    sar_width = enc_params->avc_param.vui.i_sar_width;
-    sar_height = enc_params->avc_param.vui.i_sar_height;
+    user_sar_width = enc_params->avc_param.vui.i_sar_width;
+    user_sar_height = enc_params->avc_param.vui.i_sar_height;
 
     while( 1 )
     {
@@ -183,15 +183,23 @@ static void *start_encoder( void *ptr )
 
         /* If the AFD has changed, then change the SAR. x264 will write the SAR at the next keyframe
          * TODO: allow user to force keyframes in order to be frame accurate */
-        if( raw_frame->sar_width != sar_width || raw_frame->sar_height != sar_height )
+        if( raw_frame->sar_width  != enc_params->avc_param.vui.i_sar_width ||
+            raw_frame->sar_height != enc_params->avc_param.vui.i_sar_height )
         {
-            enc_params->avc_param.vui.i_sar_width = raw_frame->sar_width;
-            enc_params->avc_param.vui.i_sar_height = raw_frame->sar_height;
+            /* If the frame's SAR has been guessed but the user entered a reasonable SAR, then use it.
+             * Otherwise, use the guessed SAR. */
+            if( raw_frame->sar_guess && user_sar_width > 0 && user_sar_height > 0 )
+            {
+                enc_params->avc_param.vui.i_sar_width  = user_sar_width;
+                enc_params->avc_param.vui.i_sar_height = user_sar_height;
+            }
+            else
+            {
+                enc_params->avc_param.vui.i_sar_width  = raw_frame->sar_width;
+                enc_params->avc_param.vui.i_sar_height = raw_frame->sar_height;
+            }
 
             x264_encoder_reconfig( s, &enc_params->avc_param );
-
-            sar_width = raw_frame->sar_width;
-            sar_height = raw_frame->sar_height;
         }
 
         frame_size = x264_encoder_encode( s, &nal, &i_nal, &pic, &pic_out );

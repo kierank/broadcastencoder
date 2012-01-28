@@ -315,6 +315,7 @@ typedef struct
     obe_image_t img;
     int sar_width;
     int sar_height;
+    int sar_guess; /* This is set if the SAR cannot be determined from any WSS/AFD that might exist in the stream */
 
     /* Ancillary / User-data */
     int num_user_data;
