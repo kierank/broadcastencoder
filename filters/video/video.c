@@ -84,12 +84,16 @@ const static obe_cli_csp_t obe_cli_csps[] =
     [PIX_FMT_YUV420P16] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 16 },
 };
 
-const static obe_sd_sar_t obe_sd_sars[] =
+const static obe_sd_sar_t obe_sd_sars[][2] =
 {
-    [INPUT_VIDEO_FORMAT_PAL]    = { 12, 11 }, /* PAL 4:3 */
-    [INPUT_VIDEO_FORMAT_NTSC]   = { 10, 11 }, /* NTSC 4:3 */
-    [INPUT_VIDEO_FORMAT_PAL+2]  = { 16, 11 }, /* PAL 16:9 */
-    [INPUT_VIDEO_FORMAT_NTSC+2] = { 40, 33 }, /* NTSC 16:9 */
+    {
+        [INPUT_VIDEO_FORMAT_PAL]  = { 12, 11 }, /* PAL 4:3 */
+        [INPUT_VIDEO_FORMAT_NTSC] = { 10, 11 }, /* NTSC 4:3 */
+    },
+    {
+        [INPUT_VIDEO_FORMAT_PAL]  = { 16, 11 }, /* PAL 16:9 */
+        [INPUT_VIDEO_FORMAT_NTSC] = { 40, 33 }, /* NTSC 16:9 */
+    }
 };
 
 const static int wss_to_afd[] =
@@ -457,9 +461,8 @@ static int write_afd( obe_user_data_t *user_data, obe_raw_frame_t *raw_frame )
     /* Set the SAR from the AFD value */
     if( active_format_flag && IS_SD( raw_frame->img.format ) )
     {
-        int is_wide = afd_is_wide[afd] ? 2 : 0;
-        raw_frame->sar_width = obe_sd_sars[raw_frame->img.format+is_wide].sar_width;
-        raw_frame->sar_height = obe_sd_sars[raw_frame->img.format+is_wide].sar_height;
+        raw_frame->sar_width = obe_sd_sars[afd_is_wide[afd]][raw_frame->img.format].sar_width;
+        raw_frame->sar_height = obe_sd_sars[afd_is_wide[afd]][raw_frame->img.format].sar_height;
     }
 
     user_data->type = USER_DATA_AVC_REGISTERED_ITU_T35;
@@ -647,8 +650,8 @@ void *start_filter( void *ptr )
          * TODO: make this user-choosable. OBE will prioritise any SAR information from AFD or WSS over any user settings */
         if( IS_SD( raw_frame->img.format ) && raw_frame->sar_width == 1 && raw_frame->sar_height == 1 )
         {
-            raw_frame->sar_width = obe_sd_sars[raw_frame->img.format].sar_width;
-            raw_frame->sar_height = obe_sd_sars[raw_frame->img.format].sar_height;
+            raw_frame->sar_width = obe_sd_sars[0][raw_frame->img.format].sar_width;
+            raw_frame->sar_height = obe_sd_sars[0][raw_frame->img.format].sar_height;
             raw_frame->sar_guess = 1;
         }
 
