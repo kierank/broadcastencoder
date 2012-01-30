@@ -76,7 +76,18 @@ static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_fr
                 idx++;
             }
             else
+            {
+                syslog( LOG_WARNING, "Invalid user data presented to encoder - type %i \n", raw_frame->user_data[i].type );
                 free( raw_frame->user_data[i].data );
+            }
+        }
+    }
+    else if( raw_frame->num_user_data )
+    {
+        for( int i = 0; i < raw_frame->num_user_data; i++ )
+        {
+            syslog( LOG_WARNING, "Invalid user data presented to encoder - type %i \n", raw_frame->user_data[i].type );
+            free( raw_frame->user_data[i].data );
         }
     }
 
