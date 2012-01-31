@@ -412,8 +412,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
             if( IS_SD( decklink_opts_->video_format ) )
             {
-                if( raw_frame->alloc_img.width == 486 )
-                    raw_frame->img.width = 480;
+                if( raw_frame->alloc_img.height == 486 )
+                    raw_frame->img.height = 480;
 
                 raw_frame->img.format     = decklink_opts_->video_format;
                 raw_frame->img.first_line = first_active_line[j].line;
