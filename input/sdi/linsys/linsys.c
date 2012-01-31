@@ -471,7 +471,7 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
 
         num_anc_lines += num_vbi_lines;
         /* last_line is the last line that has been written, whereas cur_line is the next line to be processed */
-	last_line = sdi_next_line( linsys_opts->video_format, cur_line-1 );
+        last_line = sdi_next_line( linsys_opts->video_format, cur_line-1 );
 
         /* Add the visible VBI lines to the ancillary buffer */
         for( int i = 0; i < num_vbi_lines; i++ )
