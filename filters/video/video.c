@@ -251,7 +251,7 @@ static int downconvert_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_
 {
     obe_image_t tmp_image = {0};
 
-    if( !vfilt->sws_ctx )
+    if( !vfilt->sws_ctx || raw_frame->reset_obe )
     {
         vfilt->sws_ctx_flags |= SWS_FULL_CHR_H_INP | SWS_ACCURATE_RND | SWS_LANCZOS;
         vfilt->dst_pix_fmt = raw_frame->img.csp == PIX_FMT_YUV422P10 ? PIX_FMT_YUV420P10 : PIX_FMT_YUV420P;
@@ -566,7 +566,7 @@ static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stre
     for( int i = 0; i < raw_frame->num_user_data; i++ )
     {
         if( raw_frame->user_data[i].type == USER_DATA_CEA_608 )
-            ret = write_608_cc( &raw_frame->user_data[i], input_stream );
+            ret = write_608_cc( &raw_frame->user_data[i], raw_frame );
         else if( raw_frame->user_data[i].type == USER_DATA_CEA_708_CDP )
             ret = write_cdp( &raw_frame->user_data[i] );
         else if( raw_frame->user_data[i].type == USER_DATA_AFD )

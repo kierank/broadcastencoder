@@ -592,6 +592,9 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
             raw_frame->img.first_line = first_active_line[j].line;
         }
 
+        raw_frame->timebase_num = linsys_opts->timebase_num;
+        raw_frame->timebase_den = linsys_opts->timebase_den;
+
         /* If AFD is present and the stream is SD this will be changed in the video filter */
         raw_frame->sar_width = raw_frame->sar_height = 1;
         raw_frame->pts = pts = av_rescale_q( linsys_ctx->v_counter++, linsys_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
