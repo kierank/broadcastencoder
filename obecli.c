@@ -419,7 +419,7 @@ static int set_stream( char *command, obecli_command_t *child )
             char *frame_packing = obe_get_option( stream_opts[17], opts );
             char *csp         = obe_get_option( stream_opts[18], opts );
             char *filler      = obe_get_option( stream_opts[19], opts );
-            char *intra_refresh = obe_get_option( stream_opts[19], opts );
+            char *intra_refresh = obe_get_option( stream_opts[20], opts );
 
             char *aac_encap   = obe_get_option( stream_opts[21], opts );
 
