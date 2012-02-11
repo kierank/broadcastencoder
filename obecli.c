@@ -84,7 +84,7 @@ static const char * stream_opts[] = { "action", "format",
                                       /* Encoding options */
                                       "vbv-maxrate", "vbv-bufsize", "bitrate", "sar-width", "sar-height",
                                       "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", "weightp",
-                                      "interlaced", "tff", "frame-packing", "csp", "filler",
+                                      "interlaced", "tff", "frame-packing", "csp", "filler", "intra-refresh",
                                       /* AAC options */
                                       "aac-encap",
                                       /* TS options */
@@ -457,13 +457,14 @@ static int set_stream( char *command, obecli_command_t *child )
             char *frame_packing = obe_get_option( stream_opts[17], opts );
             char *csp         = obe_get_option( stream_opts[18], opts );
             char *filler      = obe_get_option( stream_opts[19], opts );
+            char *intra_refresh = obe_get_option( stream_opts[19], opts );
 
-            char *aac_encap   = obe_get_option( stream_opts[20], opts );
+            char *aac_encap   = obe_get_option( stream_opts[21], opts );
 
             /* NB: remap these and the ttx values below if more encoding options are added - TODO: split them up */
-            char *pid         = obe_get_option( stream_opts[21], opts );
-            char *lang        = obe_get_option( stream_opts[22], opts );
-            char *audio_type  = obe_get_option( stream_opts[23], opts );
+            char *pid         = obe_get_option( stream_opts[22], opts );
+            char *lang        = obe_get_option( stream_opts[23], opts );
+            char *audio_type  = obe_get_option( stream_opts[24], opts );
 
             if( cli.program.streams[stream_id].stream_type == STREAM_TYPE_VIDEO )
             {
@@ -486,6 +487,15 @@ static int set_stream( char *command, obecli_command_t *child )
                 avc_param->rc.i_bitrate         = obe_otoi( bitrate, 0 );
                 avc_param->vui.i_sar_width      = obe_otoi( sar_width, avc_param->vui.i_sar_width );
                 avc_param->vui.i_sar_height     = obe_otoi( sar_height, avc_param->vui.i_sar_height );
+                avc_param->i_keyint_max        = obe_otoi( keyint, avc_param->i_keyint_max );
+                avc_param->rc.i_lookahead      = obe_otoi( lookahead, avc_param->rc.i_lookahead );
+                avc_param->i_threads           = obe_otoi( threads, avc_param->i_threads );
+                avc_param->i_bframe            = obe_otoi( bframes, avc_param->i_bframe );
+                avc_param->i_bframe_pyramid    = obe_otoi( b_pyramid, avc_param->i_bframe_pyramid );
+                avc_param->analyse.i_weighted_pred = obe_otoi( weightp, avc_param->analyse.i_weighted_pred );
+                avc_param->b_interlaced        = obe_otob( interlaced, avc_param->b_interlaced );
+                avc_param->b_tff               = obe_otob( tff, avc_param->b_tff );
+                avc_param->b_intra_refresh     = obe_otob( intra_refresh, avc_param->b_intra_refresh );
 
                 if( profile )
                     parse_enum_value( profile, x264_profile_names, &cli.avc_profile );
@@ -499,14 +509,7 @@ static int set_stream( char *command, obecli_command_t *child )
                     else
                         avc_param->i_level_idc = obe_otoi( level, avc_param->i_level_idc );
                 }
-                avc_param->i_keyint_max        = obe_otoi( keyint, avc_param->i_keyint_max );
-                avc_param->rc.i_lookahead      = obe_otoi( lookahead, avc_param->rc.i_lookahead );
-                avc_param->i_threads           = obe_otoi( threads, avc_param->i_threads );
-                avc_param->i_bframe            = obe_otoi( bframes, avc_param->i_bframe );
-                avc_param->i_bframe_pyramid    = obe_otoi( b_pyramid, avc_param->i_bframe_pyramid );
-                avc_param->analyse.i_weighted_pred = obe_otoi( weightp, avc_param->analyse.i_weighted_pred );
-                avc_param->b_interlaced        = obe_otob( interlaced, avc_param->b_interlaced );
-                avc_param->b_tff               = obe_otob( tff, avc_param->b_tff );
+
                 if( frame_packing )
                 {
                     parse_enum_value( frame_packing, frame_packing_modes, &avc_param->i_frame_packing );
@@ -520,7 +523,7 @@ static int set_stream( char *command, obecli_command_t *child )
                         avc_param->i_csp |= X264_CSP_HIGH_DEPTH;
                 }
 
-                if( filler ) 
+                if( filler )
                     avc_param->i_nal_hrd = obe_otob( filler, 0 ) ? X264_NAL_HRD_FAKE_CBR : X264_NAL_HRD_FAKE_VBR;
 
                 /* Turn on the 3DTV mux option automatically */
@@ -585,10 +588,10 @@ static int set_stream( char *command, obecli_command_t *child )
                      cli.program.streams[stream_id].stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
-                char *ttx_lang = obe_get_option( stream_opts[25], opts );
-                char *ttx_type = obe_get_option( stream_opts[26], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[27], opts );
-                char *ttx_page = obe_get_option( stream_opts[28], opts );
+                char *ttx_lang = obe_get_option( stream_opts[26], opts );
+                char *ttx_type = obe_get_option( stream_opts[27], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[28], opts );
+                char *ttx_page = obe_get_option( stream_opts[29], opts );
 
                 FAIL_IF_ERROR( ttx_type && ( check_enum_value( ttx_type, teletext_types ) < 0 ),
                                "Invalid Teletext type\n" );
@@ -857,6 +860,12 @@ static int start_encode( char *command, obecli_command_t *child )
             /* x264 calculates the single-frame VBV size later on */
             FAIL_IF_ERROR( system_type_value == OBE_SYSTEM_TYPE_GENERIC && !cli.output_streams[i].avc_param.rc.i_vbv_buffer_size,
                            "No VBV buffer size chosen\n" );
+
+            FAIL_IF_ERROR( !cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate && !cli.output_streams[i].avc_param.rc.i_bitrate,
+                           "No bitrate chosen\n" );
+
+            if( cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate && !cli.output_streams[i].avc_param.rc.i_bitrate )
+                cli.output_streams[i].avc_param.rc.i_bitrate = cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate;
 
             cli.output_streams[i].stream_action = STREAM_ENCODE;
             cli.output_streams[i].stream_format = VIDEO_AVC;

@@ -79,7 +79,7 @@ static void write_invalid( bs_t *s )
 }
 
 /* TODO: factor shared code out from 608 and 708 */
-int write_608_cc( obe_user_data_t *user_data, obe_int_input_stream_t *input_stream )
+int write_608_cc( obe_user_data_t *user_data, obe_raw_frame_t *raw_frame )
 {
     bs_t q, r;
     uint8_t temp[1000];
@@ -96,7 +96,7 @@ int write_608_cc( obe_user_data_t *user_data, obe_int_input_stream_t *input_stre
 
     for( int i = 0; cc_timecode[i].timebase_num != 0; i++ )
     {
-        if( input_stream->timebase_num == cc_timecode[i].timebase_num && input_stream->timebase_den == cc_timecode[i].timebase_den )
+        if( raw_frame->timebase_num == cc_timecode[i].timebase_num && raw_frame->timebase_den == cc_timecode[i].timebase_den )
             cc_count = cc_timecode[i].cc_count;
     }
 

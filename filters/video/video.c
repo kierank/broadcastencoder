@@ -84,12 +84,16 @@ const static obe_cli_csp_t obe_cli_csps[] =
     [PIX_FMT_YUV420P16] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 16 },
 };
 
-const static obe_sd_sar_t obe_sd_sars[] =
+const static obe_sd_sar_t obe_sd_sars[][2] =
 {
-    [INPUT_VIDEO_FORMAT_PAL]    = { 12, 11 }, /* PAL 4:3 */
-    [INPUT_VIDEO_FORMAT_NTSC]   = { 10, 11 }, /* NTSC 4:3 */
-    [INPUT_VIDEO_FORMAT_PAL+2]  = { 16, 11 }, /* PAL 16:9 */
-    [INPUT_VIDEO_FORMAT_NTSC+2] = { 40, 33 }, /* NTSC 16:9 */
+    {
+        [INPUT_VIDEO_FORMAT_PAL]  = { 12, 11 }, /* PAL 4:3 */
+        [INPUT_VIDEO_FORMAT_NTSC] = { 10, 11 }, /* NTSC 4:3 */
+    },
+    {
+        [INPUT_VIDEO_FORMAT_PAL]  = { 16, 11 }, /* PAL 16:9 */
+        [INPUT_VIDEO_FORMAT_NTSC] = { 40, 33 }, /* NTSC 16:9 */
+    }
 };
 
 const static int wss_to_afd[] =
@@ -247,7 +251,7 @@ static int downconvert_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_
 {
     obe_image_t tmp_image = {0};
 
-    if( !vfilt->sws_ctx )
+    if( !vfilt->sws_ctx || raw_frame->reset_obe )
     {
         vfilt->sws_ctx_flags |= SWS_FULL_CHR_H_INP | SWS_ACCURATE_RND | SWS_LANCZOS;
         vfilt->dst_pix_fmt = raw_frame->img.csp == PIX_FMT_YUV422P10 ? PIX_FMT_YUV420P10 : PIX_FMT_YUV420P;
@@ -457,9 +461,8 @@ static int write_afd( obe_user_data_t *user_data, obe_raw_frame_t *raw_frame )
     /* Set the SAR from the AFD value */
     if( active_format_flag && IS_SD( raw_frame->img.format ) )
     {
-        int is_wide = afd_is_wide[afd] ? 2 : 0;
-        raw_frame->sar_width = obe_sd_sars[raw_frame->img.format+is_wide].sar_width;
-        raw_frame->sar_height = obe_sd_sars[raw_frame->img.format+is_wide].sar_height;
+        raw_frame->sar_width = obe_sd_sars[afd_is_wide[afd]][raw_frame->img.format].sar_width;
+        raw_frame->sar_height = obe_sd_sars[afd_is_wide[afd]][raw_frame->img.format].sar_height;
     }
 
     user_data->type = USER_DATA_AVC_REGISTERED_ITU_T35;
@@ -563,7 +566,7 @@ static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stre
     for( int i = 0; i < raw_frame->num_user_data; i++ )
     {
         if( raw_frame->user_data[i].type == USER_DATA_CEA_608 )
-            ret = write_608_cc( &raw_frame->user_data[i], input_stream );
+            ret = write_608_cc( &raw_frame->user_data[i], raw_frame );
         else if( raw_frame->user_data[i].type == USER_DATA_CEA_708_CDP )
             ret = write_cdp( &raw_frame->user_data[i] );
         else if( raw_frame->user_data[i].type == USER_DATA_AFD )
@@ -647,8 +650,8 @@ void *start_filter( void *ptr )
          * TODO: make this user-choosable. OBE will prioritise any SAR information from AFD or WSS over any user settings */
         if( IS_SD( raw_frame->img.format ) && raw_frame->sar_width == 1 && raw_frame->sar_height == 1 )
         {
-            raw_frame->sar_width = obe_sd_sars[raw_frame->img.format].sar_width;
-            raw_frame->sar_height = obe_sd_sars[raw_frame->img.format].sar_height;
+            raw_frame->sar_width = obe_sd_sars[0][raw_frame->img.format].sar_width;
+            raw_frame->sar_height = obe_sd_sars[0][raw_frame->img.format].sar_height;
             raw_frame->sar_guess = 1;
         }
 

@@ -35,6 +35,8 @@ static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_fr
     obe_image_t *img = &raw_frame->img;
     int idx = 0, count = 0;
 
+    x264_picture_init( pic );
+
     memcpy( pic->img.i_stride, img->stride, sizeof(img->stride) );
     memcpy( pic->img.plane, img->plane, sizeof(img->plane) );
     pic->img.i_plane = img->planes;
@@ -42,8 +44,6 @@ static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_fr
 
     if( X264_BIT_DEPTH == 10 )
         pic->img.i_csp |= X264_CSP_HIGH_DEPTH;
-
-    pic->extra_sei.sei_free = free;
 
     for( int i = 0; i < raw_frame->num_user_data; i++ )
     {
@@ -59,6 +59,7 @@ static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_fr
 
     if( pic->extra_sei.num_payloads )
     {
+        pic->extra_sei.sei_free = free;
         pic->extra_sei.payloads = malloc( pic->extra_sei.num_payloads * sizeof(*pic->extra_sei.payloads) );
 
         if( !pic->extra_sei.payloads )
@@ -76,7 +77,18 @@ static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_fr
                 idx++;
             }
             else
+            {
+                syslog( LOG_WARNING, "Invalid user data presented to encoder - type %i \n", raw_frame->user_data[i].type );
                 free( raw_frame->user_data[i].data );
+            }
+        }
+    }
+    else if( raw_frame->num_user_data )
+    {
+        for( int i = 0; i < raw_frame->num_user_data; i++ )
+        {
+            syslog( LOG_WARNING, "Invalid user data presented to encoder - type %i \n", raw_frame->user_data[i].type );
+            free( raw_frame->user_data[i].data );
         }
     }
 
@@ -112,7 +124,6 @@ static void *start_encoder( void *ptr )
     }
 
     x264_encoder_parameters( s, &enc_params->avc_param );
-    x264_picture_init( &pic );
 
     encoder->encoder_params = malloc( sizeof(enc_params->avc_param) );
     if( !encoder->encoder_params )
