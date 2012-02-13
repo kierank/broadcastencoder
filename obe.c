@@ -624,7 +624,11 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     }
 
     if( input_device->input_type == INPUT_URL )
-        input = lavf_input;
+    {
+        //input = lavf_input;
+        fprintf( stderr, "URL input is not supported currently \n" );
+        goto fail;
+    }
 #if HAVE_DECKLINK
     else if( input_device->input_type == INPUT_DEVICE_DECKLINK )
         input = decklink_input;
@@ -923,7 +927,11 @@ int obe_start( obe_t *h )
     pthread_cond_init( &h->output_cv, NULL );
 
     if( h->devices[0]->device_type == INPUT_URL )
-        input = lavf_input;
+    {
+        //input = lavf_input;
+        fprintf( stderr, "URL input is not supported currently \n" );
+        goto fail;
+    }
 #if HAVE_DECKLINK
     else if( h->devices[0]->device_type == INPUT_DEVICE_DECKLINK )
         input = decklink_input;

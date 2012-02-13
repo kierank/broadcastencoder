@@ -37,7 +37,6 @@ int obe_get_buffer( AVCodecContext *codec, AVFrame *pic )
     if( av_image_alloc( pic->data, pic->linesize, w, h + 1, codec->pix_fmt, 32 ) < 0 )
         return -1;
 
-    pic->age    = 256*256*256*64; /* FIXME is there a correct value for this? */
     pic->type   = FF_BUFFER_TYPE_USER;
     pic->reordered_opaque = codec->reordered_opaque;
     pic->pkt_pts = codec->pkt ? codec->pkt->pts : AV_NOPTS_VALUE;
