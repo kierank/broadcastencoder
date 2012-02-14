@@ -557,7 +557,7 @@ static int open_card( decklink_opts_t *decklink_opts )
         goto finish;
     }
 
-    decklink_ctx->codec = avcodec_alloc_context();
+    decklink_ctx->codec = avcodec_alloc_context3( decklink_ctx->dec );
     if( !decklink_ctx->codec )
     {
         fprintf( stderr, "[decklink] Could not allocate AVCodecContext\n" );
@@ -569,7 +569,8 @@ static int open_card( decklink_opts_t *decklink_opts )
     decklink_ctx->codec->reget_buffer = obe_reget_buffer;
     decklink_ctx->codec->flags |= CODEC_FLAG_EMU_EDGE;
 
-    if( avcodec_open( decklink_ctx->codec, decklink_ctx->dec ) < 0 )
+    /* TODO: setup custom strides */
+    if( avcodec_open2( decklink_ctx->codec, decklink_ctx->dec, NULL ) < 0 )
     {
         fprintf( stderr, "[decklink] Could not open libavcodec\n" );
         goto finish;
