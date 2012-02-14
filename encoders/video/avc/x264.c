@@ -95,6 +95,35 @@ static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_fr
     return 0;
 }
 
+static int handle_frame( x264_nal_t *nal, int frame_size, x264_picture_t pic_out, obe_t *h, int stream_id )
+{
+    int64_t *pts;
+
+    obe_coded_frame_t *coded_frame = new_coded_frame( stream_id, frame_size );
+    if( !coded_frame )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+
+    memcpy( coded_frame->data, nal[0].p_payload, frame_size );
+    coded_frame->is_video = 1;
+    coded_frame->len = frame_size;
+    coded_frame->cpb_initial_arrival_time = pic_out.hrd_timing.safe_cpb_initial_arrival_time;
+    coded_frame->cpb_final_arrival_time = pic_out.hrd_timing.cpb_final_arrival_time;
+    coded_frame->real_dts = pic_out.hrd_timing.cpb_removal_time;
+    coded_frame->real_pts = pic_out.hrd_timing.dpb_output_time;
+    pts = pic_out.opaque;
+    coded_frame->pts = pts[0];
+    coded_frame->random_access = pic_out.b_keyframe;
+    coded_frame->priority = IS_X264_TYPE_I( pic_out.i_type );
+    free( pic_out.opaque );
+
+    add_to_smoothing_queue( h, coded_frame );
+
+    return 0;
+}
+
 static void *start_encoder( void *ptr )
 {
     obe_vid_enc_params_t *enc_params = ptr;
@@ -107,7 +136,6 @@ static void *start_encoder( void *ptr )
     int64_t pts = 0;
     int64_t *pts2;
     obe_raw_frame_t *raw_frame;
-    obe_coded_frame_t *coded_frame;
 
     /* TODO: check for width, height changes */
 
@@ -227,26 +255,8 @@ static void *start_encoder( void *ptr )
 
         if( frame_size )
         {
-            coded_frame = new_coded_frame( encoder->stream_id, frame_size );
-            if( !coded_frame )
-            {
-                syslog( LOG_ERR, "Malloc failed\n" );
+            if( handle_frame( nal, frame_size, pic_out, h, encoder->stream_id ) < 0 )
                 break;
-            }
-            memcpy( coded_frame->data, nal[0].p_payload, frame_size );
-            coded_frame->is_video = 1;
-            coded_frame->len = frame_size;
-            coded_frame->cpb_initial_arrival_time = pic_out.hrd_timing.safe_cpb_initial_arrival_time;
-            coded_frame->cpb_final_arrival_time = pic_out.hrd_timing.cpb_final_arrival_time;
-            coded_frame->real_dts = pic_out.hrd_timing.cpb_removal_time;
-            coded_frame->real_pts = pic_out.hrd_timing.dpb_output_time;
-            pts2 = pic_out.opaque;
-            coded_frame->pts = pts2[0];
-            coded_frame->random_access = pic_out.b_keyframe;
-            coded_frame->priority = IS_X264_TYPE_I( pic_out.i_type );
-            free( pic_out.opaque );
-
-            add_to_smoothing_queue( h, coded_frame );
         }
      }
 
