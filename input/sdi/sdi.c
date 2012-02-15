@@ -221,7 +221,7 @@ int non_display_data_was_probed( obe_device_t *device, int type, int source, int
     }
     else //if( location == USER_DATA_LOCATION_DVB_STREAM )
     {
-        for( int i = 0; device->num_input_streams; i++ )
+        for( int i = 0; i < device->num_input_streams; i++ )
         {
             if( device->streams[i]->stream_format == MISC_TELETEXT || device->streams[i]->stream_format == VBI_RAW )
             {
