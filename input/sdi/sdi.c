@@ -234,7 +234,7 @@ int non_display_data_was_probed( obe_device_t *device, int type, int source, int
             return 0;
     }
 
-    for( int i = 0; stream->num_frame_data; i++ )
+    for( int i = 0; i < stream->num_frame_data; i++ )
     {
         obe_frame_data_t *frame_data = &stream->frame_data[i];
         if( frame_data->type == type && frame_data->source == source )
