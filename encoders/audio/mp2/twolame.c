@@ -178,6 +178,7 @@ static void *start_encoder( void *ptr )
             }
             av_fifo_generic_read( fifo, coded_frame->data, frame_size, NULL );
             coded_frame->pts = cur_pts;
+            coded_frame->random_access = 1; /* Every frame output is a random access point */
 
             add_to_mux_queue( h, coded_frame );
             /* We need to generate PTS because frame sizes have changed */
