@@ -793,10 +793,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         // TODO restrict threads
     }
     else
-    {
-        param->b_sliced_threads = 1;
         x264_param_default_preset( param, "veryfast", "zerolatency" );
-    }
 
     param->b_deterministic = 0;
     param->b_vfr_input = 0;
