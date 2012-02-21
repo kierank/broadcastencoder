@@ -78,14 +78,21 @@ static void write_invalid( bs_t *s )
     bs_write( s, 8, 0 );   // c_data_2
 }
 
+static void write_itu_t_codes( bs_t *s )
+{
+    const int country_code      = 0xb5;
+    const int provider_code     = 0x31;
+
+    bs_write( s,  8, country_code );  // itu_t_t35_country_code
+    bs_write( s, 16, provider_code ); // itu_t_t35_provider_code
+}
+
 /* TODO: factor shared code out from 608 and 708 */
 int write_608_cc( obe_user_data_t *user_data, obe_raw_frame_t *raw_frame )
 {
     bs_t q, r;
     uint8_t temp[1000];
     uint8_t temp2[500];
-    const int country_code      = 0xb5;
-    const int provider_code     = 0x31;
     const char *user_identifier = "GA94";
     const int data_type_code    = 0x03;
     int cc_count                = 0;
@@ -108,8 +115,8 @@ int write_608_cc( obe_user_data_t *user_data, obe_raw_frame_t *raw_frame )
 
     bs_init( &r, temp, 1000 );
 
-    bs_write( &r,  8, country_code );  // itu_t_t35_country_code
-    bs_write( &r, 16, provider_code ); // itu_t_t35_provider_code
+    /* N.B MPEG-4 only */
+    write_itu_t_codes( &r );
 
     if( !echostar_captions )
     {
@@ -179,8 +186,6 @@ static int write_708_cc( obe_user_data_t *user_data, uint8_t *start, int cc_coun
 {
     bs_t s;
     uint8_t temp[1000];
-    const int country_code      = 0xb5;
-    const int provider_code     = 0x31;
     const char *user_identifier = "GA94";
     const int data_type_code    = 0x03;
 
@@ -189,8 +194,8 @@ static int write_708_cc( obe_user_data_t *user_data, uint8_t *start, int cc_coun
 
     bs_init( &s, temp, 1000 );
 
-    bs_write( &s,  8, country_code );  // itu_t_t35_country_code
-    bs_write( &s, 16, provider_code ); // itu_t_t35_provider_code
+    /* N.B MPEG-4 only */
+    write_itu_t_codes( &s );
 
     for( int i = 0; i < 4; i++ )
         bs_write( &s, 8, user_identifier[i] ); // user_identifier
