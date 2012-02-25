@@ -318,6 +318,7 @@ static void *start_encoder( void *ptr )
                 memcpy( coded_frame->data, pkt.data, pkt.size );
 
             coded_frame->pts = cur_pts;
+            coded_frame->random_access = 1; /* Every frame output is a random access point */
             add_to_mux_queue( h, coded_frame );
 
             /* We need to generate PTS because frame sizes have changed */
