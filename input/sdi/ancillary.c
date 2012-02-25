@@ -39,16 +39,15 @@ static int get_vanc_type( uint8_t did, uint8_t sdid )
     return -1;
 }
 
-/* TODO: check parity, ideally using x86's PF
- *       check if the packet length is sane */
+/* TODO/FIXME: check parity, ideally using x86's PF
+ *             is it possible to check parity but follow 8-bit backwards compatibility? */
 
-static int parse_afd( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame, uint16_t *line, int line_number )
+static int parse_afd( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame, uint16_t *line, int line_number, int len )
 {
     obe_int_frame_data_t *tmp, *frame_data;
     obe_user_data_t *tmp2, *user_data;
 
-    /* Skip DC word
-     * FIXME: should we skip a packet with the wrong length */
+    /* Skip DC word */
     line++;
 
     /* TODO: make Bar Data optional */
@@ -133,13 +132,11 @@ fail:
     return -1;
 }
 
-static int parse_dvb_scte_vbi( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame, uint16_t *line, int line_number )
+static int parse_dvb_scte_vbi( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame, uint16_t *line, int line_number, int len )
 {
     obe_int_frame_data_t *tmp, *frame_data;
     obe_anc_vbi_t *anc_vbi;
     int i, data_unit_id;
-
-    int len = READ_8( line[0] );
 
     /* Skip DC word */
     line++;
@@ -208,11 +205,10 @@ fail:
     return -1;
 }
 
-static int parse_cdp( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame, uint16_t *line, int line_number )
+static int parse_cdp( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame, uint16_t *line, int line_number, int len )
 {
     obe_int_frame_data_t *tmp, *frame_data;
     obe_user_data_t *tmp2, *user_data;
-    int len = READ_8( line[0] );
 
     /* Skip DC word */
     line++;
@@ -282,28 +278,38 @@ int parse_vanc_line( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame
     /* VANC can be in luma or chroma */
     width <<= 1;
 
-    /* TODO: optimise this */
-    while( i < width - 5 )
+    /* The smallest VANC data length is 7 words long (ADF + SDID + DID + DC + CS)
+     * TODO: optimise this */
+    while( i < width - 7 )
     {
         if( line[i] <= 0x03 && (line[i+1] & 0x3fc) == 0x3fc && (line[i+2] & 0x3fc) == 0x3fc )
         {
             i += 3;
+            int len = READ_8( line[i+2] );
+
+            if( len > (width - i - 1) )
+            {
+                syslog( LOG_ERR, "VANC packet length too large on line %i \n", line_number );
+                break;
+            }
+
+            /* Pass the DC word to the parsing function because some parsers may want to sanity check the length */
             switch ( get_vanc_type( READ_8( line[i] ), READ_8( line[i+1] ) ) )
             {
                 case MISC_AFD:
-                    parse_afd( non_display_data, raw_frame, &line[i+2], line_number );
+                    parse_afd( non_display_data, raw_frame, &line[i+2], line_number, len );
                     break;
                 case VANC_DVB_SCTE_VBI:
-                    parse_dvb_scte_vbi( non_display_data, raw_frame, &line[i+2], line_number );
+                    parse_dvb_scte_vbi( non_display_data, raw_frame, &line[i+2], line_number, len );
                     break;
                 case CAPTIONS_CEA_708:
-                    parse_cdp( non_display_data, raw_frame, &line[i+2], line_number );
+                    parse_cdp( non_display_data, raw_frame, &line[i+2], line_number, len );
                     break;
                 default:
                     break;
             }
             /* skip user data words and checksum */
-            i += READ_8( line[i+2] ) + 1;
+            i += len + 1;
         }
         else
             i++;
