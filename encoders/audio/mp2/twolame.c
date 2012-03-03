@@ -29,6 +29,26 @@
 
 #define MP2_AUDIO_BUFFER_SIZE 50000
 
+static int twolame_setup( twolame_options **tl_opts_ptr, obe_aud_enc_params_t *enc_params )
+{
+    *tl_opts_ptr = twolame_init();
+    if( !*tl_opts_ptr )
+        return -1;
+
+    /* TODO: setup bitrate reconfig, errors */
+    twolame_set_bitrate( *tl_opts_ptr, enc_params->bitrate );
+    twolame_set_in_samplerate( *tl_opts_ptr, enc_params->sample_rate );
+    twolame_set_out_samplerate( *tl_opts_ptr, enc_params->sample_rate );
+    twolame_set_copyright( *tl_opts_ptr, 1 );
+    twolame_set_original( *tl_opts_ptr, 1 );
+    twolame_set_num_channels( *tl_opts_ptr, enc_params->num_channels );
+    twolame_set_error_protection( *tl_opts_ptr, 1 );
+
+    twolame_init_params( *tl_opts_ptr );
+
+    return 0;
+}
+
 static void *start_encoder( void *ptr )
 {
     obe_aud_enc_params_t *enc_params = ptr;
@@ -37,7 +57,7 @@ static void *start_encoder( void *ptr )
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
     twolame_options *tl_opts = NULL;
-    int output_size, frame_size, in_stride;
+    int output_size, frame_size, in_stride, ret;
     int64_t cur_pts = -1;
     void *audio_buf = NULL;
     uint8_t *output_buf = NULL;
@@ -47,24 +67,12 @@ static void *start_encoder( void *ptr )
     /* Lock the mutex until we verify parameters */
     pthread_mutex_lock( &encoder->encoder_mutex );
 
-    tl_opts = twolame_init();
-    if( !tl_opts )
+    if( twolame_setup( &tl_opts, enc_params ) < 0 )
     {
-        fprintf( stderr, "[twolame] could load options" );
+        fprintf( stderr, "[twolame] couldn't load options" );
         pthread_mutex_unlock( &encoder->encoder_mutex );
         goto end;
     }
-
-    /* TODO: setup bitrate reconfig, errors */
-    twolame_set_bitrate( tl_opts, enc_params->bitrate );
-    twolame_set_in_samplerate( tl_opts, enc_params->sample_rate );
-    twolame_set_out_samplerate( tl_opts, enc_params->sample_rate );
-    twolame_set_copyright( tl_opts, 1 );
-    twolame_set_original( tl_opts, 1 );
-    twolame_set_num_channels( tl_opts, enc_params->num_channels );
-    twolame_set_error_protection( tl_opts, 1 );
-
-    twolame_init_params( tl_opts );
 
     /* NB: 125 = 1000 / 8 */
     frame_size = (double)MP2_NUM_SAMPLES * 125 * enc_params->bitrate * enc_params->frames_per_pes / enc_params->sample_rate;
@@ -120,6 +128,27 @@ static void *start_encoder( void *ptr )
 
         raw_frame = encoder->frames[0];
         pthread_mutex_unlock( &encoder->encoder_mutex );
+
+        if( raw_frame->format_change )
+        {
+            /* In theory we should encode the remaining samples but the format switch won't be clean anyway
+	     * so a couple of audio frames missing won't do any harm. Unlike other encoders twolame needs to be
+	     * closed and reopened because it buffers audio samples internally. */
+            twolame_close( &tl_opts );
+            av_fifo_reset( fifo );
+
+            pthread_mutex_lock( &encoder->encoder_mutex );
+            ret = twolame_setup( &tl_opts, enc_params );
+            pthread_mutex_unlock( &encoder->encoder_mutex );
+
+            if( ret < 0 )
+            {
+                syslog( LOG_ERR, "[twolame] couldn't load options" );
+                break;
+            }
+
+            cur_pts = -1; /* reset the pts */
+        }
 
         if( cur_pts == -1 )
             cur_pts = raw_frame->pts;

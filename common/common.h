@@ -303,6 +303,8 @@ typedef struct
     int64_t pts;
     void *opaque;
 
+    int format_change; /* applies to audio as well as video */
+
     void (*release_data)( void* );
     void (*release_frame)( void* );
 

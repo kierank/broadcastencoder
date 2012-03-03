@@ -215,6 +215,13 @@ static void *start_encoder( void *ptr )
         raw_frame = encoder->frames[0];
         pthread_mutex_unlock( &encoder->encoder_mutex );
 
+        if( raw_frame->format_change )
+        {
+            av_fifo_reset( in_fifo );
+            av_fifo_reset( out_fifo );
+            cur_pts = -1; /* reset the pts */
+        }
+
         if( cur_pts == -1 )
             cur_pts = raw_frame->pts;
 
