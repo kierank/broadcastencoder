@@ -66,8 +66,7 @@ static void *start_encoder( void *ptr )
 
     twolame_init_params( tl_opts );
 
-    /* NB: 125 = 1000 / 8 */
-    frame_size = (double)MP2_NUM_SAMPLES * 125 * enc_params->bitrate * enc_params->frames_per_pes / enc_params->sample_rate;
+    frame_size = twolame_get_framelength( tl_opts ) * enc_params->frames_per_pes;
 
     encoder->is_ready = 1;
     /* Broadcast because input and muxer can be stuck waiting for encoder */
