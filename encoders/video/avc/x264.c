@@ -133,7 +133,7 @@ static void *start_encoder( void *ptr )
     x264_picture_t pic, pic_out;
     x264_nal_t *nal;
     int i_nal, frame_size = 0, user_sar_width, user_sar_height;
-    int64_t pts = 0;
+    int64_t pts = 0, arrival_time = 0;
     int64_t *pts2;
     obe_raw_frame_t *raw_frame;
 
@@ -243,6 +243,7 @@ static void *start_encoder( void *ptr )
 
         frame_size = x264_encoder_encode( s, &nal, &i_nal, &pic, &pic_out );
 
+        arrival_time = raw_frame->arrival_time;
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
         remove_frame_from_encode_queue( encoder );
@@ -257,6 +258,13 @@ static void *start_encoder( void *ptr )
         {
             if( handle_frame( nal, frame_size, pic_out, h, encoder->stream_id ) < 0 )
                 break;
+#if 0
+            if( h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
+            {
+                coded_frame->arrival_time = arrival_time;
+                //printf("\n Encode Latency %"PRIi64" \n", obe_mdate() - coded_frame->arrival_time );
+            }
+#endif
         }
      }
 

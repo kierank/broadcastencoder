@@ -544,6 +544,19 @@ obe_t *obe_setup( void )
     return h;
 }
 
+int obe_set_config( obe_t *h, int system_type )
+{
+    if( system_type < OBE_SYSTEM_TYPE_GENERIC && system_type > OBE_SYSTEM_TYPE_LOW_LATENCY )
+    {
+        fprintf( stderr, "Invalid OBE system type\n" );
+        return -1;
+    }
+
+    h->obe_system = system_type;
+
+    return 0;
+}
+
 /* TODO handle error conditions */
 int64_t get_wallclock_in_mpeg_ticks( void )
 {
@@ -770,6 +783,18 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     }
 
     x264_param_default( param );
+
+    if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
+    {
+        param->sc.f_speed = 1.0;
+        param->sc.b_alt_timer = 1;
+        param->rc.i_lookahead = param->i_keyint_max;
+        param->b_open_gop = 1;
+        // TODO restrict threads
+    }
+    else
+        x264_param_default_preset( param, "veryfast", "zerolatency" );
+
     param->b_deterministic = 0;
     param->b_vfr_input = 0;
     param->b_pic_struct = 1;
@@ -826,12 +851,8 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     }
 
     x264_param_apply_profile( param, X264_BIT_DEPTH == 10 ? "high10" : "high" );
-
-    param->sc.f_speed = 1.0;
-    param->sc.b_alt_timer = 1;
-    param->b_aud = 1;
     param->i_nal_hrd = X264_NAL_HRD_FAKE_VBR;
-    param->rc.i_lookahead = param->i_keyint_max;
+    param->b_aud = 1;
     param->i_log_level = X264_LOG_WARNING;
 
     return 0;
@@ -969,6 +990,13 @@ int obe_start( obe_t *h )
 
             if( h->output_streams[i].stream_format == VIDEO_AVC )
             {
+                x264_param_t *x264_param = &h->output_streams[i].avc_param;
+                if( h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
+                {
+                    /* This doesn't need to be particularly accurate since x264 calculates the correct value internally */
+                    x264_param->rc.i_vbv_buffer_size = (double)x264_param->rc.i_vbv_max_bitrate * x264_param->i_fps_den / x264_param->i_fps_num;
+                }
+
                 vid_enc_params = calloc( 1, sizeof(*vid_enc_params) );
                 if( !vid_enc_params )
                 {
@@ -1013,7 +1041,7 @@ int obe_start( obe_t *h )
 
                 /* Choose the optimal number of audio frames per PES
 		 * TODO: E-AC3 (Needs T-STD information!), low-latency modifications */
-                if( !h->output_streams[i].ts_opts.frames_per_pes &&
+                if( !h->output_streams[i].ts_opts.frames_per_pes && h->obe_system != OBE_SYSTEM_TYPE_LOW_LATENCY &&
                     ( h->output_streams[i].stream_format == AUDIO_MP2 || h->output_streams[i].stream_format == AUDIO_AC_3 ) )
                 {
                     int buf_size = h->output_streams[i].stream_format == AUDIO_MP2 ? MISC_AUDIO_BS : AC3_BS_DVB;

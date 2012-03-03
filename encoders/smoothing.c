@@ -35,17 +35,20 @@ static void *start_smoothing( void *ptr )
     param.sched_priority = 99;
     pthread_setschedparam( pthread_self(), SCHED_FIFO, &param );
 
-    for( int i = 0; i < h->num_encoders; i++ )
+    if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
     {
-        if( h->encoders[i]->is_video )
+        for( int i = 0; i < h->num_encoders; i++ )
         {
-            pthread_mutex_lock( &h->encoders[i]->encoder_mutex );
-            if( !h->encoders[i]->is_ready )
-                pthread_cond_wait( &h->encoders[i]->encoder_cv, &h->encoders[i]->encoder_mutex );
-            x264_param_t *params = h->encoders[i]->encoder_params;
-            buffer_frames = params->sc.i_buffer_size;
-            pthread_mutex_unlock( &h->encoders[i]->encoder_mutex );
-            break;
+            if( h->encoders[i]->is_video )
+            {
+                pthread_mutex_lock( &h->encoders[i]->encoder_mutex );
+                if( !h->encoders[i]->is_ready )
+                    pthread_cond_wait( &h->encoders[i]->encoder_cv, &h->encoders[i]->encoder_mutex );
+                x264_param_t *params = h->encoders[i]->encoder_params;
+                buffer_frames = params->sc.i_buffer_size;
+                pthread_mutex_unlock( &h->encoders[i]->encoder_mutex );
+                break;
+            }
         }
     }
 
@@ -89,7 +92,15 @@ static void *start_smoothing( void *ptr )
         if( !ready )
         {
             if( num_smoothing_frames >= buffer_frames )
+            {
+                if( h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
+                {
+                    /* Use a 30ms dejitter buffer. FIXME: is this enough */
+                    sleep_mpeg_ticks( 810000 );
+                }
+
                 ready = 1;
+            }
             else
             {
                 pthread_mutex_unlock( &h->smoothing_mutex );

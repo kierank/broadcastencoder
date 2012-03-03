@@ -59,7 +59,9 @@ static volatile int b_ctrl_c = 0;
 static char *line_read = NULL;
 
 static int running = 0;
+static int system_type_value = OBE_SYSTEM_TYPE_GENERIC;
 
+static const char * const system_types[]             = { "generic", "lowlatency", 0 };
 static const char * const input_types[]              = { "url", "decklink", "linsys-sdi", 0 };
 static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50", "720p59.94", "720p60", "1080i50", "1080i59.94", "1080i60",
                                                          "1080p23.98", "1080p24", "1080p25", "1080p29.97", "1080p30", "1080p50", "1080p59.94",
@@ -75,6 +77,7 @@ static const char * const audio_types[]              = { "undefined", "clean-eff
 static const char * const aac_encapsulations[]       = { "adts", "latm", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 
+static const char * system_opts[] = { "system-type", NULL };
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", "ttx-location", NULL };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
@@ -304,6 +307,41 @@ static int parse_enum_value( const char *arg, const char * const *names, int *ds
 }
 
 /* set functions - TODO add lots more opts */
+static int set_obe( char *command, obecli_command_t *child )
+{
+    if( !strlen( command ) )
+        return -1;
+
+    int tok_len = strcspn( command, " " );
+    int str_len = strlen( command );
+    command[tok_len] = 0;
+
+    if( !strcasecmp( command, "opts" ) && str_len > tok_len )
+    {
+        char *params = command + tok_len + 1;
+        char **opts = obe_split_options( params, system_opts );
+        if( !opts && params )
+            return -1;
+
+        char *system_type     = obe_get_option( system_opts[0], opts );
+
+        FAIL_IF_ERROR( system_type && ( check_enum_value( system_type, system_types ) < 0 ),
+                       "Invalid system type\n" );
+
+        FAIL_IF_ERROR( cli.program.num_streams, "Cannot change OBE options after probing\n" )
+
+        if( system_type )
+        {
+            parse_enum_value( system_type, system_types, &system_type_value );
+            obe_set_config( cli.h, system_type_value );
+	}
+
+        obe_free_string_array( opts );
+    }
+
+    return 0;
+}
+
 static int set_input( char *command, obecli_command_t *child )
 {
     if( !strlen( command ) )
@@ -433,10 +471,13 @@ static int set_stream( char *command, obecli_command_t *child )
                 x264_param_t *avc_param = &cli.output_streams[stream_id].avc_param;
 
                 FAIL_IF_ERROR( profile && ( check_enum_value( profile, x264_profile_names ) < 0 ),
-                              "Invalid AVC profile\n" );
+                               "Invalid AVC profile\n" );
+
+                FAIL_IF_ERROR( vbv_bufsize && system_type_value == OBE_SYSTEM_TYPE_LOW_LATENCY,
+                               "VBV buffer size is not user-settable in low-latency mode\n" );
 
                 FAIL_IF_ERROR( frame_packing && ( check_enum_value( frame_packing, frame_packing_modes ) < 0 ),
-                              "Invalid frame packing mode\n" );
+                               "Invalid frame packing mode\n" )
 
                 /* Set it to encode by default */
                 cli.output_streams[stream_id].stream_action = STREAM_ENCODE;
@@ -816,7 +857,8 @@ static int start_encode( char *command, obecli_command_t *child )
     {
         if( cli.program.streams[i].stream_type == STREAM_TYPE_VIDEO )
         {
-            FAIL_IF_ERROR( !cli.output_streams[i].avc_param.rc.i_vbv_buffer_size,
+            /* x264 calculates the single-frame VBV size later on */
+            FAIL_IF_ERROR( system_type_value == OBE_SYSTEM_TYPE_GENERIC && !cli.output_streams[i].avc_param.rc.i_vbv_buffer_size,
                            "No VBV buffer size chosen\n" );
 
             FAIL_IF_ERROR( !cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate && !cli.output_streams[i].avc_param.rc.i_bitrate,
