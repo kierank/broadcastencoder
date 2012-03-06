@@ -334,7 +334,7 @@ static int set_obe( char *command, obecli_command_t *child )
         {
             parse_enum_value( system_type, system_types, &system_type_value );
             obe_set_config( cli.h, system_type_value );
-	}
+        }
 
         obe_free_string_array( opts );
     }
