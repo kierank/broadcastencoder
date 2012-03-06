@@ -132,8 +132,8 @@ static void *start_encoder( void *ptr )
         if( raw_frame->format_change )
         {
             /* In theory we should encode the remaining samples but the format switch won't be clean anyway
-	     * so a couple of audio frames missing won't do any harm. Unlike other encoders twolame needs to be
-	     * closed and reopened because it buffers audio samples internally. */
+             * so a couple of audio frames missing won't do any harm. Unlike other encoders twolame needs to be
+             * closed and reopened because it buffers audio samples internally. */
             twolame_close( &tl_opts );
             av_fifo_reset( fifo );
 

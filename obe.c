@@ -1040,7 +1040,7 @@ int obe_start( obe_t *h )
                 aud_enc_params->num_channels = av_get_channel_layout_nb_channels( input_stream->channel_layout );
 
                 /* Choose the optimal number of audio frames per PES
-		 * TODO: E-AC3 (Needs T-STD information!), low-latency modifications */
+                 * TODO: E-AC3 (Needs T-STD information!), low-latency modifications */
                 if( !h->output_streams[i].ts_opts.frames_per_pes && h->obe_system != OBE_SYSTEM_TYPE_LOW_LATENCY &&
                     ( h->output_streams[i].stream_format == AUDIO_MP2 || h->output_streams[i].stream_format == AUDIO_AC_3 ) )
                 {
