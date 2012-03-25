@@ -864,6 +864,7 @@ static void *probe_stream( void *ptr )
 
     decklink_opts->probe = non_display_parser->probe = 1;
     non_display_parser->teletext_location = user_opts->teletext_location;
+    non_display_parser->wss_output = user_opts->wss_output;
 
     decklink_ctx = &decklink_opts->decklink_ctx;
     decklink_ctx->h = h;
@@ -1015,6 +1016,7 @@ static void *open_input( void *ptr )
 
     non_display_parser = &decklink_ctx->non_display_parser;
     non_display_parser->teletext_location = device->user_opts.teletext_location;
+    non_display_parser->wss_output = user_opts->wss_output;
     non_display_parser->device = device;
 
     /* TODO: wait for encoder */

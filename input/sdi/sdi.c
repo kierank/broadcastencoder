@@ -213,6 +213,8 @@ int non_display_data_was_probed( obe_device_t *device, int type, int source, int
     obe_int_input_stream_t *stream = NULL;
 
     int location = get_non_display_location( type );
+    if( location < 0 )
+        return 0;
 
     if( location == USER_DATA_LOCATION_FRAME )
     {

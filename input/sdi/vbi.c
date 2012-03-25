@@ -76,11 +76,13 @@ static void write_bytes( bs_t *s, uint8_t *bytes, int length )
 
 static void set_teletext_flags( obe_sdi_non_display_data_t *non_display_data )
 {
-    non_display_data->has_ttx_frame = non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX ||
-                                      non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX_AND_VBI;
+    non_display_data->has_ttx_frame = non_display_data->teletext_location != TELETEXT_LOCATION_DVB_VBI;
+    non_display_data->has_vbi_frame |= non_display_data->teletext_location != TELETEXT_LOCATION_DVB_TTX;
+}
 
-    non_display_data->has_vbi_frame = non_display_data->teletext_location == TELETEXT_LOCATION_DVB_VBI ||
-                                      non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX_AND_VBI;
+static void set_wss_flags( obe_sdi_non_display_data_t *non_display_data )
+{
+    non_display_data->has_vbi_frame |= non_display_data->wss_output != WSS_OUTPUT_AFD;
 }
 
 static int get_vbi_type( int sliced_type )
@@ -202,8 +204,7 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                 found = 1;
             }
 
-            /* AFD is a superset of WSS so don't duplicate it
-             * TODO: have a user mode where WSS is converted to AFD without any DVB-VBI PID */
+            /* AFD is a superset of WSS so don't duplicate it */
             if( vbi_type == MISC_WSS && check_probed_non_display_data( non_display_data, MISC_AFD ) )
             {
                 found = 1;
@@ -215,24 +216,28 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
 
             if( vbi_type == MISC_TELETEXT )
                 set_teletext_flags( non_display_data );
+            else if( vbi_type == MISC_WSS )
+                set_wss_flags( non_display_data );
             else if( vbi_type != CAPTIONS_CEA_608 )
                 non_display_data->has_vbi_frame = 1;
 
-            tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+1) * sizeof(*non_display_data->frame_data) );
-            if( !tmp )
-                goto fail;
+            if( vbi_type != MISC_WSS || ( vbi_type == MISC_WSS && non_display_data->wss_output != WSS_OUTPUT_AFD ) )
+            {
+                tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+1) * sizeof(*non_display_data->frame_data) );
+                if( !tmp )
+                    goto fail;
 
-            non_display_data->frame_data = tmp;
-            frame_data = &non_display_data->frame_data[non_display_data->num_frame_data++];
-            frame_data->type = vbi_type;
-            frame_data->source = VBI_RAW;
-            frame_data->num_lines = 0;
-            frame_data->lines[frame_data->num_lines++] = sliced[i].line;
-            frame_data->location = get_non_display_location( frame_data->type );
+                non_display_data->frame_data = tmp;
+                frame_data = &non_display_data->frame_data[non_display_data->num_frame_data++];
+                frame_data->type = vbi_type;
+                frame_data->source = VBI_RAW;
+                frame_data->num_lines = 0;
+                frame_data->lines[frame_data->num_lines++] = sliced[i].line;
+                frame_data->location = get_non_display_location( frame_data->type );
+            }
 
-            /* WSS is converted to AFD so tell the user this.
-             * TODO: make this user-settable */
-            if( frame_data->type == MISC_WSS )
+            /* WSS is converted to AFD so tell the user this */
+            if( vbi_type == MISC_WSS && ( non_display_data->wss_output != WSS_OUTPUT_DVB_VBI ) )
             {
                 tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+1) * sizeof(*non_display_data->frame_data) );
                 if( !tmp )
@@ -298,19 +303,18 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
             }
             else if( sliced[i].id == VBI_SLICED_WSS_625 )
             {
-                /* Don't duplicate AFD data */
-                found |= !non_display_data_was_probed( non_display_data->device, MISC_WSS, VBI_RAW, sliced[i].line );
+                /* Check the appropriate streams were probed */
+                if( non_display_data->wss_output != WSS_OUTPUT_AFD )
+                    found |= !non_display_data_was_probed( non_display_data->device, MISC_WSS, VBI_RAW, sliced[i].line );
+                else
+                    found |= !non_display_data_was_probed( non_display_data->device, MISC_AFD, MISC_WSS, sliced[i].line );
+
+                /* Don't duplicate AFD data from VII or VANC */
                 found |= check_active_non_display_data( raw_frame, USER_DATA_AFD );
 
-                if( found )
-                {
-                    REMOVE_LINES( 1 );
-                }
-                else
+                if( !found && non_display_data->wss_output != WSS_OUTPUT_DVB_VBI )
                 {
                     /* Attach the WSS data to the frame's user data to be converted later to AFD */
-                    non_display_data->has_vbi_frame = 1;
-
                     tmp2 = realloc( raw_frame->user_data, (raw_frame->num_user_data+1) * sizeof(*raw_frame->user_data) );
                     if( !tmp2 )
                         goto fail;
@@ -327,6 +331,13 @@ int decode_vbi( obe_sdi_non_display_data_t *non_display_data, uint8_t *lines, ob
                     user_data->type = USER_DATA_WSS;
                     user_data->source = VBI_RAW;
                 }
+
+                if( found || non_display_data->wss_output == WSS_OUTPUT_AFD )
+                {
+                    REMOVE_LINES( 1 );
+                }
+                else
+                    set_wss_flags( non_display_data );
             }
             else
             {

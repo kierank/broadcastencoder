@@ -105,6 +105,13 @@ enum teletext_location_e
     TELETEXT_LOCATION_DVB_TTX_AND_VBI,
 };
 
+enum wss_output_e
+{
+    WSS_OUTPUT_AFD,
+    WSS_OUTPUT_DVB_VBI,
+    WSS_OUTPUT_AFD_AND_DVB_VBI,
+};
+
 typedef struct
 {
     int input_type;
@@ -117,6 +124,7 @@ typedef struct
     int audio_connection;
 
     int teletext_location;
+    int wss_output;
 } obe_input_t;
 
 /**** Stream Formats ****/

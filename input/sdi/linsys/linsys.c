@@ -1092,6 +1092,9 @@ static void *probe_stream( void *ptr )
     linsys_opts.linsys_ctx.h = h;
     linsys_opts.linsys_ctx.last_frame_time = -1;
     linsys_opts.probe = non_display_parser->probe = 1;
+    non_display_parser->teletext_location = user_opts->teletext_location;
+    non_display_parser->wss_output = user_opts->wss_output;
+
     linsys_opts.audio_samples = 2000; /* not important yet when probing */
 
     if( open_card( &linsys_opts ) < 0 )
@@ -1106,6 +1109,8 @@ static void *probe_stream( void *ptr )
     }
 
     close_card( &linsys_opts );
+
+    // TODO add support for DVB teletext
 
     for( int i = 0; i < non_display_parser->num_frame_data; i++ )
     {
@@ -1205,6 +1210,7 @@ static void *open_input( void *ptr )
 
     non_display_parser = &linsys_ctx->non_display_parser;
     non_display_parser->teletext_location = device->user_opts.teletext_location;
+    non_display_parser->wss_output = user_opts->wss_output;
     non_display_parser->device = device;
 
     /* TODO: wait for encoder */

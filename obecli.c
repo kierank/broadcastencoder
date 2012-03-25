@@ -69,6 +69,7 @@ static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50"
 static const char * const input_video_connections[]  = { "sdi", "hdmi", "optical-sdi", "component", "composite", "s-video", 0 };
 static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", "analogue", 0 };
 static const char * const ttx_locations[]            = { "dvb-ttx", "dvb-vbi", "both", 0 };
+static const char * const wss_outputs[]              = { "afd", "dvb-vbi", "both", 0 };
 static const char * const stream_actions[]           = { "passthrough", "encode", 0 };
 static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", "e-ac3", "aac-experimental", 0 };
 static const char * const frame_packing_modes[]      = { "none", "checkerboard", "column", "row", "side-by-side", "top-bottom", "temporal", 0 };
@@ -78,7 +79,8 @@ static const char * const aac_encapsulations[]       = { "adts", "latm", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 
 static const char * system_opts[] = { "system-type", NULL };
-static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", "ttx-location", NULL };
+static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", "ttx-location",
+                                      "wss-output", NULL };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
                                       /* Encoding options */
@@ -364,6 +366,7 @@ static int set_input( char *command, obecli_command_t *child )
         char *video_connection = obe_get_option( input_opts[3], opts );
         char *audio_connection = obe_get_option( input_opts[4], opts );
         char *ttx_location = obe_get_option( input_opts[5], opts );
+        char *wss_output   = obe_get_option( input_opts[6], opts );
 
         FAIL_IF_ERROR( video_format && ( check_enum_value( video_format, input_video_formats ) < 0 ),
                        "Invalid video format\n" );
@@ -376,6 +379,9 @@ static int set_input( char *command, obecli_command_t *child )
 
         FAIL_IF_ERROR( ttx_location && ( check_enum_value( ttx_location, ttx_locations ) < 0 ),
                        "Invalid teletext location\n" );
+
+        FAIL_IF_ERROR( wss_output && ( check_enum_value( wss_output, wss_outputs ) < 0 ),
+                       "Invalid WSS output location\n" );
 
         if( location )
         {
@@ -396,6 +402,8 @@ static int set_input( char *command, obecli_command_t *child )
             parse_enum_value( audio_connection, input_audio_connections, &cli.input.audio_connection );
         if( ttx_location )
             parse_enum_value( ttx_location, ttx_locations, &cli.input.teletext_location );
+        if( wss_output )
+            parse_enum_value( wss_output, wss_outputs, &cli.input.wss_output );
 
         obe_free_string_array( opts );
     }

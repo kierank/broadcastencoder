@@ -58,6 +58,7 @@ typedef struct
     /* VBI */
     int ntsc;
     int teletext_location;
+    int wss_output;
     int num_vbi;
     vbi_sliced vbi_slices[100];
     int has_vbi_frame;
