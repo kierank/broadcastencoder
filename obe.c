@@ -600,6 +600,7 @@ static int obe_validate_input_params( obe_input_t *input_device )
 int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *program )
 {
     pthread_t thread;
+    void *ret_ptr;
     obe_int_input_stream_t *stream_in;
     obe_input_stream_t *stream_out;
     obe_input_probe_t *args = NULL;
@@ -696,6 +697,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     }
 
     pthread_cancel( thread );
+    pthread_join( thread, &ret_ptr );
 
     cur_devices = h->num_devices;
 
