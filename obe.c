@@ -791,7 +791,6 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         param->sc.f_speed = 1.0;
         param->sc.b_alt_timer = 1;
         param->rc.i_lookahead = param->i_keyint_max;
-        param->b_open_gop = 1;
         // TODO restrict threads
     }
     else
