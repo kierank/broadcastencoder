@@ -215,6 +215,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     uint8_t *vbi_buf;
     int anc_lines[DECKLINK_VANC_LINES];
     IDeckLinkVideoFrameAncillary *ancillary;
+    BMDTimeValue stream_time, frame_duration;
 
     if( decklink_opts_->probe_success )
         return S_OK;
@@ -230,6 +231,10 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         }
         else if( decklink_opts_->probe )
             decklink_opts_->probe_success = 1;
+
+        /* use SDI ticks as clock source */
+        videoframe->GetStreamTime( &stream_time, &frame_duration, OBE_CLOCK );
+        obe_clock_tick( h, (int64_t)stream_time );
 
         if( decklink_ctx->last_frame_time == -1 )
             decklink_ctx->last_frame_time = obe_mdate();
@@ -423,9 +428,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
             /* If AFD is present and the stream is SD this will be changed in the video filter */
             raw_frame->sar_width = raw_frame->sar_height = 1;
-
-            BMDTimeValue stream_time, frame_duration;
-            videoframe->GetStreamTime( &stream_time, &frame_duration, OBE_CLOCK );
             raw_frame->pts = stream_time;
 
             for( int i = 0; i < decklink_ctx->device->num_input_streams; i++ )

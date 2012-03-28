@@ -28,7 +28,7 @@ static void *start_smoothing( void *ptr )
 {
     obe_t *h = ptr;
     int num_smoothing_frames = 0, ready = 0, buffer_frames = 0;
-    int64_t start_mpeg_time = 0, start_dts_time = 0, last_clock = -1, last_dts = -1;
+    int64_t start_dts = -1, start_pts = -1;
     obe_coded_frame_t *coded_frame = NULL;
 
     struct sched_param param = {0};
@@ -85,22 +85,13 @@ static void *start_smoothing( void *ptr )
         {
             syslog( LOG_INFO, "Smoothing buffer reset\n" );
             ready = h->smoothing_drop = 0;
-            last_clock = -1;
         }
         pthread_mutex_unlock( &h->drop_mutex );
 
         if( !ready )
         {
             if( num_smoothing_frames >= buffer_frames )
-            {
-                if( h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
-                {
-                    /* Use a 30ms dejitter buffer. FIXME: is this enough */
-                    sleep_mpeg_ticks( 810000 );
-                }
-
                 ready = 1;
-            }
             else
             {
                 pthread_mutex_unlock( &h->smoothing_mutex );
@@ -111,22 +102,32 @@ static void *start_smoothing( void *ptr )
 //        printf("\n smoothed frames %i \n", num_smoothing_frames );
 
         coded_frame = h->smoothing_frames[0];
-
         pthread_mutex_unlock( &h->smoothing_mutex );
 
-        if( last_clock != -1 )
-        {
-            sleep_mpeg_ticks( coded_frame->real_dts - start_dts_time + start_mpeg_time );
-        }
+        /* The terminology can be a cause for confusion:
+         *   pts refers to the pts from the input which is monotonic
+         *   dts refers to the dts out of the encoder which is monotonic */
 
-        if( last_clock == -1 )
-        {
-            start_mpeg_time = get_wallclock_in_mpeg_ticks();
-            start_dts_time = coded_frame->real_dts;
-        }
+        pthread_mutex_lock( &h->smoothing_clock_mutex );
 
-        last_clock = get_wallclock_in_mpeg_ticks();
-        last_dts = coded_frame->real_dts;
+        //printf("\n dts gap %"PRIi64" \n", coded_frame->real_dts - start_dts );
+        //printf("\n pts gap %"PRIi64" \n", h->smoothing_last_pts - start_pts );
+
+        if( start_dts == -1 )
+        {
+            start_dts = coded_frame->real_dts;
+            /* Wait until the next clock tick */
+            pthread_cond_wait( &h->smoothing_clock_cv, &h->smoothing_clock_mutex );
+            start_pts = h->smoothing_last_pts;
+        }
+        else if( coded_frame->real_dts - start_dts > h->smoothing_last_pts - start_pts )
+        {
+            //printf("\n waiting \n");
+            pthread_cond_wait( &h->smoothing_clock_cv, &h->smoothing_clock_mutex );
+        }
+        /* otherwise, continue since the frame is late */
+
+        pthread_mutex_unlock( &h->smoothing_clock_mutex );
 
         add_to_mux_queue( h, coded_frame );
 

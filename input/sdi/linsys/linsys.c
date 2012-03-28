@@ -284,12 +284,16 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
     uint16_t *anc_buf = NULL, *anc_buf_pos = NULL;
     uint16_t *y_src, *u_src, *v_src;
     uint8_t *vbi_buf;
-    int64_t pts;
+    int64_t pts, sdi_clock;
 
     obe_image_t *output;
 
     if( linsys_ctx->non_display_parser.has_probed )
         return 0;
+
+    /* use SDI ticks as clock source */
+    sdi_clock = av_rescale_q( linsys_ctx->v_counter, linsys_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+    obe_clock_tick( h, sdi_clock );
 
     if( linsys_ctx->last_frame_time == -1 )
         linsys_ctx->last_frame_time = obe_mdate();

@@ -575,6 +575,16 @@ void sleep_mpeg_ticks( int64_t i_time )
     clock_nanosleep( CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, &ts );
 }
 
+void obe_clock_tick( obe_t *h, int64_t value )
+{
+    /* Use this signal as the SDI clocksource */
+    pthread_mutex_lock( &h->smoothing_clock_mutex );
+    h->smoothing_last_pts = value;
+    h->smoothing_last_timestamp = get_wallclock_in_mpeg_ticks();
+    pthread_mutex_unlock( &h->smoothing_clock_mutex );
+    pthread_cond_signal( &h->smoothing_clock_cv );
+}
+
 int get_non_display_location( int type )
 {
     /* Set the appropriate location */
@@ -919,6 +929,8 @@ int obe_start( obe_t *h )
     pthread_mutex_init( &h->drop_mutex, NULL );
     pthread_mutex_init( &h->smoothing_mutex, NULL );
     pthread_cond_init( &h->smoothing_cv, NULL );
+    pthread_mutex_init( &h->smoothing_clock_mutex, NULL );
+    pthread_cond_init( &h->smoothing_clock_cv, NULL );
     pthread_mutex_init( &h->mux_mutex, NULL );
     pthread_cond_init( &h->mux_cv, NULL );
     pthread_mutex_init( &h->output_mutex, NULL );
