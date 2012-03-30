@@ -786,16 +786,6 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
 
     x264_param_default( param );
 
-    if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
-    {
-        param->sc.f_speed = 1.0;
-        param->sc.b_alt_timer = 1;
-        param->rc.i_lookahead = param->i_keyint_max;
-        // TODO restrict threads
-    }
-    else
-        x264_param_default_preset( param, "veryfast", "zerolatency" );
-
     param->b_deterministic = 0;
     param->b_vfr_input = 0;
     param->b_pic_struct = 1;
@@ -855,6 +845,16 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     param->i_nal_hrd = X264_NAL_HRD_FAKE_VBR;
     param->b_aud = 1;
     param->i_log_level = X264_LOG_WARNING;
+
+    if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
+    {
+        param->sc.f_speed = 1.0;
+        param->sc.b_alt_timer = 1;
+        param->rc.i_lookahead = param->i_keyint_max;
+        // TODO restrict threads
+    }
+    else
+        x264_param_default_preset( param, "veryfast", "zerolatency" );
 
     return 0;
 }
