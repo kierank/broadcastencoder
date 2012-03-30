@@ -844,7 +844,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     x264_param_apply_profile( param, X264_BIT_DEPTH == 10 ? "high10" : "high" );
     param->i_nal_hrd = X264_NAL_HRD_FAKE_VBR;
     param->b_aud = 1;
-    param->i_log_level = X264_LOG_WARNING;
+    param->i_log_level = X264_LOG_INFO;
 
     if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
     {
