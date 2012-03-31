@@ -23,6 +23,7 @@
 
 #include "common/common.h"
 #include "encoders/video/video.h"
+#include <libavutil/mathematics.h>
 
 static void x264_logger( void *p_unused, int i_level, const char *psz_fmt, va_list arg )
 {
@@ -104,8 +105,9 @@ static void *start_encoder( void *ptr )
     x264_picture_t pic, pic_out;
     x264_nal_t *nal;
     int i_nal, frame_size = 0, user_sar_width, user_sar_height;
-    int64_t pts = 0, arrival_time = 0;
+    int64_t pts = 0, arrival_time = 0, frame_duration, buffer_duration;
     int64_t *pts2;
+    float buffer_fill;
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
 
@@ -135,6 +137,10 @@ static void *start_encoder( void *ptr )
     memcpy( encoder->encoder_params, &enc_params->avc_param, sizeof(enc_params->avc_param) );
 
     encoder->is_ready = 1;
+    /* XXX: This will need fixing for soft pulldown streams */
+    frame_duration = av_rescale_q( 1, (AVRational){enc_params->avc_param.i_fps_den, enc_params->avc_param.i_fps_num}, (AVRational){1, OBE_CLOCK} );
+    buffer_duration = frame_duration * enc_params->avc_param.sc.i_buffer_size;
+
     /* Broadcast because input and muxer can be stuck waiting for encoder */
     pthread_cond_broadcast( &encoder->encoder_cv );
     pthread_mutex_unlock( &encoder->encoder_mutex );
@@ -161,6 +167,7 @@ static void *start_encoder( void *ptr )
             break;
         }
 
+#if 0
         /* Reset the speedcontrol buffer if the source has dropped frames. Otherwise speedcontrol
          * stays in an underflow state and is locked to the fastest preset */
         pthread_mutex_lock( &h->drop_mutex );
@@ -171,6 +178,7 @@ static void *start_encoder( void *ptr )
             h->encoder_drop = 0;
         }
         pthread_mutex_unlock( &h->drop_mutex );
+#endif
 
         raw_frame = encoder->frames[0];
         pthread_mutex_unlock( &encoder->encoder_mutex );
@@ -211,6 +219,33 @@ static void *start_encoder( void *ptr )
             }
 
             x264_encoder_reconfig( s, &enc_params->avc_param );
+        }
+
+        /* Update speedcontrol based on the system state */
+        if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
+        {
+            pthread_mutex_lock( &h->smoothing_mutex );
+            if( h->smoothing_buffer_complete )
+            {
+                /* Wait until a frame is sent out. */
+                while( !h->smoothing_last_exit_time )
+                    pthread_cond_wait( &h->smoothing_out_cv, &h->smoothing_mutex );
+
+                /* time elapsed since last frame was removed */
+                int64_t last_frame_delta = get_input_clock_in_mpeg_ticks( h ) - h->smoothing_last_exit_time;
+
+                if( h->num_smoothing_frames )
+                {
+                    int64_t frame_durations = h->smoothing_frames[h->num_smoothing_frames-1]->real_dts - h->smoothing_frames[0]->real_dts + frame_duration;
+                    buffer_fill = (float)(frame_durations - last_frame_delta)/buffer_duration;
+                }
+                else
+                    buffer_fill = (float)(-1 * last_frame_delta)/buffer_duration;
+
+                x264_speedcontrol_sync( s, buffer_fill, enc_params->avc_param.sc.i_buffer_size, 1 );
+            }
+
+            pthread_mutex_unlock( &h->smoothing_mutex );
         }
 
         frame_size = x264_encoder_encode( s, &nal, &i_nal, &pic, &pic_out );

@@ -461,7 +461,8 @@ struct obe_t
 
     /* Encoded video frames in smoothing buffer */
     pthread_mutex_t smoothing_mutex;
-    pthread_cond_t  smoothing_cv;
+    pthread_cond_t  smoothing_in_cv;
+    pthread_cond_t  smoothing_out_cv;
 
     int64_t         smoothing_last_pts; /* from sdi clock */
     int64_t         smoothing_last_timestamp; /* from cpu clock */
@@ -470,6 +471,9 @@ struct obe_t
 
     int num_smoothing_frames;
     obe_coded_frame_t **smoothing_frames;
+
+    int             smoothing_buffer_complete;
+    int64_t         smoothing_last_exit_time;
 
     /* Encoded frames for muxing */
     pthread_mutex_t mux_mutex;
@@ -524,6 +528,7 @@ obe_output_stream_t *get_output_stream( obe_t *h, int stream_id );
 int64_t get_wallclock_in_mpeg_ticks( void );
 void sleep_mpeg_ticks( int64_t i_delay );
 void obe_clock_tick( obe_t *h, int64_t value );
+int64_t get_input_clock_in_mpeg_ticks( obe_t *h );
 
 int get_non_display_location( int type );
 

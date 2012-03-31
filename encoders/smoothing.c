@@ -35,6 +35,7 @@ static void *start_smoothing( void *ptr )
     param.sched_priority = 99;
     pthread_setschedparam( pthread_self(), SCHED_FIFO, &param );
 
+    /* FIXME: when we have soft pulldown this will need changing */
     if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
     {
         for( int i = 0; i < h->num_encoders; i++ )
@@ -68,7 +69,7 @@ static void *start_smoothing( void *ptr )
         {
 //            if( ready )
 //                printf("\n smoothing wait underflow \n" );
-            pthread_cond_wait( &h->smoothing_cv, &h->smoothing_mutex );
+            pthread_cond_wait( &h->smoothing_in_cv, &h->smoothing_mutex );
         }
 
         if( h->cancel_smoothing_thread )
@@ -79,6 +80,7 @@ static void *start_smoothing( void *ptr )
 
         num_smoothing_frames = h->num_smoothing_frames;
 
+#if 0
         /* Refill the buffer after a drop */
         pthread_mutex_lock( &h->drop_mutex );
         if( h->smoothing_drop )
@@ -87,11 +89,13 @@ static void *start_smoothing( void *ptr )
             ready = h->smoothing_drop = 0;
         }
         pthread_mutex_unlock( &h->drop_mutex );
-
+#endif
         if( !ready )
         {
             if( num_smoothing_frames >= buffer_frames )
-                ready = 1;
+            {
+                h->smoothing_buffer_complete = ready = 1;
+            }
             else
             {
                 pthread_mutex_unlock( &h->smoothing_mutex );
@@ -131,8 +135,8 @@ static void *start_smoothing( void *ptr )
 
         add_to_mux_queue( h, coded_frame );
 
-        //printf("\n send_delta %"PRIi64" \n", obe_mdate() - send_delta );
-        //send_delta = obe_mdate();
+        //printf("\n send_delta %"PRIi64" \n", get_input_clock_in_mpeg_ticks( h ) - send_delta );
+        //send_delta = get_input_clock_in_mpeg_ticks( h );
 
         remove_from_smoothing_queue( h );
         num_smoothing_frames = 0;

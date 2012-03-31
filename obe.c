@@ -315,7 +315,7 @@ int add_to_smoothing_queue( obe_t *h, obe_coded_frame_t *coded_frame )
     }
     h->smoothing_frames = tmp;
     h->smoothing_frames[h->num_smoothing_frames++] = coded_frame;
-    pthread_cond_signal( &h->smoothing_cv );
+    pthread_cond_signal( &h->smoothing_in_cv );
     pthread_mutex_unlock( &h->smoothing_mutex );
 
     return 0;
@@ -338,6 +338,9 @@ int remove_from_smoothing_queue( obe_t *h )
         h->smoothing_frames = tmp;
         break;
     }
+
+    h->smoothing_last_exit_time = get_input_clock_in_mpeg_ticks( h );
+    pthread_cond_broadcast( &h->smoothing_out_cv );
     pthread_mutex_unlock( &h->smoothing_mutex );
 
     return 0;
@@ -582,7 +585,17 @@ void obe_clock_tick( obe_t *h, int64_t value )
     h->smoothing_last_pts = value;
     h->smoothing_last_timestamp = get_wallclock_in_mpeg_ticks();
     pthread_mutex_unlock( &h->smoothing_clock_mutex );
-    pthread_cond_signal( &h->smoothing_clock_cv );
+    pthread_cond_broadcast( &h->smoothing_clock_cv );
+}
+
+int64_t get_input_clock_in_mpeg_ticks( obe_t *h )
+{
+    int64_t value;
+    pthread_mutex_lock( &h->smoothing_clock_mutex );
+    value = h->smoothing_last_pts + ( get_wallclock_in_mpeg_ticks() - h->smoothing_last_timestamp );
+    pthread_mutex_unlock( &h->smoothing_clock_mutex );
+
+    return value;
 }
 
 int get_non_display_location( int type )
@@ -928,7 +941,8 @@ int obe_start( obe_t *h )
     pthread_mutex_init( &h->devices[0]->device_mutex, NULL );
     pthread_mutex_init( &h->drop_mutex, NULL );
     pthread_mutex_init( &h->smoothing_mutex, NULL );
-    pthread_cond_init( &h->smoothing_cv, NULL );
+    pthread_cond_init( &h->smoothing_in_cv, NULL );
+    pthread_cond_init( &h->smoothing_out_cv, NULL );
     pthread_mutex_init( &h->smoothing_clock_mutex, NULL );
     pthread_cond_init( &h->smoothing_clock_cv, NULL );
     pthread_mutex_init( &h->mux_mutex, NULL );
@@ -1228,7 +1242,7 @@ void obe_close( obe_t *h )
     {
         pthread_mutex_lock( &h->smoothing_mutex );
         h->cancel_smoothing_thread = 1;
-        pthread_cond_signal( &h->smoothing_cv );
+        pthread_cond_signal( &h->smoothing_in_cv );
         pthread_mutex_unlock( &h->smoothing_mutex );
         pthread_join( h->smoothing_thread, &ret_ptr );
     }
