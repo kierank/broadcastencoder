@@ -27,8 +27,8 @@
 
 static void x264_logger( void *p_unused, int i_level, const char *psz_fmt, va_list arg )
 {
-    if( i_level <= X264_LOG_WARNING )
-        vsyslog( i_level == X264_LOG_WARNING ? LOG_WARNING : LOG_ERR, psz_fmt, arg );
+    if( i_level <= X264_LOG_INFO )
+        vsyslog( i_level == X264_LOG_INFO ? LOG_INFO : i_level == X264_LOG_WARNING ? LOG_WARNING : LOG_ERR, psz_fmt, arg );
 }
 
 static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_frame )
@@ -174,7 +174,7 @@ static void *start_encoder( void *ptr )
         if( h->encoder_drop )
         {
             syslog( LOG_INFO, "Speedcontrol reset\n" );
-            x264_speedcontrol_sync( s, enc_params->avc_param.sc.i_buffer_size, enc_params->avc_param.sc.f_buffer_init );
+            x264_speedcontrol_sync( s, enc_params->avc_param.sc.i_buffer_size, enc_params->avc_param.sc.f_buffer_init, 0 );
             h->encoder_drop = 0;
         }
         pthread_mutex_unlock( &h->drop_mutex );
