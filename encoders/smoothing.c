@@ -27,7 +27,7 @@
 static void *start_smoothing( void *ptr )
 {
     obe_t *h = ptr;
-    int num_smoothing_frames = 0, ready = 0, buffer_frames = 0;
+    int num_smoothing_frames = 0, buffer_frames = 0;
     int64_t start_dts = -1, start_pts = -1;
     obe_coded_frame_t *coded_frame = NULL;
 
@@ -66,11 +66,7 @@ static void *start_smoothing( void *ptr )
         }
 
         if( h->num_smoothing_frames == num_smoothing_frames )
-        {
-//            if( ready )
-//                printf("\n smoothing wait underflow \n" );
             pthread_cond_wait( &h->smoothing_in_cv, &h->smoothing_mutex );
-        }
 
         if( h->cancel_smoothing_thread )
         {
@@ -80,21 +76,12 @@ static void *start_smoothing( void *ptr )
 
         num_smoothing_frames = h->num_smoothing_frames;
 
-#if 0
-        /* Refill the buffer after a drop */
-        pthread_mutex_lock( &h->drop_mutex );
-        if( h->smoothing_drop )
-        {
-            syslog( LOG_INFO, "Smoothing buffer reset\n" );
-            ready = h->smoothing_drop = 0;
-        }
-        pthread_mutex_unlock( &h->drop_mutex );
-#endif
-        if( !ready )
+        if( !h->smoothing_buffer_complete )
         {
             if( num_smoothing_frames >= buffer_frames )
             {
-                h->smoothing_buffer_complete = ready = 1;
+                h->smoothing_buffer_complete = 1;
+                start_dts = -1;
             }
             else
             {

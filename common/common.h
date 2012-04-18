@@ -435,7 +435,6 @@ struct obe_t
      * TODO: make this work for multiple inputs and outputs */
     pthread_mutex_t drop_mutex;
     int encoder_drop;
-    int smoothing_drop;
     int output_drop;
 
     /* Streams */

@@ -883,8 +883,12 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     {
         param->sc.f_speed = 1.0;
         param->sc.b_alt_timer = 1;
+        if( param->i_width >= 1280 && param->i_height >= 720 )
+            param->sc.max_preset = 4; /* on the conservative side for HD */
+        else
+            param->sc.max_preset = 10;
+
         param->rc.i_lookahead = param->i_keyint_max;
-        // TODO restrict threads
     }
     else
         x264_param_default_preset( param, "veryfast", "zerolatency" );
