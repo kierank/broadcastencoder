@@ -817,7 +817,10 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         return -1;
     }
 
-    x264_param_default( param );
+    if( h->obe_system == OBE_SYSTEM_LOW_LATENCY )
+        x264_param_default_preset( param, "veryfast", "zerolatency" );
+    else
+        x264_param_default( param );
 
     param->b_deterministic = 0;
     param->b_vfr_input = 0;
@@ -890,8 +893,6 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
 
         param->rc.i_lookahead = param->i_keyint_max;
     }
-    else
-        x264_param_default_preset( param, "veryfast", "zerolatency" );
 
     return 0;
 }
