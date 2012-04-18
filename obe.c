@@ -581,21 +581,31 @@ void sleep_mpeg_ticks( int64_t i_time )
 void obe_clock_tick( obe_t *h, int64_t value )
 {
     /* Use this signal as the SDI clocksource */
-    pthread_mutex_lock( &h->smoothing_clock_mutex );
+    pthread_mutex_lock( &h->obe_clock_mutex );
     h->smoothing_last_pts = value;
-    h->smoothing_last_timestamp = get_wallclock_in_mpeg_ticks();
-    pthread_mutex_unlock( &h->smoothing_clock_mutex );
-    pthread_cond_broadcast( &h->smoothing_clock_cv );
+    h->smoothing_last_wallclock = get_wallclock_in_mpeg_ticks();
+    pthread_mutex_unlock( &h->obe_clock_mutex );
+    pthread_cond_broadcast( &h->obe_clock_cv );
 }
 
 int64_t get_input_clock_in_mpeg_ticks( obe_t *h )
 {
     int64_t value;
-    pthread_mutex_lock( &h->smoothing_clock_mutex );
-    value = h->smoothing_last_pts + ( get_wallclock_in_mpeg_ticks() - h->smoothing_last_timestamp );
-    pthread_mutex_unlock( &h->smoothing_clock_mutex );
+    pthread_mutex_lock( &h->obe_clock_mutex );
+    value = h->smoothing_last_pts + ( get_wallclock_in_mpeg_ticks() - h->smoothing_last_wallclock );
+    pthread_mutex_unlock( &h->obe_clock_mutex );
 
     return value;
+}
+
+void sleep_input_clock( obe_t *h, int64_t i_time )
+{
+    int64_t wallclock_time;
+    pthread_mutex_lock( &h->obe_clock_mutex );
+    wallclock_time = ( i_time - h->smoothing_last_pts ) + h->smoothing_last_wallclock;
+    pthread_mutex_unlock( &h->obe_clock_mutex );
+
+    sleep_mpeg_ticks( wallclock_time );
 }
 
 int get_non_display_location( int type )
@@ -943,8 +953,8 @@ int obe_start( obe_t *h )
     pthread_mutex_init( &h->smoothing_mutex, NULL );
     pthread_cond_init( &h->smoothing_in_cv, NULL );
     pthread_cond_init( &h->smoothing_out_cv, NULL );
-    pthread_mutex_init( &h->smoothing_clock_mutex, NULL );
-    pthread_cond_init( &h->smoothing_clock_cv, NULL );
+    pthread_mutex_init( &h->obe_clock_mutex, NULL );
+    pthread_cond_init( &h->obe_clock_cv, NULL );
     pthread_mutex_init( &h->mux_mutex, NULL );
     pthread_cond_init( &h->mux_cv, NULL );
     pthread_mutex_init( &h->output_mutex, NULL );

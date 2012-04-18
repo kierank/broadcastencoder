@@ -421,6 +421,10 @@ struct obe_t
     int is_active;
     int obe_system;
 
+    /* OBE recovered clock */
+    pthread_mutex_t obe_clock_mutex;
+    pthread_cond_t  obe_clock_cv;
+
     /* Devices */
     pthread_mutex_t device_list_mutex;
     int num_devices;
@@ -465,9 +469,7 @@ struct obe_t
     pthread_cond_t  smoothing_out_cv;
 
     int64_t         smoothing_last_pts; /* from sdi clock */
-    int64_t         smoothing_last_timestamp; /* from cpu clock */
-    pthread_mutex_t smoothing_clock_mutex;
-    pthread_cond_t  smoothing_clock_cv;
+    int64_t         smoothing_last_wallclock; /* from cpu clock */
 
     int num_smoothing_frames;
     obe_coded_frame_t **smoothing_frames;
@@ -529,6 +531,7 @@ int64_t get_wallclock_in_mpeg_ticks( void );
 void sleep_mpeg_ticks( int64_t i_delay );
 void obe_clock_tick( obe_t *h, int64_t value );
 int64_t get_input_clock_in_mpeg_ticks( obe_t *h );
+void sleep_input_clock( obe_t *h, int64_t i_delay );
 
 int get_non_display_location( int type );
 

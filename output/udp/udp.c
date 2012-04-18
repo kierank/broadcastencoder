@@ -174,19 +174,17 @@ static void *open_output( void *ptr )
 #if 0
                 int64_t mpegtime = get_wallclock_in_mpeg_ticks();
 
-                sleep_mpeg_ticks( pcrs[0] - start_pcr_time + start_mpeg_time );
-
                 if( last_clock + delta < mpegtime )
                 {
                     printf("\n behind %f \n", (double)(last_clock + delta - mpegtime)/27000000 );
                 }
 #endif
-                sleep_mpeg_ticks( pcrs[0] - start_pcr_time + start_mpeg_time );
+                sleep_input_clock( h, pcrs[0] - start_pcr_time + start_mpeg_time );
             }
 
             if( last_clock == -1 )
             {
-                start_mpeg_time = get_wallclock_in_mpeg_ticks();
+                start_mpeg_time = get_input_clock_in_mpeg_ticks( h );
                 start_pcr_time = pcrs[0];
             }
 

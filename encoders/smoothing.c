@@ -112,7 +112,7 @@ static void *start_smoothing( void *ptr )
          *   pts refers to the pts from the input which is monotonic
          *   dts refers to the dts out of the encoder which is monotonic */
 
-        pthread_mutex_lock( &h->smoothing_clock_mutex );
+        pthread_mutex_lock( &h->obe_clock_mutex );
 
         //printf("\n dts gap %"PRIi64" \n", coded_frame->real_dts - start_dts );
         //printf("\n pts gap %"PRIi64" \n", h->smoothing_last_pts - start_pts );
@@ -121,17 +121,17 @@ static void *start_smoothing( void *ptr )
         {
             start_dts = coded_frame->real_dts;
             /* Wait until the next clock tick */
-            pthread_cond_wait( &h->smoothing_clock_cv, &h->smoothing_clock_mutex );
+            pthread_cond_wait( &h->obe_clock_cv, &h->obe_clock_mutex );
             start_pts = h->smoothing_last_pts;
         }
         else if( coded_frame->real_dts - start_dts > h->smoothing_last_pts - start_pts )
         {
             //printf("\n waiting \n");
-            pthread_cond_wait( &h->smoothing_clock_cv, &h->smoothing_clock_mutex );
+            pthread_cond_wait( &h->obe_clock_cv, &h->obe_clock_mutex );
         }
         /* otherwise, continue since the frame is late */
 
-        pthread_mutex_unlock( &h->smoothing_clock_mutex );
+        pthread_mutex_unlock( &h->obe_clock_mutex );
 
         add_to_mux_queue( h, coded_frame );
 
