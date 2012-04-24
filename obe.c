@@ -170,7 +170,6 @@ int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame )
     obe_filter_t *filter = NULL;
     obe_raw_frame_t **tmp;
 
-    /* TODO: when only the fly reconfig is enabled, lock mutex */
     for( int i = 0; i < h->num_filters; i++ )
     {
         for( int j = 0; j < h->filters[i]->num_stream_ids; j++ )
@@ -241,7 +240,6 @@ int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame )
     obe_encoder_t *encoder = NULL;
     obe_raw_frame_t **tmp;
 
-    /* TODO: when only the fly reconfig is enabled, lock mutex */
     for( int i = 0; i < h->num_encoders; i++ )
     {
         if( h->encoders[i]->stream_id == raw_frame->stream_id )
@@ -485,7 +483,6 @@ static void destroy_output( obe_t *h )
 /* Input stream */
 obe_int_input_stream_t *get_input_stream( obe_t *h, int input_stream_id )
 {
-    /* TODO lock and unlock when we can reconfig input streams */
     for( int j = 0; j < h->devices[0]->num_input_streams; j++ )
     {
         if( h->devices[0]->streams[j]->stream_id == input_stream_id )
@@ -497,7 +494,6 @@ obe_int_input_stream_t *get_input_stream( obe_t *h, int input_stream_id )
 /* Encoder */
 obe_encoder_t *get_encoder( obe_t *h, int stream_id )
 {
-    /* TODO lock and unlock when we can reconfig encoders */
     for( int i = 0; i < h->num_encoders; i++ )
     {
         if( h->encoders[i]->stream_id == stream_id )
@@ -509,7 +505,6 @@ obe_encoder_t *get_encoder( obe_t *h, int stream_id )
 /* Output */
 obe_output_stream_t *get_output_stream( obe_t *h, int stream_id )
 {
-    /* TODO lock and unlock when we can reconfig outputs */
     for( int i = 0; i < h->num_output_streams; i++ )
     {
         if( h->output_streams[i].stream_id == stream_id )
@@ -907,7 +902,6 @@ int obe_setup_streams( obe_t *h, obe_output_stream_t *output_streams, int num_st
     // TODO sanity check the inputs
 
     h->num_output_streams = num_streams;
-    /* TODO deal with updating case */
     h->output_streams = malloc( num_streams * sizeof(*h->output_streams) );
     if( !h->output_streams )
     {

@@ -313,7 +313,11 @@ static void *open_output( void *ptr )
 
             last_clock = get_wallclock_in_mpeg_ticks();
             last_pcr = pcrs[0];
-            write_rtp_pkt( rtp_handle, rtp_buf, TS_PACKETS_SIZE, pcrs[0] ); // TODO handle fail
+            if( write_rtp_pkt( rtp_handle, rtp_buf, TS_PACKETS_SIZE, pcrs[0] ) < 0 )
+	    {
+                syslog( LOG_ERR, "[rtp] Failed to write RTP packet\n" );
+                return NULL;
+            }
         }
     }
 

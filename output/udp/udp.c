@@ -191,7 +191,11 @@ static void *open_output( void *ptr )
             last_clock = get_wallclock_in_mpeg_ticks();
             last_pcr = pcrs[0];
 
-            udp_write( udp_handle, udp_buf, TS_PACKETS_SIZE ); // TODO handle fail
+            if( udp_write( udp_handle, udp_buf, TS_PACKETS_SIZE ) < 0 )
+	    {
+                syslog( LOG_ERR, "[udp] Failed to write UDP packet\n" );
+                return NULL;
+            }
         }
         num_muxed_data = 0;
     }
