@@ -372,6 +372,7 @@ int decode_video_index_information( obe_sdi_non_display_data_t *non_display_data
     uint8_t data[90] = {0};
     obe_int_frame_data_t *tmp, *frame_data;
     obe_user_data_t *tmp2, *user_data;
+    uint8_t afd_code, scan_system, is_wide;
 
     for( int i = 0; i < 90; i++ )
     {
@@ -427,11 +428,15 @@ int decode_video_index_information( obe_sdi_non_display_data_t *non_display_data
             if( !user_data->data )
                 goto fail;
 
+            afd_code = data[0] & 0x78;
+            scan_system = data[0] & 0x7;
+            is_wide = scan_system == 0x5 || scan_system == 0x6;
+
             user_data->len  = 1;
             user_data->type = USER_DATA_AFD;
             user_data->source = VBI_VIDEO_INDEX;
-            /* Set bit two in order to mimic the data from VANC */
-            user_data->data[0] = (data[0] & 0x78) | (1 << 2);
+            /* Create a packet like AFD from VANC */
+            user_data->data[0] = afd_code | (is_wide << 2);
         }
     }
 

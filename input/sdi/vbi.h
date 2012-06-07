@@ -28,6 +28,7 @@
 
 #define PAL_VIDEO_INDEX_LINE  11
 #define NTSC_VIDEO_INDEX_LINE 14
+// TODO: Video index field 2
 
 enum dvb_vbi_data_unit_id_e
 {

@@ -75,6 +75,12 @@ typedef struct
     int sar_height;
 } obe_sd_sar_t;
 
+typedef struct
+{
+    int afd_code;
+    int is_wide;
+} obe_wss_to_afd_t;
+
 const static obe_cli_csp_t obe_cli_csps[] =
 {
     [PIX_FMT_YUV420P] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 8 },
@@ -96,36 +102,16 @@ const static obe_sd_sar_t obe_sd_sars[][2] =
     }
 };
 
-const static int wss_to_afd[] =
+const static obe_wss_to_afd_t wss_to_afd[] =
 {
-    [0x0] = 0x9, /* 4:3 (centre) */
-    [0x1] = 0xb, /* 14:9 (centre) */
-    [0x2] = 0x3, /* box 14:9 (top) */
-    [0x3] = 0xa, /* 16:9 (centre) */
-    [0x4] = 0x2, /* box 16:9 (top) */
-    [0x5] = 0x4, /* box > 16:9 (centre) */
-    [0x6] = 0xd, /* 4:3 (shoot and protect 14:9 centre) */
-    [0x7] = 0xf, /* 16:9 (shoot and protect 4:3 centre) */
-};
-
-const static uint8_t afd_is_wide[] =
-{
-    [0x0] = 0, /* reserved */
-    [0x1] = 0, /* reserved */
-    [0x2] = 1, /* box 16:9 (top) */
-    [0x3] = 0, /* box 14:9 (top) */
-    [0x4] = 1, /* box > 16:9 (centre) */
-    [0x5] = 0, /* reserved */
-    [0x6] = 0, /* reserved */
-    [0x7] = 0, /* reserved */
-    [0x8] = 0, /* as the coded frame */
-    [0x9] = 0, /* 4:3 (centre) */
-    [0xa] = 1, /* 16:9 (centre) */
-    [0xb] = 0, /* 14:9 (centre) */
-    [0xc] = 0, /* reserved */
-    [0xd] = 0, /* 4:3 (with shoot and protect 14:9 centre) */
-    [0xe] = 1, /* 16:9 (with shoot and protect 14:9 centre) */
-    [0xf] = 1, /* 16:9 (with shoot and protect 4:3 centre) */
+    [0x0] = { 0x9, 0 }, /* 4:3 (centre) */
+    [0x1] = { 0xb, 0 }, /* 14:9 (centre) */
+    [0x2] = { 0x3, 0 }, /* box 14:9 (top) */
+    [0x3] = { 0xa, 1 }, /* 16:9 (centre) */
+    [0x4] = { 0x2, 1 }, /* box 16:9 (top) */
+    [0x5] = { 0x4, 1 }, /* box > 16:9 (centre) */
+    [0x6] = { 0xd, 0 }, /* 4:3 (shoot and protect 14:9 centre) */
+    [0x7] = { 0xf, 1 }, /* 16:9 (shoot and protect 4:3 centre) */
 };
 
 static void scale_plane_c( uint16_t *src, int stride, int width, int height, int lshift, int rshift )
@@ -430,8 +416,8 @@ static int write_afd( obe_user_data_t *user_data, obe_raw_frame_t *raw_frame )
     const int country_code      = 0xb5;
     const int provider_code     = 0x31;
     const char *user_identifier = "DTG1";
-    int active_format_flag;
-    uint8_t afd = 0;
+    const int active_format_flag = 1;
+    const int is_wide = (user_data->data[0] >> 2) & 1;
 
     /* TODO: when MPEG-2 is added make this do the right thing */
 
@@ -443,17 +429,16 @@ static int write_afd( obe_user_data_t *user_data, obe_raw_frame_t *raw_frame )
     for( int i = 0; i < 4; i++ )
         bs_write( &r, 8, user_identifier[i] ); // user_identifier
 
-    active_format_flag = (user_data->data[0] >> 2) & 1;
     // afd_data()
     bs_write1( &r, 0 );   // '0'
     bs_write1( &r, active_format_flag ); // active_format_flag
     bs_write( &r, 6, 1 ); // reserved
 
+    /* FIXME: is there any reason active_format_flag would be zero? */
     if( active_format_flag )
     {
         bs_write( &r, 4, 0xf ); // reserved
-        afd = (user_data->data[0] >> 3) & 0xf;
-        bs_write( &r, 4, afd ); // active_format
+        bs_write( &r, 4, (user_data->data[0] >> 3) & 0xf ); // active_format
     }
 
     bs_flush( &r );
@@ -461,8 +446,8 @@ static int write_afd( obe_user_data_t *user_data, obe_raw_frame_t *raw_frame )
     /* Set the SAR from the AFD value */
     if( active_format_flag && IS_SD( raw_frame->img.format ) )
     {
-        raw_frame->sar_width = obe_sd_sars[afd_is_wide[afd]][raw_frame->img.format].sar_width;
-        raw_frame->sar_height = obe_sd_sars[afd_is_wide[afd]][raw_frame->img.format].sar_height;
+        raw_frame->sar_width = obe_sd_sars[is_wide][raw_frame->img.format].sar_width;
+        raw_frame->sar_height = obe_sd_sars[is_wide][raw_frame->img.format].sar_height;
     }
 
     user_data->type = USER_DATA_AVC_REGISTERED_ITU_T35;
@@ -552,7 +537,7 @@ static int write_bar_data( obe_user_data_t *user_data )
 
 static int convert_wss_to_afd( obe_user_data_t *user_data, obe_raw_frame_t *raw_frame )
 {
-    user_data->data[0] = (wss_to_afd[user_data->data[0]] << 3) | (1 << 2);
+    user_data->data[0] = (wss_to_afd[user_data->data[0]].afd_code << 3) | (wss_to_afd[user_data->data[0]].is_wide << 2);
     if( write_afd( user_data, raw_frame ) < 0 )
         return -1;
 
