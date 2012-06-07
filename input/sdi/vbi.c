@@ -663,7 +663,7 @@ int send_vbi_and_ttx( obe_t *h, obe_sdi_non_display_data_t *non_display_parser, 
 
             if( add_to_mux_queue( h, non_display_parser->dvb_vbi_frame ) < 0 )
             {
-                destroy_coded_frame( non_display_parser->dvb_ttx_frame );
+                destroy_coded_frame( non_display_parser->dvb_vbi_frame );
                 return -1;
             }
         }
