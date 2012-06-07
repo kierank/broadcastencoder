@@ -736,7 +736,6 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
         return -1;
     }
 
-    // FIXME this needs to be made to support probing whilst running
     // TODO metadata etc
     program->num_streams = h->devices[h->num_devices-1]->num_input_streams;
     program->streams = calloc( program->num_streams, sizeof(*program->streams) );
