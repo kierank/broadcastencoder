@@ -111,7 +111,7 @@ const static obe_wss_to_afd_t wss_to_afd[] =
     [0x4] = { 0x2, 1 }, /* box 16:9 (top) */
     [0x5] = { 0x4, 1 }, /* box > 16:9 (centre) */
     [0x6] = { 0xd, 0 }, /* 4:3 (shoot and protect 14:9 centre) */
-    [0x7] = { 0xf, 1 }, /* 16:9 (shoot and protect 4:3 centre) */
+    [0x7] = { 0xa, 1 }, /* 16:9 (shoot and protect 4:3 centre) */
 };
 
 static void scale_plane_c( uint16_t *src, int stride, int width, int height, int lshift, int rshift )
