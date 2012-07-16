@@ -47,6 +47,12 @@ static int parse_afd( obe_sdi_non_display_data_t *non_display_data, obe_raw_fram
     obe_int_frame_data_t *tmp, *frame_data;
     obe_user_data_t *tmp2, *user_data;
 
+    if( line[0] != 8 )
+    {
+        syslog( LOG_ERR, "Skipping AFD in VANC on line %d - incorrect DC word\n", line_number );
+        return -1;
+    }
+
     /* Skip DC word */
     line++;
 
