@@ -40,7 +40,7 @@ typedef struct
     int output_format;
     int bitrate;
     int sample_rate;
-    int num_channels;
+    uint64_t channel_layout;
     int frames_per_pes;
 
     // TODO ac3 opts

@@ -1072,16 +1072,16 @@ int obe_start( obe_t *h )
                 /* TODO: check the bitrate is allowed by the format */
                 aud_enc_params->bitrate = h->output_streams[i].bitrate;
                 aud_enc_params->sample_rate = input_stream->sample_rate;
-                aud_enc_params->num_channels = av_get_channel_layout_nb_channels( input_stream->channel_layout );
+                aud_enc_params->channel_layout = input_stream->channel_layout;
 
                 /* Choose the optimal number of audio frames per PES
                  * TODO: E-AC3 (Needs T-STD information!), low-latency modifications */
-                if( !h->output_streams[i].ts_opts.frames_per_pes && h->obe_system != OBE_SYSTEM_TYPE_LOW_LATENCY &&
-                    ( h->output_streams[i].stream_format == AUDIO_MP2 || h->output_streams[i].stream_format == AUDIO_AC_3 ) )
+                if( !h->output_streams[i].ts_opts.frames_per_pes && h->obe_system != OBE_SYSTEM_TYPE_LOW_LATENCY )
                 {
-                    int buf_size = h->output_streams[i].stream_format == AUDIO_MP2 ? MISC_AUDIO_BS : AC3_BS_DVB;
+                    int buf_size = h->output_streams[i].stream_format == AUDIO_MP2 || h->output_streams[i].stream_format == AUDIO_AAC ? MISC_AUDIO_BS : AC3_BS_DVB;
                     if( buf_size == AC3_BS_DVB && ( h->mux_opts.ts_type == OBE_TS_TYPE_CABLELABS || h->mux_opts.ts_type == OBE_TS_TYPE_ATSC ) )
                         buf_size = AC3_BS_ATSC;
+                    /* AAC does not have exact frame sizes but this should be a good a approximation */
                     int single_frame_size = (double)num_samples * 125 * aud_enc_params->bitrate / aud_enc_params->sample_rate;
                     int frames_per_pes = MAX( buf_size / single_frame_size, 1 );
                     h->output_streams[i].ts_opts.frames_per_pes = aud_enc_params->frames_per_pes = frames_per_pes;

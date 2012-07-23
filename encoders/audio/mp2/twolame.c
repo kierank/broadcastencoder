@@ -25,7 +25,8 @@
 #include "encoders/audio/audio.h"
 #include <twolame.h>
 #include <libavutil/fifo.h>
-#include <libavcodec/audioconvert.h>
+#include <libavresample/avresample.h>
+#include <libavutil/opt.h>
 
 #define MP2_AUDIO_BUFFER_SIZE 50000
 
@@ -37,11 +38,11 @@ static void *start_encoder( void *ptr )
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
     twolame_options *tl_opts = NULL;
-    int output_size, frame_size, in_stride;
+    int output_size, frame_size, linesize; /* Linesize in libavresample terminology is the entire buffer size for packed formats */
     int64_t cur_pts = -1;
     void *audio_buf = NULL;
     uint8_t *output_buf = NULL;
-    AVAudioConvert *audio_conv = NULL;
+    AVAudioResampleContext *avr = NULL;
     AVFifoBuffer *fifo = NULL;
 
     /* Lock the mutex until we verify parameters */
@@ -61,7 +62,7 @@ static void *start_encoder( void *ptr )
     twolame_set_out_samplerate( tl_opts, enc_params->sample_rate );
     twolame_set_copyright( tl_opts, 1 );
     twolame_set_original( tl_opts, 1 );
-    twolame_set_num_channels( tl_opts, enc_params->num_channels );
+    twolame_set_num_channels( tl_opts, av_get_channel_layout_nb_channels( enc_params->channel_layout ) );
     twolame_set_error_protection( tl_opts, 1 );
 
     twolame_init_params( tl_opts );
@@ -80,13 +81,23 @@ static void *start_encoder( void *ptr )
         goto end;
     }
 
-    int out_stride = av_get_bytes_per_sample( AV_SAMPLE_FMT_FLT );
-
-    /* This works on "planar" audio so pretend it's just one audio plane */
-    audio_conv = av_audio_convert_alloc( AV_SAMPLE_FMT_FLT, 1, enc_params->sample_format, 1, NULL, 0 );
-    if( !audio_conv )
+    avr = avresample_alloc_context();
+    if( !avr )
     {
         fprintf( stderr, "Malloc failed\n" );
+        goto end;
+    }
+
+    av_opt_set_int( avr, "in_channel_layout",   enc_params->channel_layout,  0 );
+    av_opt_set_int( avr, "in_sample_fmt",       AV_SAMPLE_FMT_S32,    0 ); // FIXME
+    av_opt_set_int( avr, "in_sample_rate",      enc_params->sample_rate, 0 );
+    av_opt_set_int( avr, "out_channel_layout",  enc_params->channel_layout, 0 );
+    av_opt_set_int( avr, "out_sample_fmt",      AV_SAMPLE_FMT_FLT,   0 );
+    av_opt_set_int( avr, "internal_sample_fmt", AV_SAMPLE_FMT_FLTP,  0 );
+
+    if( avresample_open( avr ) < 0 )
+    {
+        fprintf( stderr, "Could not open AVResample\n" );
         goto end;
     }
 
@@ -123,25 +134,18 @@ static void *start_encoder( void *ptr )
         if( cur_pts == -1 )
             cur_pts = raw_frame->pts;
 
-        in_stride = av_get_bytes_per_sample( raw_frame->sample_fmt );
-        int num_samples = raw_frame->len / in_stride;
-        int sample_bytes = num_samples * out_stride;
-        int istride[6] = { in_stride };
-        int ostride[6] = { out_stride };
-        const void *ibuf[6] = { raw_frame->data };
-
-        audio_buf = malloc( sample_bytes );
-        if( !audio_buf )
+        /* Allocate the output buffer */
+        if( av_samples_alloc( (uint8_t**)&audio_buf, &linesize, av_get_channel_layout_nb_channels( raw_frame->channel_layout ), raw_frame->num_samples,
+                              AV_SAMPLE_FMT_FLT, 0 ) < 0 )
         {
             syslog( LOG_ERR, "Malloc failed\n" );
             goto end;
         }
-        void *obuf[6] = { audio_buf };
 
-        if( av_audio_convert( audio_conv, obuf, ostride, ibuf, istride, num_samples ) < 0 )
+        if( avresample_convert( avr, &audio_buf, linesize, raw_frame->num_samples, (void**)&raw_frame->data, raw_frame->len, raw_frame->num_samples ) < 0 )
         {
-            syslog( LOG_ERR, "[lavf] Could not convert audio sample format\n" );
-            goto end;
+            syslog( LOG_ERR, "[twolame] Sample format conversion failed\n" );
+            break;
         }
 
         output_size = twolame_encode_buffer_float32_interleaved( tl_opts, audio_buf, raw_frame->num_samples, output_buf, MP2_AUDIO_BUFFER_SIZE );
@@ -192,8 +196,8 @@ end:
     if( audio_buf )
         free( audio_buf );
 
-    if( audio_conv )
-        av_audio_convert_free( audio_conv );
+    if( avr )
+        avresample_free( &avr );
 
     if( fifo )
         av_fifo_free( fifo );

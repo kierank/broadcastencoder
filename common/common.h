@@ -336,7 +336,8 @@ typedef struct
     /* Audio */
     int num_samples;
     int sample_fmt;
-    int64_t channel_layout;
+    int num_channels;
+    uint64_t channel_layout;
     // TODO channel order
     // TODO audio metadata
 
