@@ -24,14 +24,6 @@ echo "audio encoding:"
 echo ""
 echo "  --disable-twolame        disable support for twolame"
 echo ""
-echo "filtering:"
-echo ""
-echo "  --disable-swscale        disable swscale support"
-echo ""
-echo "frontends:"
-echo ""
-echo "  --disable-readline       disable readline frontend"
-echo ""
 exit 1
 fi
 
@@ -231,23 +223,11 @@ for opt do
         --disable-decklink)
             decklink="no"
             ;;
-        --disable-libzvbi)
-            lzvbi="no"
-            ;;
         --disable-lavf)
             lavf="no"
             ;;
-        --disable-libmpegts)
-            lmpegts="no"
-            ;;
         --disable-libtwolame)
             ltwolame="no"
-            ;;
-        --disable-swscale)
-            swscale="no"
-            ;;
-        --disable-readline)
-            readline="no"
             ;;
         --extra-asflags=*)
             ASFLAGS="$ASFLAGS ${opt#--extra-asflags=}"
