@@ -666,7 +666,7 @@ int send_vbi_and_ttx( obe_t *h, obe_sdi_non_display_data_t *non_display_parser, 
             non_display_parser->dvb_vbi_frame->stream_id = stream_id;
             non_display_parser->dvb_vbi_frame->pts = pts;
 
-            if( add_to_mux_queue( h, non_display_parser->dvb_vbi_frame ) < 0 )
+            if( add_to_queue( &h->mux_queue, non_display_parser->dvb_vbi_frame ) < 0 )
             {
                 destroy_coded_frame( non_display_parser->dvb_vbi_frame );
                 return -1;
@@ -695,7 +695,7 @@ int send_vbi_and_ttx( obe_t *h, obe_sdi_non_display_data_t *non_display_parser, 
             non_display_parser->dvb_ttx_frame->stream_id = stream_id;
             non_display_parser->dvb_ttx_frame->pts = pts;
 
-            if( add_to_mux_queue( h, non_display_parser->dvb_ttx_frame ) < 0 )
+            if( add_to_queue( &h->mux_queue, non_display_parser->dvb_ttx_frame ) < 0 )
             {
                 destroy_coded_frame( non_display_parser->dvb_ttx_frame );
                 return -1;

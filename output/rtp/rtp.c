@@ -219,14 +219,14 @@ static void *open_output( void *ptr )
 
     while( 1 )
     {
-        pthread_mutex_lock( &h->output_mutex );
-        if( h->num_muxed_data == num_muxed_data )
+        pthread_mutex_lock( &h->output_queue.mutex );
+        if( h->output_queue.size == num_muxed_data )
         {
             /* Often this cond_wait is not because of an underflow */
-            pthread_cond_wait( &h->output_cv, &h->output_mutex );
+            pthread_cond_wait( &h->output_queue.in_cv, &h->output_queue.mutex );
         }
 
-        num_muxed_data = h->num_muxed_data;
+        num_muxed_data = h->output_queue.size;
 
         /* Refill the buffer after a drop */
         pthread_mutex_lock( &h->drop_mutex );
@@ -244,7 +244,7 @@ static void *open_output( void *ptr )
                 ready = 1;
             else
             {
-                pthread_mutex_unlock( &h->output_mutex );
+                pthread_mutex_unlock( &h->output_queue.mutex );
                 continue;
             }
         }
@@ -252,12 +252,12 @@ static void *open_output( void *ptr )
         muxed_data = malloc( num_muxed_data * sizeof(*muxed_data) );
         if( !muxed_data )
         {
-            pthread_mutex_unlock( &h->output_mutex );
+            pthread_mutex_unlock( &h->output_queue.mutex );
             syslog( LOG_ERR, "Malloc failed\n" );
             return NULL;
         }
-        memcpy( muxed_data, h->muxed_data, num_muxed_data * sizeof(*muxed_data) );
-        pthread_mutex_unlock( &h->output_mutex );
+        memcpy( muxed_data, h->output_queue.queue, num_muxed_data * sizeof(*muxed_data) );
+        pthread_mutex_unlock( &h->output_queue.mutex );
 
 //        printf("\n START %i \n", num_muxed_data );
 
@@ -279,7 +279,7 @@ static void *open_output( void *ptr )
 
             av_fifo_generic_write( fifo_pcr, muxed_data[i]->pcr_list, (muxed_data[i]->len * sizeof(int64_t)) / 188, NULL );
 
-            remove_from_output_queue( h );
+            remove_from_queue( &h->output_queue );
             destroy_muxed_data( muxed_data[i] );
         }
 

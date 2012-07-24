@@ -77,10 +77,10 @@ static void encoder_wait( obe_t *h, int stream_id )
 {
     /* Wait for encoder to be ready */
     obe_encoder_t *encoder = get_encoder( h, stream_id );
-    pthread_mutex_lock( &encoder->encoder_mutex );
+    pthread_mutex_lock( &encoder->queue.mutex );
     if( !encoder->is_ready )
-        pthread_cond_wait( &encoder->encoder_cv, &encoder->encoder_mutex );
-    pthread_mutex_unlock( &encoder->encoder_mutex );
+        pthread_cond_wait( &encoder->queue.in_cv, &encoder->queue.mutex );
+    pthread_mutex_unlock( &encoder->queue.mutex );
 }
 
 void *open_muxer( void *ptr )
@@ -105,6 +105,7 @@ void *open_muxer( void *ptr )
     obe_output_stream_t *output_stream;
     obe_encoder_t *encoder;
     obe_muxed_data_t *muxed_data;
+    obe_coded_frame_t *coded_frame;
 
     struct sched_param param = {0};
     param.sched_priority = 99;
@@ -371,28 +372,29 @@ void *open_muxer( void *ptr )
         video_dts = 0;
         int64_t lowest_pts = -1, largest_pts = -1;
 
-        pthread_mutex_lock( &h->mux_mutex );
+        pthread_mutex_lock( &h->mux_queue.mutex );
 
         if( h->cancel_mux_thread )
         {
-            pthread_mutex_unlock( &h->mux_mutex );
+            pthread_mutex_unlock( &h->mux_queue.mutex );
             goto end;
         }
 
         while( !video_found )
         {
-            for( int i = 0; i < h->num_coded_frames; i++ )
+            for( int i = 0; i < h->mux_queue.size; i++ )
             {
-                if( h->coded_frames[i]->is_video )
+                coded_frame = h->mux_queue.queue[i];
+                if( coded_frame->is_video )
                 {
                     video_found = 1;
-                    video_dts = h->coded_frames[i]->real_dts;
-                    /* FIXME: handle case where first_video_pts < h->coded_frames[i]->real_pts */
+                    video_dts = coded_frame->real_dts;
+                    /* FIXME: handle case where first_video_pts < coded_frame->real_pts */
                     if( first_video_pts == -1 )
                     {
                         /* Get rid of frames which are too early */
-                        first_video_pts = h->coded_frames[i]->pts;
-                        first_video_real_pts = h->coded_frames[i]->real_pts;
+                        first_video_pts = coded_frame->pts;
+                        first_video_real_pts = coded_frame->real_pts;
                         remove_early_frames( h, first_video_pts );
                     }
                     break;
@@ -400,66 +402,67 @@ void *open_muxer( void *ptr )
             }
 
             if( !video_found )
-                pthread_cond_wait( &h->mux_cv, &h->mux_mutex );
+                pthread_cond_wait( &h->mux_queue.in_cv, &h->mux_queue.mutex );
 
             if( h->cancel_mux_thread )
             {
-                pthread_mutex_unlock( &h->mux_mutex );
+                pthread_mutex_unlock( &h->mux_queue.mutex );
                 goto end;
             }
         }
 
-        frames = calloc( h->num_coded_frames, sizeof(*frames) );
+        frames = calloc( h->mux_queue.size, sizeof(*frames) );
         if( !frames )
         {
             syslog( LOG_ERR, "Malloc failed\n" );
-            pthread_mutex_unlock( &h->mux_mutex );
+            pthread_mutex_unlock( &h->mux_queue.mutex );
             goto end;
         }
 
-        //printf("\n START - queuelen %i \n", h->num_coded_frames);
+        //printf("\n START - queuelen %i \n", h->mux_queue.size);
 
         num_frames = 0;
-        for( int i = 0; i < h->num_coded_frames; i++ )
+        for( int i = 0; i < h->mux_queue.size; i++ )
         {
-            output_stream = get_output_mux_stream( mux_params, h->coded_frames[i]->stream_id );
+            coded_frame = h->mux_queue.queue[i];
+            output_stream = get_output_mux_stream( mux_params, coded_frame->stream_id );
             // FIXME name
-            int64_t rescaled_dts = h->coded_frames[i]->pts - first_video_pts + first_video_real_pts;
-            if( h->coded_frames[i]->is_video )
-                rescaled_dts = h->coded_frames[i]->real_dts;
+            int64_t rescaled_dts = coded_frame->pts - first_video_pts + first_video_real_pts;
+            if( coded_frame->is_video )
+                rescaled_dts = coded_frame->real_dts;
 
-            //printf("\n stream-id %i ours: %"PRIi64" \n", h->coded_frames[i]->stream_id, h->coded_frames[i]->pts );
+            //printf("\n stream-id %i ours: %"PRIi64" \n", coded_frame->stream_id, coded_frame->pts );
 
             if( rescaled_dts <= video_dts )
             {
-                frames[num_frames].opaque = h->coded_frames[i];
-                frames[num_frames].size = h->coded_frames[i]->len;
-                frames[num_frames].data = h->coded_frames[i]->data;
+                frames[num_frames].opaque = h->mux_queue.queue[i];
+                frames[num_frames].size = coded_frame->len;
+                frames[num_frames].data = coded_frame->data;
                 frames[num_frames].pid = output_stream->ts_opts.pid;
-                if( h->coded_frames[i]->is_video )
+                if( coded_frame->is_video )
                 {
-                    frames[num_frames].cpb_initial_arrival_time = h->coded_frames[i]->cpb_initial_arrival_time;
-                    frames[num_frames].cpb_final_arrival_time = h->coded_frames[i]->cpb_final_arrival_time;
-                    frames[num_frames].dts = h->coded_frames[i]->real_dts;
-                    frames[num_frames].pts = h->coded_frames[i]->real_pts;
+                    frames[num_frames].cpb_initial_arrival_time = coded_frame->cpb_initial_arrival_time;
+                    frames[num_frames].cpb_final_arrival_time = coded_frame->cpb_final_arrival_time;
+                    frames[num_frames].dts = coded_frame->real_dts;
+                    frames[num_frames].pts = coded_frame->real_pts;
                 }
                 else
                 {
-                    frames[num_frames].dts = h->coded_frames[i]->pts - first_video_pts + first_video_real_pts;
-                    frames[num_frames].pts = h->coded_frames[i]->pts - first_video_pts + first_video_real_pts;
+                    frames[num_frames].dts = coded_frame->pts - first_video_pts + first_video_real_pts;
+                    frames[num_frames].pts = coded_frame->pts - first_video_pts + first_video_real_pts;
                 }
 
                 frames[num_frames].dts /= 300;
                 frames[num_frames].pts /= 300;
 
                 //printf("\n pid: %i ours: %"PRIi64" \n", frames[num_frames].pid, frames[num_frames].dts );
-                frames[num_frames].random_access = h->coded_frames[i]->random_access;
-                frames[num_frames].priority = h->coded_frames[i]->priority;
+                frames[num_frames].random_access = coded_frame->random_access;
+                frames[num_frames].priority = coded_frame->priority;
                 num_frames++;
             }
         }
 
-        pthread_mutex_unlock( &h->mux_mutex );
+        pthread_mutex_unlock( &h->mux_queue.mutex );
 
         // TODO figure out last frame
         ts_write_frames( w, frames, num_frames, &output, &len, &pcr_list );
@@ -482,12 +485,12 @@ void *open_muxer( void *ptr )
                 goto end;
             }
             memcpy( muxed_data->pcr_list, pcr_list, (len / 188) * sizeof(int64_t) );
-            add_to_output_queue( h, muxed_data );
+            add_to_queue( &h->output_queue, muxed_data );
         }
 
         for( int i = 0; i < num_frames; i++ )
         {
-            remove_from_mux_queue( h, frames[i].opaque );
+            remove_item_from_queue( &h->mux_queue, frames[i].opaque );
             destroy_coded_frame( frames[i].opaque );
         }
 

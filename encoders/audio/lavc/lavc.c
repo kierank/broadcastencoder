@@ -130,12 +130,12 @@ static void *start_encoder( void *ptr )
     /* The number of samples per E-AC3 frame is unknown until the encoder is ready */
     if( enc_params->output_format == AUDIO_E_AC_3 )
     {
-        pthread_mutex_lock( &encoder->encoder_mutex );
+        pthread_mutex_lock( &encoder->queue.mutex );
         encoder->is_ready = 1;
         encoder->num_samples = codec->frame_size;
         /* Broadcast because input and muxer can be stuck waiting for encoder */
-        pthread_cond_broadcast( &encoder->encoder_cv );
-        pthread_mutex_unlock( &encoder->encoder_mutex );
+        pthread_cond_broadcast( &encoder->queue.in_cv );
+        pthread_mutex_unlock( &encoder->queue.mutex );
     }
 
     frame_size = (double)codec->frame_size * 125 * enc_params->bitrate *
@@ -160,24 +160,24 @@ static void *start_encoder( void *ptr )
     while( 1 )
     {
         /* TODO: detect bitrate or channel reconfig */
-        pthread_mutex_lock( &encoder->encoder_mutex );
+        pthread_mutex_lock( &encoder->queue.mutex );
         if( encoder->cancel_thread )
         {
-            pthread_mutex_unlock( &encoder->encoder_mutex );
+            pthread_mutex_unlock( &encoder->queue.mutex );
             goto finish;
         }
 
-        if( !encoder->num_raw_frames )
-            pthread_cond_wait( &encoder->encoder_cv, &encoder->encoder_mutex );
+        if( !encoder->queue.size )
+            pthread_cond_wait( &encoder->queue.in_cv, &encoder->queue.mutex );
 
         if( encoder->cancel_thread )
         {
-            pthread_mutex_unlock( &encoder->encoder_mutex );
+            pthread_mutex_unlock( &encoder->queue.mutex );
             goto finish;
         }
 
-        raw_frame = encoder->frames[0];
-        pthread_mutex_unlock( &encoder->encoder_mutex );
+        raw_frame = encoder->queue.queue[0];
+        pthread_mutex_unlock( &encoder->queue.mutex );
 
         if( cur_pts == -1 )
             cur_pts = raw_frame->pts;
@@ -190,7 +190,7 @@ static void *start_encoder( void *ptr )
 
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
-        remove_frame_from_encode_queue( encoder );
+        remove_from_queue( &encoder->queue );
 
         while( avresample_available( avr ) >= codec->frame_size )
         {
@@ -234,7 +234,7 @@ static void *start_encoder( void *ptr )
 
                 coded_frame->pts = cur_pts;
                 coded_frame->random_access = 1; /* Every frame output is a random access point */
-                add_to_mux_queue( h, coded_frame );
+                add_to_queue( &h->mux_queue, coded_frame );
 
                 /* We need to generate PTS because frame sizes have changed */
                 cur_pts += (double)codec->frame_size * OBE_CLOCK * enc_params->frames_per_pes / enc_params->sample_rate;

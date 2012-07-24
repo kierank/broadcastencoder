@@ -299,6 +299,16 @@ typedef struct
 
 typedef struct
 {
+    void **queue;
+    int  size;
+
+    pthread_mutex_t mutex;
+    pthread_cond_t  in_cv;
+    pthread_cond_t  out_cv;
+} obe_queue_t;
+
+typedef struct
+{
     int stream_id;
     int64_t pts;
     void *opaque;
@@ -350,12 +360,9 @@ typedef struct
     int *stream_id_list;
 
     pthread_t filter_thread;
-    pthread_mutex_t filter_mutex;
-    pthread_cond_t  filter_cv;
+    obe_queue_t queue;
     int cancel_thread;
 
-    int num_raw_frames;
-    obe_raw_frame_t **frames;
 } obe_filter_t;
 
 typedef struct
@@ -365,14 +372,10 @@ typedef struct
     int is_video;
 
     pthread_t encoder_thread;
-    pthread_mutex_t encoder_mutex;
-    pthread_cond_t  encoder_cv;
+    obe_queue_t queue;
     int cancel_thread;
 
     hnd_t encoder_params;
-
-    int num_raw_frames;
-    obe_raw_frame_t **frames;
 
     /* E-AC3 */
     int num_samples;
@@ -464,30 +467,20 @@ struct obe_t
     obe_encoder_t *encoders[MAX_STREAMS];
 
     /* Encoded video frames in smoothing buffer */
-    pthread_mutex_t smoothing_mutex;
-    pthread_cond_t  smoothing_in_cv;
-    pthread_cond_t  smoothing_out_cv;
+    obe_queue_t     smoothing_queue;
 
     int64_t         smoothing_last_pts; /* from sdi clock */
     int64_t         smoothing_last_wallclock; /* from cpu clock */
 
-    int num_smoothing_frames;
-    obe_coded_frame_t **smoothing_frames;
 
     int             smoothing_buffer_complete;
     int64_t         smoothing_last_exit_time;
 
-    /* Encoded frames for muxing */
-    pthread_mutex_t mux_mutex;
-    pthread_cond_t  mux_cv;
-    int num_coded_frames;
-    obe_coded_frame_t **coded_frames;
+    /* Encoded frame queue for muxing */
+    obe_queue_t mux_queue;
 
-    /* Muxed frames for transmission */
-    pthread_mutex_t output_mutex;
-    pthread_cond_t  output_cv;
-    int num_muxed_data;
-    obe_muxed_data_t **muxed_data;
+    /* Muxed frame queue for transmission */
+    obe_queue_t output_queue;
 
     /* Statistics and Monitoring */
 
@@ -511,14 +504,12 @@ void destroy_muxed_data( obe_muxed_data_t *muxed_data );
 
 void add_device( obe_t *h, obe_device_t *device );
 
+int add_to_queue( obe_queue_t *queue, void *item );
+int remove_from_queue( obe_queue_t *queue );
+int remove_item_from_queue( obe_queue_t *queue, void *item );
+
 int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame );
-int remove_frame_from_filter_queue( obe_filter_t *filter );
 int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame );
-int remove_frame_from_encode_queue( obe_encoder_t *encoder );
-int add_to_smoothing_queue( obe_t *h, obe_coded_frame_t *coded_frame );
-int remove_from_smoothing_queue( obe_t *h );
-int add_to_mux_queue( obe_t *h, obe_coded_frame_t *coded_frame );
-int remove_from_mux_queue( obe_t *h, obe_coded_frame_t *coded_frame );
 int remove_early_frames( obe_t *h, int64_t pts );
 int add_to_output_queue( obe_t *h, obe_muxed_data_t *muxed_data );
 int remove_from_output_queue( obe_t *h );

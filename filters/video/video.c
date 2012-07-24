@@ -590,25 +590,25 @@ void *start_filter( void *ptr )
         /* TODO: support resolution changes */
         /* TODO: support changes in pixel format */
 
-        pthread_mutex_lock( &filter->filter_mutex );
+        pthread_mutex_lock( &filter->queue.mutex );
 
         if( filter->cancel_thread )
         {
-            pthread_mutex_unlock( &filter->filter_mutex );
+            pthread_mutex_unlock( &filter->queue.mutex );
             goto end;
         }
 
-        if( !filter->num_raw_frames )
-            pthread_cond_wait( &filter->filter_cv, &filter->filter_mutex );
+        if( !filter->queue.size )
+            pthread_cond_wait( &filter->queue.in_cv, &filter->queue.mutex );
 
         if( filter->cancel_thread )
         {
-            pthread_mutex_unlock( &filter->filter_mutex );
+            pthread_mutex_unlock( &filter->queue.mutex );
             goto end;
         }
 
-        raw_frame = filter->frames[0];
-        pthread_mutex_unlock( &filter->filter_mutex );
+        raw_frame = filter->queue.queue[0];
+        pthread_mutex_unlock( &filter->queue.mutex );
 
         /* TODO: scale 8-bit to 10-bit
          * TODO: convert from 4:2:0 to 4:2:2 */
@@ -640,7 +640,7 @@ void *start_filter( void *ptr )
             raw_frame->sar_guess = 1;
         }
 
-        remove_frame_from_filter_queue( filter );
+        remove_from_queue( &filter->queue );
         add_to_encode_queue( h, raw_frame );
     }
 

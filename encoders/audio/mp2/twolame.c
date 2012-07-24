@@ -46,13 +46,13 @@ static void *start_encoder( void *ptr )
     AVFifoBuffer *fifo = NULL;
 
     /* Lock the mutex until we verify parameters */
-    pthread_mutex_lock( &encoder->encoder_mutex );
+    pthread_mutex_lock( &encoder->queue.mutex );
 
     tl_opts = twolame_init();
     if( !tl_opts )
     {
         fprintf( stderr, "[twolame] could load options" );
-        pthread_mutex_unlock( &encoder->encoder_mutex );
+        pthread_mutex_unlock( &encoder->queue.mutex );
         goto end;
     }
 
@@ -71,8 +71,8 @@ static void *start_encoder( void *ptr )
 
     encoder->is_ready = 1;
     /* Broadcast because input and muxer can be stuck waiting for encoder */
-    pthread_cond_broadcast( &encoder->encoder_cv );
-    pthread_mutex_unlock( &encoder->encoder_mutex );
+    pthread_cond_broadcast( &encoder->queue.in_cv );
+    pthread_mutex_unlock( &encoder->queue.mutex );
 
     output_buf = malloc( MP2_AUDIO_BUFFER_SIZE );
     if( !output_buf )
@@ -111,25 +111,25 @@ static void *start_encoder( void *ptr )
 
     while( 1 )
     {
-        pthread_mutex_lock( &encoder->encoder_mutex );
+        pthread_mutex_lock( &encoder->queue.mutex );
 
         if( encoder->cancel_thread )
         {
-            pthread_mutex_unlock( &encoder->encoder_mutex );
+            pthread_mutex_unlock( &encoder->queue.mutex );
             break;
         }
 
-        if( !encoder->num_raw_frames )
-            pthread_cond_wait( &encoder->encoder_cv, &encoder->encoder_mutex );
+        if( !encoder->queue.size )
+            pthread_cond_wait( &encoder->queue.in_cv, &encoder->queue.mutex );
 
         if( encoder->cancel_thread )
         {
-            pthread_mutex_unlock( &encoder->encoder_mutex );
+            pthread_mutex_unlock( &encoder->queue.mutex );
             break;
         }
 
-        raw_frame = encoder->frames[0];
-        pthread_mutex_unlock( &encoder->encoder_mutex );
+        raw_frame = encoder->queue.queue[0];
+        pthread_mutex_unlock( &encoder->queue.mutex );
 
         if( cur_pts == -1 )
             cur_pts = raw_frame->pts;
@@ -161,7 +161,7 @@ static void *start_encoder( void *ptr )
 
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
-        remove_frame_from_encode_queue( encoder );
+        remove_from_queue( &encoder->queue );
 
         if( av_fifo_realloc2( fifo, av_fifo_size( fifo ) + output_size ) < 0 )
         {
@@ -183,7 +183,7 @@ static void *start_encoder( void *ptr )
             coded_frame->pts = cur_pts;
             coded_frame->random_access = 1; /* Every frame output is a random access point */
 
-            add_to_mux_queue( h, coded_frame );
+            add_to_queue( &h->mux_queue, coded_frame );
             /* We need to generate PTS because frame sizes have changed */
             cur_pts += (double)MP2_NUM_SAMPLES * OBE_CLOCK * enc_params->frames_per_pes / enc_params->sample_rate;
         }

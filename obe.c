@@ -164,11 +164,96 @@ void add_device( obe_t *h, obe_device_t *device )
 }
 
 /** Add/Remove from queues */
+void obe_init_queue( obe_queue_t *queue )
+{
+    pthread_mutex_init( &queue->mutex, NULL );
+    pthread_cond_init( &queue->in_cv, NULL );
+    pthread_cond_init( &queue->out_cv, NULL );
+}
+
+void obe_destroy_queue( obe_queue_t *queue )
+{
+    free( queue->queue );
+
+    pthread_mutex_unlock( &queue->mutex );
+    pthread_mutex_destroy( &queue->mutex );
+    pthread_cond_destroy( &queue->in_cv );
+}
+
+int add_to_queue( obe_queue_t *queue, void *item )
+{
+    void **tmp;
+
+    pthread_mutex_lock( &queue->mutex );
+    tmp = realloc( queue->queue, sizeof(*queue->queue) * (queue->size+1) );
+    if( !tmp )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+    queue->queue = tmp;
+    queue->queue[queue->size++] = item;
+
+    pthread_cond_signal( &queue->in_cv );
+    pthread_mutex_unlock( &queue->mutex );
+
+    return 0;
+}
+
+int remove_from_queue( obe_queue_t *queue )
+{
+    void **tmp;
+
+    pthread_mutex_lock( &queue->mutex );
+    if( queue->size > 1 )
+        memmove( &queue->queue[0], &queue->queue[1], sizeof(*queue->queue) * (queue->size-1) );
+    tmp = realloc( queue->queue, sizeof(*queue->queue) * (queue->size-1) );
+    queue->size--;
+    if( !tmp && queue->size )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+    queue->queue = tmp;
+
+    pthread_cond_signal( &queue->out_cv );
+    pthread_mutex_unlock( &queue->mutex );
+
+    return 0;
+}
+
+int remove_item_from_queue( obe_queue_t *queue, void *item )
+{
+    void **tmp;
+
+    pthread_mutex_lock( &queue->mutex );
+    for( int i = 0; i < queue->size; i++ )
+    {
+        if( queue->queue[i] == item )
+        {
+            memmove( &queue->queue[i], &queue->queue[i+1], sizeof(*queue->queue) * (queue->size-1-i) );
+            tmp = realloc( queue->queue, sizeof(*queue->queue) * (queue->size-1) );
+            queue->size--;
+            if( !tmp && queue->size )
+            {
+                syslog( LOG_ERR, "Malloc failed\n" );
+                return -1;
+            }
+            queue->queue = tmp;
+            break;
+        }
+    }
+
+    pthread_cond_signal( &queue->out_cv );
+    pthread_mutex_unlock( &queue->mutex );
+
+    return 0;
+}
+
 /* Filter queue */
 int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame )
 {
     obe_filter_t *filter = NULL;
-    obe_raw_frame_t **tmp;
 
     for( int i = 0; i < h->num_filters; i++ )
     {
@@ -182,53 +267,21 @@ int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame )
     if( !filter )
         return -1;
 
-    pthread_mutex_lock( &filter->filter_mutex );
-    tmp = realloc( filter->frames, sizeof(*filter->frames) * (filter->num_raw_frames+1) );
-    if( !tmp )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
-    filter->frames = tmp;
-    filter->frames[filter->num_raw_frames++] = raw_frame;
-    pthread_cond_signal( &filter->filter_cv );
-    pthread_mutex_unlock( &filter->filter_mutex );
-
-    return 0;
-}
-
-int remove_frame_from_filter_queue( obe_filter_t *filter )
-{
-    obe_raw_frame_t **tmp;
-
-    pthread_mutex_lock( &filter->filter_mutex );
-    if( filter->num_raw_frames > 1 )
-        memmove( &filter->frames[0], &filter->frames[1], sizeof(*filter->frames) * (filter->num_raw_frames-1) );
-    tmp = realloc( filter->frames, sizeof(*filter->frames) * (filter->num_raw_frames-1) );
-    filter->num_raw_frames--;
-    if( !tmp && filter->num_raw_frames )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
-    filter->frames = tmp;
-    pthread_mutex_unlock( &filter->filter_mutex );
-
-    return 0;
+    return add_to_queue( &filter->queue, raw_frame );
 }
 
 static void destroy_filter( obe_filter_t *filter )
 {
-    pthread_mutex_lock( &filter->filter_mutex );
-    for( int i = 0; i < filter->num_raw_frames; i++ )
+    obe_raw_frame_t *raw_frame;
+    pthread_mutex_lock( &filter->queue.mutex );
+    for( int i = 0; i < filter->queue.size; i++ )
     {
-        filter->frames[i]->release_data( filter->frames[i] );
-        filter->frames[i]->release_frame( filter->frames[i] );
+        raw_frame = filter->queue.queue[i];
+        raw_frame->release_data( raw_frame );
+        raw_frame->release_frame( raw_frame );
     }
 
-    pthread_mutex_unlock( &filter->filter_mutex );
-    pthread_mutex_destroy( &filter->filter_mutex );
-    pthread_cond_destroy( &filter->filter_cv );
+    obe_destroy_queue( &filter->queue );
 
     free( filter->stream_id_list );
     free( filter );
@@ -238,7 +291,6 @@ static void destroy_filter( obe_filter_t *filter )
 int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame )
 {
     obe_encoder_t *encoder = NULL;
-    obe_raw_frame_t **tmp;
 
     for( int i = 0; i < h->num_encoders; i++ )
     {
@@ -249,177 +301,53 @@ int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame )
     if( !encoder )
         return -1;
 
-    pthread_mutex_lock( &encoder->encoder_mutex );
-    tmp = realloc( encoder->frames, sizeof(*encoder->frames) * (encoder->num_raw_frames+1) );
-    if( !tmp )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
-    encoder->frames = tmp;
-    encoder->frames[encoder->num_raw_frames++] = raw_frame;
-    pthread_cond_signal( &encoder->encoder_cv );
-    pthread_mutex_unlock( &encoder->encoder_mutex );
-
-    return 0;
-}
-
-int remove_frame_from_encode_queue( obe_encoder_t *encoder )
-{
-    obe_raw_frame_t **tmp;
-
-    pthread_mutex_lock( &encoder->encoder_mutex );
-    if( encoder->num_raw_frames > 1 )
-        memmove( &encoder->frames[0], &encoder->frames[1], sizeof(*encoder->frames) * (encoder->num_raw_frames-1) );
-    tmp = realloc( encoder->frames, sizeof(*encoder->frames) * (encoder->num_raw_frames-1) );
-    encoder->num_raw_frames--;
-    if( !tmp && encoder->num_raw_frames )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
-    encoder->frames = tmp;
-    pthread_mutex_unlock( &encoder->encoder_mutex );
-
-    return 0;
+    return add_to_queue( &encoder->queue, raw_frame );
 }
 
 static void destroy_encoder( obe_encoder_t *encoder )
 {
-    pthread_mutex_lock( &encoder->encoder_mutex );
-    for( int i = 0; i < encoder->num_raw_frames; i++ )
+    obe_raw_frame_t *raw_frame;
+    pthread_mutex_lock( &encoder->queue.mutex );
+    for( int i = 0; i < encoder->queue.size; i++ )
     {
-        encoder->frames[i]->release_data( encoder->frames[i] );
-        encoder->frames[i]->release_frame( encoder->frames[i] );
+        raw_frame = encoder->queue.queue[i];
+        raw_frame->release_data( raw_frame );
+        raw_frame->release_frame( raw_frame );
     }
-    pthread_mutex_unlock( &encoder->encoder_mutex );
-    pthread_mutex_destroy( &encoder->encoder_mutex );
-    pthread_cond_destroy( &encoder->encoder_cv );
+
+    obe_destroy_queue( &encoder->queue );
 
     free( encoder );
 }
 
-/* Smoothing queue */
-int add_to_smoothing_queue( obe_t *h, obe_coded_frame_t *coded_frame )
-{
-    obe_coded_frame_t **tmp;
-
-    pthread_mutex_lock( &h->smoothing_mutex );
-    tmp = realloc( h->smoothing_frames, sizeof(*h->smoothing_frames) * (h->num_smoothing_frames+1) );
-    if( !tmp )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
-    h->smoothing_frames = tmp;
-    h->smoothing_frames[h->num_smoothing_frames++] = coded_frame;
-    pthread_cond_signal( &h->smoothing_in_cv );
-    pthread_mutex_unlock( &h->smoothing_mutex );
-
-    return 0;
-}
-
-int remove_from_smoothing_queue( obe_t *h )
-{
-    obe_coded_frame_t **tmp;
-    pthread_mutex_lock( &h->smoothing_mutex );
-    for( int i = 0; i < h->num_smoothing_frames; i++ )
-    {
-        memmove( &h->smoothing_frames[0], &h->smoothing_frames[1], sizeof(*h->smoothing_frames) * (h->num_smoothing_frames-1) );
-        tmp = realloc( h->smoothing_frames, sizeof(*h->smoothing_frames) * (h->num_smoothing_frames-1) );
-        h->num_smoothing_frames--;
-        if( !tmp && h->num_smoothing_frames )
-        {
-            syslog( LOG_ERR, "Malloc failed\n" );
-            return -1;
-        }
-        h->smoothing_frames = tmp;
-        break;
-    }
-
-    h->smoothing_last_exit_time = get_input_clock_in_mpeg_ticks( h );
-    pthread_cond_broadcast( &h->smoothing_out_cv );
-    pthread_mutex_unlock( &h->smoothing_mutex );
-
-    return 0;
-}
-
-/* Mux queue */
-int add_to_mux_queue( obe_t *h, obe_coded_frame_t *coded_frame )
-{
-    obe_coded_frame_t **tmp;
-
-    pthread_mutex_lock( &h->mux_mutex );
-    tmp = realloc( h->coded_frames, sizeof(*h->coded_frames) * (h->num_coded_frames+1) );
-    if( !tmp )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
-    h->coded_frames = tmp;
-    h->coded_frames[h->num_coded_frames++] = coded_frame;
-    pthread_cond_signal( &h->mux_cv );
-    pthread_mutex_unlock( &h->mux_mutex );
-
-    return 0;
-}
-
-int remove_from_mux_queue( obe_t *h, obe_coded_frame_t *coded_frame )
-{
-    obe_coded_frame_t **tmp;
-    pthread_mutex_lock( &h->mux_mutex );
-    for( int i = 0; i < h->num_coded_frames; i++ )
-    {
-        if( h->coded_frames[i] == coded_frame )
-        {
-            memmove( &h->coded_frames[i], &h->coded_frames[i+1], sizeof(*h->coded_frames) * (h->num_coded_frames-1-i) );
-            tmp = realloc( h->coded_frames, sizeof(*h->coded_frames) * (h->num_coded_frames-1) );
-            h->num_coded_frames--;
-            if( !tmp && h->num_coded_frames )
-            {
-                syslog( LOG_ERR, "Malloc failed\n" );
-                return -1;
-            }
-            h->coded_frames = tmp;
-            break;
-        }
-    }
-    pthread_mutex_unlock( &h->mux_mutex );
-
-    return 0;
-}
-
 static void destroy_mux( obe_t *h )
 {
-    pthread_mutex_lock( &h->mux_mutex );
-    for( int i = 0; i < h->num_coded_frames; i++ )
-        destroy_coded_frame( h->coded_frames[i] );
+    pthread_mutex_lock( &h->mux_queue.mutex );
+    for( int i = 0; i < h->mux_queue.size; i++ )
+        destroy_coded_frame( h->mux_queue.queue[i] );
 
-    free( h->coded_frames );
-
-    pthread_mutex_unlock( &h->mux_mutex );
-    pthread_mutex_destroy( &h->mux_mutex );
-    pthread_cond_destroy( &h->mux_cv );
+    obe_destroy_queue( &h->mux_queue );
 }
 
 int remove_early_frames( obe_t *h, int64_t pts )
 {
-    obe_coded_frame_t **tmp;
-    for( int i = 0; i < h->num_coded_frames; i++ )
+    void **tmp;
+    for( int i = 0; i < h->mux_queue.size; i++ )
     {
-        if( !h->coded_frames[i]->is_video && h->coded_frames[i]->pts < pts )
+        obe_coded_frame_t *frame = h->mux_queue.queue[i];
+        if( !frame->is_video && frame->pts < pts )
         {
-            destroy_coded_frame( h->coded_frames[i] );
-            memmove( &h->coded_frames[i], &h->coded_frames[i+1], sizeof(*h->coded_frames) * (h->num_coded_frames-1-i) );
-            tmp = realloc( h->coded_frames, sizeof(*h->coded_frames) * (h->num_coded_frames-1) );
-            h->num_coded_frames--;
+            destroy_coded_frame( frame );
+            memmove( &h->mux_queue.queue[i], &h->mux_queue.queue[i], sizeof(*h->mux_queue.queue) * (h->mux_queue.size-1-i) );
+            tmp = realloc( h->mux_queue.queue, sizeof(*h->mux_queue.queue) * (h->mux_queue.size-1) );
+            h->mux_queue.size--;
             i--;
-            if( !tmp && h->num_coded_frames )
+            if( !tmp && h->mux_queue.size )
             {
                 syslog( LOG_ERR, "Malloc failed\n" );
                 return -1;
             }
-            h->coded_frames = tmp;
+            h->mux_queue.queue = tmp;
         }
     }
 
@@ -427,56 +355,13 @@ int remove_early_frames( obe_t *h, int64_t pts )
 }
 
 /* Output queue */
-int add_to_output_queue( obe_t *h, obe_muxed_data_t *muxed_data )
-{
-    obe_muxed_data_t **tmp;
-
-    pthread_mutex_lock( &h->output_mutex );
-    tmp = realloc( h->muxed_data, sizeof(*h->muxed_data) * (h->num_muxed_data+1) );
-    if( !tmp )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
-    h->muxed_data = tmp;
-    h->muxed_data[h->num_muxed_data++] = muxed_data;
-    pthread_cond_signal( &h->output_cv );
-    pthread_mutex_unlock( &h->output_mutex );
-
-    return 0;
-}
-
-int remove_from_output_queue( obe_t *h )
-{
-    obe_muxed_data_t **tmp;
-
-    pthread_mutex_lock( &h->output_mutex );
-    if( h->num_muxed_data > 1 )
-        memmove( &h->muxed_data[0], &h->muxed_data[1], sizeof(*h->muxed_data) * (h->num_muxed_data-1) );
-    tmp = realloc( h->muxed_data, sizeof(*h->muxed_data) * (h->num_muxed_data-1) );
-    h->num_muxed_data--;
-    if( !tmp && h->num_muxed_data )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
-    h->muxed_data = tmp;
-    pthread_mutex_unlock( &h->output_mutex );
-
-    return 0;
-}
-
 static void destroy_output( obe_t *h )
 {
-    pthread_mutex_lock( &h->output_mutex );
-    for( int i = 0; i < h->num_muxed_data; i++ )
-        destroy_muxed_data( h->muxed_data[i] );
+    pthread_mutex_lock( &h->output_queue.mutex );
+    for( int i = 0; i < h->output_queue.size; i++ )
+        destroy_muxed_data( h->output_queue.queue[i] );
 
-    free( h->muxed_data );
-
-    pthread_mutex_unlock( &h->output_mutex );
-    pthread_mutex_destroy( &h->output_mutex );
-    pthread_cond_destroy( &h->output_cv );
+    obe_destroy_queue( &h->output_queue );
 }
 
 /** Get items **/
@@ -940,7 +825,7 @@ int obe_start( obe_t *h )
     obe_aud_enc_func_t audio_encoder;
     obe_output_func_t output;
 
-    int num_samples;
+    int num_samples = 0;
 
     /* TODO: a lot of sanity checks */
     /* TODO: decide upon thread priorities */
@@ -948,15 +833,11 @@ int obe_start( obe_t *h )
     /* Setup mutexes and cond vars */
     pthread_mutex_init( &h->devices[0]->device_mutex, NULL );
     pthread_mutex_init( &h->drop_mutex, NULL );
-    pthread_mutex_init( &h->smoothing_mutex, NULL );
-    pthread_cond_init( &h->smoothing_in_cv, NULL );
-    pthread_cond_init( &h->smoothing_out_cv, NULL );
+    obe_init_queue( &h->smoothing_queue );
+    obe_init_queue( &h->mux_queue );
+    obe_init_queue( &h->output_queue );
     pthread_mutex_init( &h->obe_clock_mutex, NULL );
     pthread_cond_init( &h->obe_clock_cv, NULL );
-    pthread_mutex_init( &h->mux_mutex, NULL );
-    pthread_cond_init( &h->mux_cv, NULL );
-    pthread_mutex_init( &h->output_mutex, NULL );
-    pthread_cond_init( &h->output_cv, NULL );
 
     if( h->devices[0]->device_type == INPUT_URL )
     {
@@ -1019,10 +900,9 @@ int obe_start( obe_t *h )
                 fprintf( stderr, "Malloc failed \n" );
                 goto fail;
             }
-            h->encoders[h->num_encoders]->stream_id = h->output_streams[i].stream_id;
-            pthread_mutex_init( &h->encoders[h->num_encoders]->encoder_mutex, NULL );
-            pthread_cond_init( &h->encoders[h->num_encoders]->encoder_cv, NULL );
+            obe_init_queue( &h->encoders[h->num_encoders]->queue );
 
+            h->encoders[h->num_encoders]->stream_id = h->output_streams[i].stream_id;
             if( h->output_streams[i].stream_format == VIDEO_AVC )
             {
                 x264_param_t *x264_param = &h->output_streams[i].avc_param;
@@ -1138,8 +1018,7 @@ int obe_start( obe_t *h )
             if( !h->filters[h->num_filters] )
                 goto fail;
 
-            pthread_mutex_init( &h->filters[h->num_filters]->filter_mutex, NULL );
-            pthread_cond_init( &h->filters[h->num_filters]->filter_cv, NULL );
+            obe_init_queue( &h->filters[h->num_filters]->queue );
 
             h->filters[h->num_filters]->num_stream_ids = 1;
             h->filters[h->num_filters]->stream_id_list = malloc( sizeof(*h->filters[h->num_filters]->stream_id_list) );
@@ -1224,10 +1103,10 @@ void obe_close( obe_t *h )
     /* Cancel filter threads */
     for( int i = 0; i < h->num_filters; i++ )
     {
-        pthread_mutex_lock( &h->filters[i]->filter_mutex );
+        pthread_mutex_lock( &h->filters[i]->queue.mutex );
         h->filters[i]->cancel_thread = 1;
-        pthread_cond_signal( &h->filters[i]->filter_cv );
-        pthread_mutex_unlock( &h->filters[i]->filter_mutex );
+        pthread_cond_signal( &h->filters[i]->queue.in_cv );
+        pthread_mutex_unlock( &h->filters[i]->queue.mutex );
         pthread_join( h->filters[i]->filter_thread, &ret_ptr );
     }
 
@@ -1236,10 +1115,10 @@ void obe_close( obe_t *h )
     /* Cancel encoder threads */
     for( int i = 0; i < h->num_encoders; i++ )
     {
-        pthread_mutex_lock( &h->encoders[i]->encoder_mutex );
+        pthread_mutex_lock( &h->encoders[i]->queue.mutex );
         h->encoders[i]->cancel_thread = 1;
-        pthread_cond_signal( &h->encoders[i]->encoder_cv );
-        pthread_mutex_unlock( &h->encoders[i]->encoder_mutex );
+        pthread_cond_signal( &h->encoders[i]->queue.in_cv );
+        pthread_mutex_unlock( &h->encoders[i]->queue.mutex );
         pthread_join( h->encoders[i]->encoder_thread, &ret_ptr );
     }
 
@@ -1248,10 +1127,10 @@ void obe_close( obe_t *h )
     /* Cancel smoothing thread */
     if ( h->smoothing_thread )
     {
-        pthread_mutex_lock( &h->smoothing_mutex );
+        pthread_mutex_lock( &h->smoothing_queue.mutex );
         h->cancel_smoothing_thread = 1;
-        pthread_cond_signal( &h->smoothing_in_cv );
-        pthread_mutex_unlock( &h->smoothing_mutex );
+        pthread_cond_signal( &h->smoothing_queue.in_cv );
+        pthread_mutex_unlock( &h->smoothing_queue.mutex );
         pthread_join( h->smoothing_thread, &ret_ptr );
     }
 
@@ -1260,10 +1139,10 @@ void obe_close( obe_t *h )
     /* Cancel mux thread */
     if ( h->mux_thread )
     {
-        pthread_mutex_lock( &h->mux_mutex );
+        pthread_mutex_lock( &h->mux_queue.mutex );
         h->cancel_mux_thread = 1;
-        pthread_cond_signal( &h->mux_cv );
-        pthread_mutex_unlock( &h->mux_mutex );
+        pthread_cond_signal( &h->mux_queue.in_cv );
+        pthread_mutex_unlock( &h->mux_queue.mutex );
         pthread_join( h->mux_thread, &ret_ptr );
     }
 
@@ -1283,11 +1162,15 @@ void obe_close( obe_t *h )
     for( int i = 0; i < h->num_encoders; i++ )
         destroy_encoder( h->encoders[i] );
 
+    // FIXME destroy smoothing thread
+
     /* Destroy mux */
     destroy_mux( h );
 
     /* Destroy output */
     destroy_output( h );
+
+    /* TODO: free other things */
 
     free( h );
     h = NULL;

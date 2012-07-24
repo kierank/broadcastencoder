@@ -42,12 +42,12 @@ static void *start_smoothing( void *ptr )
         {
             if( h->encoders[i]->is_video )
             {
-                pthread_mutex_lock( &h->encoders[i]->encoder_mutex );
+                pthread_mutex_lock( &h->encoders[i]->queue.mutex );
                 if( !h->encoders[i]->is_ready )
-                    pthread_cond_wait( &h->encoders[i]->encoder_cv, &h->encoders[i]->encoder_mutex );
+                    pthread_cond_wait( &h->encoders[i]->queue.in_cv, &h->encoders[i]->queue.mutex );
                 x264_param_t *params = h->encoders[i]->encoder_params;
                 buffer_frames = params->sc.i_buffer_size;
-                pthread_mutex_unlock( &h->encoders[i]->encoder_mutex );
+                pthread_mutex_unlock( &h->encoders[i]->queue.mutex );
                 break;
             }
         }
@@ -57,24 +57,24 @@ static void *start_smoothing( void *ptr )
 
     while( 1 )
     {
-        pthread_mutex_lock( &h->smoothing_mutex );
+        pthread_mutex_lock( &h->smoothing_queue.mutex );
 
         if( h->cancel_smoothing_thread )
         {
-            pthread_mutex_unlock( &h->smoothing_mutex );
+            pthread_mutex_unlock( &h->smoothing_queue.mutex );
             break;
         }
 
-        if( h->num_smoothing_frames == num_smoothing_frames )
-            pthread_cond_wait( &h->smoothing_in_cv, &h->smoothing_mutex );
+        if( h->smoothing_queue.size == num_smoothing_frames )
+            pthread_cond_wait( &h->smoothing_queue.in_cv, &h->smoothing_queue.mutex );
 
         if( h->cancel_smoothing_thread )
         {
-            pthread_mutex_unlock( &h->smoothing_mutex );
+            pthread_mutex_unlock( &h->smoothing_queue.mutex );
             break;
         }
 
-        num_smoothing_frames = h->num_smoothing_frames;
+        num_smoothing_frames = h->smoothing_queue.size;
 
         if( !h->smoothing_buffer_complete )
         {
@@ -85,15 +85,15 @@ static void *start_smoothing( void *ptr )
             }
             else
             {
-                pthread_mutex_unlock( &h->smoothing_mutex );
+                pthread_mutex_unlock( &h->smoothing_queue.mutex );
                 continue;
             }
         }
 
 //        printf("\n smoothed frames %i \n", num_smoothing_frames );
 
-        coded_frame = h->smoothing_frames[0];
-        pthread_mutex_unlock( &h->smoothing_mutex );
+        coded_frame = h->smoothing_queue.queue[0];
+        pthread_mutex_unlock( &h->smoothing_queue.mutex );
 
         /* The terminology can be a cause for confusion:
          *   pts refers to the pts from the input which is monotonic
@@ -120,12 +120,13 @@ static void *start_smoothing( void *ptr )
 
         pthread_mutex_unlock( &h->obe_clock_mutex );
 
-        add_to_mux_queue( h, coded_frame );
+        add_to_queue( &h->mux_queue, coded_frame );
 
         //printf("\n send_delta %"PRIi64" \n", get_input_clock_in_mpeg_ticks( h ) - send_delta );
         //send_delta = get_input_clock_in_mpeg_ticks( h );
 
-        remove_from_smoothing_queue( h );
+        remove_from_queue( &h->smoothing_queue );
+        h->smoothing_last_exit_time = get_input_clock_in_mpeg_ticks( h );
         num_smoothing_frames = 0;
     }
 

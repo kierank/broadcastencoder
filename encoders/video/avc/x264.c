@@ -114,13 +114,13 @@ static void *start_encoder( void *ptr )
     /* TODO: check for width, height changes */
 
     /* Lock the mutex until we verify and fetch new parameters */
-    pthread_mutex_lock( &encoder->encoder_mutex );
+    pthread_mutex_lock( &encoder->queue.mutex );
 
     enc_params->avc_param.pf_log = x264_logger;
     s = x264_encoder_open( &enc_params->avc_param );
     if( !s )
     {
-        pthread_mutex_unlock( &encoder->encoder_mutex );
+        pthread_mutex_unlock( &encoder->queue.mutex );
         fprintf( stderr, "[x264]: encoder configuration failed\n" );
         goto end;
     }
@@ -130,7 +130,7 @@ static void *start_encoder( void *ptr )
     encoder->encoder_params = malloc( sizeof(enc_params->avc_param) );
     if( !encoder->encoder_params )
     {
-        pthread_mutex_unlock( &encoder->encoder_mutex );
+        pthread_mutex_unlock( &encoder->queue.mutex );
         syslog( LOG_ERR, "Malloc failed\n" );
         goto end;
     }
@@ -142,28 +142,28 @@ static void *start_encoder( void *ptr )
     buffer_duration = frame_duration * enc_params->avc_param.sc.i_buffer_size;
 
     /* Broadcast because input and muxer can be stuck waiting for encoder */
-    pthread_cond_broadcast( &encoder->encoder_cv );
-    pthread_mutex_unlock( &encoder->encoder_mutex );
+    pthread_cond_broadcast( &encoder->queue.in_cv );
+    pthread_mutex_unlock( &encoder->queue.mutex );
 
     user_sar_width = enc_params->avc_param.vui.i_sar_width;
     user_sar_height = enc_params->avc_param.vui.i_sar_height;
 
     while( 1 )
     {
-        pthread_mutex_lock( &encoder->encoder_mutex );
+        pthread_mutex_lock( &encoder->queue.mutex );
 
         if( encoder->cancel_thread )
         {
-            pthread_mutex_unlock( &encoder->encoder_mutex );
+            pthread_mutex_unlock( &encoder->queue.mutex );
             break;
         }
 
-        if( !encoder->num_raw_frames )
-            pthread_cond_wait( &encoder->encoder_cv, &encoder->encoder_mutex );
+        if( !encoder->queue.size )
+            pthread_cond_wait( &encoder->queue.in_cv, &encoder->queue.mutex );
 
         if( encoder->cancel_thread )
         {
-            pthread_mutex_unlock( &encoder->encoder_mutex );
+            pthread_mutex_unlock( &encoder->queue.mutex );
             break;
         }
 
@@ -172,17 +172,17 @@ static void *start_encoder( void *ptr )
         pthread_mutex_lock( &h->drop_mutex );
         if( h->encoder_drop )
         {
-            pthread_mutex_lock( &h->smoothing_mutex );
+            pthread_mutex_lock( &h->smoothing_queue.mutex );
             h->smoothing_buffer_complete = 0;
-            pthread_mutex_unlock( &h->smoothing_mutex );
+            pthread_mutex_unlock( &h->smoothing_queue.mutex );
             syslog( LOG_INFO, "Speedcontrol reset\n" );
             x264_speedcontrol_sync( s, enc_params->avc_param.sc.i_buffer_size, enc_params->avc_param.sc.f_buffer_init, 0 );
             h->encoder_drop = 0;
         }
         pthread_mutex_unlock( &h->drop_mutex );
 
-        raw_frame = encoder->frames[0];
-        pthread_mutex_unlock( &encoder->encoder_mutex );
+        raw_frame = encoder->queue.queue[0];
+        pthread_mutex_unlock( &encoder->queue.mutex );
 
         if( convert_obe_to_x264_pic( &pic, raw_frame ) < 0 )
         {
@@ -225,19 +225,22 @@ static void *start_encoder( void *ptr )
         /* Update speedcontrol based on the system state */
         if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
         {
-            pthread_mutex_lock( &h->smoothing_mutex );
+            pthread_mutex_lock( &h->smoothing_queue.mutex );
             if( h->smoothing_buffer_complete )
             {
                 /* Wait until a frame is sent out. */
                 while( !h->smoothing_last_exit_time )
-                    pthread_cond_wait( &h->smoothing_out_cv, &h->smoothing_mutex );
+                    pthread_cond_wait( &h->smoothing_queue.out_cv, &h->smoothing_queue.mutex );
 
                 /* time elapsed since last frame was removed */
                 int64_t last_frame_delta = get_input_clock_in_mpeg_ticks( h ) - h->smoothing_last_exit_time;
 
-                if( h->num_smoothing_frames )
+                if( h->smoothing_queue.size )
                 {
-                    int64_t frame_durations = h->smoothing_frames[h->num_smoothing_frames-1]->real_dts - h->smoothing_frames[0]->real_dts + frame_duration;
+                    obe_coded_frame_t *first_frame, *last_frame;
+                    first_frame = h->smoothing_queue.queue[0];
+                    last_frame = h->smoothing_queue.queue[h->smoothing_queue.size-1];
+                    int64_t frame_durations = last_frame->real_dts - first_frame->real_dts + frame_duration;
                     buffer_fill = (float)(frame_durations - last_frame_delta)/buffer_duration;
                 }
                 else
@@ -246,7 +249,7 @@ static void *start_encoder( void *ptr )
                 x264_speedcontrol_sync( s, buffer_fill, enc_params->avc_param.sc.i_buffer_size, 1 );
             }
 
-            pthread_mutex_unlock( &h->smoothing_mutex );
+            pthread_mutex_unlock( &h->smoothing_queue.mutex );
         }
 
         frame_size = x264_encoder_encode( s, &nal, &i_nal, &pic, &pic_out );
@@ -254,7 +257,7 @@ static void *start_encoder( void *ptr )
         arrival_time = raw_frame->arrival_time;
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
-        remove_frame_from_encode_queue( encoder );
+        remove_from_queue( &encoder->queue );
 
         if( frame_size < 0 )
         {
@@ -289,7 +292,7 @@ static void *start_encoder( void *ptr )
                 //printf("\n Encode Latency %"PRIi64" \n", obe_mdate() - coded_frame->arrival_time );
             }
 
-            add_to_smoothing_queue( h, coded_frame );
+            add_to_queue( &h->smoothing_queue, coded_frame );
         }
      }
 
