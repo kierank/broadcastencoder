@@ -179,7 +179,7 @@ void *open_muxer( void *ptr )
             j++;
 
         stream->stream_format = mpegts_stream_info[j][1];
-        stream->stream_id = mpegts_stream_info[j][2];
+        stream->stream_id = mpegts_stream_info[j][2]; /* Note this is the MPEG-TS stream_id, not the OBE stream_id */
         if( mux_opts->passthrough )
         {
             output_stream->ts_opts.pid = stream->pid = input_stream->pid ? input_stream->pid : cur_pid++;
@@ -216,14 +216,14 @@ void *open_muxer( void *ptr )
         else if( stream_format == AUDIO_MP2 )
             stream->audio_frame_size = (double)MP2_NUM_SAMPLES * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
         else if( stream_format == AUDIO_AC_3 )
-            stream->audio_frame_size = (double)AC3_NUM_SAMPLES * 90000LL / input_stream->sample_rate;
+            stream->audio_frame_size = (double)AC3_NUM_SAMPLES * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
         else if( stream_format == AUDIO_AAC )
-            stream->audio_frame_size = (double)AAC_NUM_SAMPLES * 90000LL / input_stream->sample_rate;
+            stream->audio_frame_size = (double)AAC_NUM_SAMPLES * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
         else if( stream_format == AUDIO_E_AC_3 )
         {
-            encoder_wait( h, output_stream->stream_id );
-            encoder = get_encoder( h, output_stream->stream_id );
-            stream->audio_frame_size = (double)encoder->num_samples * 90000LL / input_stream->sample_rate;
+            encoder_wait( h, output_stream->output_stream_id );
+            encoder = get_encoder( h, output_stream->output_stream_id );
+            stream->audio_frame_size = (double)encoder->num_samples * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
         }
     }
 
@@ -267,7 +267,11 @@ void *open_muxer( void *ptr )
         {
             /* Even though the stream might be stereo, it could switch to 5.1 at some point.
              * It's simpler to let T-STD use 5 channels. As usual the spec doesn't explain how to deal with channel switches */
-            if( ts_setup_mpeg4_aac_stream( w, stream->pid, LIBMPEGTS_MPEG4_AAC_PROFILE_LEVEL_5, 5 ) < 0 )
+            int profile_and_level = output_stream->aac_opts.aac_profile == AAC_HE_V2 ? LIBMPEGTS_MPEG4_HE_AAC_V2_PROFILE_LEVEL_4 :
+                                    output_stream->aac_opts.aac_profile == AAC_HE_V1 ? LIBMPEGTS_MPEG4_HE_AAC_PROFILE_LEVEL_4 :
+                                    LIBMPEGTS_MPEG4_AAC_PROFILE_LEVEL_4;
+
+            if( ts_setup_mpeg4_aac_stream( w, stream->pid, profile_and_level, 5 ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup AAC stream\n" );
                 goto end;

@@ -58,6 +58,8 @@ static void *start_encoder( void *ptr )
     AVPacket pkt;
     AVCodecContext *codec = NULL;
     AVFrame frame;
+    AVDictionary *opts = NULL;
+    char is_latm[2];
 
     avcodec_register_all();
 
@@ -100,8 +102,14 @@ static void *start_encoder( void *ptr )
     codec->channel_layout = enc_params->channel_layout;
     codec->time_base.num = 1;
     codec->time_base.den = OBE_CLOCK;
+    codec->profile = stream->aac_opts.aac_profile == AAC_HE_V2 ? FF_PROFILE_AAC_HE_V2 :
+                     stream->aac_opts.aac_profile == AAC_HE_V1 ? FF_PROFILE_AAC_HE :
+                     FF_PROFILE_AAC_LOW;
 
-    if( avcodec_open2( codec, enc, NULL ) < 0 )
+    snprintf( is_latm, sizeof(is_latm), "%i", enc_params->aac_opts.latm_output );
+    av_dict_set( &opts, "latm", is_latm, 0 );
+
+    if( avcodec_open2( codec, enc, &opts ) < 0 )
     {
         fprintf( stderr, "[lavc] Could not open encoder\n" );
         goto finish;
@@ -199,7 +207,7 @@ static void *start_encoder( void *ptr )
             avresample_read( avr, &audio_buf, codec->frame_size );
 
             if( avcodec_fill_audio_frame( &frame, codec->channels, codec->sample_fmt, audio_buf, audio_buf_len, 0 ) < 0 )
-	    {
+            {
                 syslog( LOG_ERR, "[lavc] Could not fill audio frame\n" );
                 break;
             }

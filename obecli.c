@@ -75,6 +75,7 @@ static const char * const encode_formats[]           = { "", "avc", "", "", "mp2
 static const char * const frame_packing_modes[]      = { "none", "checkerboard", "column", "row", "side-by-side", "top-bottom", "temporal", 0 };
 static const char * const teletext_types[]           = { "", "initial", "subtitle", "additional-info", "program-schedule", "hearing-imp", 0 };
 static const char * const audio_types[]              = { "undefined", "clean-effects", "hearing-impaired", "visual-impaired", 0 };
+static const char * const aac_profiles[]             = { "aac-lc", "he-aac-v1", "he-aac-v2" };
 static const char * const aac_encapsulations[]       = { "adts", "latm", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 
@@ -467,12 +468,13 @@ static int set_stream( char *command, obecli_command_t *child )
             char *filler      = obe_get_option( stream_opts[19], opts );
             char *intra_refresh = obe_get_option( stream_opts[20], opts );
 
-            char *aac_encap   = obe_get_option( stream_opts[21], opts );
+            char *aac_profile = obe_get_option( stream_opts[21], opts );
+            char *aac_encap   = obe_get_option( stream_opts[22], opts );
 
             /* NB: remap these and the ttx values below if more encoding options are added - TODO: split them up */
-            char *pid         = obe_get_option( stream_opts[22], opts );
-            char *lang        = obe_get_option( stream_opts[23], opts );
-            char *audio_type  = obe_get_option( stream_opts[24], opts );
+            char *pid         = obe_get_option( stream_opts[23], opts );
+            char *lang        = obe_get_option( stream_opts[24], opts );
+            char *audio_type  = obe_get_option( stream_opts[25], opts );
 
             if( cli.program.streams[stream_id].stream_type == STREAM_TYPE_VIDEO )
             {
@@ -552,6 +554,9 @@ static int set_stream( char *command, obecli_command_t *child )
                 FAIL_IF_ERROR( format && ( check_enum_value( format, encode_formats ) < 0 ),
                               "Invalid stream format\n" );
 
+                FAIL_IF_ERROR( aac_profile && ( check_enum_value( aac_profile, aac_profiles ) < 0 ),
+                              "Invalid aac encapsulation\n" );
+
                 FAIL_IF_ERROR( aac_encap && ( check_enum_value( aac_encap, aac_encapsulations ) < 0 ),
                               "Invalid aac encapsulation\n" );
 
@@ -579,6 +584,9 @@ static int set_stream( char *command, obecli_command_t *child )
                 {
                     default_bitrate = 128;
 
+                    if( aac_profile )
+                        parse_enum_value( aac_profile, aac_profiles, &cli.output_streams[stream_id].aac_opts.aac_profile );
+
                     if( aac_encap )
                         parse_enum_value( aac_encap, aac_encapsulations, &cli.output_streams[stream_id].aac_opts.latm_output );
                 }
@@ -596,10 +604,10 @@ static int set_stream( char *command, obecli_command_t *child )
                      cli.program.streams[stream_id].stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
-                char *ttx_lang = obe_get_option( stream_opts[26], opts );
-                char *ttx_type = obe_get_option( stream_opts[27], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[28], opts );
-                char *ttx_page = obe_get_option( stream_opts[29], opts );
+                char *ttx_lang = obe_get_option( stream_opts[27], opts );
+                char *ttx_type = obe_get_option( stream_opts[28], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[29], opts );
+                char *ttx_page = obe_get_option( stream_opts[30], opts );
 
                 FAIL_IF_ERROR( ttx_type && ( check_enum_value( ttx_type, teletext_types ) < 0 ),
                                "Invalid Teletext type\n" );
