@@ -138,7 +138,7 @@ static void *start_encoder( void *ptr )
     }
 
     /* The number of samples per E-AC3 frame is unknown until the encoder is ready */
-    if( stream->stream_format == AUDIO_E_AC_3 )
+    if( stream->stream_format == AUDIO_E_AC_3 || stream->stream_format == AUDIO_AAC )
     {
         pthread_mutex_lock( &encoder->queue.mutex );
         encoder->is_ready = 1;
@@ -150,9 +150,8 @@ static void *start_encoder( void *ptr )
 
     frame_size = (double)codec->frame_size * 125 * stream->bitrate *
                  enc_params->frames_per_pes / enc_params->sample_rate;
+    /* NB: libfdk-aac already doubles the frame size appropriately */
     pts_increment = (double)codec->frame_size * OBE_CLOCK * enc_params->frames_per_pes / enc_params->sample_rate;
-    if( stream->aac_opts.aac_profile == AAC_HE_V1 || stream->aac_opts.aac_profile == AAC_HE_V2 )
-        pts_increment <<= 1;
 
     out_fifo = av_fifo_alloc( frame_size );
     if( !out_fifo )

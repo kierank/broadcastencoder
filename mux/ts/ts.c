@@ -217,17 +217,12 @@ void *open_muxer( void *ptr )
             stream->audio_frame_size = (double)MP2_NUM_SAMPLES * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
         else if( stream_format == AUDIO_AC_3 )
             stream->audio_frame_size = (double)AC3_NUM_SAMPLES * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
-        else if( stream_format == AUDIO_AAC )
-        {
-            stream->audio_frame_size = (double)AAC_NUM_SAMPLES * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
-            if( output_stream->aac_opts.aac_profile == AAC_HE_V1 || output_stream->aac_opts.aac_profile == AAC_HE_V2 )
-                stream->audio_frame_size <<= 1;
-        }
-        else if( stream_format == AUDIO_E_AC_3 )
+        else if( stream_format == AUDIO_E_AC_3 || stream_format == AUDIO_AAC )
         {
             encoder_wait( h, output_stream->stream_id );
             encoder = get_encoder( h, output_stream->stream_id );
             stream->audio_frame_size = (double)encoder->num_samples * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
+            printf("\n %i \n", stream->audio_frame_size );
         }
     }
 

@@ -954,14 +954,14 @@ int obe_start( obe_t *h )
                 /* TODO: check the bitrate is allowed by the format */
 
                 /* Choose the optimal number of audio frames per PES
-                 * TODO: E-AC3 */
+                 * TODO: This should be set after the encoder has told us the frame size */
                 if( !h->output_streams[i].ts_opts.frames_per_pes && h->obe_system != OBE_SYSTEM_TYPE_LOW_LATENCY &&
                     h->output_streams[i].stream_format != AUDIO_E_AC_3 )
                 {
                     int buf_size = h->output_streams[i].stream_format == AUDIO_MP2 || h->output_streams[i].stream_format == AUDIO_AAC ? MISC_AUDIO_BS : AC3_BS_DVB;
                     if( buf_size == AC3_BS_DVB && ( h->mux_opts.ts_type == OBE_TS_TYPE_CABLELABS || h->mux_opts.ts_type == OBE_TS_TYPE_ATSC ) )
                         buf_size = AC3_BS_ATSC;
-                    /* AAC does not have exact frame sizes but this should be a good a approximation */
+                    /* AAC does not have exact frame sizes but this should be a good approximation */
                     int single_frame_size = (double)num_samples * 125 * h->output_streams[i].bitrate / input_stream->sample_rate;
                     if( h->output_streams[i].aac_opts.aac_profile == AAC_HE_V1 || h->output_streams[i].aac_opts.aac_profile == AAC_HE_V2 )
                         single_frame_size <<= 1;
