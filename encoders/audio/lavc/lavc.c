@@ -194,6 +194,7 @@ static void *start_encoder( void *ptr )
 
         while( avresample_available( avr ) >= codec->frame_size )
         {
+            got_pkt = 0;
             frame.nb_samples = codec->frame_size;
             avresample_read( avr, &audio_buf, codec->frame_size );
 
