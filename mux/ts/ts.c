@@ -222,7 +222,6 @@ void *open_muxer( void *ptr )
             encoder_wait( h, output_stream->stream_id );
             encoder = get_encoder( h, output_stream->stream_id );
             stream->audio_frame_size = (double)encoder->num_samples * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
-            printf("\n %i \n", stream->audio_frame_size );
         }
     }
 
