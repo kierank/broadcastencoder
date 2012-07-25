@@ -220,6 +220,13 @@ static void *start_encoder( void *ptr )
 
             total_size += pkt.size;
             num_frames++;
+
+            if( av_fifo_realloc2( out_fifo, av_fifo_size( out_fifo ) + pkt.size ) < 0 )
+            {
+                syslog( LOG_ERR, "Malloc failed\n" );
+                break;
+            }
+
             av_fifo_generic_write( out_fifo, pkt.data, pkt.size, NULL );
             obe_free_packet( &pkt );
 
