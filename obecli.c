@@ -89,7 +89,7 @@ static const char * stream_opts[] = { "action", "format",
                                       "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", "weightp",
                                       "interlaced", "tff", "frame-packing", "csp", "filler", "intra-refresh",
                                       /* AAC options */
-                                      "aac-encap",
+                                      "aac-profile", "aac-encap",
                                       /* TS options */
                                       "pid", "lang", "audio-type", "num-ttx", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page",
                                       NULL };
