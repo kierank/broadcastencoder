@@ -220,6 +220,7 @@ static void *start_encoder( void *ptr )
             total_size += pkt.size;
             num_frames++;
             av_fifo_generic_write( out_fifo, pkt.data, pkt.size, NULL );
+            obe_free_packet( &pkt );
 
             if( num_frames == enc_params->frames_per_pes )
             {
@@ -238,7 +239,6 @@ static void *start_encoder( void *ptr )
 
                 /* We need to generate PTS because frame sizes have changed */
                 cur_pts += (double)codec->frame_size * OBE_CLOCK * enc_params->frames_per_pes / enc_params->sample_rate;
-                obe_free_packet( &pkt );
 
                 total_size = num_frames = 0;
             }
