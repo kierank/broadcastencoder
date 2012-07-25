@@ -963,7 +963,10 @@ int obe_start( obe_t *h )
                         buf_size = AC3_BS_ATSC;
                     /* AAC does not have exact frame sizes but this should be a good a approximation */
                     int single_frame_size = (double)num_samples * 125 * h->output_streams[i].bitrate / input_stream->sample_rate;
+                    if( h->output_streams[i].aac_opts.aac_profile == AAC_HE_V1 || h->output_streams[i].aac_opts.aac_profile == AAC_HE_V2 )
+                        single_frame_size <<= 1;
                     int frames_per_pes = MAX( buf_size / single_frame_size, 1 );
+                    frames_per_pes = MIN( frames_per_pes, 6 );
                     h->output_streams[i].ts_opts.frames_per_pes = aud_enc_params->frames_per_pes = frames_per_pes;
                 }
                 else

@@ -52,7 +52,7 @@ static void *start_encoder( void *ptr )
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
     void *audio_buf = NULL;
-    int64_t cur_pts = -1;
+    int64_t cur_pts = -1, pts_increment;
     int i, frame_size, ret, got_pkt, num_frames = 0, total_size = 0, audio_buf_len;
     AVFifoBuffer *out_fifo = NULL;
     AVAudioResampleContext *avr = NULL;
@@ -107,8 +107,9 @@ static void *start_encoder( void *ptr )
                      stream->aac_opts.aac_profile == AAC_HE_V1 ? FF_PROFILE_AAC_HE :
                      FF_PROFILE_AAC_LOW;
 
-    snprintf( is_latm, sizeof(is_latm), "%i", enc_params->aac_opts.latm_output );
+    snprintf( is_latm, sizeof(is_latm), "%i", stream->aac_opts.latm_output );
     av_dict_set( &opts, "latm", is_latm, 0 );
+    av_dict_set( &opts, "header_period", "2", 0 );
 
     if( avcodec_open2( codec, enc, &opts ) < 0 )
     {
@@ -149,6 +150,10 @@ static void *start_encoder( void *ptr )
 
     frame_size = (double)codec->frame_size * 125 * stream->bitrate *
                  enc_params->frames_per_pes / enc_params->sample_rate;
+    pts_increment = (double)codec->frame_size * OBE_CLOCK * enc_params->frames_per_pes / enc_params->sample_rate;
+    if( stream->aac_opts.aac_profile == AAC_HE_V1 || stream->aac_opts.aac_profile == AAC_HE_V2 )
+        pts_increment <<= 1;
+
     out_fifo = av_fifo_alloc( frame_size );
     if( !out_fifo )
     {
@@ -255,8 +260,7 @@ static void *start_encoder( void *ptr )
                 add_to_queue( &h->mux_queue, coded_frame );
 
                 /* We need to generate PTS because frame sizes have changed */
-                cur_pts += (double)codec->frame_size * OBE_CLOCK * enc_params->frames_per_pes / enc_params->sample_rate;
-
+                cur_pts += pts_increment;
                 total_size = num_frames = 0;
             }
         }
