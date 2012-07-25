@@ -221,8 +221,8 @@ void *open_muxer( void *ptr )
             stream->audio_frame_size = (double)AAC_NUM_SAMPLES * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
         else if( stream_format == AUDIO_E_AC_3 )
         {
-            encoder_wait( h, output_stream->output_stream_id );
-            encoder = get_encoder( h, output_stream->output_stream_id );
+            encoder_wait( h, output_stream->stream_id );
+            encoder = get_encoder( h, output_stream->stream_id );
             stream->audio_frame_size = (double)encoder->num_samples * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
         }
     }

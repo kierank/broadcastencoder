@@ -35,12 +35,10 @@ typedef struct
 {
     obe_t *h;
     obe_encoder_t *encoder;
+    obe_output_stream_t *stream;
 
-    int sample_format;
-    int output_format;
-    int bitrate;
+    int input_sample_format;
     int sample_rate;
-    uint64_t channel_layout;
     int frames_per_pes;
 
     // TODO ac3 opts

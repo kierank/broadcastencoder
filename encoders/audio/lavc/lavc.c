@@ -48,6 +48,7 @@ static void *start_encoder( void *ptr )
     obe_aud_enc_params_t *enc_params = ptr;
     obe_t *h = enc_params->h;
     obe_encoder_t *encoder = enc_params->encoder;
+    obe_output_stream_t *stream = enc_params->stream;
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
     void *audio_buf = NULL;
@@ -72,7 +73,7 @@ static void *start_encoder( void *ptr )
 
     for( i = 0; lavc_encoders[i].obe_name != -1; i++ )
     {
-        if( lavc_encoders[i].obe_name == enc_params->output_format )
+        if( lavc_encoders[i].obe_name == stream->stream_format )
             break;
     }
 
@@ -96,10 +97,10 @@ static void *start_encoder( void *ptr )
     }
 
     codec->sample_rate = enc_params->sample_rate;
-    codec->bit_rate = enc_params->bitrate * 1000;
+    codec->bit_rate = stream->bitrate * 1000;
     codec->sample_fmt = enc->sample_fmts[0];
-    codec->channels = av_get_channel_layout_nb_channels( enc_params->channel_layout );
-    codec->channel_layout = enc_params->channel_layout;
+    codec->channels = av_get_channel_layout_nb_channels( stream->channel_layout );
+    codec->channel_layout = stream->channel_layout;
     codec->time_base.num = 1;
     codec->time_base.den = OBE_CLOCK;
     codec->profile = stream->aac_opts.aac_profile == AAC_HE_V2 ? FF_PROFILE_AAC_HE_V2 :
@@ -123,7 +124,7 @@ static void *start_encoder( void *ptr )
     }
 
     av_opt_set_int( avr, "in_channel_layout",   codec->channel_layout, 0 );
-    av_opt_set_int( avr, "in_sample_fmt",       AV_SAMPLE_FMT_S32,     0 ); // FIXME
+    av_opt_set_int( avr, "in_sample_fmt",       enc_params->input_sample_format, 0 );
     av_opt_set_int( avr, "in_sample_rate",      enc_params->sample_rate, 0 );
     av_opt_set_int( avr, "out_channel_layout",  codec->channel_layout, 0 );
     av_opt_set_int( avr, "out_sample_fmt",      codec->sample_fmt,     0 );
@@ -136,7 +137,7 @@ static void *start_encoder( void *ptr )
     }
 
     /* The number of samples per E-AC3 frame is unknown until the encoder is ready */
-    if( enc_params->output_format == AUDIO_E_AC_3 )
+    if( stream->stream_format == AUDIO_E_AC_3 )
     {
         pthread_mutex_lock( &encoder->queue.mutex );
         encoder->is_ready = 1;
@@ -146,7 +147,7 @@ static void *start_encoder( void *ptr )
         pthread_mutex_unlock( &encoder->queue.mutex );
     }
 
-    frame_size = (double)codec->frame_size * 125 * enc_params->bitrate *
+    frame_size = (double)codec->frame_size * 125 * stream->bitrate *
                  enc_params->frames_per_pes / enc_params->sample_rate;
     out_fifo = av_fifo_alloc( frame_size );
     if( !out_fifo )

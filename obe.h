@@ -355,9 +355,16 @@ typedef struct
 } obe_audio_metadata_t;
 
 /**** AAC Encoding ****/
+enum aac_profile_e
+{
+    AAC_LC,
+    AAC_HE_V1,
+    AAC_HE_V2,
+};
+
 typedef struct
 {
-
+    int aac_profile;
     int latm_output;
 } obe_aac_opts_t;
 
@@ -384,6 +391,7 @@ typedef struct
 
     /* Audio */
     int bitrate;
+    uint64_t channel_layout;
 
     /* Metadata */
     obe_audio_metadata_t audio_metadata;

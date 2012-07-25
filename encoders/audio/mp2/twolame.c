@@ -35,8 +35,10 @@ static void *start_encoder( void *ptr )
     obe_aud_enc_params_t *enc_params = ptr;
     obe_t *h = enc_params->h;
     obe_encoder_t *encoder = enc_params->encoder;
+    obe_output_stream_t *stream = enc_params->stream;
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
+
     twolame_options *tl_opts = NULL;
     int output_size, frame_size, linesize; /* Linesize in libavresample terminology is the entire buffer size for packed formats */
     int64_t cur_pts = -1;
@@ -57,12 +59,12 @@ static void *start_encoder( void *ptr )
     }
 
     /* TODO: setup bitrate reconfig, errors */
-    twolame_set_bitrate( tl_opts, enc_params->bitrate );
+    twolame_set_bitrate( tl_opts, stream->bitrate * 1000 );
     twolame_set_in_samplerate( tl_opts, enc_params->sample_rate );
     twolame_set_out_samplerate( tl_opts, enc_params->sample_rate );
     twolame_set_copyright( tl_opts, 1 );
     twolame_set_original( tl_opts, 1 );
-    twolame_set_num_channels( tl_opts, av_get_channel_layout_nb_channels( enc_params->channel_layout ) );
+    twolame_set_num_channels( tl_opts, av_get_channel_layout_nb_channels( stream->channel_layout ) );
     twolame_set_error_protection( tl_opts, 1 );
 
     twolame_init_params( tl_opts );
@@ -88,10 +90,10 @@ static void *start_encoder( void *ptr )
         goto end;
     }
 
-    av_opt_set_int( avr, "in_channel_layout",   enc_params->channel_layout,  0 );
-    av_opt_set_int( avr, "in_sample_fmt",       AV_SAMPLE_FMT_S32,    0 ); // FIXME
+    av_opt_set_int( avr, "in_channel_layout",   stream->channel_layout,  0 );
+    av_opt_set_int( avr, "in_sample_fmt",       enc_params->input_sample_format, 0 );
     av_opt_set_int( avr, "in_sample_rate",      enc_params->sample_rate, 0 );
-    av_opt_set_int( avr, "out_channel_layout",  enc_params->channel_layout, 0 );
+    av_opt_set_int( avr, "out_channel_layout",  stream->channel_layout, 0 );
     av_opt_set_int( avr, "out_sample_fmt",      AV_SAMPLE_FMT_FLT,   0 );
     av_opt_set_int( avr, "internal_sample_fmt", AV_SAMPLE_FMT_FLTP,  0 );
 
