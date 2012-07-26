@@ -34,6 +34,7 @@
 
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <libavcodec/avcodec.h>
 
 #include "obe.h"
 #include "obecli.h"
@@ -1104,6 +1105,8 @@ int main( int argc, char **argv )
 
     printf( "\nOpen Broadcast Encoder command line interface.\n" );
     printf( "Version 0.1-beta \n" );
+    printf( "OBE Licence: %s \n", "GNU GPL Version 2 except where libavcodec\n" "licence is nonfree and unredestributable" );
+    printf( "Libavcodec Licence: %s \n", avcodec_license() );
     printf( "\n" );
 
     while( 1 )
