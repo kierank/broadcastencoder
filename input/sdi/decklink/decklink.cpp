@@ -208,7 +208,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     AVFrame frame;
     void *frame_bytes, *anc_line;
     obe_t *h = decklink_ctx->h;
-    int finished = 0, ret, bytes, num_anc_lines = 0, anc_line_stride,
+    int finished = 0, ret, num_anc_lines = 0, anc_line_stride,
     lines_read = 0, first_line = 0, last_line = 0, line, num_vbi_lines, vii_line;
     uint32_t *frame_ptr;
     uint16_t *anc_buf, *anc_buf_pos;
@@ -458,28 +458,24 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             goto end;
         }
 
-        raw_frame->num_samples = audioframe->GetSampleFrameCount();
-        raw_frame->channel_layout = AV_CH_LAYOUT_STEREO;
-        raw_frame->sample_fmt = AV_SAMPLE_FMT_S32;
+        raw_frame->audio_frame.num_samples = audioframe->GetSampleFrameCount();
+        raw_frame->audio_frame.channel_layout = AV_CH_LAYOUT_STEREO;
+        raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32;
 
-        bytes = raw_frame->num_samples * decklink_opts_->num_channels * sizeof(int32_t);
-
-        audioframe->GetBytes( &frame_bytes );
-        raw_frame->len = raw_frame->bytes_left = bytes;
-        raw_frame->data = (uint8_t*)av_malloc( raw_frame->len );
-        if( !raw_frame->data )
+        if( av_samples_alloc( raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize, 2,
+                              raw_frame->audio_frame.num_samples, (AVSampleFormat)raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
         {
             syslog( LOG_ERR, "Malloc failed\n" );
-            goto fail;
+            return -1;
         }
 
-        raw_frame->cur_pos = raw_frame->data;
-        memcpy( raw_frame->data, frame_bytes, bytes );
+        av_samples_copy( raw_frame->audio_frame.audio_data, (uint8_t* const*)&frame_bytes, 0, 0, raw_frame->audio_frame.num_samples,
+                         2, (AVSampleFormat)raw_frame->audio_frame.sample_fmt );
 
         BMDTimeValue packet_time;
         audioframe->GetPacketTime( &packet_time, OBE_CLOCK );
         raw_frame->pts = packet_time;
-        raw_frame->release_data = obe_release_other_data;
+        raw_frame->release_data = obe_release_audio_data;
         raw_frame->release_frame = obe_release_frame;
         for( int i = 0; i < decklink_ctx->device->num_input_streams; i++ )
         {

@@ -113,10 +113,10 @@ void obe_release_video_data( void *ptr )
      av_freep( &raw_frame->alloc_img.plane[0] );
 }
 
-void obe_release_other_data( void *ptr )
+void obe_release_audio_data( void *ptr )
 {
      obe_raw_frame_t *raw_frame = ptr;
-     av_freep( &raw_frame->data );
+     av_freep( &raw_frame->audio_frame.audio_data[0] );
 }
 
 void obe_release_frame( void *ptr )

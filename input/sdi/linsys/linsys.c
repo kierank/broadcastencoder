@@ -637,26 +637,23 @@ static int handle_audio_frame( linsys_opts_t *linsys_opts, uint8_t *data )
         return -1;
     }
 
-    raw_frame->num_samples = linsys_ctx->abuffer_size / ( sizeof(int32_t) * 2 );
-    raw_frame->channel_layout = AV_CH_LAYOUT_STEREO;
-    raw_frame->sample_fmt = AV_SAMPLE_FMT_S32;
+    raw_frame->audio_frame.num_samples = linsys_ctx->abuffer_size / ( sizeof(int32_t) * 2 );
+    raw_frame->audio_frame.channel_layout = AV_CH_LAYOUT_STEREO;
+    raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32;
 
-    raw_frame->len = raw_frame->bytes_left = linsys_ctx->abuffer_size;
-    raw_frame->data = av_malloc( raw_frame->len );
-    if( !raw_frame->data )
+    if( av_samples_alloc( raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize, 2,
+                          raw_frame->audio_frame.num_samples, raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
-        free( raw_frame );
         return -1;
     }
 
-    raw_frame->cur_pos = raw_frame->data;
-    memcpy( raw_frame->data, data, raw_frame->len );
+    av_samples_copy( raw_frame->audio_frame.audio_data, &data, 0, 0, raw_frame->audio_frame.num_samples, 2, raw_frame->audio_frame.sample_fmt );
 
     raw_frame->pts = av_rescale_q( linsys_ctx->a_counter, linsys_ctx->a_timebase, (AVRational){1, OBE_CLOCK} );
-    linsys_ctx->a_counter += raw_frame->num_samples;
+    linsys_ctx->a_counter += raw_frame->audio_frame.num_samples;
 
-    raw_frame->release_data = obe_release_other_data;
+    raw_frame->release_data = obe_release_audio_data;
     raw_frame->release_frame = obe_release_frame;
     for( int i = 0; i < linsys_ctx->device->num_input_streams; i++ )
     {

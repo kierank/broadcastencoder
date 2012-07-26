@@ -195,7 +195,8 @@ static void *start_encoder( void *ptr )
         if( cur_pts == -1 )
             cur_pts = raw_frame->pts;
 
-        if( avresample_convert( avr, NULL, 0, raw_frame->num_samples, (void**)&raw_frame->data, raw_frame->len, raw_frame->num_samples ) < 0 )
+        if( avresample_convert( avr, NULL, 0, raw_frame->audio_frame.num_samples, (void**)raw_frame->audio_frame.audio_data,
+                                raw_frame->audio_frame.linesize[0], raw_frame->audio_frame.num_samples ) < 0 )
         {
             syslog( LOG_ERR, "[lavc] Sample format conversion failed\n" );
             break;

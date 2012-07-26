@@ -137,20 +137,21 @@ static void *start_encoder( void *ptr )
             cur_pts = raw_frame->pts;
 
         /* Allocate the output buffer */
-        if( av_samples_alloc( (uint8_t**)&audio_buf, &linesize, av_get_channel_layout_nb_channels( raw_frame->channel_layout ), raw_frame->num_samples,
-                              AV_SAMPLE_FMT_FLT, 0 ) < 0 )
+        if( av_samples_alloc( (uint8_t**)&audio_buf, &linesize, av_get_channel_layout_nb_channels( raw_frame->audio_frame.channel_layout ),
+                              raw_frame->audio_frame.linesize[0], AV_SAMPLE_FMT_FLT, 0 ) < 0 )
         {
             syslog( LOG_ERR, "Malloc failed\n" );
             goto end;
         }
 
-        if( avresample_convert( avr, &audio_buf, linesize, raw_frame->num_samples, (void**)&raw_frame->data, raw_frame->len, raw_frame->num_samples ) < 0 )
+        if( avresample_convert( avr, NULL, 0, raw_frame->audio_frame.num_samples, (void**)raw_frame->audio_frame.audio_data,
+                                raw_frame->audio_frame.linesize[0], raw_frame->audio_frame.num_samples ) < 0 )
         {
             syslog( LOG_ERR, "[twolame] Sample format conversion failed\n" );
             break;
         }
 
-        output_size = twolame_encode_buffer_float32_interleaved( tl_opts, audio_buf, raw_frame->num_samples, output_buf, MP2_AUDIO_BUFFER_SIZE );
+        output_size = twolame_encode_buffer_float32_interleaved( tl_opts, audio_buf, raw_frame->audio_frame.num_samples, output_buf, MP2_AUDIO_BUFFER_SIZE );
 
         if( output_size < 0 )
         {

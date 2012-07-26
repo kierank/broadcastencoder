@@ -45,6 +45,7 @@
 
 #define MAX_DEVICES 1
 #define MAX_STREAMS 40
+#define MAX_CHANNELS 16
 
 #define MAX_PROBE_TIME 20
 
@@ -213,6 +214,16 @@ typedef struct
      int location;
 } obe_int_frame_data_t;
 
+typedef struct
+{
+    uint8_t *audio_data[MAX_CHANNELS];
+    int      linesize[MAX_CHANNELS];
+    uint64_t channel_layout; /* If this is zero then num_channels is set */
+    int      num_channels;
+    int      num_samples;
+    int      sample_fmt;
+} obe_audio_frame_t;
+
 enum user_data_types_e
 {
     /* Encapsulated frame data formats */
@@ -334,22 +345,13 @@ typedef struct
     int num_user_data;
     obe_user_data_t *user_data;
 
-    /* Non-video */
-    int len;
-    int bytes_left;
-    uint8_t *data;
-    uint8_t *cur_pos;
+    /* Audio */
+    obe_audio_frame_t audio_frame;
+    // TODO channel order
+    // TODO audio metadata
 
     int valid_timecode;
     obe_timecode_t timecode;
-
-    /* Audio */
-    int num_samples;
-    int sample_fmt;
-    int num_channels;
-    uint64_t channel_layout;
-    // TODO channel order
-    // TODO audio metadata
 
     int reset_obe;
 } obe_raw_frame_t;
@@ -496,7 +498,7 @@ void destroy_raw_frame( obe_raw_frame_t *raw_frame );
 obe_coded_frame_t *new_coded_frame( int stream_id, int len );
 void destroy_coded_frame( obe_coded_frame_t *coded_frame );
 void obe_release_video_data( void *ptr );
-void obe_release_other_data( void *ptr );
+void obe_release_audio_data( void *ptr );
 void obe_release_frame( void *ptr );
 
 obe_muxed_data_t *new_muxed_data( int len );
