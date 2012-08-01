@@ -268,7 +268,7 @@ void *open_muxer( void *ptr )
                                     output_stream->aac_opts.aac_profile == AAC_HE_V1 ? LIBMPEGTS_MPEG4_HE_AAC_PROFILE_LEVEL_2 :
                                     LIBMPEGTS_MPEG4_AAC_PROFILE_LEVEL_2;
 
-            if( ts_setup_mpeg4_aac_stream( w, stream->pid, profile_and_level, 5 ) < 0 )
+            if( ts_setup_mpeg4_aac_stream( w, stream->pid, profile_and_level, 2 ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup AAC stream\n" );
                 goto end;
