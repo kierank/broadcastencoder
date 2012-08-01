@@ -217,7 +217,7 @@ typedef struct
 typedef struct
 {
     uint8_t *audio_data[MAX_CHANNELS];
-    int      linesize[MAX_CHANNELS];
+    int      linesize;
     uint64_t channel_layout; /* If this is zero then num_channels is set */
     int      num_channels;
     int      num_samples;

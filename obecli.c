@@ -430,6 +430,8 @@ static int set_input( char *command, obecli_command_t *child )
 
 static int set_stream( char *command, obecli_command_t *child )
 {
+    obe_input_stream_t *input_stream;
+
     if( !strlen( command ) )
         return -1;
 
@@ -444,10 +446,10 @@ static int set_stream( char *command, obecli_command_t *child )
         int str_len2 = strlen( command );
         command[tok_len2] = 0;
 
-        int stream_id = obe_otoi( command, -1 );
+        int output_stream_id = obe_otoi( command, -1 );
+        input_stream = &cli.program.streams[cli.output_streams[output_stream_id].input_stream_id];
 
-
-        FAIL_IF_ERROR( stream_id < 0 || stream_id > cli.program.num_streams-1,
+        FAIL_IF_ERROR( output_stream_id < 0 || output_stream_id > cli.num_output_streams-1,
                        "Invalid stream id\n" );
 
         if( str_len > str_len2 )
@@ -487,9 +489,9 @@ static int set_stream( char *command, obecli_command_t *child )
             char *lang        = obe_get_option( stream_opts[24], opts );
             char *audio_type  = obe_get_option( stream_opts[25], opts );
 
-            if( cli.program.streams[stream_id].stream_type == STREAM_TYPE_VIDEO )
+            if( input_stream->stream_type == STREAM_TYPE_VIDEO )
             {
-                x264_param_t *avc_param = &cli.output_streams[stream_id].avc_param;
+                x264_param_t *avc_param = &cli.output_streams[output_stream_id].avc_param;
 
                 FAIL_IF_ERROR( profile && ( check_enum_value( profile, x264_profile_names ) < 0 ),
                                "Invalid AVC profile\n" );
@@ -501,8 +503,8 @@ static int set_stream( char *command, obecli_command_t *child )
                                "Invalid frame packing mode\n" )
 
                 /* Set it to encode by default */
-                cli.output_streams[stream_id].stream_action = STREAM_ENCODE;
-                cli.output_streams[stream_id].stream_format = VIDEO_AVC;
+                cli.output_streams[output_stream_id].stream_action = STREAM_ENCODE;
+                cli.output_streams[output_stream_id].stream_format = VIDEO_AVC;
                 avc_param->rc.i_vbv_max_bitrate = obe_otoi( vbv_maxrate, 0 );
                 avc_param->rc.i_vbv_buffer_size = obe_otoi( vbv_bufsize, 0 );
                 avc_param->rc.i_bitrate         = obe_otoi( bitrate, 0 );
@@ -552,12 +554,12 @@ static int set_stream( char *command, obecli_command_t *child )
                     cli.mux_opts.is_3dtv = 1;
 
             }
-            else if( cli.program.streams[stream_id].stream_type == STREAM_TYPE_AUDIO )
+            else if( input_stream->stream_type == STREAM_TYPE_AUDIO )
             {
                 int default_bitrate = 0;
 
                 /* Set it to encode by default */
-                cli.output_streams[stream_id].stream_action = STREAM_ENCODE;
+                cli.output_streams[output_stream_id].stream_action = STREAM_ENCODE;
 
                 FAIL_IF_ERROR( action && ( check_enum_value( action, stream_actions ) < 0 ),
                               "Invalid stream action\n" );
@@ -575,44 +577,44 @@ static int set_stream( char *command, obecli_command_t *child )
                               "Invalid audio type\n" );
 
                 FAIL_IF_ERROR( audio_type && check_enum_value( audio_type, audio_types ) >= 0 &&
-                               !cli.output_streams[stream_id].ts_opts.write_lang_code && !( lang && strlen( lang ) >= 3 ),
+                               !cli.output_streams[output_stream_id].ts_opts.write_lang_code && !( lang && strlen( lang ) >= 3 ),
                                "Audio type requires setting a language\n" );
 
                 if( action )
-                    parse_enum_value( action, stream_actions, &cli.output_streams[stream_id].stream_action );
+                    parse_enum_value( action, stream_actions, &cli.output_streams[output_stream_id].stream_action );
                 if( format )
-                    parse_enum_value( format, encode_formats, &cli.output_streams[stream_id].stream_format );
+                    parse_enum_value( format, encode_formats, &cli.output_streams[output_stream_id].stream_format );
                 if( audio_type )
-                    parse_enum_value( audio_type, audio_types, &cli.output_streams[stream_id].ts_opts.audio_type );
+                    parse_enum_value( audio_type, audio_types, &cli.output_streams[output_stream_id].ts_opts.audio_type );
 
-                if( cli.output_streams[stream_id].stream_format == AUDIO_MP2 )
+                if( cli.output_streams[output_stream_id].stream_format == AUDIO_MP2 )
                     default_bitrate = 256;
-                else if( cli.output_streams[stream_id].stream_format == AUDIO_AC_3 )
+                else if( cli.output_streams[output_stream_id].stream_format == AUDIO_AC_3 )
                     default_bitrate = 192;
-                else if( cli.output_streams[stream_id].stream_format == AUDIO_E_AC_3 )
+                else if( cli.output_streams[output_stream_id].stream_format == AUDIO_E_AC_3 )
                     default_bitrate = 192;
                 else // AAC
                 {
                     default_bitrate = 128;
 
                     if( aac_profile )
-                        parse_enum_value( aac_profile, aac_profiles, &cli.output_streams[stream_id].aac_opts.aac_profile );
+                        parse_enum_value( aac_profile, aac_profiles, &cli.output_streams[output_stream_id].aac_opts.aac_profile );
 
                     if( aac_encap )
-                        parse_enum_value( aac_encap, aac_encapsulations, &cli.output_streams[stream_id].aac_opts.latm_output );
+                        parse_enum_value( aac_encap, aac_encapsulations, &cli.output_streams[output_stream_id].aac_opts.latm_output );
                 }
 
-                cli.output_streams[stream_id].bitrate = obe_otoi( bitrate, default_bitrate );
+                cli.output_streams[output_stream_id].bitrate = obe_otoi( bitrate, default_bitrate );
 
                 if( lang && strlen( lang ) >= 3 )
                 {
-                    cli.output_streams[stream_id].ts_opts.write_lang_code = 1;
-                    memcpy( cli.output_streams[stream_id].ts_opts.lang_code, lang, 3 );
-                    cli.output_streams[stream_id].ts_opts.lang_code[3] = 0;
+                    cli.output_streams[output_stream_id].ts_opts.write_lang_code = 1;
+                    memcpy( cli.output_streams[output_stream_id].ts_opts.lang_code, lang, 3 );
+                    cli.output_streams[output_stream_id].ts_opts.lang_code[3] = 0;
                 }
             }
-            else if( cli.program.streams[stream_id].stream_format == MISC_TELETEXT ||
-                     cli.program.streams[stream_id].stream_format == VBI_RAW )
+            else if( input_stream->stream_format == MISC_TELETEXT ||
+                     input_stream->stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
                 char *ttx_lang = obe_get_option( stream_opts[27], opts );
@@ -624,15 +626,15 @@ static int set_stream( char *command, obecli_command_t *child )
                                "Invalid Teletext type\n" );
 
                 /* TODO: find a nice way of supporting multiple teletexts in the CLI */
-                cli.output_streams[stream_id].ts_opts.num_teletexts = 1;
+                cli.output_streams[output_stream_id].ts_opts.num_teletexts = 1;
 
-                if( cli.output_streams[stream_id].ts_opts.teletext_opts )
-                    free( cli.output_streams[stream_id].ts_opts.teletext_opts );
+                if( cli.output_streams[output_stream_id].ts_opts.teletext_opts )
+                    free( cli.output_streams[output_stream_id].ts_opts.teletext_opts );
 
-                cli.output_streams[stream_id].ts_opts.teletext_opts = calloc( 1, sizeof(*cli.output_streams[stream_id].ts_opts.teletext_opts) );
-                FAIL_IF_ERROR( !cli.output_streams[stream_id].ts_opts.teletext_opts, "malloc failed\n" );
+                cli.output_streams[output_stream_id].ts_opts.teletext_opts = calloc( 1, sizeof(*cli.output_streams[output_stream_id].ts_opts.teletext_opts) );
+                FAIL_IF_ERROR( !cli.output_streams[output_stream_id].ts_opts.teletext_opts, "malloc failed\n" );
 
-                obe_teletext_opts_t *ttx_opts = &cli.output_streams[stream_id].ts_opts.teletext_opts[0];
+                obe_teletext_opts_t *ttx_opts = &cli.output_streams[output_stream_id].ts_opts.teletext_opts[0];
 
                 if( ttx_lang && strlen( ttx_lang ) >= 3 )
                 {
@@ -645,7 +647,7 @@ static int set_stream( char *command, obecli_command_t *child )
                 ttx_opts->dvb_teletext_page_number = obe_otoi( ttx_page, ttx_opts->dvb_teletext_page_number );
             }
 
-            cli.output_streams[stream_id].ts_opts.pid = obe_otoi( pid, cli.output_streams[stream_id].ts_opts.pid );
+            cli.output_streams[output_stream_id].ts_opts.pid = obe_otoi( pid, cli.output_streams[output_stream_id].ts_opts.pid );
             obe_free_string_array( opts );
         }
     }
@@ -964,12 +966,14 @@ static int show_output_streams( char *command, obecli_command_t *child )
 
 static int start_encode( char *command, obecli_command_t *child )
 {
+    obe_input_stream_t *input_stream;
     FAIL_IF_ERROR( running, "Encoder already running\n" );
     FAIL_IF_ERROR( !cli.program.num_streams, "No active devices\n" );
 
-    for( int i = 0; i < cli.program.num_streams; i++ )
+    for( int i = 0; i < cli.num_output_streams; i++ )
     {
-        if( cli.program.streams[i].stream_type == STREAM_TYPE_VIDEO )
+        input_stream = &cli.program.streams[cli.output_streams[i].input_stream_id];
+        if( input_stream->stream_type == STREAM_TYPE_VIDEO )
         {
             /* x264 calculates the single-frame VBV size later on */
             FAIL_IF_ERROR( system_type_value == OBE_SYSTEM_TYPE_GENERIC && !cli.output_streams[i].avc_param.rc.i_vbv_buffer_size,
@@ -986,9 +990,9 @@ static int start_encode( char *command, obecli_command_t *child )
             if( cli.avc_profile >= 0 )
                 x264_param_apply_profile( &cli.output_streams[i].avc_param, x264_profile_names[cli.avc_profile] );
         }
-        else if( cli.program.streams[i].stream_type == STREAM_TYPE_AUDIO )
+        else if( input_stream->stream_type == STREAM_TYPE_AUDIO )
         {
-            if( cli.output_streams[i].stream_action == STREAM_PASSTHROUGH && cli.program.streams[i].stream_format == AUDIO_PCM &&
+            if( cli.output_streams[i].stream_action == STREAM_PASSTHROUGH && input_stream->stream_format == AUDIO_PCM &&
                 cli.output_streams[i].stream_format != AUDIO_MP2 && cli.output_streams[i].stream_format != AUDIO_AC_3 &&
                 cli.output_streams[i].stream_format != AUDIO_AAC )
             {
@@ -1001,16 +1005,16 @@ static int start_encode( char *command, obecli_command_t *child )
                 return -1;
             }
         }
-        else if( cli.program.streams[i].stream_format == MISC_TELETEXT || cli.program.streams[i].stream_format == VBI_RAW )
+        else if( input_stream->stream_format == MISC_TELETEXT || input_stream->stream_format == VBI_RAW )
         {
-            int found = cli.program.streams[i].stream_format == MISC_TELETEXT;
+            int found = input_stream->stream_format == MISC_TELETEXT;
 
             /* Search the VBI streams for teletext and complain if teletext isn't set up properly */
-            if( cli.program.streams[i].stream_format == VBI_RAW )
+            if( input_stream->stream_format == VBI_RAW )
             {
-                for( int j = 0; j < cli.program.streams[i].num_frame_data; j++ )
+                for( int j = 0; j < input_stream->num_frame_data; j++ )
                 {
-                    if( cli.program.streams[i].frame_data[j].type == MISC_TELETEXT )
+                    if( input_stream->frame_data[j].type == MISC_TELETEXT )
                     {
                         found = 1;
                         break;
@@ -1069,14 +1073,14 @@ static int probe_device( char *command, obecli_command_t *child )
         if( cli.output_streams )
             free( cli.output_streams );
 
-        cli.output_streams = calloc( 1, cli.program.num_streams * sizeof(*cli.output_streams) );
+        cli.num_output_streams = cli.program.num_streams;
+        cli.output_streams = calloc( 1, cli.num_output_streams * sizeof(*cli.output_streams) );
         if( !cli.output_streams )
         {
             fprintf( stderr, "Malloc failed \n" );
             return -1;
         }
-        cli.num_output_streams = cli.program.num_streams;
-        for( int i = 0; i < cli.program.num_streams; i++ )
+        for( int i = 0; i < cli.num_output_streams; i++ )
         {
             cli.output_streams[i].input_stream_id = i;
             cli.output_streams[i].output_stream_id = cli.program.streams[i].input_stream_id;

@@ -818,6 +818,7 @@ int obe_start( obe_t *h )
 {
     obe_int_input_stream_t  *input_stream;
     obe_vid_filter_params_t *vid_filter_params;
+    obe_aud_filter_params_t *aud_filter_params;
     obe_vid_enc_params_t *vid_enc_params;
     obe_aud_enc_params_t *aud_enc_params;
     obe_output_params_t  *out_params;
@@ -902,8 +903,8 @@ int obe_start( obe_t *h )
                 goto fail;
             }
             obe_init_queue( &h->encoders[h->num_encoders]->queue );
-
             h->encoders[h->num_encoders]->output_stream_id = h->output_streams[i].output_stream_id;
+
             if( h->output_streams[i].stream_format == VIDEO_AVC )
             {
                 x264_param_t *x264_param = &h->output_streams[i].avc_param;
@@ -972,7 +973,6 @@ int obe_start( obe_t *h )
                 else
                     h->output_streams[i].ts_opts.frames_per_pes = aud_enc_params->frames_per_pes = 1;
 
-
                 if( pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, audio_encoder.start_encoder, (void*)aud_enc_params ) < 0 )
                 {
                     fprintf( stderr, "Couldn't create encode thread \n" );
@@ -1015,7 +1015,6 @@ int obe_start( obe_t *h )
         input_stream = get_input_stream( h, h->output_streams[i].input_stream_id );
         if( input_stream && ( input_stream->stream_type == STREAM_TYPE_VIDEO || input_stream->stream_type == STREAM_TYPE_AUDIO ) )
         {
-            void *filter_params = NULL;
             h->filters[h->num_filters] = calloc( 1, sizeof(obe_filter_t) );
             if( !h->filters[h->num_filters] )
                 goto fail;
@@ -1029,11 +1028,13 @@ int obe_start( obe_t *h )
                 fprintf( stderr, "Malloc failed\n" );
                 goto fail;
             }
+            printf("\n stream %i \n", h->output_streams[i].input_stream_id );
+
             h->filters[h->num_filters]->stream_id_list[0] = h->output_streams[i].input_stream_id;
 
             if( input_stream->stream_type == STREAM_TYPE_VIDEO )
             {
-                filter_params = vid_filter_params = calloc( 1, sizeof(*vid_filter_params) );
+                vid_filter_params = calloc( 1, sizeof(*vid_filter_params) );
                 if( !vid_filter_params )
                 {
                     fprintf( stderr, "Malloc failed\n" );
@@ -1045,7 +1046,7 @@ int obe_start( obe_t *h )
                 vid_filter_params->input_stream = input_stream;
                 vid_filter_params->target_csp = h->output_streams[i].avc_param.i_csp & X264_CSP_MASK;
 
-                if( pthread_create( &h->filters[h->num_filters]->filter_thread, NULL, video_filter.start_filter, filter_params ) < 0 )
+                if( pthread_create( &h->filters[h->num_filters]->filter_thread, NULL, video_filter.start_filter, vid_filter_params ) < 0 )
                 {
                     fprintf( stderr, "Couldn't create video filter thread \n" );
                     goto fail;
@@ -1053,13 +1054,21 @@ int obe_start( obe_t *h )
             }
 	    else
             {
-#if 0
-                if( pthread_create( &h->filters[h->num_filters]->filter_thread, NULL, audio_filter.start_filter, filter_params ) < 0 )
+                aud_filter_params = calloc( 1, sizeof(*aud_filter_params) );
+                if( !aud_filter_params )
+                {
+                    fprintf( stderr, "Malloc failed\n" );
+                    goto fail;
+                }
+
+                aud_filter_params->h = h;
+                aud_filter_params->filter = h->filters[h->num_filters];
+
+                if( pthread_create( &h->filters[h->num_filters]->filter_thread, NULL, audio_filter.start_filter, aud_filter_params ) < 0 )
                 {
                     fprintf( stderr, "Couldn't create filter thread \n" );
                     goto fail;
                 }
-#endif
             }
 
 

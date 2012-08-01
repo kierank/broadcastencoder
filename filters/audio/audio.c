@@ -21,11 +21,14 @@
  */
 
 #include "common/common.h"
+#include "audio.h"
 
-void *start_filter( void *ptr )
+static void *start_filter( void *ptr )
 {
     obe_raw_frame_t *raw_frame, *split_raw_frame;
+    obe_aud_filter_params_t *filter_params = ptr;
     obe_t *h = filter_params->h;
+    obe_filter_t *filter = filter_params->filter;
 
     while( 1 )
     {
@@ -34,7 +37,7 @@ void *start_filter( void *ptr )
         if( filter->cancel_thread )
         {
             pthread_mutex_unlock( &filter->queue.mutex );
-            goto end;
+            return NULL;
         }
 
         if( !filter->queue.size )
@@ -43,7 +46,7 @@ void *start_filter( void *ptr )
         if( filter->cancel_thread )
         {
             pthread_mutex_unlock( &filter->queue.mutex );
-            goto end;
+            return NULL;
         }
 
         raw_frame = filter->queue.queue[0];
@@ -56,27 +59,28 @@ void *start_filter( void *ptr )
             if( !split_raw_frame )
             {
                 syslog( LOG_ERR, "Malloc failed\n" );
-                return -1;
+                return NULL;
             }
             memcpy( split_raw_frame, raw_frame, sizeof(*split_raw_frame) );
-            split_raw_frame->audio_frame.audio_data = split_raw_frame->audio_frame.linesize = NULL;
-            split_raw_frame->num_channels = 0;
-            split_raw_frame->channel_layout = AV_CH_LAYOUT_STEREO;
+            memset( split_raw_frame->audio_frame.audio_data, 0, sizeof(split_raw_frame->audio_frame.audio_data) );
+            split_raw_frame->audio_frame.linesize = split_raw_frame->audio_frame.num_channels = 0;
+            split_raw_frame->audio_frame.channel_layout = AV_CH_LAYOUT_STEREO;
 
-            if( av_samples_alloc( split_raw_frame->audio_frame.audio_data, split_raw_frame->audio_frame.linesize, 2,
-                                  split_raw_frame->audio_frame.num_samples, (AVSampleFormat)split_raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
+            if( av_samples_alloc( split_raw_frame->audio_frame.audio_data, &split_raw_frame->audio_frame.linesize, 2,
+                                  split_raw_frame->audio_frame.num_samples, split_raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
             {
                 syslog( LOG_ERR, "Malloc failed\n" );
-                return -1;
+                return NULL;
             }
 
             /* TODO: offset the channel pointers by the user's request */
             av_samples_copy( split_raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.audio_data[0], 0, 0,
                              split_raw_frame->audio_frame.num_samples, 2, split_raw_frame->audio_frame.sample_fmt );
 
-            add_to_encode_queue( h, split_raw_frame, 1 ); // FIXME
+            add_to_encode_queue( h, split_raw_frame, h->encoders[i]->output_stream_id );
         }
 
+        remove_from_queue( &filter->queue );
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
         raw_frame = NULL;

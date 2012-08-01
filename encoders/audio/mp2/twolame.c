@@ -138,14 +138,14 @@ static void *start_encoder( void *ptr )
 
         /* Allocate the output buffer */
         if( av_samples_alloc( (uint8_t**)&audio_buf, &linesize, av_get_channel_layout_nb_channels( raw_frame->audio_frame.channel_layout ),
-                              raw_frame->audio_frame.linesize[0], AV_SAMPLE_FMT_FLT, 0 ) < 0 )
+                              raw_frame->audio_frame.linesize, AV_SAMPLE_FMT_FLT, 0 ) < 0 )
         {
             syslog( LOG_ERR, "Malloc failed\n" );
             goto end;
         }
 
         if( avresample_convert( avr, NULL, 0, raw_frame->audio_frame.num_samples, (void**)raw_frame->audio_frame.audio_data,
-                                raw_frame->audio_frame.linesize[0], raw_frame->audio_frame.num_samples ) < 0 )
+                                raw_frame->audio_frame.linesize, raw_frame->audio_frame.num_samples ) < 0 )
         {
             syslog( LOG_ERR, "[twolame] Sample format conversion failed\n" );
             break;

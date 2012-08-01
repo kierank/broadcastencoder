@@ -471,14 +471,14 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         raw_frame->audio_frame.num_channels = decklink_opts_->num_channels;
         raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
 
-        if( av_samples_alloc( raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize, decklink_opts_->num_channels,
+        if( av_samples_alloc( raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.linesize, decklink_opts_->num_channels,
                               raw_frame->audio_frame.num_samples, (AVSampleFormat)raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
         {
             syslog( LOG_ERR, "Malloc failed\n" );
             return -1;
         }
 
-        if( avresample_convert( decklink_ctx->avr, (void**)raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize[0],
+        if( avresample_convert( decklink_ctx->avr, (void**)raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize,
                                 raw_frame->audio_frame.num_samples, (void**)&frame_bytes, 0, raw_frame->audio_frame.num_samples ) < 0 )
         {
             syslog( LOG_ERR, "[decklink-asi] Sample format conversion failed\n" );
@@ -496,8 +496,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 raw_frame->input_stream_id = decklink_ctx->device->streams[i]->input_stream_id;
         }
 
-        // FIXME this is broken
-        if( add_to_encode_queue( decklink_ctx->h, raw_frame, raw_frame->input_stream_id ) < 0 )
+        if( add_to_filter_queue( decklink_ctx->h, raw_frame ) < 0 )
             goto fail;
     }
 

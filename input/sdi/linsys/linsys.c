@@ -647,14 +647,14 @@ static int handle_audio_frame( linsys_opts_t *linsys_opts, uint8_t *data )
     raw_frame->audio_frame.num_channels = linsys_opts->num_channels;
     raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
 
-    if( av_samples_alloc( raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize, linsys_opts->num_channels,
+    if( av_samples_alloc( raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.linesize, linsys_opts->num_channels,
                           raw_frame->audio_frame.num_samples, raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
     }
 
-    if( avresample_convert( linsys_ctx->avr, (void**)raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize[0],
+    if( avresample_convert( linsys_ctx->avr, (void**)raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize,
                             raw_frame->audio_frame.num_samples, (void**)&data,
                             linsys_ctx->abuffer_size, raw_frame->audio_frame.num_samples ) < 0 )
     {
@@ -673,8 +673,7 @@ static int handle_audio_frame( linsys_opts_t *linsys_opts, uint8_t *data )
             raw_frame->input_stream_id = linsys_ctx->device->streams[i]->input_stream_id;
     }
 
-    // FIXME this is broken
-    if( add_to_encode_queue( linsys_ctx->h, raw_frame, raw_frame->input_stream_id ) < 0 )
+    if( add_to_filter_queue( linsys_ctx->h, raw_frame ) < 0 )
     {
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );

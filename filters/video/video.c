@@ -568,7 +568,7 @@ static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stre
     return ret;
 }
 
-void *start_filter( void *ptr )
+static void *start_filter( void *ptr )
 {
     obe_vid_filter_params_t *filter_params = ptr;
     obe_t *h = filter_params->h;
