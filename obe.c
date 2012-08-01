@@ -82,13 +82,13 @@ obe_raw_frame_t *new_raw_frame( void )
 }
 
 /* Coded frame */
-obe_coded_frame_t *new_coded_frame( int stream_id, int len )
+obe_coded_frame_t *new_coded_frame( int output_stream_id, int len )
 {
     obe_coded_frame_t *coded_frame = calloc( 1, sizeof(*coded_frame) );
     if( !coded_frame )
         return NULL;
 
-    coded_frame->stream_id = stream_id;
+    coded_frame->output_stream_id = output_stream_id;
     coded_frame->len = len;
     coded_frame->data = malloc( len );
     if( !coded_frame->data )
@@ -260,7 +260,7 @@ int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame )
     {
         for( int j = 0; j < h->filters[i]->num_stream_ids; j++ )
         {
-            if( h->filters[i]->stream_id_list[j] == raw_frame->stream_id )
+            if( h->filters[i]->stream_id_list[j] == raw_frame->input_stream_id )
                 filter = h->filters[i];
         }
     }
@@ -289,13 +289,13 @@ static void destroy_filter( obe_filter_t *filter )
 }
 
 /* Encode queue */
-int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame )
+int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame, int output_stream_id )
 {
     obe_encoder_t *encoder = NULL;
 
     for( int i = 0; i < h->num_encoders; i++ )
     {
-        if( h->encoders[i]->stream_id == raw_frame->stream_id )
+        if( h->encoders[i]->output_stream_id == output_stream_id )
             encoder = h->encoders[i];
     }
 
@@ -371,29 +371,29 @@ obe_int_input_stream_t *get_input_stream( obe_t *h, int input_stream_id )
 {
     for( int j = 0; j < h->devices[0]->num_input_streams; j++ )
     {
-        if( h->devices[0]->streams[j]->stream_id == input_stream_id )
+        if( h->devices[0]->streams[j]->input_stream_id == input_stream_id )
             return h->devices[0]->streams[j];
     }
     return NULL;
 }
 
 /* Encoder */
-obe_encoder_t *get_encoder( obe_t *h, int stream_id )
+obe_encoder_t *get_encoder( obe_t *h, int output_stream_id )
 {
     for( int i = 0; i < h->num_encoders; i++ )
     {
-        if( h->encoders[i]->stream_id == stream_id )
+        if( h->encoders[i]->output_stream_id == output_stream_id )
             return h->encoders[i];
     }
     return NULL;
 }
 
 /* Output */
-obe_output_stream_t *get_output_stream( obe_t *h, int stream_id )
+obe_output_stream_t *get_output_stream( obe_t *h, int output_stream_id )
 {
     for( int i = 0; i < h->num_output_streams; i++ )
     {
-        if( h->output_streams[i].stream_id == stream_id )
+        if( h->output_streams[i].output_stream_id == output_stream_id )
             return &h->output_streams[i];
     }
     return NULL;
@@ -638,7 +638,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
         stream_in = h->devices[h->num_devices-1]->streams[i];
         stream_out = &program->streams[i];
 
-        stream_out->stream_id = stream_in->stream_id;
+        stream_out->input_stream_id = stream_in->input_stream_id;
         stream_out->stream_type = stream_in->stream_type;
         stream_out->stream_format = stream_in->stream_format;
 
@@ -903,7 +903,7 @@ int obe_start( obe_t *h )
             }
             obe_init_queue( &h->encoders[h->num_encoders]->queue );
 
-            h->encoders[h->num_encoders]->stream_id = h->output_streams[i].stream_id;
+            h->encoders[h->num_encoders]->output_stream_id = h->output_streams[i].output_stream_id;
             if( h->output_streams[i].stream_format == VIDEO_AVC )
             {
                 x264_param_t *x264_param = &h->output_streams[i].avc_param;
@@ -948,7 +948,7 @@ int obe_start( obe_t *h )
                 aud_enc_params->encoder = h->encoders[h->num_encoders];
                 aud_enc_params->stream = &h->output_streams[i];
 
-                input_stream = get_input_stream( h, h->output_streams[i].stream_id );
+                input_stream = get_input_stream( h, h->output_streams[i].input_stream_id );
                 aud_enc_params->input_sample_format = input_stream->sample_format;
                 aud_enc_params->sample_rate = input_stream->sample_rate;
                 /* TODO: check the bitrate is allowed by the format */
@@ -1012,9 +1012,10 @@ int obe_start( obe_t *h )
     /* Open Filter Thread */
     for( int i = 0; i < h->num_output_streams; i++ )
     {
-        input_stream = get_input_stream( h, h->output_streams[i].stream_id );
-        if( input_stream && input_stream->stream_type == STREAM_TYPE_VIDEO )
+        input_stream = get_input_stream( h, h->output_streams[i].input_stream_id );
+        if( input_stream && ( input_stream->stream_type == STREAM_TYPE_VIDEO || input_stream->stream_type == STREAM_TYPE_AUDIO ) )
         {
+            void *filter_params = NULL;
             h->filters[h->num_filters] = calloc( 1, sizeof(obe_filter_t) );
             if( !h->filters[h->num_filters] )
                 goto fail;
@@ -1028,25 +1029,40 @@ int obe_start( obe_t *h )
                 fprintf( stderr, "Malloc failed\n" );
                 goto fail;
             }
-            h->filters[h->num_filters]->stream_id_list[0] = h->output_streams[i].stream_id;
+            h->filters[h->num_filters]->stream_id_list[0] = h->output_streams[i].input_stream_id;
 
-            vid_filter_params = calloc( 1, sizeof(*vid_filter_params) );
-            if( !vid_filter_params )
+            if( input_stream->stream_type == STREAM_TYPE_VIDEO )
             {
-                fprintf( stderr, "Malloc failed\n" );
-                goto fail;
+                filter_params = vid_filter_params = calloc( 1, sizeof(*vid_filter_params) );
+                if( !vid_filter_params )
+                {
+                    fprintf( stderr, "Malloc failed\n" );
+                    goto fail;
+                }
+
+                vid_filter_params->h = h;
+                vid_filter_params->filter = h->filters[h->num_filters];
+                vid_filter_params->input_stream = input_stream;
+                vid_filter_params->target_csp = h->output_streams[i].avc_param.i_csp & X264_CSP_MASK;
+
+                if( pthread_create( &h->filters[h->num_filters]->filter_thread, NULL, video_filter.start_filter, filter_params ) < 0 )
+                {
+                    fprintf( stderr, "Couldn't create video filter thread \n" );
+                    goto fail;
+                }
+            }
+	    else
+            {
+#if 0
+                if( pthread_create( &h->filters[h->num_filters]->filter_thread, NULL, audio_filter.start_filter, filter_params ) < 0 )
+                {
+                    fprintf( stderr, "Couldn't create filter thread \n" );
+                    goto fail;
+                }
+#endif
             }
 
-            vid_filter_params->h = h;
-            vid_filter_params->filter = h->filters[h->num_filters];
-            vid_filter_params->input_stream = input_stream;
-            vid_filter_params->target_csp = h->output_streams[i].avc_param.i_csp & X264_CSP_MASK;
 
-            if( pthread_create( &h->filters[h->num_filters]->filter_thread, NULL, video_filter.start_filter, (void*)vid_filter_params ) < 0 )
-            {
-                fprintf( stderr, "Couldn't create filter thread \n" );
-                goto fail;
-            }
             h->num_filters++;
         }
     }

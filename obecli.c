@@ -34,7 +34,6 @@
 
 #include <readline/readline.h>
 #include <readline/history.h>
-#include <libavcodec/avcodec.h>
 
 #include "obe.h"
 #include "obecli.h"
@@ -47,6 +46,7 @@ typedef struct
     obe_t *h;
     obe_input_t input;
     obe_input_program_t program;
+    int num_output_streams;
     obe_output_stream_t *output_streams;
     obe_mux_opts_t mux_opts;
     obe_output_opts_t output;
@@ -308,6 +308,16 @@ static int parse_enum_value( const char *arg, const char * const *names, int *ds
             return 0;
         }
     return -1;
+}
+
+static char *get_format_name( int stream_format, const obecli_format_name_t *names, int long_name )
+{
+    int i = 0;
+
+    while( names[i].format_name != 0 && names[i].format != stream_format )
+        i++;
+
+    return  long_name ? names[i].long_name : names[i].format_name;
 }
 
 /* set functions - TODO add lots more opts */
@@ -775,9 +785,8 @@ static int show_help( char *command, obecli_command_t *child )
     H0( "\n" );
 
     H0( "show - Show supported items\n" );
-
     for( int i = 0; show_commands[i].name != 0; i++ )
-        H0( "       %-*s          - %s \n", 8, show_commands[i].name, show_commands[i].description );
+        H0( "       %-*s %-*s  - %s \n", 8, show_commands[i].name, 21, show_commands[i].child_opts, show_commands[i].description );
 
     H0( "\n" );
 
@@ -818,6 +827,20 @@ static int show_help( char *command, obecli_command_t *child )
     H0( "\n" );
 
     return 0;
+}
+
+static int show_input( char *command, obecli_command_t *child )
+{
+    if( !strlen( command ) )
+        return -1;
+
+    int tok_len = strcspn( command, " " );
+    command[tok_len] = 0;
+
+    if( !strcasecmp( command, "streams" ) )
+        return show_input_streams( NULL, NULL );
+
+    return -1;
 }
 
 static int show_inputs( char *command, obecli_command_t *child )
@@ -861,6 +884,80 @@ static int show_outputs( char *command, obecli_command_t *child )
         printf( "       %-*s          - %s \n", 8, output_names[i].output_name, output_names[i].output_lib_name );
         i++;
     }
+
+    return 0;
+}
+
+static int show_input_streams( char *command, obecli_command_t *child )
+{
+    obe_input_stream_t *stream;
+    char buf[200];
+    char *format_name;
+
+    printf( "\n" );
+
+    if( !cli.program.num_streams )
+        printf( "No input streams. Please probe a device" );
+
+    printf( "Detected input streams: \n" );
+
+    for( int i = 0; i < cli.program.num_streams; i++ )
+    {
+        stream = &cli.program.streams[i];
+        format_name = get_format_name( stream->stream_format, format_names, 0 );
+        if( stream->stream_type == STREAM_TYPE_VIDEO )
+        {
+            /* TODO: show profile, level, csp etc */
+            printf( "Input-stream-id: %d - Video: %s %dx%d%s %d/%dfps \n", stream->input_stream_id,
+                    format_name, stream->width, stream->height, stream->interlaced ? "i" : "p",
+                    stream->timebase_den, stream->timebase_num );
+
+            for( int j = 0; j < stream->num_frame_data; j++ )
+            {
+                format_name = get_format_name( stream->frame_data[j].type, format_names, 1 );
+                /* TODO make this use the proper names */
+                printf( "                     %s:   %s\n", stream->frame_data[j].source == MISC_WSS ? "WSS (converted)" :
+                        stream->frame_data[j].source == VBI_RAW ? "VBI" : stream->frame_data[j].source == VBI_VIDEO_INDEX ? "VII" : "VANC", format_name );
+            }
+        }
+        else if( stream->stream_type == STREAM_TYPE_AUDIO )
+        {
+            /* let it work out the number of channels from the channel map */
+            av_get_channel_layout_string( buf, 200, 0, stream->channel_layout );
+            printf( "Input-stream-id: %d - Audio: %s%s %s %ikbps %ikHz Language: %s \n", stream->input_stream_id, format_name,
+                    stream->stream_format == AUDIO_AAC ? stream->aac_is_latm ? " LATM" : " ADTS" : "",
+                    buf, stream->bitrate / 1000, stream->sample_rate / 1000, strlen( stream->lang_code ) ? stream->lang_code : "none" );
+        }
+        else if( stream->stream_format == SUBTITLES_DVB )
+        {
+            printf( "Input-stream-id: %d - DVB Subtitles: Language: %s DDS: %s \n", stream->input_stream_id, stream->lang_code,
+                    stream->dvb_has_dds ? "yes" : "no" );
+        }
+        else if( stream->stream_format == MISC_TELETEXT )
+        {
+            printf( "Input-stream-id: %d - DVB Teletext: \n", stream->input_stream_id );
+        }
+        else if( stream->stream_format == VBI_RAW )
+        {
+            printf( "Input-stream-id: %d - DVB-VBI: \n", stream->input_stream_id );
+            for( int j = 0; j < stream->num_frame_data; j++ )
+            {
+                format_name = get_format_name( stream->frame_data[j].type, format_names, 1 );
+                printf( "               %s:   %s\n", stream->frame_data[j].source == VBI_RAW ? "VBI" : "", format_name );
+            }
+        }
+        else
+            printf( "Input-stream-id: %d \n", stream->input_stream_id );
+    }
+
+    printf("\n");
+
+    return 0;
+}
+
+static int show_output_streams( char *command, obecli_command_t *child )
+{
+
 
     return 0;
 }
@@ -934,7 +1031,7 @@ static int start_encode( char *command, obecli_command_t *child )
         return -1;
     }
 
-    obe_setup_streams( cli.h, cli.output_streams, cli.program.num_streams );
+    obe_setup_streams( cli.h, cli.output_streams, cli.num_output_streams );
     obe_setup_muxer( cli.h, &cli.mux_opts );
     obe_setup_output( cli.h, &cli.output );
     if( obe_start( cli.h ) < 0 )
@@ -953,22 +1050,8 @@ static int stop_encode( char *command, obecli_command_t *child )
     return 0;
 }
 
-static char *get_format_name( int stream_format, const obecli_format_name_t *names, int long_name )
-{
-    int i = 0;
-
-    while( names[i].format_name != 0 && names[i].format != stream_format )
-        i++;
-
-    return  long_name ? names[i].long_name : names[i].format_name;
-}
-
 static int probe_device( char *command, obecli_command_t *child )
 {
-    obe_input_stream_t *stream;
-    char buf[200];
-    char *format_name;
-
     if( !strlen( command ) )
         return -1;
 
@@ -979,58 +1062,7 @@ static int probe_device( char *command, obecli_command_t *child )
     if( obe_probe_device( cli.h, &cli.input, &cli.program ) < 0 )
         return -1;
 
-    printf("\n");
-
-    for( int i = 0; i < cli.program.num_streams; i++ )
-    {
-        stream = &cli.program.streams[i];
-        format_name = get_format_name( stream->stream_format, format_names, 0 );
-        if( stream->stream_type == STREAM_TYPE_VIDEO )
-        {
-            /* TODO: show profile, level, csp etc */
-            printf( "Stream-id: %d - Video: %s %dx%d%s %d/%dfps \n", stream->stream_id,
-                    format_name, stream->width, stream->height, stream->interlaced ? "i" : "p",
-                    stream->timebase_den, stream->timebase_num );
-
-            for( int j = 0; j < stream->num_frame_data; j++ )
-            {
-                format_name = get_format_name( stream->frame_data[j].type, format_names, 1 );
-                /* TODO make this use the proper names */
-                printf( "               %s:   %s\n", stream->frame_data[j].source == MISC_WSS ? "WSS (converted)" :
-                        stream->frame_data[j].source == VBI_RAW ? "VBI" : stream->frame_data[j].source == VBI_VIDEO_INDEX ? "VII" : "VANC", format_name );
-            }
-        }
-        else if( stream->stream_type == STREAM_TYPE_AUDIO )
-        {
-            /* let it work out the number of channels from the channel map */
-            av_get_channel_layout_string( buf, 200, 0, stream->channel_layout );
-            printf( "Stream-id: %d - Audio: %s%s %s %ikbps %ikHz Language: %s \n", stream->stream_id, format_name,
-                    stream->stream_format == AUDIO_AAC ? stream->aac_is_latm ? " LATM" : " ADTS" : "",
-                    buf, stream->bitrate / 1000, stream->sample_rate / 1000, strlen( stream->lang_code ) ? stream->lang_code : "none" );
-        }
-        else if( stream->stream_format == SUBTITLES_DVB )
-        {
-            printf( "Stream-id: %d - DVB Subtitles: Language: %s DDS: %s \n", stream->stream_id, stream->lang_code,
-                    stream->dvb_has_dds ? "yes" : "no" );
-        }
-        else if( stream->stream_format == MISC_TELETEXT )
-        {
-            printf( "Stream-id: %d - DVB Teletext: \n", stream->stream_id );
-        }
-        else if( stream->stream_format == VBI_RAW )
-        {
-            printf( "Stream-id: %d - DVB-VBI: \n", stream->stream_id );
-            for( int j = 0; j < stream->num_frame_data; j++ )
-            {
-                format_name = get_format_name( stream->frame_data[j].type, format_names, 1 );
-                printf( "               %s:   %s\n", stream->frame_data[j].source == VBI_RAW ? "VBI" : "", format_name );
-            }
-        }
-        else
-            printf( "Stream-id: %d \n", stream->stream_id );
-    }
-
-    printf("\n");
+    show_input_streams( NULL, NULL );
 
     if( cli.program.num_streams )
     {
@@ -1043,13 +1075,18 @@ static int probe_device( char *command, obecli_command_t *child )
             fprintf( stderr, "Malloc failed \n" );
             return -1;
         }
+        cli.num_output_streams = cli.program.num_streams;
         for( int i = 0; i < cli.program.num_streams; i++ )
         {
-            cli.output_streams[i].stream_id = i;
+            cli.output_streams[i].input_stream_id = i;
+            cli.output_streams[i].output_stream_id = cli.program.streams[i].input_stream_id;
             if( cli.program.streams[i].stream_type == STREAM_TYPE_VIDEO )
-                obe_populate_avc_encoder_params( cli.h, cli.program.streams[i].stream_id, &(cli.output_streams[i].avc_param) );
+                obe_populate_avc_encoder_params( cli.h, cli.program.streams[i].input_stream_id, &cli.output_streams[i].avc_param );
             else if( cli.program.streams[i].stream_type == STREAM_TYPE_AUDIO )
+            {
+                cli.output_streams[i].sdi_channel_pair = 1;
                 cli.output_streams[i].channel_layout = AV_CH_LAYOUT_STEREO;
+            }
         }
     }
 
@@ -1105,8 +1142,6 @@ int main( int argc, char **argv )
 
     printf( "\nOpen Broadcast Encoder command line interface.\n" );
     printf( "Version 0.1-beta \n" );
-    printf( "OBE Licence: %s \n", "GNU GPL Version 2 except where libavcodec\n" "licence is nonfree and unredestributable" );
-    printf( "Libavcodec Licence: %s \n", avcodec_license() );
     printf( "\n" );
 
     while( 1 )

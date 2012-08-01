@@ -645,25 +645,25 @@ static int encapsulate_dvb_ttx( obe_sdi_non_display_data_t *non_display_data )
 
 int send_vbi_and_ttx( obe_t *h, obe_sdi_non_display_data_t *non_display_parser, obe_device_t *device, int64_t pts )
 {
-    int stream_id;
+    int input_stream_id;
 
     /* Send any DVB-VBI frames */
     if( non_display_parser->has_vbi_frame )
     {
-        stream_id = -1;
+        input_stream_id = -1;
         // FIXME when we make streams selectable
         for( int i = 0; i < device->num_input_streams; i++ )
         {
             if( device->streams[i]->stream_format == VBI_RAW )
-                stream_id = device->streams[i]->stream_id;
+                input_stream_id = device->streams[i]->input_stream_id; // FIXME this is broken
         }
 
-        if( stream_id >= 0 )
+        if( input_stream_id >= 0 )
         {
             if( encapsulate_dvb_vbi( non_display_parser ) < 0 )
                 return -1;
 
-            non_display_parser->dvb_vbi_frame->stream_id = stream_id;
+            non_display_parser->dvb_vbi_frame->output_stream_id = input_stream_id; // FIXME this is broken
             non_display_parser->dvb_vbi_frame->pts = pts;
 
             if( add_to_queue( &h->mux_queue, non_display_parser->dvb_vbi_frame ) < 0 )
@@ -679,20 +679,20 @@ int send_vbi_and_ttx( obe_t *h, obe_sdi_non_display_data_t *non_display_parser, 
     /* Send any DVB-TTX frames */
     if( non_display_parser->has_ttx_frame )
     {
-        stream_id = -1;
+        input_stream_id = -1;
         // FIXME when we make streams selectable
         for( int i = 0; i < device->num_input_streams; i++ )
         {
             if( device->streams[i]->stream_format == MISC_TELETEXT )
-                stream_id = device->streams[i]->stream_id;
+                input_stream_id = device->streams[i]->input_stream_id; // FIXME this is broken
         }
 
-        if( stream_id >= 0 )
+        if( input_stream_id >= 0 )
         {
             if( encapsulate_dvb_ttx( non_display_parser ) < 0 )
                 return -1;
 
-            non_display_parser->dvb_ttx_frame->stream_id = stream_id;
+            non_display_parser->dvb_ttx_frame->output_stream_id = input_stream_id; // FIXME this is broken
             non_display_parser->dvb_ttx_frame->pts = pts;
 
             if( add_to_queue( &h->mux_queue, non_display_parser->dvb_ttx_frame ) < 0 )

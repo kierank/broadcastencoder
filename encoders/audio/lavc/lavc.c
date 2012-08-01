@@ -25,7 +25,6 @@
 #include "common/lavc.h"
 #include "encoders/audio/audio.h"
 #include <libavutil/fifo.h>
-#include <libavformat/avformat.h>
 #include <libavresample/avresample.h>
 #include <libavutil/opt.h>
 
@@ -246,7 +245,7 @@ static void *start_encoder( void *ptr )
 
             if( num_frames == enc_params->frames_per_pes )
             {
-                coded_frame = new_coded_frame( encoder->stream_id, total_size );
+                coded_frame = new_coded_frame( encoder->output_stream_id, total_size );
                 if( !coded_frame )
                 {
                     syslog( LOG_ERR, "Malloc failed\n" );

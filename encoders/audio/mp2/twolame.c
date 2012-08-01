@@ -176,7 +176,7 @@ static void *start_encoder( void *ptr )
 
         while( av_fifo_size( fifo ) >= frame_size )
         {
-            coded_frame = new_coded_frame( encoder->stream_id, frame_size );
+            coded_frame = new_coded_frame( encoder->output_stream_id, frame_size );
             if( !coded_frame )
             {
                 syslog( LOG_ERR, "Malloc failed\n" );

@@ -33,6 +33,8 @@ extern "C"
 #include "input/sdi/ancillary.h"
 #include "input/sdi/vbi.h"
 #include "input/sdi/x86/sdi.h"
+#include <libavresample/avresample.h>
+#include <libavutil/opt.h>
 }
 
 #include "include/DeckLinkAPI.h"
@@ -106,11 +108,17 @@ typedef struct
        see section 2.4.15 of the blackmagic decklink sdk documentation. */
     IDeckLinkConfiguration *p_config;
 
+#if 0
     int      probe_buf_len;
     int32_t  *audio_probe_buf;
+#endif
 
+    /* Video */
     AVCodec         *dec;
     AVCodecContext  *codec;
+
+    /* Audio */
+    AVAudioResampleContext *avr;
 
     int64_t last_frame_time;
 
@@ -433,7 +441,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             for( int i = 0; i < decklink_ctx->device->num_input_streams; i++ )
             {
                 if( decklink_ctx->device->streams[i]->stream_format == VIDEO_UNCOMPRESSED )
-                    raw_frame->stream_id = decklink_ctx->device->streams[i]->stream_id;
+                    raw_frame->input_stream_id = decklink_ctx->device->streams[i]->input_stream_id;
             }
 
             if( add_to_filter_queue( h, raw_frame ) < 0 )
@@ -451,6 +459,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
     if( audioframe && !decklink_opts_->probe )
     {
+        audioframe->GetBytes( &frame_bytes );
         raw_frame = new_raw_frame();
         if( !raw_frame )
         {
@@ -459,18 +468,22 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         }
 
         raw_frame->audio_frame.num_samples = audioframe->GetSampleFrameCount();
-        raw_frame->audio_frame.channel_layout = AV_CH_LAYOUT_STEREO;
-        raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32;
+        raw_frame->audio_frame.num_channels = decklink_opts_->num_channels;
+        raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
 
-        if( av_samples_alloc( raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize, 2,
+        if( av_samples_alloc( raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize, decklink_opts_->num_channels,
                               raw_frame->audio_frame.num_samples, (AVSampleFormat)raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
         {
             syslog( LOG_ERR, "Malloc failed\n" );
             return -1;
         }
 
-        av_samples_copy( raw_frame->audio_frame.audio_data, (uint8_t* const*)&frame_bytes, 0, 0, raw_frame->audio_frame.num_samples,
-                         2, (AVSampleFormat)raw_frame->audio_frame.sample_fmt );
+        if( avresample_convert( decklink_ctx->avr, (void**)raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize[0],
+                                raw_frame->audio_frame.num_samples, (void**)&frame_bytes, 0, raw_frame->audio_frame.num_samples ) < 0 )
+        {
+            syslog( LOG_ERR, "[decklink-asi] Sample format conversion failed\n" );
+            return -1;
+        }
 
         BMDTimeValue packet_time;
         audioframe->GetPacketTime( &packet_time, OBE_CLOCK );
@@ -480,10 +493,11 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         for( int i = 0; i < decklink_ctx->device->num_input_streams; i++ )
         {
             if( decklink_ctx->device->streams[i]->stream_format == AUDIO_PCM )
-                raw_frame->stream_id = decklink_ctx->device->streams[i]->stream_id;
+                raw_frame->input_stream_id = decklink_ctx->device->streams[i]->input_stream_id;
         }
 
-        if( add_to_encode_queue( decklink_ctx->h, raw_frame ) < 0 )
+        // FIXME this is broken
+        if( add_to_encode_queue( decklink_ctx->h, raw_frame, raw_frame->input_stream_id ) < 0 )
             goto fail;
     }
 
@@ -530,6 +544,10 @@ static void close_card( decklink_opts_t *decklink_opts )
 
     if( IS_SD( decklink_opts->video_format ) )
         vbi_raw_decoder_destroy( &decklink_ctx->non_display_parser.vbi_decoder );
+
+    if( decklink_ctx->avr )
+        avresample_free( &decklink_ctx->avr );
+
 }
 
 static int open_card( decklink_opts_t *decklink_opts )
@@ -807,6 +825,30 @@ static int open_card( decklink_opts_t *decklink_opts )
         goto finish;
     }
 
+    if( !decklink_opts->probe )
+    {
+        decklink_ctx->avr = avresample_alloc_context();
+        if( !decklink_ctx->avr )
+        {
+            fprintf( stderr, "[decklink-sdiaudio] couldn't setup sample rate conversion \n" );
+            ret = -1;
+            goto finish;
+        }
+
+        /* Give libavresample a made up channel map */
+        av_opt_set_int( decklink_ctx->avr, "in_channel_layout",   (1 << decklink_opts->num_channels) - 1, 0 );
+        av_opt_set_int( decklink_ctx->avr, "in_sample_fmt",       AV_SAMPLE_FMT_S32, 0 );
+        av_opt_set_int( decklink_ctx->avr, "in_sample_rate",      48000, 0 );
+        av_opt_set_int( decklink_ctx->avr, "out_channel_layout",  (1 << decklink_opts->num_channels) - 1, 0 );
+        av_opt_set_int( decklink_ctx->avr, "out_sample_fmt",      AV_SAMPLE_FMT_S32P, 0 );
+
+        if( avresample_open( decklink_ctx->avr ) < 0 )
+        {
+            fprintf( stderr, "Could not open AVResample\n" );
+            goto finish;
+        }
+    }
+
     decklink_ctx->p_delegate = new DeckLinkCaptureDelegate( decklink_opts );
     decklink_ctx->p_input->SetCallback( decklink_ctx->p_delegate );
 
@@ -854,7 +896,7 @@ static void *probe_stream( void *ptr )
     non_display_parser = &decklink_opts->decklink_ctx.non_display_parser;
 
     /* TODO: support multi-channel */
-    decklink_opts->num_channels = 2;
+    decklink_opts->num_channels = 16;
     decklink_opts->card_idx = user_opts->card_idx;
     decklink_opts->video_conn = user_opts->video_connection;
     decklink_opts->audio_conn = user_opts->audio_connection;
@@ -894,7 +936,7 @@ static void *probe_stream( void *ptr )
 
         /* TODO: make it take a continuous set of stream-ids */
         pthread_mutex_lock( &h->device_list_mutex );
-        streams[i]->stream_id = h->cur_stream_id++;
+        streams[i]->input_stream_id = h->cur_input_stream_id++;
         pthread_mutex_unlock( &h->device_list_mutex );
 
         if( i == 0 )
@@ -918,7 +960,7 @@ static void *probe_stream( void *ptr )
             streams[i]->stream_type = STREAM_TYPE_AUDIO;
             streams[i]->stream_format = AUDIO_PCM;
             streams[i]->channel_layout = AV_CH_LAYOUT_STEREO;
-            streams[i]->sample_format = AV_SAMPLE_FMT_S32;
+            streams[i]->sample_format = AV_SAMPLE_FMT_S32P;
             /* TODO: support other sample rates */
             streams[i]->sample_rate = 48000;
         }
@@ -931,7 +973,7 @@ static void *probe_stream( void *ptr )
             goto finish;
 
         pthread_mutex_lock( &h->device_list_mutex );
-        streams[cur_stream]->stream_id = h->cur_stream_id++;
+        streams[cur_stream]->input_stream_id = h->cur_input_stream_id++;
         pthread_mutex_unlock( &h->device_list_mutex );
 
         streams[cur_stream]->stream_type = STREAM_TYPE_MISC;
@@ -949,7 +991,7 @@ static void *probe_stream( void *ptr )
             goto finish;
 
         pthread_mutex_lock( &h->device_list_mutex );
-        streams[cur_stream]->stream_id = h->cur_stream_id++;
+        streams[cur_stream]->input_stream_id = h->cur_input_stream_id++;
         pthread_mutex_unlock( &h->device_list_mutex );
 
         streams[cur_stream]->stream_type = STREAM_TYPE_MISC;
@@ -1000,7 +1042,7 @@ static void *open_input( void *ptr )
         goto finish;
     }
 
-    decklink_opts->num_channels = 2;
+    decklink_opts->num_channels = 16;
     decklink_opts->card_idx = user_opts->card_idx;
     decklink_opts->video_conn = user_opts->video_connection;
     decklink_opts->audio_conn = user_opts->audio_connection;

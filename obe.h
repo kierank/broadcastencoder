@@ -195,7 +195,7 @@ typedef struct
 
 typedef struct
 {
-    int stream_id;
+    int input_stream_id;
     int stream_type;
     int stream_format;
 
@@ -220,7 +220,8 @@ typedef struct
     obe_frame_data_t *frame_data;
 
     /** Audio **/
-    int64_t channel_layout;
+    uint64_t channel_layout;
+    int num_channels; /* set if channel layout is 0 */
     int sample_rate;
 
     /* Raw Audio */
@@ -370,17 +371,22 @@ typedef struct
 
 /* Stream Options:
  *
- * stream_id - stream id. Streams cannot be duplicated
+ * input_stream_id - stream id of the INPUT stream
+ * output_stream_id - unique id of the current OUTPUT stream
  * stream_action - stream action. Video streams must be encoded
  *
  * Encode Options: (ignored in passthrough mode)
  * stream_format - stream_format
  *
- */
+ * Audio Options:
+ * sdi_channel_pair - channel pair to use for encoding stereo (starts from channel pair 1)
+ *
+ * */
 
 typedef struct
 {
-    int stream_id;
+    int input_stream_id;
+    int output_stream_id;
     int stream_action;
 
     /** Encode options **/
@@ -391,6 +397,7 @@ typedef struct
 
     /* Audio */
     int bitrate;
+    int sdi_channel_pair;
     uint64_t channel_layout;
 
     /* Metadata */

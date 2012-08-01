@@ -63,20 +63,20 @@ static const int avc_profiles[][2] =
     { 0, 0 },
 };
 
-static obe_output_stream_t *get_output_mux_stream( obe_mux_params_t *mux_params, int stream_id )
+static obe_output_stream_t *get_output_mux_stream( obe_mux_params_t *mux_params, int output_stream_id )
 {
     for( int i = 0; i < mux_params->num_output_streams; i++ )
     {
-        if( mux_params->output_streams[i].stream_id == stream_id )
+        if( mux_params->output_streams[i].output_stream_id == output_stream_id )
             return &mux_params->output_streams[i];
     }
     return NULL;
 }
 
-static void encoder_wait( obe_t *h, int stream_id )
+static void encoder_wait( obe_t *h, int output_stream_id )
 {
     /* Wait for encoder to be ready */
-    obe_encoder_t *encoder = get_encoder( h, stream_id );
+    obe_encoder_t *encoder = get_encoder( h, output_stream_id );
     pthread_mutex_lock( &encoder->queue.mutex );
     if( !encoder->is_ready )
         pthread_cond_wait( &encoder->queue.in_cv, &encoder->queue.mutex );
@@ -162,7 +162,7 @@ void *open_muxer( void *ptr )
     {
         stream = &program.streams[i];
         output_stream = &mux_params->output_streams[i];
-        input_stream = get_input_stream( h, output_stream->stream_id );
+        input_stream = get_input_stream( h, output_stream->input_stream_id );
 
         if( output_stream->stream_action == STREAM_ENCODE )
             stream_format = output_stream->stream_format;
@@ -207,7 +207,7 @@ void *open_muxer( void *ptr )
 
         if( stream_format == VIDEO_AVC )
         {
-            encoder_wait( h, output_stream->stream_id );
+            encoder_wait( h, output_stream->output_stream_id );
 
             width = output_stream->avc_param.i_width;
             height = output_stream->avc_param.i_height;
@@ -219,8 +219,8 @@ void *open_muxer( void *ptr )
             stream->audio_frame_size = (double)AC3_NUM_SAMPLES * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
         else if( stream_format == AUDIO_E_AC_3 || stream_format == AUDIO_AAC )
         {
-            encoder_wait( h, output_stream->stream_id );
-            encoder = get_encoder( h, output_stream->stream_id );
+            encoder_wait( h, output_stream->output_stream_id );
+            encoder = get_encoder( h, output_stream->output_stream_id );
             stream->audio_frame_size = (double)encoder->num_samples * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
         }
     }
@@ -240,8 +240,8 @@ void *open_muxer( void *ptr )
     {
         stream = &program.streams[i];
         output_stream = &mux_params->output_streams[i];
-        input_stream = get_input_stream( h, output_stream->stream_id );
-        encoder = get_encoder( h, output_stream->stream_id );
+        input_stream = get_input_stream( h, output_stream->input_stream_id );
+        encoder = get_encoder( h, output_stream->output_stream_id );
 
         if( output_stream->stream_action == STREAM_ENCODE )
             stream_format = output_stream->stream_format;
@@ -427,13 +427,13 @@ void *open_muxer( void *ptr )
         for( int i = 0; i < h->mux_queue.size; i++ )
         {
             coded_frame = h->mux_queue.queue[i];
-            output_stream = get_output_mux_stream( mux_params, coded_frame->stream_id );
+            output_stream = get_output_mux_stream( mux_params, coded_frame->output_stream_id );
             // FIXME name
             int64_t rescaled_dts = coded_frame->pts - first_video_pts + first_video_real_pts;
             if( coded_frame->is_video )
                 rescaled_dts = coded_frame->real_dts;
 
-            //printf("\n stream-id %i ours: %"PRIi64" \n", coded_frame->stream_id, coded_frame->pts );
+            //printf("\n stream-id %i ours: %"PRIi64" \n", coded_frame->output_stream_id, coded_frame->pts );
 
             if( rescaled_dts <= video_dts )
             {

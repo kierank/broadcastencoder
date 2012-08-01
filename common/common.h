@@ -93,7 +93,7 @@ typedef struct
 
 typedef struct
 {
-    int stream_id;
+    int input_stream_id;
     int stream_type;
     int stream_format;
 
@@ -320,7 +320,7 @@ typedef struct
 
 typedef struct
 {
-    int stream_id;
+    int input_stream_id;
     int64_t pts;
     void *opaque;
 
@@ -369,7 +369,7 @@ typedef struct
 
 typedef struct
 {
-    int stream_id;
+    int output_stream_id;
     int is_ready;
     int is_video;
 
@@ -385,7 +385,7 @@ typedef struct
 
 typedef struct
 {
-    int stream_id;
+    int output_stream_id;
     int is_video;
 
     int64_t pts;
@@ -435,7 +435,7 @@ struct obe_t
     pthread_mutex_t device_list_mutex;
     int num_devices;
     obe_device_t *devices[MAX_DEVICES];
-    int cur_stream_id;
+    int cur_input_stream_id;
 
     /* Frame drop flags
      * TODO: make this work for multiple inputs and outputs */
@@ -474,7 +474,6 @@ struct obe_t
     int64_t         smoothing_last_pts; /* from sdi clock */
     int64_t         smoothing_last_wallclock; /* from cpu clock */
 
-
     int             smoothing_buffer_complete;
     int64_t         smoothing_last_exit_time;
 
@@ -511,7 +510,7 @@ int remove_from_queue( obe_queue_t *queue );
 int remove_item_from_queue( obe_queue_t *queue, void *item );
 
 int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame );
-int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame );
+int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame, int output_stream_id );
 int remove_early_frames( obe_t *h, int64_t pts );
 int add_to_output_queue( obe_t *h, obe_muxed_data_t *muxed_data );
 int remove_from_output_queue( obe_t *h );

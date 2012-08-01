@@ -46,6 +46,8 @@
 
 #include <libavutil/mathematics.h>
 #include <libavutil/bswap.h>
+#include <libavresample/avresample.h>
+#include <libavutil/opt.h>
 
 #define SDIVIDEO_DEVICE         "/dev/sdivideorx%u"
 #define SDIVIDEO_BUFFERS_FILE   "/sys/class/sdivideo/sdivideorx%u/buffers"
@@ -147,6 +149,7 @@ typedef struct
     unsigned int abuffer_size;
     int64_t      a_counter;
     AVRational   a_timebase;
+    AVAudioResampleContext *avr;
 
     int64_t      last_frame_time;
 
@@ -273,6 +276,9 @@ static void close_card( linsys_opts_t *linsys_opts )
         free( linsys_ctx->abuffers );
     }
     close( linsys_ctx->afd );
+
+    if( linsys_ctx->avr )
+        avresample_free( &linsys_ctx->avr );
 }
 
 static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
@@ -637,18 +643,24 @@ static int handle_audio_frame( linsys_opts_t *linsys_opts, uint8_t *data )
         return -1;
     }
 
-    raw_frame->audio_frame.num_samples = linsys_ctx->abuffer_size / ( sizeof(int32_t) * 2 );
-    raw_frame->audio_frame.channel_layout = AV_CH_LAYOUT_STEREO;
-    raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32;
+    raw_frame->audio_frame.num_samples = linsys_ctx->abuffer_size / ( sizeof(int32_t) * linsys_opts->num_channels );
+    raw_frame->audio_frame.num_channels = linsys_opts->num_channels;
+    raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
 
-    if( av_samples_alloc( raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize, 2,
+    if( av_samples_alloc( raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize, linsys_opts->num_channels,
                           raw_frame->audio_frame.num_samples, raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
     }
 
-    av_samples_copy( raw_frame->audio_frame.audio_data, &data, 0, 0, raw_frame->audio_frame.num_samples, 2, raw_frame->audio_frame.sample_fmt );
+    if( avresample_convert( linsys_ctx->avr, (void**)raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize[0],
+                            raw_frame->audio_frame.num_samples, (void**)&data,
+                            linsys_ctx->abuffer_size, raw_frame->audio_frame.num_samples ) < 0 )
+    {
+        syslog( LOG_ERR, "[linsys-sdiaudio] Sample format conversion failed\n" );
+        return -1;
+    }
 
     raw_frame->pts = av_rescale_q( linsys_ctx->a_counter, linsys_ctx->a_timebase, (AVRational){1, OBE_CLOCK} );
     linsys_ctx->a_counter += raw_frame->audio_frame.num_samples;
@@ -658,10 +670,11 @@ static int handle_audio_frame( linsys_opts_t *linsys_opts, uint8_t *data )
     for( int i = 0; i < linsys_ctx->device->num_input_streams; i++ )
     {
         if( linsys_ctx->device->streams[i]->stream_format == AUDIO_PCM )
-            raw_frame->stream_id = linsys_ctx->device->streams[i]->stream_id;
+            raw_frame->input_stream_id = linsys_ctx->device->streams[i]->input_stream_id;
     }
 
-    if( add_to_encode_queue( linsys_ctx->h, raw_frame ) < 0 )
+    // FIXME this is broken
+    if( add_to_encode_queue( linsys_ctx->h, raw_frame, raw_frame->input_stream_id ) < 0 )
     {
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
@@ -950,14 +963,14 @@ static int open_card( linsys_opts_t *linsys_opts )
     }
 
     /* TODO: support multichannel */
-    if( write_ul_sysfs( SDIAUDIO_CHANNELS_FILE, linsys_opts->card_idx, SDIAUDIO_CTL_AUDCH_EN_2 ) < 0 )
+    if( write_ul_sysfs( SDIAUDIO_CHANNELS_FILE, linsys_opts->card_idx, SDIAUDIO_CTL_AUDCH_EN_8 ) < 0 )
     {
         fprintf( stderr, "[linsys-sdiaudio] could not write to SDIAUDIO_CHANNELS_FILE \n");
         ret = -1;
         goto finish;
     }
 
-    linsys_ctx->abuffer_size = linsys_opts->audio_samples * 2 * sizeof(int32_t);
+    linsys_ctx->abuffer_size = linsys_opts->audio_samples * linsys_opts->num_channels * sizeof(int32_t);
     linsys_ctx->num_abuffers = NB_ABUFFERS;
 
     if( write_ul_sysfs( SDIAUDIO_BUFFERS_FILE, linsys_opts->card_idx, linsys_ctx->num_abuffers ) < 0 )
@@ -972,6 +985,30 @@ static int open_card( linsys_opts_t *linsys_opts )
         fprintf( stderr, "[linsys-sdiaudio] could not write audio buffer size \n");
         ret = -1;
         goto finish;
+    }
+
+    if( !linsys_opts->probe )
+    {
+        linsys_ctx->avr = avresample_alloc_context();
+        if( !linsys_ctx->avr )
+        {
+            fprintf( stderr, "[linsys-sdiaudio] couldn't setup sample rate conversion \n" );
+            ret = -1;
+            goto finish;
+        }
+
+        /* Give libavresample a made up channel map */
+        av_opt_set_int( linsys_ctx->avr, "in_channel_layout",   (1 << linsys_opts->num_channels) - 1, 0 );
+        av_opt_set_int( linsys_ctx->avr, "in_sample_fmt",       AV_SAMPLE_FMT_S32, 0 );
+        av_opt_set_int( linsys_ctx->avr, "in_sample_rate",      48000, 0 );
+        av_opt_set_int( linsys_ctx->avr, "out_channel_layout",  (1 << linsys_opts->num_channels) - 1, 0 );
+        av_opt_set_int( linsys_ctx->avr, "out_sample_fmt",      AV_SAMPLE_FMT_S32P, 0 );
+
+        if( avresample_open( linsys_ctx->avr ) < 0 )
+        {
+            fprintf( stderr, "Could not open AVResample\n" );
+            goto finish;
+        }
     }
 
     if( (linsys_ctx->afd = open( adev, O_RDONLY )) < 0 )
@@ -1128,7 +1165,7 @@ static void *probe_stream( void *ptr )
 
         /* TODO: make it take a continuous set of stream-ids */
         pthread_mutex_lock( &h->device_list_mutex );
-        streams[i]->stream_id = h->cur_stream_id++;
+        streams[i]->input_stream_id = h->cur_input_stream_id++;
         pthread_mutex_unlock( &h->device_list_mutex );
 
         if( i == 0 )
@@ -1151,8 +1188,9 @@ static void *probe_stream( void *ptr )
         {
             streams[i]->stream_type = STREAM_TYPE_AUDIO;
             streams[i]->stream_format = AUDIO_PCM;
-            streams[i]->channel_layout = AV_CH_LAYOUT_STEREO;
-            streams[i]->sample_format = AV_SAMPLE_FMT_S32;
+            //streams[i]->num_channels = 8;
+            // FIXME
+            streams[i]->sample_format = AV_SAMPLE_FMT_S32P;
             /* TODO: support other sample rates */
             streams[i]->sample_rate = 48000;
         }
@@ -1199,7 +1237,7 @@ static void *open_input( void *ptr )
     linsys_opts_t linsys_opts;
     memset( &linsys_opts, 0, sizeof(linsys_opts_t) );
 
-    linsys_opts.num_channels = 2;
+    linsys_opts.num_channels = 8;
     linsys_opts.card_idx = user_opts->card_idx;
     linsys_opts.audio_samples = input->audio_samples;
 

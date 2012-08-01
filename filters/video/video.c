@@ -641,7 +641,7 @@ void *start_filter( void *ptr )
         }
 
         remove_from_queue( &filter->queue );
-        add_to_encode_queue( h, raw_frame );
+        add_to_encode_queue( h, raw_frame, 0 );
     }
 
 end:
