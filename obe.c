@@ -1028,7 +1028,6 @@ int obe_start( obe_t *h )
                 fprintf( stderr, "Malloc failed\n" );
                 goto fail;
             }
-            printf("\n stream %i \n", h->output_streams[i].input_stream_id );
 
             h->filters[h->num_filters]->stream_id_list[0] = h->output_streams[i].input_stream_id;
 
