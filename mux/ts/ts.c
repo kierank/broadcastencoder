@@ -263,11 +263,10 @@ void *open_muxer( void *ptr )
         }
         else if( stream_format == AUDIO_AAC )
         {
-            /* Even though the stream might be stereo, it could switch to 5.1 at some point.
-             * It's simpler to let T-STD use 5 channels. As usual the spec doesn't explain how to deal with channel switches */
-            int profile_and_level = output_stream->aac_opts.aac_profile == AAC_HE_V2 ? LIBMPEGTS_MPEG4_HE_AAC_V2_PROFILE_LEVEL_4 :
-                                    output_stream->aac_opts.aac_profile == AAC_HE_V1 ? LIBMPEGTS_MPEG4_HE_AAC_PROFILE_LEVEL_4 :
-                                    LIBMPEGTS_MPEG4_AAC_PROFILE_LEVEL_4;
+            /* TODO: handle 5.1 audio and associated switching */
+            int profile_and_level = output_stream->aac_opts.aac_profile == AAC_HE_V2 ? LIBMPEGTS_MPEG4_HE_AAC_V2_PROFILE_LEVEL_2 :
+                                    output_stream->aac_opts.aac_profile == AAC_HE_V1 ? LIBMPEGTS_MPEG4_HE_AAC_PROFILE_LEVEL_2 :
+                                    LIBMPEGTS_MPEG4_AAC_PROFILE_LEVEL_2;
 
             if( ts_setup_mpeg4_aac_stream( w, stream->pid, profile_and_level, 5 ) < 0 )
             {
