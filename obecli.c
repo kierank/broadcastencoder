@@ -1071,7 +1071,7 @@ static int show_output_streams( char *command, obecli_command_t *child )
         }
         else if( input_stream->stream_type == MISC_TELETEXT )
             printf( "DVB-Teletext\n" );
-        else if( stream->stream_format == VBI_RAW )
+        else if( input_stream->stream_format == VBI_RAW )
             printf( "DVB-VBI\n" );
     }
 
