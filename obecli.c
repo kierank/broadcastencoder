@@ -983,7 +983,7 @@ static int show_output_streams( char *command, obecli_command_t *child )
     for( int i = 0; i < cli.num_output_streams; i++ )
     {
         input_stream = &cli.program.streams[cli.output_streams[i].input_stream_id];
-        if( stream->stream_type == STREAM_TYPE_VIDEO )
+        if( input_stream->stream_type == STREAM_TYPE_VIDEO )
         {
 
         }
