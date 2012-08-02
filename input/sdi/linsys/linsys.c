@@ -1132,6 +1132,7 @@ static void *probe_stream( void *ptr )
     non_display_parser->teletext_location = user_opts->teletext_location;
     non_display_parser->wss_output = user_opts->wss_output;
 
+    linsys_opts.num_channels = 8;
     linsys_opts.audio_samples = 2000; /* not important yet when probing */
 
     if( open_card( &linsys_opts ) < 0 )
