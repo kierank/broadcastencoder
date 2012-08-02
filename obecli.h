@@ -37,6 +37,9 @@ if( cond )\
 
 typedef struct obecli_command_t obecli_command_t;
 
+static int add_stream( char *command, obecli_command_t *child );
+static int remove_stream( char *command, obecli_command_t *child );
+
 static int parse_command( char *command, obecli_command_t *commmand_list );
 static int probe_device( char *command, obecli_command_t *child );
 
@@ -105,13 +108,17 @@ typedef struct
 } obecli_output_name_t;
 
 /* Commands */
-#if 0
 static obecli_command_t add_commands[] =
 {
-
-    {0}
+    { "stream", "",  "Add stream", add_stream, NULL },
+    { 0 }
 };
-#endif
+
+static obecli_command_t remove_commands[] =
+{
+    { "stream", "",  "Remove stream", remove_stream, NULL },
+    { 0 }
+};
 
 static obecli_command_t show_commands[] =
 {
@@ -140,9 +147,10 @@ static obecli_command_t set_commands[] =
 
 static obecli_command_t main_commands[] =
 {
-    //{ "add",   "[item] ...", "Add stream",             parse_command, add_commands },
+    { "add",   "[item] ...", "Add stream",               parse_command, add_commands },
     { "help",  "[item] ...", "Display help",             show_help,     NULL },
     { "probe", "[input]",    "Probe input",              probe_device,  NULL },
+    { "remove","[item] ...", "Remove stream",            parse_command, remove_commands },
     { "set",   "[item] ...", "Set item",                 parse_command, set_commands },
     { "show",  "[item] ...", "Show item",                parse_command, show_commands },
     { "start", "",           "Start encoding",           start_encode,  NULL },

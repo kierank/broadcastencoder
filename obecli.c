@@ -83,6 +83,7 @@ static const char * const output_modules[]           = { "udp", "rtp", "linsys-a
 static const char * system_opts[] = { "system-type", NULL };
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", "ttx-location",
                                       "wss-output", NULL };
+static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
                                       /* Encoding options */
@@ -318,6 +319,86 @@ static char *get_format_name( int stream_format, const obecli_format_name_t *nam
         i++;
 
     return  long_name ? names[i].long_name : names[i].format_name;
+}
+
+/* add/remove functions */
+static int add_stream( char *command, obecli_command_t *child )
+{
+    obe_output_stream_t *tmp;
+    if( !cli.program.num_streams )
+    {
+        printf( "No input streams. Please probe a device \n" );
+        return -1;
+    }
+
+    if( !strlen( command ) )
+        return -1;
+
+    int tok_len = strcspn( command, ":" );
+    command[tok_len] = 0;
+
+    int output_stream_id = obe_otoi( command, -1 );
+
+    FAIL_IF_ERROR( output_stream_id < 0 || output_stream_id == 0 || output_stream_id > cli.num_output_streams,
+                   "Invalid stream id\n" );
+
+    char *params = command + tok_len + 1;
+    char **opts = obe_split_options( params, add_opts );
+    if( !opts && params )
+        return -1;
+
+    char *type     = obe_get_option( add_opts[0], opts );
+
+    FAIL_IF_ERROR( strcasecmp( type, "audio" ),
+                   "Only able to add audio streams\n" );
+
+    tmp = realloc( cli.output_streams, sizeof(*cli.output_streams) * (cli.num_output_streams+1) );
+    FAIL_IF_ERROR( !tmp, "malloc failed\n" );
+    cli.output_streams = tmp;
+    memmove( &cli.output_streams[output_stream_id+1], &cli.output_streams[output_stream_id], (cli.num_output_streams-output_stream_id)*sizeof(*cli.output_streams) );
+    cli.num_output_streams++;
+
+    for( int i = output_stream_id+1; i < cli.num_output_streams; i++ )
+        cli.output_streams[i].output_stream_id++;
+
+    memset( &cli.output_streams[output_stream_id], 0, sizeof(*cli.output_streams) );
+    cli.output_streams[output_stream_id].input_stream_id = 1; /* FIXME when more stream types are allowed */
+    cli.output_streams[output_stream_id].output_stream_id = output_stream_id;
+    cli.output_streams[output_stream_id].sdi_audio_pair = 1;
+    cli.output_streams[output_stream_id].channel_layout = AV_CH_LAYOUT_STEREO;
+
+    printf( "NOTE: output-stream-ids have CHANGED! \n" );
+
+    show_output_streams( NULL, NULL );
+
+    return 0;
+}
+
+static int remove_stream( char *command, obecli_command_t *child )
+{
+    obe_output_stream_t *tmp;
+    if( !cli.program.num_streams )
+    {
+        printf( "No input streams. Please probe a device \n" );
+        return -1;
+    }
+
+    int output_stream_id = obe_otoi( command, -1 );
+
+    FAIL_IF_ERROR( output_stream_id < 0 || output_stream_id == 0 || cli.num_output_streams == 2,
+                   "Invalid stream id\n" );
+
+    memmove( &cli.output_streams[output_stream_id], &cli.output_streams[output_stream_id+1], (cli.num_output_streams-1-output_stream_id)*sizeof(*cli.output_streams) );
+    tmp = realloc( cli.output_streams, sizeof(*cli.output_streams) * (cli.num_output_streams-1) );
+    cli.num_output_streams--;
+    FAIL_IF_ERROR( !tmp, "malloc failed\n" );
+    cli.output_streams = tmp;
+
+    printf( "NOTE: output-stream-ids have CHANGED! \n" );
+
+    show_output_streams( NULL, NULL );
+
+    return 0;
 }
 
 /* set functions - TODO add lots more opts */
@@ -795,10 +876,8 @@ static int show_help( char *command, obecli_command_t *child )
 
     H0( "\n" );
 
-    /* TODO: stream selection */
-#if 0
     H0( "add  - Add item\n" );
-    while( add_commands[i].name )
+    for( int i = 0; add_commands[i].name != 0; i++ )
     {
         H0( "       %-*s          - %s \n", 8, add_commands[i].name, add_commands[i].description );
         i++;
@@ -806,17 +885,8 @@ static int show_help( char *command, obecli_command_t *child )
 
     H0( "\n" );
 
-
-    H0( "list - List current items\n" );
-    H0( "       inputs               - List current inputs\n" );
-    H0( "       muxers               - List current muxers\n" );
-    H0( "       streams              - List current streams\n" );
-    H0( "       outputs              - List current outputs\n" );
-
-    H0( "\n" );
-
+#if 0
     H0( "load - Load configuration\n" );
-
 #endif
 
     H0( "set  - Set parameter\n" );
@@ -916,7 +986,10 @@ static int show_input_streams( char *command, obecli_command_t *child )
     printf( "\n" );
 
     if( !cli.program.num_streams )
+    {
         printf( "No input streams. Please probe a device" );
+        return -1;
+    }
 
     printf( "Detected input streams: \n" );
 
@@ -956,11 +1029,11 @@ static int show_input_streams( char *command, obecli_command_t *child )
         }
         else if( stream->stream_format == MISC_TELETEXT )
         {
-            printf( "Input-stream-id: %d - DVB Teletext: \n", stream->input_stream_id );
+            printf( "Input-stream-id: %d - Teletext: \n", stream->input_stream_id );
         }
         else if( stream->stream_format == VBI_RAW )
         {
-            printf( "Input-stream-id: %d - DVB-VBI: \n", stream->input_stream_id );
+            printf( "Input-stream-id: %d - VBI: \n", stream->input_stream_id );
             for( int j = 0; j < stream->num_frame_data; j++ )
             {
                 format_name = get_format_name( stream->frame_data[j].type, format_names, 1 );
@@ -979,17 +1052,30 @@ static int show_input_streams( char *command, obecli_command_t *child )
 static int show_output_streams( char *command, obecli_command_t *child )
 {
     obe_input_stream_t *input_stream;
+    char *format_name;
+
+    printf( "Encoder outputs: \n" );
 
     for( int i = 0; i < cli.num_output_streams; i++ )
     {
         input_stream = &cli.program.streams[cli.output_streams[i].input_stream_id];
+        printf( "Output-stream-id: %d - Input-stream-id: %d - ", cli.output_streams[i].output_stream_id, cli.output_streams[i].input_stream_id );
         if( input_stream->stream_type == STREAM_TYPE_VIDEO )
         {
-
+            printf( "Video: AVC \n" );
         }
-
-
+        else if( input_stream->stream_type == STREAM_TYPE_AUDIO )
+        {
+            format_name = get_format_name( cli.output_streams[i].stream_format, format_names, 0 );
+            printf( "Audio: %s - SDI audio pair: %d \n", format_name, cli.output_streams[i].sdi_audio_pair );
+        }
+        else if( input_stream->stream_type == MISC_TELETEXT )
+            printf( "DVB-Teletext\n" );
+        else if( stream->stream_format == VBI_RAW )
+            printf( "DVB-VBI\n" );
     }
+
+    printf( "\n" );
 
     return 0;
 }
@@ -1026,12 +1112,12 @@ static int start_encode( char *command, obecli_command_t *child )
                 cli.output_streams[i].stream_format != AUDIO_MP2 && cli.output_streams[i].stream_format != AUDIO_AC_3 &&
                 cli.output_streams[i].stream_format != AUDIO_AAC )
             {
-                fprintf( stderr, "Uncompressed audio cannot yet be placed in TS\n" );
+                fprintf( stderr, "Output-stream-id %i: Uncompressed audio cannot yet be placed in TS\n", cli.output_streams[i].output_stream_id );
                 return -1;
             }
             else if( cli.output_streams[i].stream_action == STREAM_ENCODE && !cli.output_streams[i].bitrate )
             {
-                fprintf( stderr, "Audio stream requires bitrate\n" );
+                fprintf( stderr, "Output-stream-id %i: Audio stream requires bitrate\n", cli.output_streams[i].output_stream_id );
                 return -1;
             }
         }
@@ -1123,6 +1209,8 @@ static int probe_device( char *command, obecli_command_t *child )
             }
         }
     }
+
+    show_output_streams( NULL, NULL );
 
     return 0;
 }
