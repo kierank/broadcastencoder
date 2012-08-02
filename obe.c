@@ -261,7 +261,10 @@ int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame )
         for( int j = 0; j < h->filters[i]->num_stream_ids; j++ )
         {
             if( h->filters[i]->stream_id_list[j] == raw_frame->input_stream_id )
+            {
                 filter = h->filters[i];
+                break;
+            }
         }
     }
 
@@ -296,7 +299,10 @@ int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame, int output_stream
     for( int i = 0; i < h->num_encoders; i++ )
     {
         if( h->encoders[i]->output_stream_id == output_stream_id )
+        {
             encoder = h->encoders[i];
+            break;
+        }
     }
 
     if( !encoder )
@@ -938,7 +944,6 @@ int obe_start( obe_t *h )
                 num_samples = h->output_streams[i].stream_format == AUDIO_MP2 ? MP2_NUM_SAMPLES :
                               h->output_streams[i].stream_format == AUDIO_AAC ? AAC_NUM_SAMPLES : AC3_NUM_SAMPLES;
 
-
                 aud_enc_params = calloc( 1, sizeof(*aud_enc_params) );
                 if( !aud_enc_params )
                 {
@@ -953,6 +958,8 @@ int obe_start( obe_t *h )
                 aud_enc_params->input_sample_format = input_stream->sample_format;
                 aud_enc_params->sample_rate = input_stream->sample_rate;
                 /* TODO: check the bitrate is allowed by the format */
+
+                h->output_streams[i].sdi_audio_pair = MAX( h->output_streams[i].sdi_audio_pair, 0 );
 
                 /* Choose the optimal number of audio frames per PES
                  * TODO: This should be set after the encoder has told us the frame size */
@@ -1010,9 +1017,9 @@ int obe_start( obe_t *h )
     }
 
     /* Open Filter Thread */
-    for( int i = 0; i < h->num_output_streams; i++ )
+    for( int i = 0; i < h->devices[0]->num_input_streams; i++ )
     {
-        input_stream = get_input_stream( h, h->output_streams[i].input_stream_id );
+        input_stream = h->devices[0]->streams[i];
         if( input_stream && ( input_stream->stream_type == STREAM_TYPE_VIDEO || input_stream->stream_type == STREAM_TYPE_AUDIO ) )
         {
             h->filters[h->num_filters] = calloc( 1, sizeof(obe_filter_t) );
@@ -1029,7 +1036,7 @@ int obe_start( obe_t *h )
                 goto fail;
             }
 
-            h->filters[h->num_filters]->stream_id_list[0] = h->output_streams[i].input_stream_id;
+            h->filters[h->num_filters]->stream_id_list[0] = input_stream->input_stream_id;
 
             if( input_stream->stream_type == STREAM_TYPE_VIDEO )
             {
@@ -1069,7 +1076,6 @@ int obe_start( obe_t *h )
                     goto fail;
                 }
             }
-
 
             h->num_filters++;
         }

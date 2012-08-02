@@ -397,7 +397,7 @@ typedef struct
 
     /* Audio */
     int bitrate;
-    int sdi_channel_pair;
+    int sdi_audio_pair;
     uint64_t channel_layout;
 
     /* Metadata */

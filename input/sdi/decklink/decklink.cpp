@@ -958,7 +958,7 @@ static void *probe_stream( void *ptr )
         {
             streams[i]->stream_type = STREAM_TYPE_AUDIO;
             streams[i]->stream_format = AUDIO_PCM;
-            streams[i]->channel_layout = AV_CH_LAYOUT_STEREO;
+            streams[i]->num_channels  = 16;
             streams[i]->sample_format = AV_SAMPLE_FMT_S32P;
             /* TODO: support other sample rates */
             streams[i]->sample_rate = 48000;

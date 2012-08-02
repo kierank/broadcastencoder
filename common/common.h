@@ -134,7 +134,8 @@ typedef struct
     obe_frame_data_t *frame_data;
 
     /** Audio **/
-    int64_t channel_layout;
+    uint64_t channel_layout;
+    int num_channels; /* set if channel layout is 0 */
     int sample_rate;
 
     /* Raw Audio */
@@ -379,7 +380,7 @@ typedef struct
 
     hnd_t encoder_params;
 
-    /* E-AC3 */
+    /* HE-AAC and E-AC3 */
     int num_samples;
 } obe_encoder_t;
 

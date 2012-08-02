@@ -29,6 +29,7 @@ static void *start_filter( void *ptr )
     obe_aud_filter_params_t *filter_params = ptr;
     obe_t *h = filter_params->h;
     obe_filter_t *filter = filter_params->filter;
+    obe_output_stream_t *output_stream = get_output_stream( h, filter->stream_id_list[0] );
 
     while( 1 )
     {
@@ -74,7 +75,7 @@ static void *start_filter( void *ptr )
             }
 
             /* TODO: offset the channel pointers by the user's request */
-            av_samples_copy( split_raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.audio_data[0], 0, 0,
+            av_samples_copy( split_raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.audio_data[(output_stream->sdi_audio_pair-1)<<1], 0, 0,
                              split_raw_frame->audio_frame.num_samples, 2, split_raw_frame->audio_frame.sample_fmt );
 
             add_to_encode_queue( h, split_raw_frame, h->encoders[i]->output_stream_id );

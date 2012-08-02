@@ -88,7 +88,7 @@ static const char * stream_opts[] = { "action", "format",
                                       /* Encoding options */
                                       "vbv-maxrate", "vbv-bufsize", "bitrate", "sar-width", "sar-height",
                                       "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", "weightp",
-                                      "interlaced", "tff", "frame-packing", "csp", "filler", "intra-refresh",
+                                      "interlaced", "tff", "frame-packing", "csp", "filler", "intra-refresh", "sdi-audio-pair",
                                       /* AAC options */
                                       "aac-profile", "aac-encap",
                                       /* TS options */
@@ -480,14 +480,15 @@ static int set_stream( char *command, obecli_command_t *child )
             char *csp         = obe_get_option( stream_opts[18], opts );
             char *filler      = obe_get_option( stream_opts[19], opts );
             char *intra_refresh = obe_get_option( stream_opts[20], opts );
+            char *sdi_audio_pair = obe_get_option( stream_opts[21], opts );
 
-            char *aac_profile = obe_get_option( stream_opts[21], opts );
-            char *aac_encap   = obe_get_option( stream_opts[22], opts );
+            char *aac_profile = obe_get_option( stream_opts[22], opts );
+            char *aac_encap   = obe_get_option( stream_opts[23], opts );
 
             /* NB: remap these and the ttx values below if more encoding options are added - TODO: split them up */
-            char *pid         = obe_get_option( stream_opts[23], opts );
-            char *lang        = obe_get_option( stream_opts[24], opts );
-            char *audio_type  = obe_get_option( stream_opts[25], opts );
+            char *pid         = obe_get_option( stream_opts[24], opts );
+            char *lang        = obe_get_option( stream_opts[25], opts );
+            char *audio_type  = obe_get_option( stream_opts[26], opts );
 
             if( input_stream->stream_type == STREAM_TYPE_VIDEO )
             {
@@ -612,15 +613,17 @@ static int set_stream( char *command, obecli_command_t *child )
                     memcpy( cli.output_streams[output_stream_id].ts_opts.lang_code, lang, 3 );
                     cli.output_streams[output_stream_id].ts_opts.lang_code[3] = 0;
                 }
+
+                cli.output_streams[output_stream_id].sdi_audio_pair = obe_otoi( sdi_audio_pair, cli.output_streams[output_stream_id].sdi_audio_pair );
             }
             else if( input_stream->stream_format == MISC_TELETEXT ||
                      input_stream->stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
-                char *ttx_lang = obe_get_option( stream_opts[27], opts );
-                char *ttx_type = obe_get_option( stream_opts[28], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[29], opts );
-                char *ttx_page = obe_get_option( stream_opts[30], opts );
+                char *ttx_lang = obe_get_option( stream_opts[28], opts );
+                char *ttx_type = obe_get_option( stream_opts[29], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[30], opts );
+                char *ttx_page = obe_get_option( stream_opts[31], opts );
 
                 FAIL_IF_ERROR( ttx_type && ( check_enum_value( ttx_type, teletext_types ) < 0 ),
                                "Invalid Teletext type\n" );
@@ -875,6 +878,20 @@ static int show_muxers( char *command, obecli_command_t *child )
     return 0;
 }
 
+static int show_output( char *command, obecli_command_t *child )
+{
+    if( !strlen( command ) )
+        return -1;
+
+    int tok_len = strcspn( command, " " );
+    command[tok_len] = 0;
+
+    if( !strcasecmp( command, "streams" ) )
+        return show_output_streams( NULL, NULL );
+
+    return -1;
+}
+
 static int show_outputs( char *command, obecli_command_t *child )
 {
     int i = 0;
@@ -924,11 +941,13 @@ static int show_input_streams( char *command, obecli_command_t *child )
         }
         else if( stream->stream_type == STREAM_TYPE_AUDIO )
         {
-            /* let it work out the number of channels from the channel map */
-            av_get_channel_layout_string( buf, 200, 0, stream->channel_layout );
-            printf( "Input-stream-id: %d - Audio: %s%s %s %ikbps %ikHz Language: %s \n", stream->input_stream_id, format_name,
+            if( !stream->channel_layout )
+                snprintf( buf, sizeof(buf), "%i channels", stream->num_channels );
+            else
+                av_get_channel_layout_string( buf, sizeof(buf), 0, stream->channel_layout );
+            printf( "Input-stream-id: %d - Audio: %s%s %s %ikHz \n", stream->input_stream_id, format_name,
                     stream->stream_format == AUDIO_AAC ? stream->aac_is_latm ? " LATM" : " ADTS" : "",
-                    buf, stream->bitrate / 1000, stream->sample_rate / 1000, strlen( stream->lang_code ) ? stream->lang_code : "none" );
+                    buf, stream->sample_rate / 1000);
         }
         else if( stream->stream_format == SUBTITLES_DVB )
         {
@@ -959,7 +978,18 @@ static int show_input_streams( char *command, obecli_command_t *child )
 
 static int show_output_streams( char *command, obecli_command_t *child )
 {
+    obe_input_stream_t *input_stream;
 
+    for( int i = 0; i < cli.num_output_streams; i++ )
+    {
+        input_stream = &cli.program.streams[cli.output_streams[i].input_stream_id];
+        if( stream->stream_type == STREAM_TYPE_VIDEO )
+        {
+
+        }
+
+
+    }
 
     return 0;
 }
@@ -1088,7 +1118,7 @@ static int probe_device( char *command, obecli_command_t *child )
                 obe_populate_avc_encoder_params( cli.h, cli.program.streams[i].input_stream_id, &cli.output_streams[i].avc_param );
             else if( cli.program.streams[i].stream_type == STREAM_TYPE_AUDIO )
             {
-                cli.output_streams[i].sdi_channel_pair = 1;
+                cli.output_streams[i].sdi_audio_pair = 1;
                 cli.output_streams[i].channel_layout = AV_CH_LAYOUT_STEREO;
             }
         }

@@ -1188,8 +1188,7 @@ static void *probe_stream( void *ptr )
         {
             streams[i]->stream_type = STREAM_TYPE_AUDIO;
             streams[i]->stream_format = AUDIO_PCM;
-            //streams[i]->num_channels = 8;
-            // FIXME
+            streams[i]->num_channels = 8;
             streams[i]->sample_format = AV_SAMPLE_FMT_S32P;
             /* TODO: support other sample rates */
             streams[i]->sample_rate = 48000;
