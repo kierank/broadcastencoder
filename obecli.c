@@ -513,6 +513,8 @@ static int set_stream( char *command, obecli_command_t *child )
 {
     obe_input_stream_t *input_stream;
 
+    FAIL_IF_ERROR( !cli.num_output_streams, "no output streams \n" );
+
     if( !strlen( command ) )
         return -1;
 

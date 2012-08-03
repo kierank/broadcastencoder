@@ -29,7 +29,7 @@ static void *start_filter( void *ptr )
     obe_aud_filter_params_t *filter_params = ptr;
     obe_t *h = filter_params->h;
     obe_filter_t *filter = filter_params->filter;
-    obe_output_stream_t *output_stream = get_output_stream( h, filter->stream_id_list[0] );
+    obe_output_stream_t *output_stream;
 
     while( 1 )
     {
@@ -56,6 +56,7 @@ static void *start_filter( void *ptr )
         /* ignore the video track */
         for( int i = 1; i < h->num_encoders; i++ )
         {
+            output_stream = get_output_stream( h, h->encoders[i]->output_stream_id );
             split_raw_frame = new_raw_frame();
             if( !split_raw_frame )
             {
