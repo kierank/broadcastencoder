@@ -57,6 +57,7 @@ static void *start_filter( void *ptr )
         for( int i = 1; i < h->num_encoders; i++ )
         {
             output_stream = get_output_stream( h, h->encoders[i]->output_stream_id );
+
             split_raw_frame = new_raw_frame();
             if( !split_raw_frame )
             {

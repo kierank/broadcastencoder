@@ -71,9 +71,11 @@ typedef struct
 
 typedef struct
 {
+    int width;
+    int height;
     int sar_width;
     int sar_height;
-} obe_sd_sar_t;
+} obe_sar_t;
 
 typedef struct
 {
@@ -90,16 +92,46 @@ const static obe_cli_csp_t obe_cli_csps[] =
     [PIX_FMT_YUV420P16] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 16 },
 };
 
-const static obe_sd_sar_t obe_sd_sars[][2] =
+/* These SARs are often based on historical convention so often cannot be calculated */
+const static obe_sar_t obe_sars[][17] =
 {
     {
-        [INPUT_VIDEO_FORMAT_PAL]  = { 12, 11 }, /* PAL 4:3 */
-        [INPUT_VIDEO_FORMAT_NTSC] = { 10, 11 }, /* NTSC 4:3 */
+        /* NTSC */
+        { 720, 480, 10, 11 },
+        { 640, 480,  1,  1 },
+        { 528, 480, 40, 33 },
+        { 544, 480, 40, 33 },
+        { 480, 480, 15, 11 },
+        { 352, 480, 20, 11 },
+        /* PAL */
+        { 720, 576, 12, 11 },
+        { 544, 576, 16, 11 },
+        { 480, 576, 18, 11 },
+        { 352, 576, 24, 11 },
+        { 0 },
     },
     {
-        [INPUT_VIDEO_FORMAT_PAL]  = { 16, 11 }, /* PAL 16:9 */
-        [INPUT_VIDEO_FORMAT_NTSC] = { 40, 33 }, /* NTSC 16:9 */
-    }
+        /* NTSC */
+        { 720, 480, 40, 33 },
+        { 640, 480,  4,  3 },
+        { 544, 480, 16, 99 },
+        { 480, 480, 20, 11 },
+        { 352, 480, 80, 33 },
+        /* PAL */
+        { 720, 576, 16, 11 },
+        { 544, 576, 64, 33 },
+        { 480, 576, 24, 11 },
+        { 352, 576, 32, 11 },
+        /* HD */
+        { 1920, 1080, 1, 1 },
+        { 1440, 1080, 4, 3 },
+        { 1280, 1080, 3, 2 },
+        {  960, 1080, 2, 1 },
+        { 1280,  720, 1, 1 },
+        {  960,  720, 4, 3 },
+        {  640,  720, 2, 1 },
+        { 0 },
+    },
 };
 
 const static obe_wss_to_afd_t wss_to_afd[] =
@@ -113,6 +145,21 @@ const static obe_wss_to_afd_t wss_to_afd[] =
     [0x6] = { 0xd, 0 }, /* 4:3 (shoot and protect 14:9 centre) */
     [0x7] = { 0xa, 1 }, /* 16:9 (shoot and protect 4:3 centre) */
 };
+
+static int set_sar( obe_raw_frame_t *raw_frame, int is_wide )
+{
+    for( int i = 0; obe_sars[is_wide][i].width != 0; i++ )
+    {
+        if( raw_frame->img.width == obe_sars[is_wide][i].width && raw_frame->img.height == obe_sars[is_wide][i].height )
+        {
+            raw_frame->sar_width  = obe_sars[is_wide][i].sar_width;
+            raw_frame->sar_height = obe_sars[is_wide][i].sar_height;
+            return 0;
+        }
+    }
+
+    return -1;
+}
 
 static void scale_plane_c( uint16_t *src, int stride, int width, int height, int lshift, int rshift )
 {
@@ -233,7 +280,7 @@ static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
     return 0;
 }
 
-static int downconvert_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
+static int downconvert_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame, int width )
 {
     obe_image_t tmp_image = {0};
 
@@ -243,7 +290,7 @@ static int downconvert_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_
         vfilt->dst_pix_fmt = raw_frame->img.csp == PIX_FMT_YUV422P10 ? PIX_FMT_YUV420P10 : PIX_FMT_YUV420P;
 
         vfilt->sws_ctx = sws_getContext( raw_frame->img.width, raw_frame->img.height, raw_frame->img.csp,
-                                         raw_frame->img.width, raw_frame->img.height, vfilt->dst_pix_fmt,
+                                         width, raw_frame->img.height, vfilt->dst_pix_fmt,
                                          vfilt->sws_ctx_flags, NULL, NULL, NULL );
         if( !vfilt->sws_ctx )
         {
@@ -253,7 +300,7 @@ static int downconvert_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_
     }
 
     tmp_image.csp = vfilt->dst_pix_fmt;
-    tmp_image.width = raw_frame->img.width;
+    tmp_image.width = width;
     tmp_image.height = raw_frame->img.height;
     tmp_image.planes = av_pix_fmt_descriptors[vfilt->dst_pix_fmt].nb_components;
     tmp_image.format = raw_frame->img.format;
@@ -445,10 +492,7 @@ static int write_afd( obe_user_data_t *user_data, obe_raw_frame_t *raw_frame )
 
     /* Set the SAR from the AFD value */
     if( active_format_flag && IS_SD( raw_frame->img.format ) )
-    {
-        raw_frame->sar_width = obe_sd_sars[is_wide][raw_frame->img.format].sar_width;
-        raw_frame->sar_height = obe_sd_sars[is_wide][raw_frame->img.format].sar_height;
-    }
+        set_sar( raw_frame, is_wide ); // TODO check return
 
     user_data->type = USER_DATA_AVC_REGISTERED_ITU_T35;
     user_data->len = bs_pos( &r ) >> 3;
@@ -575,6 +619,7 @@ static void *start_filter( void *ptr )
     obe_filter_t *filter = filter_params->filter;
     obe_int_input_stream_t *input_stream = filter_params->input_stream;
     obe_raw_frame_t *raw_frame;
+    obe_output_stream_t *output_stream = get_output_stream( h, 0 ); /* FIXME when output_stream_id for video is not zero */
 
     obe_vid_filter_ctx_t *vfilt = calloc( 1, sizeof(*vfilt) );
     if( !vfilt )
@@ -618,7 +663,7 @@ static void *start_filter( void *ptr )
 
         if( filter_params->target_csp == X264_CSP_I420 && ( raw_frame->img.csp == PIX_FMT_YUV422P || raw_frame->img.csp == PIX_FMT_YUV422P10 ) )
         {
-            if( downconvert_frame( vfilt, raw_frame ) < 0 )
+            if( downconvert_frame( vfilt, raw_frame, output_stream->avc_param.i_width ) < 0 )
                 goto end;
         }
 
@@ -635,8 +680,7 @@ static void *start_filter( void *ptr )
          * TODO: make this user-choosable. OBE will prioritise any SAR information from AFD or WSS over any user settings */
         if( IS_SD( raw_frame->img.format ) && raw_frame->sar_width == 1 && raw_frame->sar_height == 1 )
         {
-            raw_frame->sar_width = obe_sd_sars[0][raw_frame->img.format].sar_width;
-            raw_frame->sar_height = obe_sd_sars[0][raw_frame->img.format].sar_height;
+            set_sar( raw_frame, output_stream->is_wide );
             raw_frame->sar_guess = 1;
         }
 

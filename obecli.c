@@ -89,7 +89,11 @@ static const char * stream_opts[] = { "action", "format",
                                       /* Encoding options */
                                       "vbv-maxrate", "vbv-bufsize", "bitrate", "sar-width", "sar-height",
                                       "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", "weightp",
-                                      "interlaced", "tff", "frame-packing", "csp", "filler", "intra-refresh", "sdi-audio-pair",
+                                      "interlaced", "tff", "frame-packing", "csp", "filler", "intra-refresh", "aspect-ratio",
+                                      "width",
+
+                                      /* Audio options */
+                                      "sdi-audio-pair",
                                       /* AAC options */
                                       "aac-profile", "aac-encap",
                                       /* TS options */
@@ -99,6 +103,30 @@ static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrou
                                       "pcr-period", "pat-period", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
 static const char * output_opts[] = { "target", NULL };
+
+const static int allowed_resolutions[17][2] =
+{
+    /* NTSC */
+    { 720, 480 },
+    { 640, 480 },
+    { 544, 480 },
+    { 480, 480 },
+    { 352, 480 },
+    /* PAL */
+    { 720, 576 },
+    { 544, 576 },
+    { 480, 576 },
+    { 352, 576 },
+    /* HD */
+    { 1920, 1080 },
+    { 1440, 1080 },
+    { 1280, 1080 },
+    {  960, 1080 },
+    { 1280,  720 },
+    {  960,  720 },
+    {  640,  720 },
+    { 0, 0 }
+};
 
 void obe_cli_printf( const char *name, const char *fmt, ... )
 {
@@ -512,6 +540,7 @@ static int set_input( char *command, obecli_command_t *child )
 static int set_stream( char *command, obecli_command_t *child )
 {
     obe_input_stream_t *input_stream;
+    int i = 0;
 
     FAIL_IF_ERROR( !cli.num_output_streams, "no output streams \n" );
 
@@ -563,15 +592,20 @@ static int set_stream( char *command, obecli_command_t *child )
             char *csp         = obe_get_option( stream_opts[18], opts );
             char *filler      = obe_get_option( stream_opts[19], opts );
             char *intra_refresh = obe_get_option( stream_opts[20], opts );
-            char *sdi_audio_pair = obe_get_option( stream_opts[21], opts );
+            char *aspect_ratio = obe_get_option( stream_opts[21], opts );
+            char *width = obe_get_option( stream_opts[22], opts );
 
-            char *aac_profile = obe_get_option( stream_opts[22], opts );
-            char *aac_encap   = obe_get_option( stream_opts[23], opts );
+            /* Audio Options */
+            char *sdi_audio_pair = obe_get_option( stream_opts[23], opts );
+
+            /* AAC options */
+            char *aac_profile = obe_get_option( stream_opts[24], opts );
+            char *aac_encap   = obe_get_option( stream_opts[25], opts );
 
             /* NB: remap these and the ttx values below if more encoding options are added - TODO: split them up */
-            char *pid         = obe_get_option( stream_opts[24], opts );
-            char *lang        = obe_get_option( stream_opts[25], opts );
-            char *audio_type  = obe_get_option( stream_opts[26], opts );
+            char *pid         = obe_get_option( stream_opts[26], opts );
+            char *lang        = obe_get_option( stream_opts[27], opts );
+            char *audio_type  = obe_get_option( stream_opts[28], opts );
 
             if( input_stream->stream_type == STREAM_TYPE_VIDEO )
             {
@@ -585,6 +619,35 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 FAIL_IF_ERROR( frame_packing && ( check_enum_value( frame_packing, frame_packing_modes ) < 0 ),
                                "Invalid frame packing mode\n" )
+
+                if( sar_width || sar_height )
+                    printf( "Options sar-width and sar-height are deprecated. Use aspect-ratio.\n" );
+
+                if( aspect_ratio )
+                {
+                    int ar_num, ar_den;
+                    sscanf( aspect_ratio, "%d:%d", &ar_num, &ar_den );
+                    if( ar_num == 16 && ar_den == 9 )
+                        cli.output_streams[output_stream_id].is_wide = 1;
+                    else if( ar_num == 4 && ar_den == 3 )
+                        cli.output_streams[output_stream_id].is_wide = 0;
+                    else
+                    {
+                        fprintf( stderr, "Aspect ratio is invalid\n" );
+                        return -1;
+                    }
+                }
+
+                if( width )
+                {
+                    int i_width = obe_otoi( width, avc_param->i_width );
+                    while( allowed_resolutions[i][0] && ( allowed_resolutions[i][1] != avc_param->i_height ||
+                           allowed_resolutions[i][0] != i_width ) )
+                       i++;
+
+                    FAIL_IF_ERROR( !allowed_resolutions[i][0], "Invalid resolution. \n" );
+                    avc_param->i_width = i_width;
+                }
 
                 /* Set it to encode by default */
                 cli.output_streams[output_stream_id].stream_action = STREAM_ENCODE;
@@ -636,7 +699,6 @@ static int set_stream( char *command, obecli_command_t *child )
                 /* Turn on the 3DTV mux option automatically */
                 if( avc_param->i_frame_packing >= 0 )
                     cli.mux_opts.is_3dtv = 1;
-
             }
             else if( input_stream->stream_type == STREAM_TYPE_AUDIO )
             {
@@ -703,10 +765,10 @@ static int set_stream( char *command, obecli_command_t *child )
                      input_stream->stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
-                char *ttx_lang = obe_get_option( stream_opts[28], opts );
-                char *ttx_type = obe_get_option( stream_opts[29], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[30], opts );
-                char *ttx_page = obe_get_option( stream_opts[31], opts );
+                char *ttx_lang = obe_get_option( stream_opts[30], opts );
+                char *ttx_type = obe_get_option( stream_opts[31], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[32], opts );
+                char *ttx_page = obe_get_option( stream_opts[33], opts );
 
                 FAIL_IF_ERROR( ttx_type && ( check_enum_value( ttx_type, teletext_types ) < 0 ),
                                "Invalid Teletext type\n" );

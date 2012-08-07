@@ -392,6 +392,9 @@ typedef struct
     /** Encode options **/
     int stream_format;
 
+    /* Video */
+    int is_wide;
+
     /* AVC */
     x264_param_t avc_param;
 
