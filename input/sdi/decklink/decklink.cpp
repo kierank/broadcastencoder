@@ -565,7 +565,7 @@ static int open_card( decklink_opts_t *decklink_opts )
     HRESULT result;
 
     avcodec_register_all();
-    decklink_ctx->dec = avcodec_find_decoder( CODEC_ID_V210 );
+    decklink_ctx->dec = avcodec_find_decoder( AV_CODEC_ID_V210 );
     if( !decklink_ctx->dec )
     {
         fprintf( stderr, "[decklink] Could not find v210 decoder\n" );

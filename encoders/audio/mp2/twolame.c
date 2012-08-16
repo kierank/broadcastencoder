@@ -59,7 +59,7 @@ static void *start_encoder( void *ptr )
     }
 
     /* TODO: setup bitrate reconfig, errors */
-    twolame_set_bitrate( tl_opts, stream->bitrate * 1000 );
+    twolame_set_bitrate( tl_opts, stream->bitrate );
     twolame_set_in_samplerate( tl_opts, enc_params->sample_rate );
     twolame_set_out_samplerate( tl_opts, enc_params->sample_rate );
     twolame_set_copyright( tl_opts, 1 );
