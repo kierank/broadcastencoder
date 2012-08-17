@@ -104,7 +104,7 @@ static void *start_encoder( void *ptr )
     x264_t *s = NULL;
     x264_picture_t pic, pic_out;
     x264_nal_t *nal;
-    int i_nal, frame_size = 0, user_sar_width, user_sar_height;
+    int i_nal, frame_size = 0;
     int64_t pts = 0, arrival_time = 0, frame_duration, buffer_duration;
     int64_t *pts2;
     float buffer_fill;
@@ -144,9 +144,6 @@ static void *start_encoder( void *ptr )
     /* Broadcast because input and muxer can be stuck waiting for encoder */
     pthread_cond_broadcast( &encoder->queue.in_cv );
     pthread_mutex_unlock( &encoder->queue.mutex );
-
-    user_sar_width = enc_params->avc_param.vui.i_sar_width;
-    user_sar_height = enc_params->avc_param.vui.i_sar_height;
 
     while( 1 )
     {
@@ -200,26 +197,17 @@ static void *start_encoder( void *ptr )
         }
         pts2[0] = raw_frame->pts;
         pic.opaque = pts2;
+        pic.param = NULL;
 
         /* If the AFD has changed, then change the SAR. x264 will write the SAR at the next keyframe
          * TODO: allow user to force keyframes in order to be frame accurate */
         if( raw_frame->sar_width  != enc_params->avc_param.vui.i_sar_width ||
             raw_frame->sar_height != enc_params->avc_param.vui.i_sar_height )
         {
-            /* If the frame's SAR has been guessed but the user entered a reasonable SAR, then use it.
-             * Otherwise, use the guessed SAR. */
-            if( raw_frame->sar_guess && user_sar_width > 0 && user_sar_height > 0 )
-            {
-                enc_params->avc_param.vui.i_sar_width  = user_sar_width;
-                enc_params->avc_param.vui.i_sar_height = user_sar_height;
-            }
-            else
-            {
-                enc_params->avc_param.vui.i_sar_width  = raw_frame->sar_width;
-                enc_params->avc_param.vui.i_sar_height = raw_frame->sar_height;
-            }
+            enc_params->avc_param.vui.i_sar_width  = raw_frame->sar_width;
+            enc_params->avc_param.vui.i_sar_height = raw_frame->sar_height;
 
-            x264_encoder_reconfig( s, &enc_params->avc_param );
+            pic.param = &enc_params->avc_param;
         }
 
         /* Update speedcontrol based on the system state */

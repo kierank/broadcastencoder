@@ -576,36 +576,34 @@ static int set_stream( char *command, obecli_command_t *child )
             char *vbv_maxrate = obe_get_option( stream_opts[2], opts );
             char *vbv_bufsize = obe_get_option( stream_opts[3], opts );
             char *bitrate     = obe_get_option( stream_opts[4], opts );
-            char *sar_width   = obe_get_option( stream_opts[5], opts );
-            char *sar_height  = obe_get_option( stream_opts[6], opts );
-            char *profile     = obe_get_option( stream_opts[7], opts );
-            char *level       = obe_get_option( stream_opts[8], opts );
-            char *keyint      = obe_get_option( stream_opts[9], opts );
-            char *lookahead   = obe_get_option( stream_opts[10], opts );
-            char *threads     = obe_get_option( stream_opts[11], opts );
-            char *bframes     = obe_get_option( stream_opts[12], opts );
-            char *b_pyramid   = obe_get_option( stream_opts[13], opts );
-            char *weightp     = obe_get_option( stream_opts[14], opts );
-            char *interlaced  = obe_get_option( stream_opts[15], opts );
-            char *tff         = obe_get_option( stream_opts[16], opts );
-            char *frame_packing = obe_get_option( stream_opts[17], opts );
-            char *csp         = obe_get_option( stream_opts[18], opts );
-            char *filler      = obe_get_option( stream_opts[19], opts );
-            char *intra_refresh = obe_get_option( stream_opts[20], opts );
-            char *aspect_ratio = obe_get_option( stream_opts[21], opts );
-            char *width = obe_get_option( stream_opts[22], opts );
+            char *profile     = obe_get_option( stream_opts[5], opts );
+            char *level       = obe_get_option( stream_opts[6], opts );
+            char *keyint      = obe_get_option( stream_opts[7], opts );
+            char *lookahead   = obe_get_option( stream_opts[8], opts );
+            char *threads     = obe_get_option( stream_opts[9], opts );
+            char *bframes     = obe_get_option( stream_opts[10], opts );
+            char *b_pyramid   = obe_get_option( stream_opts[11], opts );
+            char *weightp     = obe_get_option( stream_opts[12], opts );
+            char *interlaced  = obe_get_option( stream_opts[13], opts );
+            char *tff         = obe_get_option( stream_opts[14], opts );
+            char *frame_packing = obe_get_option( stream_opts[15], opts );
+            char *csp         = obe_get_option( stream_opts[16], opts );
+            char *filler      = obe_get_option( stream_opts[17], opts );
+            char *intra_refresh = obe_get_option( stream_opts[18], opts );
+            char *aspect_ratio = obe_get_option( stream_opts[19], opts );
+            char *width = obe_get_option( stream_opts[20], opts );
 
             /* Audio Options */
-            char *sdi_audio_pair = obe_get_option( stream_opts[23], opts );
+            char *sdi_audio_pair = obe_get_option( stream_opts[21], opts );
 
             /* AAC options */
-            char *aac_profile = obe_get_option( stream_opts[24], opts );
-            char *aac_encap   = obe_get_option( stream_opts[25], opts );
+            char *aac_profile = obe_get_option( stream_opts[22], opts );
+            char *aac_encap   = obe_get_option( stream_opts[23], opts );
 
             /* NB: remap these and the ttx values below if more encoding options are added - TODO: split them up */
-            char *pid         = obe_get_option( stream_opts[26], opts );
-            char *lang        = obe_get_option( stream_opts[27], opts );
-            char *audio_type  = obe_get_option( stream_opts[28], opts );
+            char *pid         = obe_get_option( stream_opts[24], opts );
+            char *lang        = obe_get_option( stream_opts[25], opts );
+            char *audio_type  = obe_get_option( stream_opts[26], opts );
 
             if( input_stream->stream_type == STREAM_TYPE_VIDEO )
             {
@@ -619,9 +617,6 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 FAIL_IF_ERROR( frame_packing && ( check_enum_value( frame_packing, frame_packing_modes ) < 0 ),
                                "Invalid frame packing mode\n" )
-
-                if( sar_width || sar_height )
-                    printf( "Options sar-width and sar-height are deprecated. Use aspect-ratio.\n" );
 
                 if( aspect_ratio )
                 {
@@ -655,8 +650,6 @@ static int set_stream( char *command, obecli_command_t *child )
                 avc_param->rc.i_vbv_max_bitrate = obe_otoi( vbv_maxrate, 0 );
                 avc_param->rc.i_vbv_buffer_size = obe_otoi( vbv_bufsize, 0 );
                 avc_param->rc.i_bitrate         = obe_otoi( bitrate, 0 );
-                avc_param->vui.i_sar_width      = obe_otoi( sar_width, avc_param->vui.i_sar_width );
-                avc_param->vui.i_sar_height     = obe_otoi( sar_height, avc_param->vui.i_sar_height );
                 avc_param->i_keyint_max        = obe_otoi( keyint, avc_param->i_keyint_max );
                 avc_param->rc.i_lookahead      = obe_otoi( lookahead, avc_param->rc.i_lookahead );
                 avc_param->i_threads           = obe_otoi( threads, avc_param->i_threads );
@@ -765,10 +758,10 @@ static int set_stream( char *command, obecli_command_t *child )
                      input_stream->stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
-                char *ttx_lang = obe_get_option( stream_opts[30], opts );
-                char *ttx_type = obe_get_option( stream_opts[31], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[32], opts );
-                char *ttx_page = obe_get_option( stream_opts[33], opts );
+                char *ttx_lang = obe_get_option( stream_opts[28], opts );
+                char *ttx_type = obe_get_option( stream_opts[29], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[31], opts );
+                char *ttx_page = obe_get_option( stream_opts[32], opts );
 
                 FAIL_IF_ERROR( ttx_type && ( check_enum_value( ttx_type, teletext_types ) < 0 ),
                                "Invalid Teletext type\n" );
