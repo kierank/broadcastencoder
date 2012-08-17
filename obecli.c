@@ -87,7 +87,7 @@ static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
                                       /* Encoding options */
-                                      "vbv-maxrate", "vbv-bufsize", "bitrate", "sar-width", "sar-height",
+                                      "vbv-maxrate", "vbv-bufsize", "bitrate",
                                       "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", "weightp",
                                       "interlaced", "tff", "frame-packing", "csp", "filler", "intra-refresh", "aspect-ratio",
                                       "width",
