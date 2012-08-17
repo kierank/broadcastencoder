@@ -126,7 +126,9 @@ static void *start_smoothing( void *ptr )
         //send_delta = get_input_clock_in_mpeg_ticks( h );
 
         remove_from_queue( &h->smoothing_queue );
+        pthread_mutex_lock( &h->smoothing_queue.mutex );
         h->smoothing_last_exit_time = get_input_clock_in_mpeg_ticks( h );
+        pthread_mutex_unlock( &h->smoothing_queue.mutex );
         num_smoothing_frames = 0;
     }
 
