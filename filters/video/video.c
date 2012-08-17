@@ -681,7 +681,7 @@ static void *start_filter( void *ptr )
 
         /* If SAR, on an SD stream, has not been updated by AFD or WSS, set to default 4:3
          * TODO: make this user-choosable. OBE will prioritise any SAR information from AFD or WSS over any user settings */
-        if( IS_SD( raw_frame->img.format ) && raw_frame->sar_width == 1 && raw_frame->sar_height == 1 )
+        if( raw_frame->sar_width == 1 && raw_frame->sar_height == 1 )
         {
             set_sar( raw_frame, output_stream->is_wide );
             raw_frame->sar_guess = 1;
