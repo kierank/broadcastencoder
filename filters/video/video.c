@@ -683,7 +683,7 @@ static void *start_filter( void *ptr )
          * TODO: make this user-choosable. OBE will prioritise any SAR information from AFD or WSS over any user settings */
         if( raw_frame->sar_width == 1 && raw_frame->sar_height == 1 )
         {
-            set_sar( raw_frame, output_stream->is_wide );
+            set_sar( raw_frame, IS_SD( raw_frame->img.format ) ? output_stream->is_wide : 1 );
             raw_frame->sar_guess = 1;
         }
 
