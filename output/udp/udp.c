@@ -55,7 +55,7 @@ static void *open_output( void *ptr )
     obe_t *h = output_params->h;
     struct udp_status status;
     hnd_t udp_handle = NULL;
-    int num_muxed_data = 0, buffer_frames = 0, ready = 0;
+    int num_muxed_data = 0;
     obe_muxed_data_t **muxed_data;
     int64_t last_pcr = -1, last_clock = -1, delta;
     AVFifoBuffer *fifo_data = NULL, *fifo_pcr = NULL;
@@ -92,8 +92,6 @@ static void *open_output( void *ptr )
         return NULL;
     }
 
-    buffer_frames = h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY ? 0 : 2;
-
     int64_t start_mpeg_time = 0, start_pcr_time = 0;
 
     while( 1 )
@@ -112,21 +110,10 @@ static void *open_output( void *ptr )
         if( h->output_drop )
         {
             syslog( LOG_INFO, "UDP output buffer reset\n" );
-            ready = h->output_drop = 0;
+            h->output_drop = 0;
             last_clock = -1;
         }
         pthread_mutex_unlock( &h->drop_mutex );
-
-        if( !ready )
-        {
-            if( num_muxed_data >= buffer_frames )
-                ready = 1;
-            else
-            {
-                pthread_mutex_unlock( &h->output_queue.mutex );
-                continue;
-            }
-        }
 
         muxed_data = malloc( num_muxed_data * sizeof(*muxed_data) );
         if( !muxed_data )
