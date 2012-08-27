@@ -28,6 +28,7 @@
 
 #include <libavutil/pixfmt.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/common.h>
 
 #include <stdio.h>
 #include <stdlib.h>

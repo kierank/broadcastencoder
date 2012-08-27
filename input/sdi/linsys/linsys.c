@@ -48,7 +48,6 @@
 #include <libavutil/bswap.h>
 #include <libavresample/avresample.h>
 #include <libavutil/opt.h>
-#include <libavutil/common.h>
 
 #define SDIVIDEO_DEVICE         "/dev/sdivideorx%u"
 #define SDIVIDEO_BUFFERS_FILE   "/sys/class/sdivideo/sdivideorx%u/buffers"
