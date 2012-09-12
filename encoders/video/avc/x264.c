@@ -158,7 +158,7 @@ static void *start_encoder( void *ptr )
             break;
         }
 
-        if( !encoder->queue.size )
+        while( !encoder->queue.size && !encoder->cancel_thread )
             pthread_cond_wait( &encoder->queue.in_cv, &encoder->queue.mutex );
 
         if( encoder->cancel_thread )

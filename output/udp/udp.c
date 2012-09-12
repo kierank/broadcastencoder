@@ -97,7 +97,7 @@ static void *open_output( void *ptr )
     while( 1 )
     {
         pthread_mutex_lock( &h->output_queue.mutex );
-        if( h->output_queue.size == num_muxed_data )
+        while( h->output_queue.size == num_muxed_data )
         {
             /* Often this cond_wait is not because of an underflow */
             pthread_cond_wait( &h->output_queue.in_cv, &h->output_queue.mutex );
