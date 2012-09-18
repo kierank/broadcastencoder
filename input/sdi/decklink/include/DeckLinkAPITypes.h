@@ -1,5 +1,5 @@
 /* -LICENSE-START-
-** Copyright (c) 2011 Blackmagic Design
+** Copyright (c) 2012 Blackmagic Design
 **
 ** Permission is hereby granted, free of charge, to any person or organization
 ** obtaining a copy of the software and accompanying documentation covered by
@@ -28,6 +28,15 @@
 #ifndef BMD_DECKLINKAPITYPES_H
 #define BMD_DECKLINKAPITYPES_H
 
+
+#ifndef BMD_CONST
+    #if defined(_MSC_VER)
+        #define BMD_CONST __declspec(selectany) static const
+    #else
+        #define BMD_CONST static const
+    #endif
+#endif
+
 // Type Declarations
 
 typedef int64_t BMDTimeValue;
@@ -37,7 +46,7 @@ typedef uint32_t BMDTimecodeUserBits;
 
 // Interface ID Declarations
 
-#define IID_IDeckLinkTimecode                            /* BC6CFBD3-8317-4325-AC1C-1216391E9340 */ (REFIID){0xBC,0x6C,0xFB,0xD3,0x83,0x17,0x43,0x25,0xAC,0x1C,0x12,0x16,0x39,0x1E,0x93,0x40}
+BMD_CONST REFIID IID_IDeckLinkTimecode                            = /* BC6CFBD3-8317-4325-AC1C-1216391E9340 */ {0xBC,0x6C,0xFB,0xD3,0x83,0x17,0x43,0x25,0xAC,0x1C,0x12,0x16,0x39,0x1E,0x93,0x40};
 
 /* Enum BMDTimecodeFlags - Timecode flags */
 
