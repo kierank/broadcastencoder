@@ -646,7 +646,7 @@ static void *start_filter( void *ptr )
             goto end;
         }
 
-        if( !filter->queue.size )
+        while( !filter->queue.size )
             pthread_cond_wait( &filter->queue.in_cv, &filter->queue.mutex );
 
         if( filter->cancel_thread )

@@ -179,7 +179,7 @@ static void *open_output( void *ptr )
     obe_t *h = output_params->h;
     struct rtp_status status;
     hnd_t rtp_handle = NULL;
-    int num_muxed_data = 0, buffer_frames = 0, ready = 0;
+    int num_muxed_data = 0;
     obe_muxed_data_t **muxed_data;
     int64_t last_pcr = -1, last_clock = -1, delta;
     AVFifoBuffer *fifo_data = NULL, *fifo_pcr = NULL;
@@ -213,14 +213,12 @@ static void *open_output( void *ptr )
     if( rtp_open( &rtp_handle, output_params->output_opts.target ) < 0 )
         return NULL;
 
-    buffer_frames = h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY ? 0 : 2;
-
     int64_t start_mpeg_time = 0, start_pcr_time = 0;
 
     while( 1 )
     {
         pthread_mutex_lock( &h->output_queue.mutex );
-        if( h->output_queue.size == num_muxed_data )
+        while( h->output_queue.size == num_muxed_data )
         {
             /* Often this cond_wait is not because of an underflow */
             pthread_cond_wait( &h->output_queue.in_cv, &h->output_queue.mutex );
@@ -233,21 +231,10 @@ static void *open_output( void *ptr )
         if( h->output_drop )
         {
             syslog( LOG_INFO, "RTP output buffer reset\n" );
-            ready = h->output_drop = 0;
+            h->output_drop = 0;
             last_clock = -1;
         }
         pthread_mutex_unlock( &h->drop_mutex );
-
-        if( !ready )
-        {
-            if( num_muxed_data >= buffer_frames )
-                ready = 1;
-            else
-            {
-                pthread_mutex_unlock( &h->output_queue.mutex );
-                continue;
-            }
-        }
 
         muxed_data = malloc( num_muxed_data * sizeof(*muxed_data) );
         if( !muxed_data )
@@ -313,11 +300,9 @@ static void *open_output( void *ptr )
 
             last_clock = get_wallclock_in_mpeg_ticks();
             last_pcr = pcrs[0];
+
             if( write_rtp_pkt( rtp_handle, rtp_buf, TS_PACKETS_SIZE, pcrs[0] ) < 0 )
-	    {
                 syslog( LOG_ERR, "[rtp] Failed to write RTP packet\n" );
-                return NULL;
-            }
         }
     }
 

@@ -1,5 +1,5 @@
 /* -LICENSE-START-
-** Copyright (c) 2011 Blackmagic Design
+** Copyright (c) 2012 Blackmagic Design
 **
 ** Permission is hereby granted, free of charge, to any person or organization
 ** obtaining a copy of the software and accompanying documentation covered by
@@ -28,12 +28,21 @@
 #ifndef BMD_DECKLINKAPICONFIGURATION_H
 #define BMD_DECKLINKAPICONFIGURATION_H
 
+
+#ifndef BMD_CONST
+    #if defined(_MSC_VER)
+        #define BMD_CONST __declspec(selectany) static const
+    #else
+        #define BMD_CONST static const
+    #endif
+#endif
+
 // Type Declarations
 
 
 // Interface ID Declarations
 
-#define IID_IDeckLinkConfiguration                       /* C679A35B-610C-4D09-B748-1D0478100FC0 */ (REFIID){0xC6,0x79,0xA3,0x5B,0x61,0x0C,0x4D,0x09,0xB7,0x48,0x1D,0x04,0x78,0x10,0x0F,0xC0}
+BMD_CONST REFIID IID_IDeckLinkConfiguration                       = /* C679A35B-610C-4D09-B748-1D0478100FC0 */ {0xC6,0x79,0xA3,0x5B,0x61,0x0C,0x4D,0x09,0xB7,0x48,0x1D,0x04,0x78,0x10,0x0F,0xC0};
 
 /* Enum BMDDeckLinkConfigurationID - DeckLink Configuration ID */
 

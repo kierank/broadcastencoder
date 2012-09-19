@@ -28,7 +28,7 @@ static void *start_smoothing( void *ptr )
 {
     obe_t *h = ptr;
     int num_smoothing_frames = 0, buffer_frames = 0;
-    int64_t start_dts = -1, start_pts = -1;
+    int64_t start_dts = -1, start_pts = -1, last_clock = -1;
     obe_coded_frame_t *coded_frame = NULL;
 
     struct sched_param param = {0};
@@ -43,7 +43,7 @@ static void *start_smoothing( void *ptr )
             if( h->encoders[i]->is_video )
             {
                 pthread_mutex_lock( &h->encoders[i]->queue.mutex );
-                if( !h->encoders[i]->is_ready )
+                while( !h->encoders[i]->is_ready )
                     pthread_cond_wait( &h->encoders[i]->queue.in_cv, &h->encoders[i]->queue.mutex );
                 x264_param_t *params = h->encoders[i]->encoder_params;
                 buffer_frames = params->sc.i_buffer_size;
@@ -65,7 +65,7 @@ static void *start_smoothing( void *ptr )
             break;
         }
 
-        if( h->smoothing_queue.size == num_smoothing_frames )
+        while( h->smoothing_queue.size == num_smoothing_frames )
             pthread_cond_wait( &h->smoothing_queue.in_cv, &h->smoothing_queue.mutex );
 
         if( h->cancel_smoothing_thread )
@@ -104,17 +104,21 @@ static void *start_smoothing( void *ptr )
         //printf("\n dts gap %"PRIi64" \n", coded_frame->real_dts - start_dts );
         //printf("\n pts gap %"PRIi64" \n", h->smoothing_last_pts - start_pts );
 
+        last_clock = h->smoothing_last_pts;
+
         if( start_dts == -1 )
         {
             start_dts = coded_frame->real_dts;
             /* Wait until the next clock tick */
-            pthread_cond_wait( &h->obe_clock_cv, &h->obe_clock_mutex );
+            while( last_clock == h->smoothing_last_pts )
+                pthread_cond_wait( &h->obe_clock_cv, &h->obe_clock_mutex );
             start_pts = h->smoothing_last_pts;
         }
         else if( coded_frame->real_dts - start_dts > h->smoothing_last_pts - start_pts )
         {
             //printf("\n waiting \n");
-            pthread_cond_wait( &h->obe_clock_cv, &h->obe_clock_mutex );
+            while( last_clock == h->smoothing_last_pts )
+                pthread_cond_wait( &h->obe_clock_cv, &h->obe_clock_mutex );
         }
         /* otherwise, continue since the frame is late */
 
@@ -126,7 +130,9 @@ static void *start_smoothing( void *ptr )
         //send_delta = get_input_clock_in_mpeg_ticks( h );
 
         remove_from_queue( &h->smoothing_queue );
+        pthread_mutex_lock( &h->smoothing_queue.mutex );
         h->smoothing_last_exit_time = get_input_clock_in_mpeg_ticks( h );
+        pthread_mutex_unlock( &h->smoothing_queue.mutex );
         num_smoothing_frames = 0;
     }
 
