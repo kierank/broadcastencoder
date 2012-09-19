@@ -50,7 +50,7 @@
 
 #define MAX_PROBE_TIME 20
 
-#define OBE_CLOCK 27000000LL
+#define OBE_CLOCK 27000000L
 
 /* Macros */
 #define BOOLIFY(x) x = !!x
@@ -201,8 +201,8 @@ typedef struct
     int     width;     /* width of the picture */
     int     height;    /* height of the picture */
     int     planes;    /* number of planes */
-    uint8_t *plane[4]; /* pointers for each plane */
-    int     stride[4]; /* strides for each plane */
+    uint8_t *plane[8]; /* pointers for each plane */
+    int     stride[8]; /* strides for each plane */
     int     format;    /* image format (SD SDI only) */
     int     first_line; /* first line of image (SD from SDI only) */
 } obe_image_t;
@@ -356,6 +356,7 @@ typedef struct
     obe_timecode_t timecode;
 
     int reset_obe;
+
 } obe_raw_frame_t;
 
 typedef struct
@@ -467,6 +468,8 @@ struct obe_t
     obe_output_opts_t output_opts;
 
     /* Filtering */
+    obe_filter_opts_t filter_opts;
+
     int num_filters;
     obe_filter_t *filters[MAX_STREAMS];
 

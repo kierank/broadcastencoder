@@ -26,13 +26,15 @@
 static void *start_smoothing( void *ptr )
 {
     obe_t *h = ptr;
-    int num_enc_smoothing_frames = 0, buffer_frames = 0;
+    int num_enc_smoothing_frames = 0, buffer_frames = 0, double_output = 0, release_late_frame = 0;
     int64_t start_dts = -1, start_pts = -1, last_clock = -1;
-    obe_coded_frame_t *coded_frame = NULL;
+    obe_coded_frame_t *coded_frame[2] = { NULL };
 
     struct sched_param param = {0};
     param.sched_priority = 99;
     pthread_setschedparam( pthread_self(), SCHED_FIFO, &param );
+
+	double_output = h->filter_opts.yadif_mode == 1 || h->filter_opts.yadif_mode == 3;
 
     /* FIXME: when we have soft pulldown this will need changing */
     if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
@@ -91,7 +93,12 @@ static void *start_smoothing( void *ptr )
 
 //        printf("\n smoothed frames %i \n", num_enc_smoothing_frames );
 
-        coded_frame = h->enc_smoothing_queue.queue[0];
+        coded_frame[0] = h->enc_smoothing_queue.queue[0];
+        if( double_output && !release_late_frame )
+        {
+            if( num_enc_smoothing_frames > 1 )
+                coded_frame[1] = h->enc_smoothing_queue.queue[1];
+        }
         pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
 
         /* The terminology can be a cause for confusion:
@@ -105,15 +112,17 @@ static void *start_smoothing( void *ptr )
 
         last_clock = h->obe_clock_last_pts;
 
-        if( start_dts == -1 )
+        if( release_late_frame )
+            release_late_frame = 0;
+        else if( start_dts == -1 )
         {
-            start_dts = coded_frame->real_dts;
+            start_dts = coded_frame[0]->real_dts;
             /* Wait until the next clock tick */
             while( last_clock == h->obe_clock_last_pts )
                 pthread_cond_wait( &h->obe_clock_cv, &h->obe_clock_mutex );
             start_pts = h->obe_clock_last_pts;
         }
-        else if( coded_frame->real_dts - start_dts > h->obe_clock_last_pts - start_pts )
+        else if( coded_frame[0]->real_dts - start_dts > h->obe_clock_last_pts - start_pts )
         {
             //printf("\n waiting \n");
             while( last_clock == h->obe_clock_last_pts )
@@ -123,12 +132,23 @@ static void *start_smoothing( void *ptr )
 
         pthread_mutex_unlock( &h->obe_clock_mutex );
 
-        add_to_queue( &h->mux_queue, coded_frame );
+        add_to_queue( &h->mux_queue, coded_frame[0] );
+        remove_from_queue( &h->enc_smoothing_queue );
+
+        if( double_output )
+        {
+            if( num_enc_smoothing_frames == 1 )
+                release_late_frame = 1;
+            else
+            {
+                add_to_queue( &h->mux_queue, coded_frame[1] );
+                remove_from_queue( &h->enc_smoothing_queue );
+            }
+        }
 
         //printf("\n send_delta %"PRIi64" \n", get_input_clock_in_mpeg_ticks( h ) - send_delta );
         //send_delta = get_input_clock_in_mpeg_ticks( h );
 
-        remove_from_queue( &h->enc_smoothing_queue );
         pthread_mutex_lock( &h->enc_smoothing_queue.mutex );
         h->enc_smoothing_last_exit_time = get_input_clock_in_mpeg_ticks( h );
         pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
