@@ -78,7 +78,7 @@ static void encoder_wait( obe_t *h, int output_stream_id )
     /* Wait for encoder to be ready */
     obe_encoder_t *encoder = get_encoder( h, output_stream_id );
     pthread_mutex_lock( &encoder->queue.mutex );
-    if( !encoder->is_ready )
+    while( !encoder->is_ready )
         pthread_cond_wait( &encoder->queue.in_cv, &encoder->queue.mutex );
     pthread_mutex_unlock( &encoder->queue.mutex );
 }

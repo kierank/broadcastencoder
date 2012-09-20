@@ -121,7 +121,7 @@ static void *start_encoder( void *ptr )
             break;
         }
 
-        if( !encoder->queue.size )
+        while( !encoder->queue.size && !encoder->cancel_thread )
             pthread_cond_wait( &encoder->queue.in_cv, &encoder->queue.mutex );
 
         if( encoder->cancel_thread )
@@ -150,6 +150,8 @@ static void *start_encoder( void *ptr )
             syslog( LOG_ERR, "[twolame] Sample format conversion failed\n" );
             break;
         }
+
+        avresample_read( avr, &audio_buf, avresample_available( avr ) );
 
         output_size = twolame_encode_buffer_float32_interleaved( tl_opts, audio_buf, raw_frame->audio_frame.num_samples, output_buf, MP2_AUDIO_BUFFER_SIZE );
 
