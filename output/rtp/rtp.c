@@ -304,6 +304,7 @@ static void *open_output( void *ptr )
             if( write_rtp_pkt( rtp_handle, rtp_buf, TS_PACKETS_SIZE, pcrs[0] ) < 0 )
                 syslog( LOG_ERR, "[rtp] Failed to write RTP packet\n" );
         }
+        num_muxed_data = 0;
     }
 
     pthread_cleanup_pop( 1 );
