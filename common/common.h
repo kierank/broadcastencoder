@@ -339,7 +339,6 @@ typedef struct
     int len;
     int bytes_left;
     uint8_t *data;
-    uint8_t *cur_pos;
 
     int valid_timecode;
     obe_timecode_t timecode;
@@ -406,11 +405,9 @@ typedef struct
 {
     int len;
     uint8_t *data;
-    uint8_t *cur_pos;
 
     /* MPEG-TS */
     int64_t *pcr_list;
-    int64_t *pcr_list_pos;
 } obe_muxed_data_t;
 
 typedef struct
