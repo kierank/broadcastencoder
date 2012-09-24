@@ -142,7 +142,6 @@ obe_muxed_data_t *new_muxed_data( int len )
         free( muxed_data );
         return NULL;
     }
-    muxed_data->cur_pos = muxed_data->data;
 
     return muxed_data;
 }

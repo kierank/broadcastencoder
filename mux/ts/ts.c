@@ -478,7 +478,7 @@ void *open_muxer( void *ptr )
             }
 
             memcpy( muxed_data->data, output, len );
-            muxed_data->pcr_list = muxed_data->pcr_list_pos = malloc( (len / 188) * sizeof(int64_t) );
+            muxed_data->pcr_list = malloc( (len / 188) * sizeof(int64_t) );
             if( !muxed_data->pcr_list )
             {
                 syslog( LOG_ERR, "Malloc failed\n" );

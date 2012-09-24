@@ -650,7 +650,6 @@ static int handle_audio_frame( linsys_opts_t *linsys_opts, uint8_t *data )
         return -1;
     }
 
-    raw_frame->cur_pos = raw_frame->data;
     memcpy( raw_frame->data, data, raw_frame->len );
 
     raw_frame->pts = av_rescale_q( linsys_ctx->a_counter, linsys_ctx->a_timebase, (AVRational){1, OBE_CLOCK} );

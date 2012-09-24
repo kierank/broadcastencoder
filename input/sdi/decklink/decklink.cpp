@@ -473,7 +473,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             goto fail;
         }
 
-        raw_frame->cur_pos = raw_frame->data;
         memcpy( raw_frame->data, frame_bytes, bytes );
 
         BMDTimeValue packet_time;
