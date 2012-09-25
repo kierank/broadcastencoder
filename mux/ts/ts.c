@@ -486,7 +486,7 @@ void *open_muxer( void *ptr )
                 goto end;
             }
             memcpy( muxed_data->pcr_list, pcr_list, (len / 188) * sizeof(int64_t) );
-            add_to_queue( &h->output_queue, muxed_data );
+            add_to_queue( &h->mux_smoothing_queue, muxed_data );
         }
 
         for( int i = 0; i < num_frames; i++ )

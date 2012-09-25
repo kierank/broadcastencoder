@@ -426,6 +426,8 @@ struct obe_t
     /* OBE recovered clock */
     pthread_mutex_t obe_clock_mutex;
     pthread_cond_t  obe_clock_cv;
+    int64_t         obe_clock_last_pts; /* from sdi clock */
+    int64_t         obe_clock_last_wallclock; /* from cpu clock */
 
     /* Devices */
     pthread_mutex_t device_list_mutex;
@@ -437,20 +439,24 @@ struct obe_t
      * TODO: make this work for multiple inputs and outputs */
     pthread_mutex_t drop_mutex;
     int encoder_drop;
-    int output_drop;
+    int mux_drop;
 
     /* Streams */
     int num_output_streams;
     obe_output_stream_t *output_streams;
 
     /* Smoothing (video) */
-    pthread_t smoothing_thread;
-    int cancel_smoothing_thread;
+    pthread_t enc_smoothing_thread;
+    int cancel_enc_smoothing_thread;
 
     /* Mux */
     pthread_t mux_thread;
     int cancel_mux_thread;
     obe_mux_opts_t mux_opts;
+
+    /* Smoothing (video) */
+    pthread_t mux_smoothing_thread;
+    int cancel_mux_smoothing_thread;
 
     /* Output */
     pthread_t output_thread;
@@ -464,18 +470,17 @@ struct obe_t
     int num_encoders;
     obe_encoder_t *encoders[MAX_STREAMS];
 
-    /* Encoded video frames in smoothing buffer */
-    obe_queue_t     smoothing_queue;
+    /* Encoded frames in smoothing buffer */
+    obe_queue_t     enc_smoothing_queue;
 
-    int64_t         smoothing_last_pts; /* from sdi clock */
-    int64_t         smoothing_last_wallclock; /* from cpu clock */
-
-
-    int             smoothing_buffer_complete;
-    int64_t         smoothing_last_exit_time;
+    int             enc_smoothing_buffer_complete;
+    int64_t         enc_smoothing_last_exit_time;
 
     /* Encoded frame queue for muxing */
     obe_queue_t mux_queue;
+
+    /* Muxed frames in smoothing buffer */
+    obe_queue_t mux_smoothing_queue;
 
     /* Muxed frame queue for transmission */
     obe_queue_t output_queue;
@@ -484,6 +489,14 @@ struct obe_t
 
 
 };
+
+typedef struct
+{
+    void* (*start_smoothing)( void *ptr );
+} obe_smoothing_func_t;
+
+extern const obe_smoothing_func_t enc_smoothing;
+extern const obe_smoothing_func_t mux_smoothing;
 
 int64_t obe_mdate( void );
 

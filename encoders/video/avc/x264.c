@@ -172,9 +172,9 @@ static void *start_encoder( void *ptr )
         pthread_mutex_lock( &h->drop_mutex );
         if( h->encoder_drop )
         {
-            pthread_mutex_lock( &h->smoothing_queue.mutex );
-            h->smoothing_buffer_complete = 0;
-            pthread_mutex_unlock( &h->smoothing_queue.mutex );
+            pthread_mutex_lock( &h->enc_smoothing_queue.mutex );
+            h->enc_smoothing_buffer_complete = 0;
+            pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
             syslog( LOG_INFO, "Speedcontrol reset\n" );
             x264_speedcontrol_sync( s, enc_params->avc_param.sc.i_buffer_size, enc_params->avc_param.sc.f_buffer_init, 0 );
             h->encoder_drop = 0;
@@ -225,21 +225,21 @@ static void *start_encoder( void *ptr )
         /* Update speedcontrol based on the system state */
         if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
         {
-            pthread_mutex_lock( &h->smoothing_queue.mutex );
-            if( h->smoothing_buffer_complete )
+            pthread_mutex_lock( &h->enc_smoothing_queue.mutex );
+            if( h->enc_smoothing_buffer_complete )
             {
                 /* Wait until a frame is sent out. */
-                while( !h->smoothing_last_exit_time )
-                    pthread_cond_wait( &h->smoothing_queue.out_cv, &h->smoothing_queue.mutex );
+                while( !h->enc_smoothing_last_exit_time )
+                    pthread_cond_wait( &h->enc_smoothing_queue.out_cv, &h->enc_smoothing_queue.mutex );
 
                 /* time elapsed since last frame was removed */
-                int64_t last_frame_delta = get_input_clock_in_mpeg_ticks( h ) - h->smoothing_last_exit_time;
+                int64_t last_frame_delta = get_input_clock_in_mpeg_ticks( h ) - h->enc_smoothing_last_exit_time;
 
-                if( h->smoothing_queue.size )
+                if( h->enc_smoothing_queue.size )
                 {
                     obe_coded_frame_t *first_frame, *last_frame;
-                    first_frame = h->smoothing_queue.queue[0];
-                    last_frame = h->smoothing_queue.queue[h->smoothing_queue.size-1];
+                    first_frame = h->enc_smoothing_queue.queue[0];
+                    last_frame = h->enc_smoothing_queue.queue[h->enc_smoothing_queue.size-1];
                     int64_t frame_durations = last_frame->real_dts - first_frame->real_dts + frame_duration;
                     buffer_fill = (float)(frame_durations - last_frame_delta)/buffer_duration;
                 }
@@ -249,7 +249,7 @@ static void *start_encoder( void *ptr )
                 x264_speedcontrol_sync( s, buffer_fill, enc_params->avc_param.sc.i_buffer_size, 1 );
             }
 
-            pthread_mutex_unlock( &h->smoothing_queue.mutex );
+            pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
         }
 
         frame_size = x264_encoder_encode( s, &nal, &i_nal, &pic, &pic_out );
@@ -292,7 +292,7 @@ static void *start_encoder( void *ptr )
                 //printf("\n Encode Latency %"PRIi64" \n", obe_mdate() - coded_frame->arrival_time );
             }
 
-            add_to_queue( &h->smoothing_queue, coded_frame );
+            add_to_queue( &h->mux_queue, coded_frame );
         }
      }
 
