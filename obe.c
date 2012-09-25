@@ -337,7 +337,7 @@ int remove_early_frames( obe_t *h, int64_t pts )
         if( !frame->is_video && frame->pts < pts )
         {
             destroy_coded_frame( frame );
-            memmove( &h->mux_queue.queue[i], &h->mux_queue.queue[i], sizeof(*h->mux_queue.queue) * (h->mux_queue.size-1-i) );
+            memmove( &h->mux_queue.queue[i], &h->mux_queue.queue[i+1], sizeof(*h->mux_queue.queue) * (h->mux_queue.size-1-i) );
             tmp = realloc( h->mux_queue.queue, sizeof(*h->mux_queue.queue) * (h->mux_queue.size-1) );
             h->mux_queue.size--;
             i--;
