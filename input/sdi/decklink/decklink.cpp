@@ -254,7 +254,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 syslog( LOG_WARNING, "Decklink card index %i: No frame received for %"PRIi64" ms", decklink_opts_->card_idx,
                        (cur_frame_time - decklink_ctx->last_frame_time) / 1000 );
                 pthread_mutex_lock( &h->drop_mutex );
-                h->encoder_drop = h->output_drop = 1;
+                h->encoder_drop = h->mux_drop = 1;
                 pthread_mutex_unlock( &h->drop_mutex );
             }
 

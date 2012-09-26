@@ -26,7 +26,6 @@
 #include "input/input.h"
 #include "filters/video/video.h"
 #include "filters/audio/audio.h"
-#include "encoders/smoothing.h"
 #include "encoders/video/video.h"
 #include "encoders/audio/audio.h"
 #include "mux/mux.h"
@@ -142,7 +141,6 @@ obe_muxed_data_t *new_muxed_data( int len )
         free( muxed_data );
         return NULL;
     }
-    muxed_data->cur_pos = muxed_data->data;
 
     return muxed_data;
 }
@@ -469,8 +467,8 @@ void obe_clock_tick( obe_t *h, int64_t value )
 {
     /* Use this signal as the SDI clocksource */
     pthread_mutex_lock( &h->obe_clock_mutex );
-    h->smoothing_last_pts = value;
-    h->smoothing_last_wallclock = get_wallclock_in_mpeg_ticks();
+    h->obe_clock_last_pts = value;
+    h->obe_clock_last_wallclock = get_wallclock_in_mpeg_ticks();
     pthread_mutex_unlock( &h->obe_clock_mutex );
     pthread_cond_broadcast( &h->obe_clock_cv );
 }
@@ -479,7 +477,7 @@ int64_t get_input_clock_in_mpeg_ticks( obe_t *h )
 {
     int64_t value;
     pthread_mutex_lock( &h->obe_clock_mutex );
-    value = h->smoothing_last_pts + ( get_wallclock_in_mpeg_ticks() - h->smoothing_last_wallclock );
+    value = h->obe_clock_last_pts + ( get_wallclock_in_mpeg_ticks() - h->obe_clock_last_wallclock );
     pthread_mutex_unlock( &h->obe_clock_mutex );
 
     return value;
@@ -489,7 +487,7 @@ void sleep_input_clock( obe_t *h, int64_t i_time )
 {
     int64_t wallclock_time;
     pthread_mutex_lock( &h->obe_clock_mutex );
-    wallclock_time = ( i_time - h->smoothing_last_pts ) + h->smoothing_last_wallclock;
+    wallclock_time = ( i_time - h->obe_clock_last_pts ) + h->obe_clock_last_wallclock;
     pthread_mutex_unlock( &h->obe_clock_mutex );
 
     sleep_mpeg_ticks( wallclock_time );
@@ -841,8 +839,9 @@ int obe_start( obe_t *h )
     /* Setup mutexes and cond vars */
     pthread_mutex_init( &h->devices[0]->device_mutex, NULL );
     pthread_mutex_init( &h->drop_mutex, NULL );
-    obe_init_queue( &h->smoothing_queue );
+    obe_init_queue( &h->enc_smoothing_queue );
     obe_init_queue( &h->mux_queue );
+    obe_init_queue( &h->mux_smoothing_queue );
     obe_init_queue( &h->output_queue );
     pthread_mutex_init( &h->obe_clock_mutex, NULL );
     pthread_cond_init( &h->obe_clock_cv, NULL );
@@ -991,10 +990,17 @@ int obe_start( obe_t *h )
         }
     }
 
-    /* Open Smoothing Thread */
-    if( pthread_create( &h->smoothing_thread, NULL, x264_smoothing.start_smoothing, (void*)h ) < 0 )
+    /* Open Encoder Smoothing Thread */
+    if( pthread_create( &h->enc_smoothing_thread, NULL, enc_smoothing.start_smoothing, (void*)h ) < 0 )
     {
-        fprintf( stderr, "Couldn't create mux thread \n" );
+        fprintf( stderr, "Couldn't create encoder smoothing thread \n" );
+        goto fail;
+    }
+
+    /* Open Mux Smoothing Thread */
+    if( pthread_create( &h->mux_smoothing_thread, NULL, mux_smoothing.start_smoothing, (void*)h ) < 0 )
+    {
+        fprintf( stderr, "Couldn't create mux smoothing thread \n" );
         goto fail;
     }
 
@@ -1155,17 +1161,19 @@ void obe_close( obe_t *h )
 
     fprintf( stderr, "encoders cancelled \n" );
 
-    /* Cancel smoothing thread */
-    if ( h->smoothing_thread )
+    /* Cancel encoder smoothing thread */
+    if ( h->cancel_enc_smoothing_thread )
     {
-        pthread_mutex_lock( &h->smoothing_queue.mutex );
-        h->cancel_smoothing_thread = 1;
-        pthread_cond_signal( &h->smoothing_queue.in_cv );
-        pthread_mutex_unlock( &h->smoothing_queue.mutex );
-        pthread_join( h->smoothing_thread, &ret_ptr );
+        pthread_mutex_lock( &h->enc_smoothing_queue.mutex );
+        h->cancel_enc_smoothing_thread = 1;
+        pthread_cond_signal( &h->enc_smoothing_queue.in_cv );
+        pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
+        pthread_join( h->enc_smoothing_thread, &ret_ptr );
     }
 
-    fprintf( stderr, "smoothing cancelled \n" );
+    fprintf( stderr, "encoder smoothing cancelled \n" );
+
+    // todo mux smoothing thread
 
     /* Cancel mux thread */
     if ( h->mux_thread )
