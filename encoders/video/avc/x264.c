@@ -292,7 +292,7 @@ static void *start_encoder( void *ptr )
                 //printf("\n Encode Latency %"PRIi64" \n", obe_mdate() - coded_frame->arrival_time );
             }
 
-            add_to_queue( &h->mux_queue, coded_frame );
+            add_to_queue( &h->enc_smoothing_queue, coded_frame );
         }
      }
 
