@@ -24,13 +24,6 @@
 #ifndef OBE_FILTERS_VIDEO_H
 #define OBE_FILTERS_VIDEO_H
 
-#include <libavfilter/avfiltergraph.h>
-#include <libavformat/avformat.h>
-#include <libavcodec/avcodec.h>
-#include <libswscale/swscale.h>
-
-#define MAX_BACKUP_FRAMES 10 // arbitrary
-
 typedef struct
 {
     void* (*start_filter)( void *ptr );
@@ -45,53 +38,5 @@ typedef struct
 } obe_vid_filter_params_t;
 
 extern const obe_vid_filter_func_t video_filter;
-
-typedef struct
-{
-    /* cpu flags */
-    uint32_t avutil_cpu;
-
-    /* upscaling */
-    void (*scale_plane)( uint16_t *src, int stride, int width, int height, int lshift, int rshift );
-
-    /* downscaling */
-    struct SwsContext *sws_ctx;
-    int sws_ctx_flags;
-    enum PixelFormat dst_pix_fmt;
-
-    /* dither */
-    void (*dither_row_10_to_8)( uint16_t *src, uint8_t *dst, const uint16_t *dithers, int width, int stride );
-    int16_t *error_buf;
-
-    /* libavfilter */
-    obe_filter_opts_t filter_opts;
-
-    AVFilterGraph *filter_graph;
-    AVFilterContext *video_src;
-    AVFilterContext *yadif;
-    AVFilterContext *hqdn3d;
-    AVFilterContext *resize;
-    AVFilterContext *logo_src;
-    AVFilterContext *overlay;
-    AVFilterContext *video_sink;
-
-    int64_t last_pts;
-    int timebase_num;
-    int timebase_den;
-    int sar_width;
-    int sar_height;
-    int64_t output_frames;
-    int bak_frames;
-    int last_output;
-    obe_raw_frame_t raw_frame_bak[MAX_BACKUP_FRAMES];
-
-    /* logo */
-    struct SwsContext *logo_sws_ctx;
-    AVFormatContext *logo_format;
-    AVCodec         *dec;
-    AVCodecContext  *codec;
-    obe_image_t logo;
-
-} obe_vid_filter_ctx_t;
 
 #endif

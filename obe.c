@@ -680,13 +680,6 @@ fail:
     return -1;
 }
 
-int obe_setup_filtering( obe_t *h, obe_filter_opts_t *filter_opts )
-{
-    memcpy( &h->filter_opts, filter_opts, sizeof(obe_filter_opts_t) );
-
-    return 0;
-}
-
 int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t *param )
 {
     obe_int_input_stream_t *stream = get_input_stream( h, input_stream_id );

@@ -47,7 +47,6 @@ typedef struct
     obe_input_t input;
     obe_input_program_t program;
     int num_output_streams;
-    obe_filter_opts_t filter_opts;
     obe_output_stream_t *output_streams;
     obe_mux_opts_t mux_opts;
     obe_output_opts_t output;
@@ -85,7 +84,6 @@ static const char * system_opts[] = { "system-type", NULL };
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", "ttx-location",
                                       "wss-output", NULL };
 static const char * add_opts[] =    { "type" };
-static const char * filter_opts[] = { "yadif", "yadif-mode", "denoise", "denoise-opts", "resize-res", "logo-filename", "logo-opts", "logo-transparency" };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
                                       /* Encoding options */
@@ -534,83 +532,6 @@ static int set_input( char *command, obecli_command_t *child )
     {
         FAIL_IF_ERROR( ( check_enum_value( command, input_types ) < 0 ), "Invalid input type\n" );
         parse_enum_value( command, input_types, &cli.input.input_type );
-    }
-
-    return 0;
-}
-
-static int set_filter( char *command, obecli_command_t *child )
-{
-    FAIL_IF_ERROR( !cli.num_output_streams, "no output streams \n" );
-
-    if( !strlen( command ) )
-        return -1;
-
-    int tok_len = strcspn( command, " " );
-    int str_len = strlen( command );
-    command[tok_len] = 0;
-
-    if( !strcasecmp( command, "opts" ) && str_len > tok_len )
-    {
-        char *params = command + tok_len + 1;
-        char **opts = obe_split_options( params, filter_opts );
-        if( !opts && params )
-            return -1;
-
-        char *yadif     = obe_get_option( filter_opts[0], opts );
-        char *yadif_mode = obe_get_option( filter_opts[1], opts );
-        char *denoise = obe_get_option( filter_opts[2], opts );
-        char *denoise_opts = obe_get_option( filter_opts[3], opts );
-        char *resize_res = obe_get_option( filter_opts[4], opts );
-        char *logo_filename = obe_get_option( filter_opts[5], opts );
-        char *logo_opts = obe_get_option( filter_opts[6], opts );
-        char *logo_transparency = obe_get_option( filter_opts[7], opts );
-
-        cli.filter_opts.deinterlace = obe_otob( yadif, cli.filter_opts.deinterlace );
-        cli.filter_opts.yadif_mode = obe_otob( yadif_mode, cli.filter_opts.yadif_mode );
-        cli.filter_opts.denoise = obe_otob( denoise, cli.filter_opts.denoise );
-
-        if( cli.filter_opts.yadif_mode == 1 )
-            cli.output_streams[0].avc_param.i_fps_num <<= 1;
-
-        if( denoise_opts )
-        {
-            if( cli.filter_opts.denoise_opts )
-                free( cli.filter_opts.denoise_opts );
-
-            cli.filter_opts.denoise_opts = malloc( strlen( denoise_opts ) + 1 );
-            FAIL_IF_ERROR( !cli.filter_opts.denoise_opts , "malloc failed\n" );
-            strcpy( cli.filter_opts.denoise_opts, denoise_opts );
-        }
-
-        if( resize_res )
-        {
-            sscanf( resize_res, "%dx%d", &cli.filter_opts.resize_width, &cli.filter_opts.resize_height );
-            cli.output_streams[0].avc_param.i_width = cli.filter_opts.resize_width;
-            cli.output_streams[0].avc_param.i_height = cli.filter_opts.resize_height;
-        }
-
-        if( logo_filename )
-        {
-            if( cli.filter_opts.logo_filename )
-                free( cli.filter_opts.logo_filename );
-
-            cli.filter_opts.logo_filename = malloc( strlen( logo_filename ) + 1 );
-            FAIL_IF_ERROR( !cli.filter_opts.logo_filename , "malloc failed\n" );
-            strcpy( cli.filter_opts.logo_filename, logo_filename );
-        }
-
-        if( logo_opts )
-        {
-            if( cli.filter_opts.logo_opts )
-                free( cli.filter_opts.logo_opts );
-
-            cli.filter_opts.logo_opts = malloc( strlen( logo_opts ) + 1 );
-            FAIL_IF_ERROR( !cli.filter_opts.logo_opts , "malloc failed\n" );
-            strcpy( cli.filter_opts.logo_opts, logo_opts );
-        }
-
-        cli.filter_opts.logo_transparency = obe_otoi( logo_transparency, cli.filter_opts.logo_transparency );
     }
 
     return 0;
@@ -1287,7 +1208,6 @@ static int start_encode( char *command, obecli_command_t *child )
         return -1;
     }
 
-    obe_setup_filtering( cli.h, &cli.filter_opts );
     obe_setup_streams( cli.h, cli.output_streams, cli.num_output_streams );
     obe_setup_muxer( cli.h, &cli.mux_opts );
     obe_setup_output( cli.h, &cli.output );

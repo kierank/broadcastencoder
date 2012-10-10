@@ -45,7 +45,6 @@ static int probe_device( char *command, obecli_command_t *child );
 
 static int set_obe( char *command, obecli_command_t *child );
 static int set_input( char *command, obecli_command_t *child );
-static int set_filter( char *command, obecli_command_t *child );
 static int set_stream( char *command, obecli_command_t *child );
 static int set_muxer( char *command, obecli_command_t *child );
 static int set_output( char *command, obecli_command_t *child );
@@ -139,7 +138,6 @@ static obecli_command_t set_commands[] =
 {
     { "obe",    "opts [opts]",            "Set OBE options",                set_obe,    NULL },
     { "input",  "opts [opts]",            "Set input options",              set_input,  NULL },
-    { "filter", "opts [opts]",            "Set filter options",             set_filter,  NULL },
     { "stream", "opts streamid:[opts]",   "Set stream options",             set_stream, NULL },
     { "muxer",  "[name] OR opts [opts]",  "Set muxer name or muxer opts",   set_muxer,  NULL },
     { "mux",    "[name] OR opts [opts]",  "Set muxer name or muxer opts",   set_muxer,  NULL },

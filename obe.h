@@ -316,22 +316,6 @@ int obe_convert_smpte_to_analogue( int format, int line_smpte, int *line_analogu
  * Returns -1 if format is a progressive format */
 int obe_convert_analogue_to_smpte( int format, int line_analogue, int field, int *line_smpte );
 
-/**** Filtering - AVG SPECIFIC! *****/
-typedef struct
-{
-    int deinterlace;
-    int yadif_mode;
-    int denoise;
-    char *denoise_opts;
-    int resize_width;
-    int resize_height;
-    char *logo_filename;
-    char *logo_opts;
-    int logo_transparency;
-} obe_filter_opts_t;
-
-int obe_setup_filtering( obe_t *h, obe_filter_opts_t *filter_opts );
-
 /**** AVC Encoding ****/
 /* Use this function to let OBE guess the encoding profile.
  * You can use the functions in the x264 API for tweaking or edit the parameter struct directly.

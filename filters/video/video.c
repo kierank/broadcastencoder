@@ -30,7 +30,7 @@
 #include "dither.h"
 #include "x86/vfilter.h"
 #include "input/sdi/sdi.h"
-#include "lavfi.h"
+
 
 #if X264_BIT_DEPTH > 8
 typedef uint16_t pixel;
@@ -40,6 +40,24 @@ typedef uint8_t pixel;
 
 #define PAL_FIRST_NON_BLANKED  24
 #define NTSC_FIRST_NON_BLANKED 22
+
+typedef struct
+{
+    /* cpu flags */
+    uint32_t avutil_cpu;
+
+    /* upscaling */
+    void (*scale_plane)( uint16_t *src, int stride, int width, int height, int lshift, int rshift );
+
+    /* downscaling */
+    struct SwsContext *sws_ctx;
+    int sws_ctx_flags;
+    enum PixelFormat dst_pix_fmt;
+
+    /* dither */
+    void (*dither_row_10_to_8)( uint16_t *src, uint8_t *dst, const uint16_t *dithers, int width, int stride );
+    int16_t *error_buf;
+} obe_vid_filter_ctx_t;
 
 typedef struct
 {
@@ -179,7 +197,7 @@ static void dither_row_10_to_8_c( uint16_t *src, uint8_t *dst, const uint16_t *d
 
 }
 
-static int init_filter( obe_vid_filter_ctx_t *vfilt )
+static void init_filter( obe_vid_filter_ctx_t *vfilt )
 {
     vfilt->avutil_cpu = av_get_cpu_flags();
 
@@ -204,7 +222,6 @@ static int init_filter( obe_vid_filter_ctx_t *vfilt )
     if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX )
         vfilt->dither_row_10_to_8 = obe_dither_row_10_to_8_avx;
 
-    return 0;
 }
 
 static void blank_lines( obe_raw_frame_t *raw_frame )
@@ -614,10 +631,7 @@ static void *start_filter( void *ptr )
         goto end;
     }
 
-    if( init_filter( vfilt ) < 0 )
-        goto end;
-
-    memcpy( &vfilt->filter_opts, &h->filter_opts, sizeof(h->filter_opts) );
+    init_filter( vfilt );
 
     while( 1 )
     {
@@ -652,7 +666,7 @@ static void *start_filter( void *ptr )
 
         if( filter_params->target_csp == X264_CSP_I420 && ( raw_frame->img.csp == PIX_FMT_YUV422P || raw_frame->img.csp == PIX_FMT_YUV422P10 ) )
         {
-            if( downconvert_frame( vfilt, raw_frame, raw_frame->img.width ) < 0 )
+            if( downconvert_frame( vfilt, raw_frame, output_stream->avc_param.i_width ) < 0 )
                 goto end;
         }
 
@@ -673,11 +687,8 @@ static void *start_filter( void *ptr )
             raw_frame->sar_guess = 1;
         }
 
-        if( !vfilt->filter_graph && init_lavfi( vfilt, raw_frame ) < 0 )
-            goto end;
-
-        lavfi_filter_frame( h, vfilt, raw_frame ); // frame enqueued in this function
         remove_from_queue( &filter->queue );
+        add_to_encode_queue( h, raw_frame, 0 );
     }
 
 end:
