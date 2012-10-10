@@ -404,6 +404,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             pkt.data = (uint8_t*)frame_bytes;
             pkt.size = stride * height;
 
+            memset( &frame, 0, sizeof(frame) );
             avcodec_get_frame_defaults( &frame );
             ret = avcodec_decode_video2( decklink_ctx->codec, &frame, &finished, &pkt );
             if( ret < 0 || !finished )
