@@ -25,6 +25,6 @@
 #define OBE_FILTERS_VIDEO_CC_H
 
 int write_608_cc( obe_user_data_t *user_data, obe_raw_frame_t *raw_frame );
-int write_cdp( obe_user_data_t *user_data );
+int read_cdp( obe_user_data_t *user_data );
 
 #endif
