@@ -232,7 +232,7 @@ static int write_708_cc( obe_user_data_t *user_data, uint8_t *start, int cc_coun
     return 0;
 }
 
-int write_cdp( obe_user_data_t *user_data )
+int read_cdp( obe_user_data_t *user_data )
 {
     uint8_t *start = NULL;
     int cc_count = 0;

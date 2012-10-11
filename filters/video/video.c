@@ -600,7 +600,7 @@ static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stre
         if( raw_frame->user_data[i].type == USER_DATA_CEA_608 )
             ret = write_608_cc( &raw_frame->user_data[i], raw_frame );
         else if( raw_frame->user_data[i].type == USER_DATA_CEA_708_CDP )
-            ret = write_cdp( &raw_frame->user_data[i] );
+            ret = read_cdp( &raw_frame->user_data[i] );
         else if( raw_frame->user_data[i].type == USER_DATA_AFD )
             ret = write_afd( &raw_frame->user_data[i], raw_frame );
         else if( raw_frame->user_data[i].type == USER_DATA_BAR_DATA )
