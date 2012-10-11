@@ -205,7 +205,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     decklink_ctx_t *decklink_ctx = &decklink_opts_->decklink_ctx;
     obe_raw_frame_t *raw_frame = NULL;
     AVPacket pkt;
-    AVFrame frame;
+    AVFrame *frame = NULL;
     void *frame_bytes, *anc_line;
     obe_t *h = decklink_ctx->h;
     int finished = 0, ret, bytes, num_anc_lines = 0, anc_line_stride,
@@ -390,15 +390,19 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
         if( !decklink_opts_->probe )
         {
+            frame = avcodec_alloc_frame();
+            if( !frame )
+            {
+                syslog( LOG_ERR, "[decklink]: Could not allocate video frame\n" );
+                goto end;
+            }
             decklink_ctx->codec->width = width;
             decklink_ctx->codec->height = height;
 
             pkt.data = (uint8_t*)frame_bytes;
             pkt.size = stride * height;
 
-            memset( &frame, 0, sizeof(frame) );
-            avcodec_get_frame_defaults( &frame );
-            ret = avcodec_decode_video2( decklink_ctx->codec, &frame, &finished, &pkt );
+            ret = avcodec_decode_video2( decklink_ctx->codec, frame, &finished, &pkt );
             if( ret < 0 || !finished )
             {
                 syslog( LOG_ERR, "[decklink]: Could not decode video frame\n" );
@@ -408,8 +412,9 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             raw_frame->release_data = obe_release_video_data;
             raw_frame->release_frame = obe_release_frame;
 
-            memcpy( raw_frame->alloc_img.stride, frame.linesize, sizeof(raw_frame->alloc_img.stride) );
-            memcpy( raw_frame->alloc_img.plane, frame.data, sizeof(raw_frame->alloc_img.plane) );
+            memcpy( raw_frame->alloc_img.stride, frame->linesize, sizeof(raw_frame->alloc_img.stride) );
+            memcpy( raw_frame->alloc_img.plane, frame->data, sizeof(raw_frame->alloc_img.plane) );
+            avcodec_free_frame( &frame );
             raw_frame->alloc_img.csp = (int)decklink_ctx->codec->pix_fmt;
             raw_frame->alloc_img.planes = av_pix_fmt_descriptors[raw_frame->alloc_img.csp].nb_components;
             raw_frame->alloc_img.width = width;
@@ -492,6 +497,9 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     }
 
 end:
+    if( frame )
+        avcodec_free_frame( &frame );
+
     av_free_packet( &pkt );
 
     return S_OK;

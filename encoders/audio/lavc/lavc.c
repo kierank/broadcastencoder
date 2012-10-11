@@ -58,7 +58,7 @@ static void *start_encoder( void *ptr )
     AVAudioResampleContext *avr = NULL;
     AVPacket pkt;
     AVCodecContext *codec = NULL;
-    AVFrame frame;
+    AVFrame *frame = NULL;
     AVDictionary *opts = NULL;
     char is_latm[2];
 
@@ -168,7 +168,12 @@ static void *start_encoder( void *ptr )
         goto finish;
     }
 
-    avcodec_get_frame_defaults( &frame );
+    frame = avcodec_alloc_frame();
+    if( !frame )
+    {
+        fprintf( stderr, "Could not allocate frame\n" );
+        goto finish;
+    }
 
     while( 1 )
     {
@@ -208,10 +213,11 @@ static void *start_encoder( void *ptr )
         while( avresample_available( avr ) >= codec->frame_size )
         {
             got_pkt = 0;
-            frame.nb_samples = codec->frame_size;
+            avcodec_get_frame_defaults( frame );
+            frame->nb_samples = codec->frame_size;
             avresample_read( avr, &audio_buf, codec->frame_size );
 
-            if( avcodec_fill_audio_frame( &frame, codec->channels, codec->sample_fmt, audio_buf, audio_buf_len, 0 ) < 0 )
+            if( avcodec_fill_audio_frame( frame, codec->channels, codec->sample_fmt, audio_buf, audio_buf_len, 0 ) < 0 )
             {
                 syslog( LOG_ERR, "[lavc] Could not fill audio frame\n" );
                 break;
@@ -221,7 +227,7 @@ static void *start_encoder( void *ptr )
             pkt.data = NULL;
             pkt.size = 0;
 
-            ret = avcodec_encode_audio2( codec, &pkt, &frame, &got_pkt );
+            ret = avcodec_encode_audio2( codec, &pkt, frame, &got_pkt );
             if( ret < 0 )
             {
                 syslog( LOG_ERR, "[lavc] Audio encoding failed\n" );
@@ -266,6 +272,9 @@ static void *start_encoder( void *ptr )
     }
 
 finish:
+    if( frame )
+       avcodec_free_frame( &frame );
+
     if( audio_buf )
         av_free( audio_buf );
 
