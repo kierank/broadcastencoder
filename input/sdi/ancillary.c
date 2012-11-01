@@ -293,7 +293,7 @@ int parse_vanc_line( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame
             i += 3;
             int len = READ_8( line[i+2] );
 
-            if( len > (width - i - 1) )
+            if( (len+2) > (width - i - 1) )
             {
                 syslog( LOG_ERR, "VANC packet length too large on line %i \n", line_number );
                 break;
@@ -314,8 +314,8 @@ int parse_vanc_line( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame
                 default:
                     break;
             }
-            /* skip user data words and checksum */
-            i += len + 1;
+            /* skip DID, DBN/SDID, user data words and checksum */
+            i += 2 + len + 1;
         }
         else
             i++;
