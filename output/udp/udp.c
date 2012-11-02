@@ -48,6 +48,7 @@ static void *open_output( void *ptr )
     obe_t *h = output_params->h;
     struct udp_status status;
     hnd_t udp_handle = NULL;
+    obe_udp_opts_t udp_opts;
     int num_muxed_data = 0;
     uint8_t **muxed_data;
 
@@ -59,7 +60,8 @@ static void *open_output( void *ptr )
     status.udp_handle = &udp_handle;
     pthread_cleanup_push( close_output, (void*)&status );
 
-    if( udp_open( &udp_handle, output_params->output_opts.target ) < 0 )
+    udp_populate_opts( &udp_opts, output_params->output_opts.target );
+    if( udp_open( &udp_handle, &udp_opts ) < 0 )
     {
         fprintf( stderr, "[udp] Could not create output\n" );
         return NULL;
