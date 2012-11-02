@@ -24,19 +24,7 @@
 #ifndef OBE_COMMON_UDP_H
 #define OBE_COMMON_UDP_H
 
-typedef struct obe_udp_opts_t
-{
-    char hostname[1024];
-    int  port;
-    int  local_port;
-    int  reuse_socket;
-    int  ttl;
-    int  buffer_size;
-    int  miface;
-} obe_udp_opts_t;
-
-void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri );
-int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts );
+int udp_open( hnd_t *p_handle, char *target );
 int udp_write( hnd_t p_handle, uint8_t *buf, int size );
 void udp_close( hnd_t handle );
 
