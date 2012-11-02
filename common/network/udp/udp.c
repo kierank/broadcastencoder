@@ -29,17 +29,19 @@
 
 typedef struct
 {
-    int udp_fd;
+    char hostname[1024];
+    int port;
     int ttl;
+    int miface;
     int buffer_size;
+    int reuse_socket;
+    int is_connected;
+
+    int udp_fd;
     int is_multicast;
     int local_port;
-    int reuse_socket;
     struct sockaddr_storage dest_addr;
     int dest_addr_len;
-    int is_connected;
-    int max_packet_size;
-    int miface;
 } obe_udp_ctx;
 
 static int udp_set_multicast_opts( int sockfd, obe_udp_ctx *s )
@@ -196,102 +198,79 @@ static int udp_port( struct sockaddr_storage *addr, int addr_len )
  * @param uri of the remote server
  * @return zero if no error.
  */
-static int udp_set_remote_url( obe_udp_ctx *s, const char *uri )
+static int udp_set_remote_url( obe_udp_ctx *s )
 {
-    char hostname[256], buf[10];
-    int port;
-    const char *p;
-
-    av_url_split( NULL, 0, NULL, 0, hostname, sizeof(hostname), &port, NULL, 0, uri );
-
     /* set the destination address */
-    s->dest_addr_len = udp_set_url(&s->dest_addr, hostname, port);
+    s->dest_addr_len = udp_set_url( &s->dest_addr, s->hostname, s->port );
     if( s->dest_addr_len < 0 )
         return -1;
 
     s->is_multicast = is_multicast_address( (struct sockaddr*) &s->dest_addr );
-    p = strchr(uri, '?');
-    if( p )
-    {
-        if( av_find_info_tag( buf, sizeof(buf), "connect", p ) )
-        {
-            int was_connected = s->is_connected;
-            s->is_connected = strtol( buf, NULL, 10 );
-            if( s->is_connected && !was_connected )
-            {
-                if( connect( s->udp_fd, (struct sockaddr *) &s->dest_addr, s->dest_addr_len ) )
-                {
-                    s->is_connected = 0;
-                    fprintf( stderr, "[udp]: connect() failed: \n" );
-                    return -1;
-                }
-            }
-        }
-    }
 
     return 0;
 }
 
-int udp_open( hnd_t *p_handle, char *uri )
+void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri )
 {
-    char hostname[1024];
-    int port, udp_fd = -1, tmp, bind_ret = -1;
-    const char *p;
     char buf[256];
+    const char *p = strchr( uri, '?' );
+
+    memset( udp_opts, 0, sizeof(*udp_opts) );
+
+    if( p )
+    {
+        if( av_find_info_tag( buf, sizeof(buf), "reuse", p ) )
+        {
+            const char *endptr = NULL;
+            udp_opts->reuse_socket = strtol( buf, (char **)&endptr, 10 );
+            /* assume if no digits were found it is a request to enable it */
+            if( buf == endptr )
+                udp_opts->reuse_socket = 1;
+        }
+        if( av_find_info_tag( buf, sizeof(buf), "ttl", p ) )
+            udp_opts->ttl = strtol( buf, NULL, 10 );
+
+        if( av_find_info_tag( buf, sizeof(buf), "localport", p ) )
+            udp_opts->local_port = strtol( buf, NULL, 10 );
+
+        if( av_find_info_tag( buf, sizeof(buf), "buffer_size", p ) )
+            udp_opts->buffer_size = strtol( buf, NULL, 10 );
+
+        if( av_find_info_tag( buf, sizeof(buf), "miface", p ) )
+            udp_opts->miface = if_nametoindex( buf );
+    }
+
+    /* fill the dest addr */
+    av_url_split( NULL, 0, NULL, 0, udp_opts->hostname, sizeof(udp_opts->hostname), &udp_opts->port, NULL, 0, uri );
+}
+
+int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
+{
+    int udp_fd = -1, tmp, bind_ret = -1;
     struct sockaddr_storage my_addr;
     int len;
-    int reuse_specified = 0;
 
     obe_udp_ctx *s = calloc( 1, sizeof(*s) );
     *p_handle = NULL;
     if( !s )
         return -1;
 
-    p = strchr( uri, '?' );
-    if( p )
-    {
-        if( av_find_info_tag( buf, sizeof(buf), "reuse", p ) )
-        {
-            const char *endptr = NULL;
-            s->reuse_socket = strtol( buf, (char **)&endptr, 10 );
-            /* assume if no digits were found it is a request to enable it */
-            if( buf == endptr )
-                s->reuse_socket = 1;
-            reuse_specified = 1;
-        }
-        if( av_find_info_tag( buf, sizeof(buf), "ttl", p ) )
-            s->ttl = strtol( buf, NULL, 10 );
+    strncpy( s->hostname, udp_opts->hostname, sizeof(s->hostname) );
+    s->port = udp_opts->port;
+    s->local_port = udp_opts->local_port;
+    s->reuse_socket = udp_opts->reuse_socket;
+    s->ttl = udp_opts->ttl;
+    s->buffer_size = udp_opts->buffer_size;
+    s->miface = udp_opts->miface;
 
-        if( av_find_info_tag( buf, sizeof(buf), "localport", p ) )
-            s->local_port = strtol( buf, NULL, 10 );
-
-        if( av_find_info_tag( buf, sizeof(buf), "pkt_size", p ) )
-            s->max_packet_size = strtol( buf, NULL, 10 );
-
-        if( av_find_info_tag( buf, sizeof(buf), "buffer_size", p ) )
-            s->buffer_size = strtol( buf, NULL, 10 );
-
-        if( av_find_info_tag( buf, sizeof(buf), "connect", p ) )
-            s->is_connected = strtol( buf, NULL, 10 );
-
-        if( av_find_info_tag( buf, sizeof(buf), "miface", p ) )
-            s->miface = if_nametoindex( buf );
-    }
-
-    /* fill the dest addr */
-    av_url_split( NULL, 0, NULL, 0, hostname, sizeof(hostname), &port, NULL, 0, uri );
-
-    if( udp_set_remote_url( s, uri ) < 0 )
+    if( udp_set_remote_url( s ) < 0 )
         goto fail;
 
     udp_fd = udp_socket_create( s, &my_addr, &len );
     if( udp_fd < 0 )
         goto fail;
 
-    /* Follow the requested reuse option, unless it's multicast in which
-     * case enable reuse unless explicitely disabled.
-     */
-    if( s->reuse_socket || (s->is_multicast && !reuse_specified) )
+    if( s->reuse_socket || s->is_multicast )
     {
         s->reuse_socket = 1;
         if( setsockopt( udp_fd, SOL_SOCKET, SO_REUSEADDR, &(s->reuse_socket), sizeof(s->reuse_socket) ) != 0)

@@ -73,6 +73,8 @@ static uint64_t obe_ntp_time(void)
 
 static int rtp_open( hnd_t *p_handle, char *target )
 {
+    obe_udp_opts_t udp_opts;
+
     obe_rtp_ctx *p_rtp = calloc( 1, sizeof(*p_rtp) );
     if( !p_rtp )
     {
@@ -80,7 +82,8 @@ static int rtp_open( hnd_t *p_handle, char *target )
         return -1;
     }
 
-    if( udp_open( &p_rtp->udp_handle, target ) < 0 )
+    udp_populate_opts( &udp_opts, target );
+    if( udp_open( &p_rtp->udp_handle, &udp_opts ) < 0 )
     {
         fprintf( stderr, "[rtp] Could not create udp output" );
         return -1;
