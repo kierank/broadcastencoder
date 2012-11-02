@@ -279,7 +279,8 @@ static int parse_cea_608( uint16_t *line )
 int parse_vanc_line( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame, uint16_t *line, int width,
                      int line_number )
 {
-    int i = 0;
+    int i = 0, j;
+    uint16_t vanc_checksum, *pkt_start;
 
     /* VANC can be in luma or chroma */
     width <<= 1;
@@ -291,7 +292,9 @@ int parse_vanc_line( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame
         if( line[i] <= 0x03 && (line[i+1] & 0x3fc) == 0x3fc && (line[i+2] & 0x3fc) == 0x3fc )
         {
             i += 3;
-            int len = READ_8( line[i+2] );
+            pkt_start = &line[i];
+            int len = READ_8( pkt_start[2] );
+            vanc_checksum = 0;
 
             if( (len+2) > (width - i - 1) )
             {
@@ -299,21 +302,36 @@ int parse_vanc_line( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame
                 break;
             }
 
-            /* Pass the DC word to the parsing function because some parsers may want to sanity check the length */
-            switch ( get_vanc_type( READ_8( line[i] ), READ_8( line[i+1] ) ) )
+            /* Checksum includes DC, DID and SDID/DBN */
+            for( j = 0; j < len+3; j++ )
             {
-                case MISC_AFD:
-                    parse_afd( non_display_data, raw_frame, &line[i+2], line_number, len );
-                    break;
-                case VANC_DVB_SCTE_VBI:
-                    parse_dvb_scte_vbi( non_display_data, raw_frame, &line[i+2], line_number, len );
-                    break;
-                case CAPTIONS_CEA_708:
-                    parse_cdp( non_display_data, raw_frame, &line[i+2], line_number, len );
-                    break;
-                default:
-                    break;
+                vanc_checksum += pkt_start[j] & 0x1ff;
+                vanc_checksum &= 0x1ff;
             }
+
+            vanc_checksum |= (~vanc_checksum & 0x100) << 1;
+
+            if( pkt_start[j] == vanc_checksum )
+            {
+                /* Pass the DC word to the parsing function because some parsers may want to sanity check the length */
+                switch ( get_vanc_type( READ_8( pkt_start[0] ), READ_8( pkt_start[1] ) ) )
+                {
+                    case MISC_AFD:
+                        parse_afd( non_display_data, raw_frame, &pkt_start[2], line_number, len );
+                        break;
+                    case VANC_DVB_SCTE_VBI:
+                        parse_dvb_scte_vbi( non_display_data, raw_frame, &pkt_start[2], line_number, len );
+                        break;
+                    case CAPTIONS_CEA_708:
+                        parse_cdp( non_display_data, raw_frame, &pkt_start[2], line_number, len );
+                        break;
+                    default:
+                        break;
+                }
+            }
+            else
+                syslog( LOG_ERR, "Invalid VANC checksum on line %i \n", line_number );
+
             /* skip DID, DBN/SDID, user data words and checksum */
             i += 2 + len + 1;
         }
