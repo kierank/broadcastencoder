@@ -314,9 +314,21 @@ int read_cdp( obe_user_data_t *user_data )
         }
         else if( section_id == CDP_FOOTER_SECTION_ID )
         {
-            /* TODO: use these for packet verification? */
             bs_skip( &s, 16 ); // cdp_ftr_sequence_cntr
-            bs_skip( &s, 8 );  // packet_checksum
+            int cs_pos = bs_read_pos( &s ) / 8;
+            uint8_t written_cs, calc_cs = 0;
+            for( int i = 0; i < cs_pos; i++ )
+                calc_cs += user_data->data[i];
+
+            calc_cs = calc_cs ? 256 - calc_cs : 0;
+            written_cs = bs_read( &s, 8 );  // packet_checksum
+
+            if( calc_cs != written_cs )
+            {
+                syslog( LOG_ERR, "Invalid checksum in Caption Distribution Packet \n" );
+                return 0;
+            }
+
             break;
         }
         else // future_section
