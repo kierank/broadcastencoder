@@ -234,7 +234,7 @@ static int write_708_cc( obe_user_data_t *user_data, uint8_t *start, int cc_coun
 
 int read_cdp( obe_user_data_t *user_data )
 {
-    uint8_t *start = NULL;
+    uint8_t *start = NULL, calc_cs = 0;
     int cc_count = 0;
     bs_read_t s;
     bs_read_init( &s, user_data->data, user_data->len );
@@ -242,6 +242,17 @@ int read_cdp( obe_user_data_t *user_data )
     // cdp_header
     if( bs_read( &s, 16 ) != CDP_IDENTIFIER )
         return 0;
+
+    /* Verify Checksum */
+    for( int i = 0; i < user_data->len - 1; i++ )
+        calc_cs += user_data->data[i];
+
+    calc_cs = calc_cs ? 256 - calc_cs : 0;
+    if( calc_cs != user_data->data[user_data->len -1] )
+    {
+        syslog( LOG_ERR, "Invalid checksum in Caption Distribution Packet \n" );
+        return 0;
+    }
 
     bs_skip( &s, 8 ); // cdp_length
     bs_skip( &s, 4 ); // cdp_frame_rate
@@ -315,20 +326,7 @@ int read_cdp( obe_user_data_t *user_data )
         else if( section_id == CDP_FOOTER_SECTION_ID )
         {
             bs_skip( &s, 16 ); // cdp_ftr_sequence_cntr
-            int cs_pos = bs_read_pos( &s ) / 8;
-            uint8_t written_cs, calc_cs = 0;
-            for( int i = 0; i < cs_pos; i++ )
-                calc_cs += user_data->data[i];
-
-            calc_cs = calc_cs ? 256 - calc_cs : 0;
-            written_cs = bs_read( &s, 8 );  // packet_checksum
-
-            if( calc_cs != written_cs )
-            {
-                syslog( LOG_ERR, "Invalid checksum in Caption Distribution Packet \n" );
-                return 0;
-            }
-
+            bs_skip( &s, 8 );  // packet_checksum
             break;
         }
         else // future_section
