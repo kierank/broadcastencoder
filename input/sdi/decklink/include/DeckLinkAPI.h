@@ -285,6 +285,8 @@ enum _BMDDeckLinkAttributeID {
     BMDDeckLinkHasVideoInputAntiAliasingFilter                   = /* 'aafl' */ 0x6161666C,
     BMDDeckLinkHasBypass                                         = /* 'byps' */ 0x62797073,
     BMDDeckLinkSupportsDesktopDisplay                            = /* 'extd' */ 0x65787464,
+    BMDDeckLinkDeviceIsPlaybackOnly                              = /* 'play' */ 0x706C6179,
+    BMDDeckLinkDeviceIsCaptureOnly                               = /* 'capt' */ 0x63617074,
 
     /* Integers */
 
