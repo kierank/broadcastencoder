@@ -205,6 +205,7 @@ static const obecli_output_name_t output_names[] =
 {
     { OUTPUT_UDP, "UDP",  "MPEG-TS in UDP",        "internal" },
     { OUTPUT_RTP, "RTP",  "MPEG-TS in RTP in UDP", "internal" },
+    { OUTPUT_LINSYS_ASI, "LINSYS-ASI",  "Linsys ASI card", "internal" },
     { 0, 0, 0, 0 },
 };
 #endif

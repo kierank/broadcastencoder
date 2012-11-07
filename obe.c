@@ -868,8 +868,15 @@ int obe_start( obe_t *h )
 
     if( h->output_opts.output == OUTPUT_UDP )
         output = udp_output;
-    else
+    else if( h->output_opts.output == OUTPUT_RTP )
         output = rtp_output;
+    else if( h->output_opts.output == OUTPUT_LINSYS_ASI )
+        output = linsys_asi_output;
+    else
+    {
+        fprintf( stderr, "Invalid output device \n" );
+        goto fail;
+    }
 
     /* Open Output Thread */
     out_params = calloc( 1, sizeof(*out_params) );

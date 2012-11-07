@@ -102,7 +102,7 @@ static const char * stream_opts[] = { "action", "format",
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrough", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
-static const char * output_opts[] = { "target", NULL };
+static const char * output_opts[] = { "target", "card-idx", "asi-bitrate", "asi-bufsize", "asi-buffers", NULL };
 
 const static int allowed_resolutions[17][2] =
 {
@@ -834,6 +834,10 @@ static int set_muxer( char *command, obecli_command_t *child )
         cli.mux_opts.cbr = obe_otob( ts_cbr, cli.mux_opts.cbr );
         cli.mux_opts.ts_muxrate = obe_otoi( ts_muxrate, cli.mux_opts.ts_muxrate );
 
+        /* Set the ASI output bitrate to the muxrate */
+        if( !cli.output.asi_bitrate )
+            cli.output.asi_bitrate = cli.mux_opts.ts_muxrate;
+
         cli.mux_opts.passthrough = obe_otob( passthrough, cli.mux_opts.passthrough );
         cli.mux_opts.ts_id = obe_otoi( ts_id, cli.mux_opts.ts_id );
         cli.mux_opts.program_num = obe_otoi( program_num, cli.mux_opts.program_num );
@@ -864,6 +868,16 @@ static int set_output( char *command, obecli_command_t *child )
             return -1;
 
         char *target = obe_get_option( output_opts[0], opts );
+        char *card_idx = obe_get_option( output_opts[1], opts );
+        char *asi_bitrate = obe_get_option( output_opts[2], opts );
+        char *asi_bufsize = obe_get_option( output_opts[3], opts );
+        char *asi_buffers = obe_get_option( output_opts[4], opts );
+
+        FAIL_IF_ERROR( asi_bufsize && ( obe_otoi( asi_bufsize, cli.output.asi_bufsize ) % 188 ),
+                       "ASI buffer size must be a multiple of 188 \n" )
+
+        // TODO others
+
         if( target )
         {
              if( cli.output.target )
@@ -873,6 +887,11 @@ static int set_output( char *command, obecli_command_t *child )
              FAIL_IF_ERROR( !cli.output.target, "malloc failed\n" );
              strcpy( cli.output.target, target );
         }
+        cli.output.card_idx = obe_otoi( card_idx, cli.output.card_idx );
+        cli.output.asi_bitrate = obe_otof( asi_bitrate, cli.output.asi_bitrate );
+        cli.output.asi_bufsize = obe_otoi( asi_bufsize, cli.output.asi_bufsize );
+        cli.output.asi_buffers = obe_otoi( asi_buffers, cli.output.asi_buffers );
+
         obe_free_string_array( opts );
     }
     else
@@ -1206,6 +1225,11 @@ static int start_encode( char *command, obecli_command_t *child )
     {
         fprintf( stderr, "No output target chosen\n" );
         return -1;
+    }
+    else if( cli.output.output == OUTPUT_LINSYS_ASI )
+    {
+        /* ASI is inherently CBR */
+        cli.mux_opts.cbr = 1;
     }
 
     obe_setup_streams( cli.h, cli.output_streams, cli.num_output_streams );

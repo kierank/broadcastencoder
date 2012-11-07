@@ -94,6 +94,7 @@ enum input_type_e
     INPUT_URL,
     INPUT_DEVICE_DECKLINK,
     INPUT_DEVICE_LINSYS_SDI,
+    INPUT_DEVICE_LINSYS_ASI,
 //    INPUT_DEVICE_V4L2,
 //    INPUT_DEVICE_ASI,
 };
@@ -468,6 +469,7 @@ enum output_e
 {
     OUTPUT_UDP, /* MPEG-TS in UDP */
     OUTPUT_RTP, /* MPEG-TS in RTP in UDP */
+    OUTPUT_LINSYS_ASI,
 //    OUTPUT_LINSYS_ASI,
 //    OUTPUT_LINSYS_SMPTE_310M,
 };
@@ -476,12 +478,23 @@ enum output_e
  *
  * target - TODO document url parameters
  *
+ * ASI Parameters
+ *
+ * asi_bitrate - ASI transmission bitrate
+ *
  */
 
 typedef struct
 {
     int output;
     char *target;
+
+    int card_idx;
+
+    double asi_bitrate;
+    int asi_bufsize;
+    int asi_buffers;
+
 } obe_output_opts_t;
 
 int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts );
