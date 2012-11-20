@@ -766,6 +766,8 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     param->b_aud = 1;
     param->i_log_level = X264_LOG_INFO;
 
+    //param->rc.f_vbv_buffer_init = 0.1;
+
     if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
     {
         param->sc.f_speed = 1.0;
@@ -1068,7 +1070,7 @@ int obe_start( obe_t *h )
                     goto fail;
                 }
             }
-	    else
+            else
             {
                 aud_filter_params = calloc( 1, sizeof(*aud_filter_params) );
                 if( !aud_filter_params )
