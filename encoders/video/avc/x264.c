@@ -277,10 +277,11 @@ static void *start_encoder( void *ptr )
             if( h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
             {
                 coded_frame->arrival_time = arrival_time;
+                add_to_queue( &h->mux_queue, coded_frame );
                 //printf("\n Encode Latency %"PRIi64" \n", obe_mdate() - coded_frame->arrival_time );
             }
-
-            add_to_queue( &h->enc_smoothing_queue, coded_frame );
+            else
+                add_to_queue( &h->enc_smoothing_queue, coded_frame );
         }
      }
 

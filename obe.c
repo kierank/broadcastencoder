@@ -990,11 +990,14 @@ int obe_start( obe_t *h )
         }
     }
 
-    /* Open Encoder Smoothing Thread */
-    if( pthread_create( &h->enc_smoothing_thread, NULL, enc_smoothing.start_smoothing, (void*)h ) < 0 )
+    if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
     {
-        fprintf( stderr, "Couldn't create encoder smoothing thread \n" );
-        goto fail;
+        /* Open Encoder Smoothing Thread */
+        if( pthread_create( &h->enc_smoothing_thread, NULL, enc_smoothing.start_smoothing, (void*)h ) < 0 )
+        {
+            fprintf( stderr, "Couldn't create encoder smoothing thread \n" );
+            goto fail;
+        }
     }
 
     /* Open Mux Smoothing Thread */
@@ -1003,6 +1006,7 @@ int obe_start( obe_t *h )
         fprintf( stderr, "Couldn't create mux smoothing thread \n" );
         goto fail;
     }
+
 
     /* Open Mux Thread */
     obe_mux_params_t *mux_params = calloc( 1, sizeof(*mux_params) );
