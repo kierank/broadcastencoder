@@ -67,7 +67,6 @@ static void *start_smoothing( void *ptr )
                 temporal_vbv_size = av_rescale_q_rnd(
                 (int64_t)params->rc.i_vbv_buffer_size * params->rc.f_vbv_buffer_init,
                 (AVRational){1, params->rc.i_vbv_max_bitrate }, (AVRational){ 1, OBE_CLOCK }, AV_ROUND_UP );
-                printf("\n %"PRIi64" %f \n", temporal_vbv_size, params->rc.f_vbv_buffer_init );
                 pthread_mutex_unlock( &h->encoders[i]->queue.mutex );
                 break;
             }
