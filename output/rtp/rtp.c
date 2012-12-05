@@ -137,7 +137,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     bs_write1( &s, 0 );             // marker
     bs_write( &s, 7, MPEG_TS_PAYLOAD_TYPE ); // payload type
     bs_write( &s, 16, p_rtp->seq++ ); // sequence number
-    bs_write32( &s, timestamp );      // timestamp
+    bs_write32( &s, timestamp / 300 ); // timestamp
     bs_write32( &s, p_rtp->ssrc );    // ssrc
     bs_flush( &s );
 
