@@ -58,13 +58,7 @@ static void *start_smoothing( void *ptr )
     {
         pthread_mutex_lock( &h->enc_smoothing_queue.mutex );
 
-        if( h->cancel_enc_smoothing_thread )
-        {
-            pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
-            break;
-        }
-
-        while( h->enc_smoothing_queue.size == num_enc_smoothing_frames )
+        while( h->enc_smoothing_queue.size == num_enc_smoothing_frames && !h->cancel_enc_smoothing_thread )
             pthread_cond_wait( &h->enc_smoothing_queue.in_cv, &h->enc_smoothing_queue.mutex );
 
         if( h->cancel_enc_smoothing_thread )

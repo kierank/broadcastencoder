@@ -640,13 +640,7 @@ static void *start_filter( void *ptr )
 
         pthread_mutex_lock( &filter->queue.mutex );
 
-        if( filter->cancel_thread )
-        {
-            pthread_mutex_unlock( &filter->queue.mutex );
-            goto end;
-        }
-
-        while( !filter->queue.size )
+        while( !filter->queue.size && !filter->cancel_thread )
             pthread_cond_wait( &filter->queue.in_cv, &filter->queue.mutex );
 
         if( filter->cancel_thread )

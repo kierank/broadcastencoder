@@ -149,12 +149,6 @@ static void *start_encoder( void *ptr )
     {
         pthread_mutex_lock( &encoder->queue.mutex );
 
-        if( encoder->cancel_thread )
-        {
-            pthread_mutex_unlock( &encoder->queue.mutex );
-            break;
-        }
-
         while( !encoder->queue.size && !encoder->cancel_thread )
             pthread_cond_wait( &encoder->queue.in_cv, &encoder->queue.mutex );
 
