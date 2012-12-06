@@ -194,6 +194,9 @@ static void *start_smoothing( void *ptr )
         }
     }
 
+    av_fifo_free( fifo_data );
+    av_fifo_free( fifo_pcr );
+
     return NULL;
 }
 
