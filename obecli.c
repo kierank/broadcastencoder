@@ -1223,6 +1223,7 @@ static int start_encode( char *command, obecli_command_t *child )
 static int stop_encode( char *command, obecli_command_t *child )
 {
     obe_close( cli.h );
+    cli.h = NULL;
 
     if( cli.input.location )
     {
@@ -1241,6 +1242,9 @@ static int stop_encode( char *command, obecli_command_t *child )
         free( cli.output.target );
         cli.output.target = NULL;
     }
+
+    memset( &cli, 0, sizeof(cli) );
+    running = 0;
 
     return 0;
 }
@@ -1365,6 +1369,17 @@ int main( int argc, char **argv )
             int ret = parse_command( line_read, main_commands );
             if( ret == -1 )
                 fprintf( stderr, "%s: command not found \n", line_read );
+
+            if( !cli.h )
+            {
+                cli.h = obe_setup();
+                if( !cli.h )
+                {
+                    fprintf( stderr, "obe_setup failed\n" );
+                    return -1;
+                }
+                cli.avc_profile = -1;
+            }
         }
     }
 
