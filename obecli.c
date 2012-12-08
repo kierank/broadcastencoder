@@ -1224,6 +1224,24 @@ static int stop_encode( char *command, obecli_command_t *child )
 {
     obe_close( cli.h );
 
+    if( cli.input.location )
+    {
+        free( cli.input.location );
+        cli.input.location = NULL;
+    }
+
+    if( cli.output_streams )
+    {
+        free( cli.output_streams );
+        cli.output_streams = NULL;
+    }
+
+    if( cli.output.target )
+    {
+        free( cli.output.target );
+        cli.output.target = NULL;
+    }
+
     return 0;
 }
 
@@ -1353,11 +1371,7 @@ int main( int argc, char **argv )
     write_history( history_filename );
     free( history_filename );
 
-    if( cli.output_streams )
-        free( cli.output_streams );
-
-    if( cli.h )
-        obe_close( cli.h );
+    stop_encode( NULL, NULL );
 
     return 0;
 }

@@ -103,14 +103,14 @@ static void *start_smoothing( void *ptr )
         {
             start_dts = coded_frame->real_dts;
             /* Wait until the next clock tick */
-            while( last_clock == h->obe_clock_last_pts )
+            while( last_clock == h->obe_clock_last_pts && !h->cancel_enc_smoothing_thread )
                 pthread_cond_wait( &h->obe_clock_cv, &h->obe_clock_mutex );
             start_pts = h->obe_clock_last_pts;
         }
         else if( coded_frame->real_dts - start_dts > h->obe_clock_last_pts - start_pts )
         {
             //printf("\n waiting \n");
-            while( last_clock == h->obe_clock_last_pts )
+            while( last_clock == h->obe_clock_last_pts && !h->cancel_enc_smoothing_thread )
                 pthread_cond_wait( &h->obe_clock_cv, &h->obe_clock_mutex );
         }
         /* otherwise, continue since the frame is late */

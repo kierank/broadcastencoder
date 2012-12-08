@@ -39,6 +39,8 @@ static void close_output( void *handle )
 
     if( *status->udp_handle )
         udp_close( *status->udp_handle );
+    if( status->output_params->output_opts.target  )
+        free( status->output_params->output_opts.target );
     free( status->output_params );
 }
 
@@ -70,10 +72,16 @@ static void *open_output( void *ptr )
     while( 1 )
     {
         pthread_mutex_lock( &h->output_queue.mutex );
-        while( !h->output_queue.size )
+        while( !h->output_queue.size && !h->cancel_output_thread )
         {
             /* Often this cond_wait is not because of an underflow */
             pthread_cond_wait( &h->output_queue.in_cv, &h->output_queue.mutex );
+        }
+
+        if( h->cancel_output_thread )
+        {
+            pthread_mutex_unlock( &h->output_queue.mutex );
+            break;
         }
 
         num_muxed_data = h->output_queue.size;

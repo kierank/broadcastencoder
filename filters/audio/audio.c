@@ -41,7 +41,7 @@ static void *start_filter( void *ptr )
         if( filter->cancel_thread )
         {
             pthread_mutex_unlock( &filter->queue.mutex );
-            return NULL;
+            break;
         }
 
         raw_frame = filter->queue.queue[0];
@@ -82,6 +82,8 @@ static void *start_filter( void *ptr )
         raw_frame->release_frame( raw_frame );
         raw_frame = NULL;
     }
+
+    free( filter_params );
 
     return NULL;
 }

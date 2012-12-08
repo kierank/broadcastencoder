@@ -58,7 +58,8 @@ void destroy_device( obe_device_t *device )
 {
     for( int i = 0; i < device->num_input_streams; i++ )
         free( device->streams[i] );
-
+    if( device->probed_streams )
+        free( device->probed_streams );
     if( device->location )
         free( device->location );
     free( device );
@@ -121,8 +122,9 @@ void obe_release_audio_data( void *ptr )
 void obe_release_frame( void *ptr )
 {
      obe_raw_frame_t *raw_frame = ptr;
-     if( raw_frame->user_data )
-         free( raw_frame->user_data );
+     for( int i = 0; i < raw_frame->num_user_data; i++ )
+         free( raw_frame->user_data[i].data );
+     free( raw_frame->user_data );
      free( raw_frame );
 }
 
@@ -321,6 +323,9 @@ static void destroy_encoder( obe_encoder_t *encoder )
     }
 
     obe_destroy_queue( &encoder->queue );
+
+    if( encoder->encoder_params )
+        free( encoder->encoder_params );
 
     free( encoder );
 }
@@ -1134,11 +1139,8 @@ void obe_close( obe_t *h )
     /* Cancel input thread */
     for( int i = 0; i < h->num_devices; i++ )
     {
-        if ( h->devices[i]->device_thread )
-        {
-            pthread_cancel( h->devices[i]->device_thread );
-            pthread_join( h->devices[i]->device_thread, &ret_ptr );
-        }
+        pthread_cancel( h->devices[i]->device_thread );
+        pthread_join( h->devices[i]->device_thread, &ret_ptr );
     }
 
     fprintf( stderr, "input cancelled \n" );
@@ -1168,53 +1170,82 @@ void obe_close( obe_t *h )
     fprintf( stderr, "encoders cancelled \n" );
 
     /* Cancel encoder smoothing thread */
-    if ( h->cancel_enc_smoothing_thread )
+    if ( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
     {
         pthread_mutex_lock( &h->enc_smoothing_queue.mutex );
         h->cancel_enc_smoothing_thread = 1;
         pthread_cond_signal( &h->enc_smoothing_queue.in_cv );
         pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
+        /* send a clock tick in case smoothing is waiting for one */
+        pthread_mutex_lock( &h->obe_clock_mutex );
+        pthread_cond_broadcast( &h->obe_clock_cv );
+        pthread_mutex_unlock( &h->obe_clock_mutex );
         pthread_join( h->enc_smoothing_thread, &ret_ptr );
     }
 
     fprintf( stderr, "encoder smoothing cancelled \n" );
 
-    // todo mux smoothing thread
-
     /* Cancel mux thread */
-    if ( h->mux_thread )
-    {
-        pthread_mutex_lock( &h->mux_queue.mutex );
-        h->cancel_mux_thread = 1;
-        pthread_cond_signal( &h->mux_queue.in_cv );
-        pthread_mutex_unlock( &h->mux_queue.mutex );
-        pthread_join( h->mux_thread, &ret_ptr );
-    }
+    pthread_mutex_lock( &h->mux_queue.mutex );
+    h->cancel_mux_thread = 1;
+    pthread_cond_signal( &h->mux_queue.in_cv );
+    pthread_mutex_unlock( &h->mux_queue.mutex );
+    pthread_join( h->mux_thread, &ret_ptr );
 
     fprintf( stderr, "mux cancelled \n" );
 
-    /* Cancel output_thread TODO */
+    /* Cancel mux smoothing thread */
+    pthread_mutex_lock( &h->mux_smoothing_queue.mutex );
+    h->cancel_mux_smoothing_thread = 1;
+    pthread_cond_signal( &h->mux_smoothing_queue.in_cv );
+    pthread_mutex_unlock( &h->mux_smoothing_queue.mutex );
+    pthread_join( h->mux_smoothing_thread, &ret_ptr );
+
+    fprintf( stderr, "mux smoothing cancelled \n" );
+
+    /* Cancel output_thread */
+    pthread_mutex_lock( &h->output_queue.mutex );
+    h->cancel_output_thread = 1;
+    pthread_cond_signal( &h->output_queue.in_cv );
+    pthread_mutex_unlock( &h->output_queue.mutex );
+    pthread_join( h->output_thread, &ret_ptr );
+    /* could be blocking on OS so have to cancel thread too */
+    pthread_cancel( h->output_thread );
+    pthread_join( h->output_thread, &ret_ptr );
+
+    fprintf( stderr, "output thread cancelled \n" );
 
     /* Destroy devices */
     for( int i = 0; i < h->num_devices; i++ )
         destroy_device( h->devices[i] );
 
+    fprintf( stderr, "devices destroyed \n" );
+
     /* Destroy filters */
     for( int i = 0; i < h->num_filters; i++ )
         destroy_filter( h->filters[i] );
 
+    fprintf( stderr, "filters destroyed \n" );
+
     /* Destroy encoders */
     for( int i = 0; i < h->num_encoders; i++ )
         destroy_encoder( h->encoders[i] );
+
+    fprintf( stderr, "encoders destroyed \n" );
 
     // FIXME destroy smoothing thread
 
     /* Destroy mux */
     destroy_mux( h );
 
+    fprintf( stderr, "mux destroyed \n" );
+
     /* Destroy output */
     destroy_output( h );
 
+    fprintf( stderr, "output destroyed \n" );
+
+    free( h->output_streams );
     /* TODO: free other things */
 
     free( h );

@@ -464,6 +464,7 @@ struct obe_t
 
     /* Output */
     pthread_t output_thread;
+    int cancel_output_thread;
     obe_output_opts_t output_opts;
 
     /* Filtering */

@@ -194,6 +194,12 @@ typedef struct
     int sample_rate;
 } linsys_opts_t;
 
+struct linsys_status
+{
+    obe_input_params_t *input;
+    linsys_opts_t *linsys_opts;
+};
+
 #define MAXLEN 256
 
 #define READ_PIXELS(a, b, c)         \
@@ -1113,6 +1119,17 @@ finish:
     return ret;
 }
 
+static void close_thread( void *handle )
+{
+    struct linsys_status *status = handle;
+
+    if( status->linsys_opts )
+        close_card( status->linsys_opts );
+
+    free( status->linsys_opts );
+    free( status->input );
+}
+
 static void *probe_stream( void *ptr )
 {
     obe_input_probe_t *probe_ctx = ptr;
@@ -1230,17 +1247,27 @@ static void *open_input( void *ptr )
     obe_t *h = input->h;
     obe_device_t *device = input->device;
     obe_input_t *user_opts = &device->user_opts;
+    linsys_opts_t *linsys_opts;
     linsys_ctx_t *linsys_ctx;
     obe_sdi_non_display_data_t *non_display_parser;
+    struct linsys_status status;
 
-    linsys_opts_t linsys_opts;
-    memset( &linsys_opts, 0, sizeof(linsys_opts_t) );
+    linsys_opts = calloc( 1, sizeof(*linsys_opts) );
+    if( !linsys_opts )
+    {
+        fprintf( stderr, "malloc failed \n" );
+        return NULL;
+    }
 
-    linsys_opts.num_channels = 8;
-    linsys_opts.card_idx = user_opts->card_idx;
-    linsys_opts.audio_samples = input->audio_samples;
+    status.input = input;
+    status.linsys_opts = linsys_opts;
+    pthread_cleanup_push( close_thread, (void*)&status );
 
-    linsys_ctx = &linsys_opts.linsys_ctx;
+    linsys_opts->num_channels = 8;
+    linsys_opts->card_idx = user_opts->card_idx;
+    linsys_opts->audio_samples = input->audio_samples;
+
+    linsys_ctx = &linsys_opts->linsys_ctx;
 
     linsys_ctx->device = device;
     linsys_ctx->h = h;
@@ -1253,16 +1280,18 @@ static void *open_input( void *ptr )
 
     /* TODO: wait for encoder */
 
-    if( open_card( &linsys_opts ) < 0 )
+    if( open_card( linsys_opts ) < 0 )
         return NULL;
 
     while( 1 )
     {
-        if( capture_data( &linsys_opts ) < 0 )
+        if( capture_data( linsys_opts ) < 0 )
             break;
     }
 
-    close_card( &linsys_opts );
+    close_card( linsys_opts );
+
+    pthread_cleanup_pop( 1 );
 
     return NULL;
 }

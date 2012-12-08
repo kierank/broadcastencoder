@@ -82,6 +82,8 @@ static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_fr
                 syslog( LOG_WARNING, "Invalid user data presented to encoder - type %i \n", raw_frame->user_data[i].type );
                 free( raw_frame->user_data[i].data );
             }
+            /* Set the pointer to NULL so only x264 can free the data if necessary */
+            raw_frame->user_data[i].data = NULL;
         }
     }
     else if( raw_frame->num_user_data )
