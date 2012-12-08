@@ -170,7 +170,7 @@ struct decklink_status
 
 static void close_thread( void *handle )
 {
-    struct decklink_status *status = handle;
+    struct decklink_status *status = (decklink_status *)handle;
 
     if( status->decklink_opts )
     {
