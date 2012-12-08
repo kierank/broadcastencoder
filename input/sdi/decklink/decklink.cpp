@@ -162,6 +162,25 @@ typedef struct
     int tff;
 } decklink_opts_t;
 
+struct decklink_status
+{
+    obe_input_params_t *input;
+    decklink_opts_t *decklink_opts;
+};
+
+static void close_thread( void *handle )
+{
+    struct decklink_status *status = handle;
+
+    if( status->decklink_opts )
+    {
+        close_card( status->decklink_opts );
+        free( status->decklink_opts );
+    }
+
+    free( status->input );
+}
+
 class DeckLinkCaptureDelegate : public IDeckLinkInputCallback
 {
 public:
@@ -1042,6 +1061,7 @@ static void *open_input( void *ptr )
     obe_input_t *user_opts = &device->user_opts;
     decklink_ctx_t *decklink_ctx;
     obe_sdi_non_display_data_t *non_display_parser;
+    struct decklink_status status;
 
     decklink_opts_t *decklink_opts = (decklink_opts_t*)calloc( 1, sizeof(*decklink_opts) );
     if( !decklink_opts )
@@ -1049,6 +1069,10 @@ static void *open_input( void *ptr )
         fprintf( stderr, "Malloc failed\n" );
         goto finish;
     }
+
+    status.input = input;
+    status.linsys_opts = decklink_opts;
+    pthread_cleanup_push( close_thread, (void*)&status );
 
     decklink_opts->num_channels = 16;
     decklink_opts->card_idx = user_opts->card_idx;

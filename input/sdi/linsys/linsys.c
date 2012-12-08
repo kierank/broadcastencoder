@@ -1124,9 +1124,11 @@ static void close_thread( void *handle )
     struct linsys_status *status = handle;
 
     if( status->linsys_opts )
+    {
         close_card( status->linsys_opts );
+        free( status->linsys_opts );
+    }
 
-    free( status->linsys_opts );
     free( status->input );
 }
 
