@@ -168,19 +168,6 @@ struct decklink_status
     decklink_opts_t *decklink_opts;
 };
 
-static void close_thread( void *handle )
-{
-    struct decklink_status *status = (decklink_status *)handle;
-
-    if( status->decklink_opts )
-    {
-        close_card( status->decklink_opts );
-        free( status->decklink_opts );
-    }
-
-    free( status->input );
-}
-
 class DeckLinkCaptureDelegate : public IDeckLinkInputCallback
 {
 public:
@@ -902,6 +889,19 @@ finish:
     return ret;
 }
 
+static void close_thread( void *handle )
+{
+    struct decklink_status *status = (decklink_status *)handle;
+
+    if( status->decklink_opts )
+    {
+        close_card( status->decklink_opts );
+        free( status->decklink_opts );
+    }
+
+    free( status->input );
+}
+
 static void *probe_stream( void *ptr )
 {
     obe_input_probe_t *probe_ctx = (obe_input_probe_t*)ptr;
@@ -1067,11 +1067,11 @@ static void *open_input( void *ptr )
     if( !decklink_opts )
     {
         fprintf( stderr, "Malloc failed\n" );
-        goto finish;
+        return NULL;
     }
 
     status.input = input;
-    status.linsys_opts = decklink_opts;
+    status.decklink_opts = decklink_opts;
     pthread_cleanup_push( close_thread, (void*)&status );
 
     decklink_opts->num_channels = 16;
@@ -1094,15 +1094,12 @@ static void *open_input( void *ptr )
     /* TODO: wait for encoder */
 
     if( open_card( decklink_opts ) < 0 )
-        goto finish;
+        return NULL;
 
     sleep( INT_MAX );
 
-    close_card( decklink_opts );
+    pthread_cleanup_pop( 1 );
 
-finish:
-    if( decklink_opts )
-        free( decklink_opts );
     return NULL;
 }
 

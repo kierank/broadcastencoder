@@ -1291,8 +1291,6 @@ static void *open_input( void *ptr )
             break;
     }
 
-    close_card( linsys_opts );
-
     pthread_cleanup_pop( 1 );
 
     return NULL;
