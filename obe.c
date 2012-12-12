@@ -726,6 +726,9 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     if( param->b_interlaced )
         param->b_tff = stream->tff;
 
+    /* A reasonable default. x264 won't go higher than this parameter irrespective of speedcontrol */
+    param->i_frame_reference = 4;
+
     if( stream->sar_num && stream->sar_den )
     {
         param->vui.i_sar_width  = stream->sar_num;
@@ -778,7 +781,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         param->sc.f_speed = 1.0;
         param->sc.b_alt_timer = 1;
         if( param->i_width >= 1280 && param->i_height >= 720 )
-            param->sc.max_preset = 4; /* on the conservative side for HD */
+            param->sc.max_preset = 7; /* on the conservative side for HD */
         else
             param->sc.max_preset = 10;
 
