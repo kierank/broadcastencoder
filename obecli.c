@@ -660,7 +660,7 @@ static int set_stream( char *command, obecli_command_t *child )
                 avc_param->b_interlaced        = obe_otob( interlaced, avc_param->b_interlaced );
                 avc_param->b_tff               = obe_otob( tff, avc_param->b_tff );
                 avc_param->b_intra_refresh     = obe_otob( intra_refresh, avc_param->b_intra_refresh );
-                avc_param->i_frame_reference   = obe_otob( max_refs, avc_param->i_frame_reference );
+                avc_param->i_frame_reference   = obe_otoi( max_refs, avc_param->i_frame_reference );
 
                 if( profile )
                     parse_enum_value( profile, x264_profile_names, &cli.avc_profile );
