@@ -874,10 +874,7 @@ int obe_start( obe_t *h )
         goto fail;
     }
 
-    if( h->output_opts.output == OUTPUT_UDP )
-        output = udp_output;
-    else
-        output = rtp_output;
+    output = ip_output;
 
     /* Open Output Thread */
     out_params = calloc( 1, sizeof(*out_params) );
