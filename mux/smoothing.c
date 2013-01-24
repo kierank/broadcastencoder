@@ -77,13 +77,7 @@ static void *start_smoothing( void *ptr )
     {
         pthread_mutex_lock( &h->mux_smoothing_queue.mutex );
 
-        if( h->cancel_mux_smoothing_thread )
-        {
-            pthread_mutex_unlock( &h->mux_smoothing_queue.mutex );
-            break;
-        }
-
-        while( h->mux_smoothing_queue.size == num_muxed_data )
+        while( h->mux_smoothing_queue.size == num_muxed_data && !h->cancel_mux_smoothing_thread )
             pthread_cond_wait( &h->mux_smoothing_queue.in_cv, &h->mux_smoothing_queue.mutex );
 
         if( h->cancel_mux_smoothing_thread )
@@ -193,6 +187,9 @@ static void *start_smoothing( void *ptr )
             output_buf = NULL;
         }
     }
+
+    av_fifo_free( fifo_data );
+    av_fifo_free( fifo_pcr );
 
     return NULL;
 }

@@ -285,8 +285,6 @@ enum _BMDDeckLinkAttributeID {
     BMDDeckLinkHasVideoInputAntiAliasingFilter                   = /* 'aafl' */ 0x6161666C,
     BMDDeckLinkHasBypass                                         = /* 'byps' */ 0x62797073,
     BMDDeckLinkSupportsDesktopDisplay                            = /* 'extd' */ 0x65787464,
-    BMDDeckLinkDeviceIsPlaybackOnly                              = /* 'play' */ 0x706C6179,
-    BMDDeckLinkDeviceIsCaptureOnly                               = /* 'capt' */ 0x63617074,
 
     /* Integers */
 
@@ -296,6 +294,7 @@ enum _BMDDeckLinkAttributeID {
     BMDDeckLinkVideoOutputConnections                            = /* 'vocn' */ 0x766F636E,
     BMDDeckLinkVideoInputConnections                             = /* 'vicn' */ 0x7669636E,
     BMDDeckLinkDeviceBusyState                                   = /* 'dbst' */ 0x64627374,
+    BMDDeckLinkVideoIOSupport                                    = /* 'vios' */ 0x76696F73,	// Returns a BMDVideoIOSupport bit field
 
     /* Floats */
 
@@ -323,6 +322,14 @@ enum _BMDDeviceBusyState {
     bmdDeviceCaptureBusy                                         = 1 << 0,
     bmdDevicePlaybackBusy                                        = 1 << 1,
     bmdDeviceSerialPortBusy                                      = 1 << 2
+};
+
+/* Enum BMDVideoIOSupport - Device video input/output support */
+
+typedef uint32_t BMDVideoIOSupport;
+enum _BMDVideoIOSupport {
+    bmdDeviceSupportsCapture                                     = 1 << 0,
+    bmdDeviceSupportsPlayback                                    = 1 << 1
 };
 
 /* Enum BMD3DPreviewFormat - Linked Frame preview format */

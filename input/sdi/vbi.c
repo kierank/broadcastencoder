@@ -463,7 +463,7 @@ static void write_generic_field( bs_t *s, uint8_t *data, int type )
 {
     int len;
 
-    if( type == VBI_SLICED_VPS )
+    if( type == MISC_VPS )
         len = VPS_BLOCK_LEN;
 
     for( int i = 0; i < len; i++ )

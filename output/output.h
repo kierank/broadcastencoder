@@ -35,8 +35,7 @@ typedef struct
     obe_output_opts_t output_opts;
 } obe_output_params_t;
 
-extern const obe_output_func_t udp_output;
-extern const obe_output_func_t rtp_output;
+extern const obe_output_func_t ip_output;
 extern const obe_output_func_t linsys_asi_output;
 
 #endif /* OBE_OUTPUT_H */

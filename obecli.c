@@ -90,7 +90,7 @@ static const char * stream_opts[] = { "action", "format",
                                       "vbv-maxrate", "vbv-bufsize", "bitrate",
                                       "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", "weightp",
                                       "interlaced", "tff", "frame-packing", "csp", "filler", "intra-refresh", "aspect-ratio",
-                                      "width",
+                                      "width", "max-refs",
 
                                       /* Audio options */
                                       "sdi-audio-pair",
@@ -592,18 +592,19 @@ static int set_stream( char *command, obecli_command_t *child )
             char *intra_refresh = obe_get_option( stream_opts[18], opts );
             char *aspect_ratio = obe_get_option( stream_opts[19], opts );
             char *width = obe_get_option( stream_opts[20], opts );
+            char *max_refs = obe_get_option( stream_opts[21], opts );
 
             /* Audio Options */
-            char *sdi_audio_pair = obe_get_option( stream_opts[21], opts );
+            char *sdi_audio_pair = obe_get_option( stream_opts[22], opts );
 
             /* AAC options */
-            char *aac_profile = obe_get_option( stream_opts[22], opts );
-            char *aac_encap   = obe_get_option( stream_opts[23], opts );
+            char *aac_profile = obe_get_option( stream_opts[23], opts );
+            char *aac_encap   = obe_get_option( stream_opts[24], opts );
 
             /* NB: remap these and the ttx values below if more encoding options are added - TODO: split them up */
-            char *pid         = obe_get_option( stream_opts[24], opts );
-            char *lang        = obe_get_option( stream_opts[25], opts );
-            char *audio_type  = obe_get_option( stream_opts[26], opts );
+            char *pid         = obe_get_option( stream_opts[25], opts );
+            char *lang        = obe_get_option( stream_opts[26], opts );
+            char *audio_type  = obe_get_option( stream_opts[27], opts );
 
             if( input_stream->stream_type == STREAM_TYPE_VIDEO )
             {
@@ -659,6 +660,7 @@ static int set_stream( char *command, obecli_command_t *child )
                 avc_param->b_interlaced        = obe_otob( interlaced, avc_param->b_interlaced );
                 avc_param->b_tff               = obe_otob( tff, avc_param->b_tff );
                 avc_param->b_intra_refresh     = obe_otob( intra_refresh, avc_param->b_intra_refresh );
+                avc_param->i_frame_reference   = obe_otoi( max_refs, avc_param->i_frame_reference );
 
                 if( profile )
                     parse_enum_value( profile, x264_profile_names, &cli.avc_profile );
@@ -758,8 +760,8 @@ static int set_stream( char *command, obecli_command_t *child )
                      input_stream->stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
-                char *ttx_lang = obe_get_option( stream_opts[28], opts );
-                char *ttx_type = obe_get_option( stream_opts[29], opts );
+                char *ttx_lang = obe_get_option( stream_opts[29], opts );
+                char *ttx_type = obe_get_option( stream_opts[30], opts );
                 char *ttx_mag  = obe_get_option( stream_opts[31], opts );
                 char *ttx_page = obe_get_option( stream_opts[32], opts );
 
@@ -1247,6 +1249,28 @@ static int start_encode( char *command, obecli_command_t *child )
 static int stop_encode( char *command, obecli_command_t *child )
 {
     obe_close( cli.h );
+    cli.h = NULL;
+
+    if( cli.input.location )
+    {
+        free( cli.input.location );
+        cli.input.location = NULL;
+    }
+
+    if( cli.output_streams )
+    {
+        free( cli.output_streams );
+        cli.output_streams = NULL;
+    }
+
+    if( cli.output.target )
+    {
+        free( cli.output.target );
+        cli.output.target = NULL;
+    }
+
+    memset( &cli, 0, sizeof(cli) );
+    running = 0;
 
     return 0;
 }
@@ -1371,17 +1395,24 @@ int main( int argc, char **argv )
             int ret = parse_command( line_read, main_commands );
             if( ret == -1 )
                 fprintf( stderr, "%s: command not found \n", line_read );
+
+            if( !cli.h )
+            {
+                cli.h = obe_setup();
+                if( !cli.h )
+                {
+                    fprintf( stderr, "obe_setup failed\n" );
+                    return -1;
+                }
+                cli.avc_profile = -1;
+            }
         }
     }
 
     write_history( history_filename );
     free( history_filename );
 
-    if( cli.output_streams )
-        free( cli.output_streams );
-
-    if( cli.h )
-        obe_close( cli.h );
+    stop_encode( NULL, NULL );
 
     return 0;
 }

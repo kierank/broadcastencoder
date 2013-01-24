@@ -1,5 +1,5 @@
 /*****************************************************************************
- * rtp.c : RTP encapsulation functions
+ * ip.c : IP output functions
  *****************************************************************************
  * Copyright (C) 2010 Open Broadcast Systems Ltd.
  *
@@ -53,10 +53,10 @@ typedef struct
     uint32_t octet_cnt;
 } obe_rtp_ctx;
 
-struct rtp_status
+struct ip_status
 {
     obe_output_params_t *output_params;
-    hnd_t *rtp_handle;
+    hnd_t *ip_handle;
 };
 
 static int64_t obe_gettime(void)
@@ -71,10 +71,8 @@ static uint64_t obe_ntp_time(void)
   return (obe_gettime() / 1000) * 1000 + NTP_OFFSET_US;
 }
 
-static int rtp_open( hnd_t *p_handle, char *target )
+static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
 {
-    obe_udp_opts_t udp_opts;
-
     obe_rtp_ctx *p_rtp = calloc( 1, sizeof(*p_rtp) );
     if( !p_rtp )
     {
@@ -82,8 +80,7 @@ static int rtp_open( hnd_t *p_handle, char *target )
         return -1;
     }
 
-    udp_populate_opts( &udp_opts, target );
-    if( udp_open( &p_rtp->udp_handle, &udp_opts ) < 0 )
+    if( udp_open( &p_rtp->udp_handle, udp_opts ) < 0 )
     {
         fprintf( stderr, "[rtp] Could not create udp output" );
         return -1;
@@ -137,7 +134,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     bs_write1( &s, 0 );             // marker
     bs_write( &s, 7, MPEG_TS_PAYLOAD_TYPE ); // payload type
     bs_write( &s, 16, p_rtp->seq++ ); // sequence number
-    bs_write32( &s, timestamp );      // timestamp
+    bs_write32( &s, timestamp / 300 ); // timestamp
     bs_write32( &s, p_rtp->ssrc );    // ssrc
     bs_flush( &s );
 
@@ -156,16 +153,26 @@ static void rtp_close( hnd_t handle )
 {
     obe_rtp_ctx *p_rtp = handle;
 
-    udp_close( p_rtp->udp_handle);
+    udp_close( p_rtp->udp_handle );
     free( p_rtp );
 }
 
 static void close_output( void *handle )
 {
-    struct rtp_status *status = handle;
+    struct ip_status *status = handle;
 
-    if( *status->rtp_handle )
-        rtp_close( *status->rtp_handle );
+    if( status->output_params->output_opts.output == OUTPUT_RTP )
+    {
+        if( *status->ip_handle )
+            rtp_close( *status->ip_handle );
+    }
+    else
+    {
+        if( *status->ip_handle )
+            udp_close( *status->ip_handle );      
+    }
+    if( status->output_params->output_opts.target  )
+        free( status->output_params->output_opts.target );
     free( status->output_params );
 }
 
@@ -174,29 +181,49 @@ static void *open_output( void *ptr )
 {
     obe_output_params_t *output_params = ptr;
     obe_t *h = output_params->h;
-    struct rtp_status status;
-    hnd_t rtp_handle = NULL;
+    struct ip_status status;
+    hnd_t ip_handle = NULL;
     int num_muxed_data = 0;
     uint8_t **muxed_data;
+    obe_udp_opts_t udp_opts;
 
     struct sched_param param = {0};
     param.sched_priority = 99;
     pthread_setschedparam( pthread_self(), SCHED_FIFO, &param );
 
     status.output_params = output_params;
-    status.rtp_handle = &rtp_handle;
+    status.ip_handle = &ip_handle;
     pthread_cleanup_push( close_output, (void*)&status );
 
-    if( rtp_open( &rtp_handle, output_params->output_opts.target ) < 0 )
-        return NULL;
+    udp_populate_opts( &udp_opts, output_params->output_opts.target );
+
+    if( output_params->output_opts.output == OUTPUT_RTP )
+    {
+        if( rtp_open( &ip_handle, &udp_opts ) < 0 )
+            return NULL;
+    }
+    else
+    {
+        if( udp_open( &ip_handle, &udp_opts ) < 0 )
+        {
+            fprintf( stderr, "[udp] Could not create udp output" );
+            return NULL;
+        }
+    }
 
     while( 1 )
     {
         pthread_mutex_lock( &h->output_queue.mutex );
-        while( !h->output_queue.size )
+        while( !h->output_queue.size && !h->cancel_output_thread )
         {
             /* Often this cond_wait is not because of an underflow */
             pthread_cond_wait( &h->output_queue.in_cv, &h->output_queue.mutex );
+        }
+
+        if( h->cancel_output_thread )
+        {
+            pthread_mutex_unlock( &h->output_queue.mutex );
+            break;
         }
 
         num_muxed_data = h->output_queue.size;
@@ -215,8 +242,16 @@ static void *open_output( void *ptr )
 
         for( int i = 0; i < num_muxed_data; i++ )
         {
-            if( write_rtp_pkt( rtp_handle, &muxed_data[i][7*sizeof(int64_t)], TS_PACKETS_SIZE, AV_RN64( muxed_data[i] ) ) < 0 )
-                syslog( LOG_ERR, "[rtp] Failed to write RTP packet\n" );
+            if( output_params->output_opts.output == OUTPUT_RTP )
+            {
+                if( write_rtp_pkt( ip_handle, &muxed_data[i][7*sizeof(int64_t)], TS_PACKETS_SIZE, AV_RN64( muxed_data[i] ) ) < 0 )
+                    syslog( LOG_ERR, "[rtp] Failed to write RTP packet\n" );
+            }
+            else
+            {
+                if( udp_write( ip_handle, &muxed_data[i][7*sizeof(int64_t)], TS_PACKETS_SIZE ) < 0 )
+                    syslog( LOG_ERR, "[udp] Failed to write UDP packet\n" );
+            }
 
             remove_from_queue( &h->output_queue );
             free( muxed_data[i] );
@@ -231,4 +266,4 @@ static void *open_output( void *ptr )
     return NULL;
 }
 
-const obe_output_func_t rtp_output = { open_output };
+const obe_output_func_t ip_output = { open_output };
