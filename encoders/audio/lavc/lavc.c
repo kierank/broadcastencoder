@@ -129,6 +129,7 @@ static void *start_encoder( void *ptr )
     av_opt_set_int( avr, "out_channel_layout",  codec->channel_layout, 0 );
     av_opt_set_int( avr, "out_sample_fmt",      codec->sample_fmt,     0 );
     av_opt_set_int( avr, "internal_sample_fmt", AV_SAMPLE_FMT_FLTP,    0 );
+    av_opt_set_int( avr, "dither_method",       AV_RESAMPLE_DITHER_TRIANGULAR_NS, 0 );
 
     if( avresample_open( avr ) < 0 )
     {
