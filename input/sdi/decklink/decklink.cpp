@@ -490,8 +490,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             return -1;
         }
 
-        if( avresample_convert( decklink_ctx->avr, (void**)raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize,
-                                raw_frame->audio_frame.num_samples, (void**)&frame_bytes, 0, raw_frame->audio_frame.num_samples ) < 0 )
+        if( avresample_convert( decklink_ctx->avr, raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize,
+                                raw_frame->audio_frame.num_samples, (uint8_t**)&frame_bytes, 0, raw_frame->audio_frame.num_samples ) < 0 )
         {
             syslog( LOG_ERR, "[decklink-asi] Sample format conversion failed\n" );
             return -1;
