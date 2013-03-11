@@ -706,10 +706,18 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         return -1;
     }
 
+#if 0
     if( h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
         x264_param_default_preset( param, "veryfast", "zerolatency" );
     else
         x264_param_default( param );
+#endif
+
+    if( param->b_mpeg2 )
+    {
+        x264_param_default_mpeg2( param );
+        x264_param_apply_profile( param, "main" );
+    }
 
     param->b_deterministic = 0;
     param->b_vfr_input = 0;
@@ -727,7 +735,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         param->b_tff = stream->tff;
 
     /* A reasonable default. x264 won't go higher than this parameter irrespective of speedcontrol */
-    param->i_frame_reference = 4;
+    param->i_frame_reference = 1;
 
     if( stream->sar_num && stream->sar_den )
     {
@@ -769,9 +777,11 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         param->vui.i_colmatrix = 1;
     }
 
+#if 0
     x264_param_apply_profile( param, X264_BIT_DEPTH == 10 ? "high10" : "high" );
+#endif
     param->i_nal_hrd = X264_NAL_HRD_FAKE_VBR;
-    param->b_aud = 1;
+//    param->b_aud = 1;
     param->i_log_level = X264_LOG_INFO;
 
     //param->rc.f_vbv_buffer_init = 0.1;
@@ -780,10 +790,14 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     {
         param->sc.f_speed = 1.0;
         param->sc.b_alt_timer = 1;
+#if 0
         if( param->i_width >= 1280 && param->i_height >= 720 )
             param->sc.max_preset = 7; /* on the conservative side for HD */
         else
             param->sc.max_preset = 10;
+#endif
+
+        param->sc.max_preset = 1;
 
         param->rc.i_lookahead = param->i_keyint_max;
     }
@@ -917,7 +931,7 @@ int obe_start( obe_t *h )
             obe_init_queue( &h->encoders[h->num_encoders]->queue );
             h->encoders[h->num_encoders]->output_stream_id = h->output_streams[i].output_stream_id;
 
-            if( h->output_streams[i].stream_format == VIDEO_AVC )
+            if( h->output_streams[i].stream_format == VIDEO_AVC || h->output_streams[i].stream_format == VIDEO_MPEG2 )
             {
                 x264_param_t *x264_param = &h->output_streams[i].avc_param;
                 if( h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
