@@ -41,6 +41,7 @@ obe_t *obe_setup( void );
 enum obe_system_type_e
 {
     OBE_SYSTEM_TYPE_GENERIC,
+    OBE_SYSTEM_TYPE_LOWEST_LATENCY,
     OBE_SYSTEM_TYPE_LOW_LATENCY,
 };
 
