@@ -706,7 +706,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         return -1;
     }
 
-    if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY )
+    if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY || h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
         x264_param_default_preset( param, "veryfast", "zerolatency" );
     else
         x264_param_default( param );
