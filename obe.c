@@ -874,7 +874,15 @@ int obe_start( obe_t *h )
         goto fail;
     }
 
-    output = ip_output;
+    if( h->output_opts.output == OUTPUT_UDP || h->output_opts.output == OUTPUT_RTP )
+        output = ip_output;
+    else if( h->output_opts.output == OUTPUT_FILE )
+        output = file_output;
+    else
+    {
+        fprintf( stderr, "Invalid output device \n" );
+        goto fail;
+    }
 
     /* Open Output Thread */
     out_params = calloc( 1, sizeof(*out_params) );

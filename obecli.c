@@ -78,7 +78,7 @@ static const char * const teletext_types[]           = { "", "initial", "subtitl
 static const char * const audio_types[]              = { "undefined", "clean-effects", "hearing-impaired", "visual-impaired", 0 };
 static const char * const aac_profiles[]             = { "aac-lc", "he-aac-v1", "he-aac-v2" };
 static const char * const aac_encapsulations[]       = { "adts", "latm", 0 };
-static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
+static const char * const output_modules[]           = { "udp", "rtp", "file", 0 };
 
 static const char * system_opts[] = { "system-type", NULL };
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", "ttx-location",
@@ -1204,7 +1204,7 @@ static int start_encode( char *command, obecli_command_t *child )
 
     FAIL_IF_ERROR( !cli.mux_opts.ts_muxrate, "No mux rate selected\n" );
 
-    if( ( cli.output.output == OUTPUT_UDP || cli.output.output == OUTPUT_RTP ) && !cli.output.target )
+    if( !cli.output.target )
     {
         fprintf( stderr, "No output target chosen\n" );
         return -1;
