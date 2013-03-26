@@ -42,8 +42,7 @@ static void *start_encoder( void *ptr )
     twolame_options *tl_opts = NULL;
     int output_size, frame_size, linesize; /* Linesize in libavresample terminology is the entire buffer size for packed formats */
     int64_t cur_pts = -1;
-    void *audio_buf = NULL;
-    uint8_t *output_buf = NULL;
+    uint8_t *audio_buf = NULL, *output_buf = NULL;
     AVAudioResampleContext *avr = NULL;
     AVFifoBuffer *fifo = NULL;
 
