@@ -128,7 +128,7 @@ static void *start_encoder( void *ptr )
     av_opt_set_int( avr, "in_sample_rate",      enc_params->sample_rate, 0 );
     av_opt_set_int( avr, "out_channel_layout",  codec->channel_layout, 0 );
     av_opt_set_int( avr, "out_sample_fmt",      codec->sample_fmt,     0 );
-    av_opt_set_int( avr, "internal_sample_fmt", AV_SAMPLE_FMT_FLTP,    0 );
+    av_opt_set_int( avr, "dither_method",       AV_RESAMPLE_DITHER_TRIANGULAR_NS, 0 );
 
     if( avresample_open( avr ) < 0 )
     {
@@ -194,7 +194,7 @@ static void *start_encoder( void *ptr )
         if( cur_pts == -1 )
             cur_pts = raw_frame->pts;
 
-        if( avresample_convert( avr, NULL, 0, raw_frame->audio_frame.num_samples, (void**)raw_frame->audio_frame.audio_data,
+        if( avresample_convert( avr, NULL, 0, raw_frame->audio_frame.num_samples, raw_frame->audio_frame.audio_data,
                                 raw_frame->audio_frame.linesize, raw_frame->audio_frame.num_samples ) < 0 )
         {
             syslog( LOG_ERR, "[lavc] Sample format conversion failed\n" );
