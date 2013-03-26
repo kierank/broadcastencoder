@@ -198,7 +198,7 @@ static void *start_encoder( void *ptr )
         pts2[0] = raw_frame->pts;
         pic.opaque = pts2;
         pic.param = NULL;
-        pic.b_tff = stream->b_tff;
+        pic.b_tff = stream->tff;
 
         /* If the AFD has changed, then change the SAR. x264 will write the SAR at the next keyframe
          * TODO: allow user to force keyframes in order to be frame accurate */
