@@ -202,8 +202,17 @@ static void *start_encoder( void *ptr )
 
         /* If the AFD has changed, then change the SAR. x264 will write the SAR at the next keyframe
          * TODO: allow user to force keyframes in order to be frame accurate */
-        if( raw_frame->sar_width  != enc_params->avc_param.vui.i_sar_width ||
-            raw_frame->sar_height != enc_params->avc_param.vui.i_sar_height )
+        if( enc_params->avc_param.b_mpeg2 )
+        {
+            int mpeg2_dar = raw_frame->is_wide ? X264_MPEG2_DAR_169 : X264_MPEG2_DAR_43;
+            if( mpeg2_dar != enc_params->avc_param.vui.i_aspect_ratio_information )
+            {
+                enc_params->avc_param.vui.i_aspect_ratio_information = mpeg2_dar;
+                pic.param = &enc_params->avc_param;
+            }
+        }
+        else if( raw_frame->sar_width  != enc_params->avc_param.vui.i_sar_width ||
+                 raw_frame->sar_height != enc_params->avc_param.vui.i_sar_height )
         {
             enc_params->avc_param.vui.i_sar_width  = raw_frame->sar_width;
             enc_params->avc_param.vui.i_sar_height = raw_frame->sar_height;

@@ -338,7 +338,7 @@ typedef struct
     obe_image_t img;
     int sar_width;
     int sar_height;
-    int sar_guess; /* This is set if the SAR cannot be determined from any WSS/AFD that might exist in the stream */
+    int is_wide; /* for MPEG-2 */
     int64_t arrival_time;
     int timebase_num;
     int timebase_den;

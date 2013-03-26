@@ -157,6 +157,7 @@ static int set_sar( obe_raw_frame_t *raw_frame, int is_wide )
         {
             raw_frame->sar_width  = obe_sars[is_wide][i].sar_width;
             raw_frame->sar_height = obe_sars[is_wide][i].sar_height;
+            raw_frame->is_wide = is_wide;
             return 0;
         }
     }
@@ -676,10 +677,7 @@ static void *start_filter( void *ptr )
         /* If SAR, on an SD stream, has not been updated by AFD or WSS, set to default 4:3
          * TODO: make this user-choosable. OBE will prioritise any SAR information from AFD or WSS over any user settings */
         if( raw_frame->sar_width == 1 && raw_frame->sar_height == 1 )
-        {
             set_sar( raw_frame, IS_SD( raw_frame->img.format ) ? output_stream->is_wide : 1 );
-            raw_frame->sar_guess = 1;
-        }
 
         remove_from_queue( &filter->queue );
         add_to_encode_queue( h, raw_frame, 0 );
