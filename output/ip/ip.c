@@ -169,14 +169,13 @@ static void close_output( void *handle )
     else
     {
         if( *status->ip_handle )
-            udp_close( *status->ip_handle );      
+            udp_close( *status->ip_handle );
     }
     if( status->output_params->output_opts.target  )
         free( status->output_params->output_opts.target );
     free( status->output_params );
 }
 
-/* TODO: merge with udp? */
 static void *open_output( void *ptr )
 {
     obe_output_params_t *output_params = ptr;
