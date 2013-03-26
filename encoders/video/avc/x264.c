@@ -112,6 +112,7 @@ static void *start_encoder( void *ptr )
     float buffer_fill;
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
+    obe_int_input_stream_t *stream;
 
     /* TODO: check for width, height changes */
 
@@ -146,6 +147,9 @@ static void *start_encoder( void *ptr )
     /* Broadcast because input and muxer can be stuck waiting for encoder */
     pthread_cond_broadcast( &encoder->queue.in_cv );
     pthread_mutex_unlock( &encoder->queue.mutex );
+
+    // FIXME stream_id might not be zero always
+    stream = get_input_stream( h, 0 );
 
     while( 1 )
     {
@@ -194,6 +198,7 @@ static void *start_encoder( void *ptr )
         pts2[0] = raw_frame->pts;
         pic.opaque = pts2;
         pic.param = NULL;
+        pic.b_tff = stream->b_tff;
 
         /* If the AFD has changed, then change the SAR. x264 will write the SAR at the next keyframe
          * TODO: allow user to force keyframes in order to be frame accurate */
