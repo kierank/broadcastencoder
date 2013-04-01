@@ -706,7 +706,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         return -1;
     }
 
-    if( h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
+    if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY || h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
         x264_param_default_preset( param, "veryfast", "zerolatency" );
     else
         x264_param_default( param );
@@ -920,7 +920,7 @@ int obe_start( obe_t *h )
             if( h->output_streams[i].stream_format == VIDEO_AVC )
             {
                 x264_param_t *x264_param = &h->output_streams[i].avc_param;
-                if( h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
+                if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY )
                 {
                     /* This doesn't need to be particularly accurate since x264 calculates the correct value internally */
                     x264_param->rc.i_vbv_buffer_size = (double)x264_param->rc.i_vbv_max_bitrate * x264_param->i_fps_den / x264_param->i_fps_num;
@@ -969,7 +969,7 @@ int obe_start( obe_t *h )
 
                 /* Choose the optimal number of audio frames per PES
                  * TODO: This should be set after the encoder has told us the frame size */
-                if( !h->output_streams[i].ts_opts.frames_per_pes && h->obe_system != OBE_SYSTEM_TYPE_LOW_LATENCY &&
+                if( !h->output_streams[i].ts_opts.frames_per_pes && h->obe_system == OBE_SYSTEM_TYPE_GENERIC &&
                     h->output_streams[i].stream_format != AUDIO_E_AC_3 )
                 {
                     int buf_size = h->output_streams[i].stream_format == AUDIO_MP2 || h->output_streams[i].stream_format == AUDIO_AAC ? MISC_AUDIO_BS : AC3_BS_DVB;

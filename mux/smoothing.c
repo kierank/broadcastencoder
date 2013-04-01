@@ -54,7 +54,7 @@ static void *start_smoothing( void *ptr )
         return NULL;
     }
 
-    if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
+    if( h->obe_system != OBE_SYSTEM_TYPE_LOWEST_LATENCY )
     {
         for( int i = 0; i < h->num_encoders; i++ )
         {

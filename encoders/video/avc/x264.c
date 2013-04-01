@@ -270,7 +270,7 @@ static void *start_encoder( void *ptr )
             coded_frame->priority = IS_X264_TYPE_I( pic_out.i_type );
             free( pic_out.opaque );
 
-            if( h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
+            if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY || h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
             {
                 coded_frame->arrival_time = arrival_time;
                 add_to_queue( &h->mux_queue, coded_frame );

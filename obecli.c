@@ -62,7 +62,7 @@ static char *line_read = NULL;
 static int running = 0;
 static int system_type_value = OBE_SYSTEM_TYPE_GENERIC;
 
-static const char * const system_types[]             = { "generic", "lowlatency", 0 };
+static const char * const system_types[]             = { "generic", "lowestlatency", "lowlatency", 0 };
 static const char * const input_types[]              = { "url", "decklink", "linsys-sdi", 0 };
 static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50", "720p59.94", "720p60", "1080i50", "1080i59.94", "1080i60",
                                                          "1080p23.98", "1080p24", "1080p25", "1080p29.97", "1080p30", "1080p50", "1080p59.94",
@@ -613,8 +613,8 @@ static int set_stream( char *command, obecli_command_t *child )
                 FAIL_IF_ERROR( profile && ( check_enum_value( profile, x264_profile_names ) < 0 ),
                                "Invalid AVC profile\n" );
 
-                FAIL_IF_ERROR( vbv_bufsize && system_type_value == OBE_SYSTEM_TYPE_LOW_LATENCY,
-                               "VBV buffer size is not user-settable in low-latency mode\n" );
+                FAIL_IF_ERROR( vbv_bufsize && system_type_value == OBE_SYSTEM_TYPE_LOWEST_LATENCY,
+                               "VBV buffer size is not user-settable in lowest-latency mode\n" );
 
                 FAIL_IF_ERROR( frame_packing && ( check_enum_value( frame_packing, frame_packing_modes ) < 0 ),
                                "Invalid frame packing mode\n" )
