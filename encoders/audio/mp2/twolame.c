@@ -42,7 +42,8 @@ static void *start_encoder( void *ptr )
     twolame_options *tl_opts = NULL;
     int output_size, frame_size, linesize; /* Linesize in libavresample terminology is the entire buffer size for packed formats */
     int64_t cur_pts = -1;
-    uint8_t *audio_buf = NULL, *output_buf = NULL;
+    float *audio_buf = NULL;
+    uint8_t *output_buf = NULL;
     AVAudioResampleContext *avr = NULL;
     AVFifoBuffer *fifo = NULL;
 
@@ -144,7 +145,7 @@ static void *start_encoder( void *ptr )
             break;
         }
 
-        avresample_read( avr, &audio_buf, avresample_available( avr ) );
+        avresample_read( avr, (uint8_t**)&audio_buf, avresample_available( avr ) );
 
         output_size = twolame_encode_buffer_float32_interleaved( tl_opts, audio_buf, raw_frame->audio_frame.num_samples, output_buf, MP2_AUDIO_BUFFER_SIZE );
 
