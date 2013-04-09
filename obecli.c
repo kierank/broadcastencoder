@@ -1203,6 +1203,7 @@ static int start_encode( char *command, obecli_command_t *child )
     }
 
     FAIL_IF_ERROR( !cli.mux_opts.ts_muxrate, "No mux rate selected\n" );
+    FAIL_IF_ERROR( cli.mux_opts.ts_muxrate < 100000, "Mux rate too low - mux rate is in bits/s, not kb/s\n" );
 
     if( ( cli.output.output == OUTPUT_UDP || cli.output.output == OUTPUT_RTP ) && !cli.output.target )
     {
