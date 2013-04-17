@@ -50,9 +50,8 @@ static void *start_encoder( void *ptr )
     obe_output_stream_t *stream = enc_params->stream;
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
-    uint8_t *audio_buf = NULL;
     int64_t cur_pts = -1, pts_increment;
-    int i, frame_size, ret, got_pkt, num_frames = 0, total_size = 0, audio_buf_len;
+    int i, frame_size, ret, got_pkt, num_frames = 0, total_size = 0;
     AVFifoBuffer *out_fifo = NULL;
     AVAudioResampleContext *avr = NULL;
     AVPacket pkt;
@@ -60,6 +59,7 @@ static void *start_encoder( void *ptr )
     AVFrame *frame = NULL;
     AVDictionary *opts = NULL;
     char is_latm[2];
+    uint8_t *audio_planes[8] = { NULL };
 
     avcodec_register_all();
 
@@ -159,18 +159,16 @@ static void *start_encoder( void *ptr )
         goto finish;
     }
 
-    audio_buf_len = codec->frame_size * av_get_bytes_per_sample( codec->sample_fmt ) * codec->channels;
-    audio_buf = av_malloc( audio_buf_len );
-    if( !audio_buf )
-    {
-        fprintf( stderr, "Malloc failed\n" );
-        goto finish;
-    }
-
     frame = avcodec_alloc_frame();
     if( !frame )
     {
         fprintf( stderr, "Could not allocate frame\n" );
+        goto finish;
+    }
+
+    if( av_samples_alloc( audio_planes, NULL, codec->channels, codec->frame_size, codec->sample_fmt, 1 ) < 0 )
+    {
+        fprintf( stderr, "Could not allocate audio samples\n" );
         goto finish;
     }
 
@@ -210,13 +208,8 @@ static void *start_encoder( void *ptr )
             got_pkt = 0;
             avcodec_get_frame_defaults( frame );
             frame->nb_samples = codec->frame_size;
-            avresample_read( avr, &audio_buf, codec->frame_size );
-
-            if( avcodec_fill_audio_frame( frame, codec->channels, codec->sample_fmt, audio_buf, audio_buf_len, 0 ) < 0 )
-            {
-                syslog( LOG_ERR, "[lavc] Could not fill audio frame\n" );
-                break;
-            }
+            memcpy( frame->data, audio_planes, sizeof(frame->data) );
+            avresample_read( avr, frame->data, codec->frame_size );
 
             av_init_packet( &pkt );
             pkt.data = NULL;
@@ -270,8 +263,8 @@ finish:
     if( frame )
        avcodec_free_frame( &frame );
 
-    if( audio_buf )
-        av_free( audio_buf );
+    if( audio_planes[0] )
+        av_free( audio_planes[0] );
 
     if( out_fifo )
         av_fifo_free( out_fifo );
