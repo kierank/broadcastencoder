@@ -667,7 +667,7 @@ static void *start_filter( void *ptr )
                 goto end;
         }
 
-        if( av_get_bits_per_pixel( &av_pix_fmt_descriptors[raw_frame->img.csp] ) == 10 && X264_BIT_DEPTH == 8 )
+        if( ( raw_frame->img.csp == PIX_FMT_YUV420P10 || raw_frame->img.csp == PIX_FMT_YUV422P10 ) && X264_BIT_DEPTH == 8 )
         {
             if( dither_image( vfilt, raw_frame ) < 0 )
                 goto end;
