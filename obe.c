@@ -727,7 +727,8 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         param->b_tff = stream->tff;
 
     /* A reasonable default. x264 won't go higher than this parameter irrespective of speedcontrol */
-    param->i_frame_reference = 4;
+    if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
+        param->i_frame_reference = 4;
 
     if( stream->sar_num && stream->sar_den )
     {
