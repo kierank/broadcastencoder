@@ -1151,7 +1151,7 @@ static int start_encode( char *command, obecli_command_t *child )
         if( input_stream->stream_type == STREAM_TYPE_VIDEO )
         {
             /* x264 calculates the single-frame VBV size later on */
-            FAIL_IF_ERROR( system_type_value == OBE_SYSTEM_TYPE_GENERIC && !cli.output_streams[i].avc_param.rc.i_vbv_buffer_size,
+            FAIL_IF_ERROR( system_type_value != OBE_SYSTEM_TYPE_LOWEST_LATENCY && !cli.output_streams[i].avc_param.rc.i_vbv_buffer_size,
                            "No VBV buffer size chosen\n" );
 
             FAIL_IF_ERROR( !cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate && !cli.output_streams[i].avc_param.rc.i_bitrate,
