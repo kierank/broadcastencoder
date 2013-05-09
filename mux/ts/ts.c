@@ -284,6 +284,7 @@ void *open_muxer( void *ptr )
                 while( mpeg2_profiles[j][0] != -1 && p_param->i_profile != mpeg2_profiles[j][0] )
                     j++;
                 profile = mpeg2_profiles[j][1];
+                j = 0;
                 while( mpeg2_levels[j][0] != -1 && p_param->i_level_idc != mpeg2_levels[j][0] )
                     j++;
                 level = mpeg2_levels[j][1];
