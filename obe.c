@@ -744,7 +744,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         param->vui.i_colorprim = 5; // BT.470-2 bg
         param->vui.i_transfer  = 5; // BT.470-2 bg
         param->vui.i_colmatrix = 5; // BT.470-2 bg
-        param->i_keyint_max = param->i_fps_num >> 1;
+        param->i_keyint_max = param->i_fps_num == 50 ? 48 : 24;
     }
     else if( ( param->i_fps_num == 30000 || param->i_fps_num == 60000 ) && param->i_fps_den == 1001 )
     {
@@ -752,7 +752,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         param->vui.i_colorprim = 6; // BT.601-6
         param->vui.i_transfer  = 6; // BT.601-6
         param->vui.i_colmatrix = 6; // BT.601-6
-        param->i_keyint_max = (param->i_fps_num / 1000) >> 1;
+        param->i_keyint_max = param->i_fps_num / 1000;
     }
     else
     {
