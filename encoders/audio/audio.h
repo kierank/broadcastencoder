@@ -40,10 +40,6 @@ typedef struct
     int input_sample_format;
     int sample_rate;
     int frames_per_pes;
-
-    // TODO ac3 opts
-    obe_aac_opts_t aac_opts;
-
 } obe_aud_enc_params_t;
 
 extern const obe_aud_enc_func_t twolame_encoder;

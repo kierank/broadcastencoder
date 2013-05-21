@@ -186,6 +186,14 @@ enum stream_formats_e
     VANC_SCTE_104,
 };
 
+enum mp2_mode_e
+{
+    MP2_MODE_AUTO,
+    MP2_MODE_STEREO,
+    MP2_MODE_JOINT_STEREO,
+    MP2_MODE_DUAL_CHANNEL,
+};
+
 typedef struct
 {
      int type;
@@ -409,6 +417,9 @@ typedef struct
 
     /* AAC */
     obe_aac_opts_t aac_opts;
+
+    /* MP2 */
+    int mp2_mode;
 
     /** Mux options **/
     /* MPEG-TS */
