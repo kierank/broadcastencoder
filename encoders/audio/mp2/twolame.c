@@ -53,7 +53,7 @@ static void *start_encoder( void *ptr )
     tl_opts = twolame_init();
     if( !tl_opts )
     {
-        fprintf( stderr, "[twolame] could load options" );
+        fprintf( stderr, "[twolame] could not load options" );
         pthread_mutex_unlock( &encoder->queue.mutex );
         goto end;
     }
