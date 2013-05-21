@@ -188,7 +188,7 @@ enum stream_formats_e
 
 enum mp2_mode_e
 {
-    MP2_MODE_AUTO,
+    MP2_MODE_AUTO = -1,
     MP2_MODE_STEREO,
     MP2_MODE_JOINT_STEREO,
     MP2_MODE_DUAL_CHANNEL,
