@@ -742,10 +742,7 @@ static int set_stream( char *command, obecli_command_t *child )
                     default_bitrate = 256;
 
                     if( mp2_mode )
-                    {
                         parse_enum_value( mp2_mode, mp2_modes, &cli.output_streams[output_stream_id].mp2_mode );
-                        cli.output_streams[output_stream_id].mp2_mode--;
-                    }
                 }
                 else if( cli.output_streams[output_stream_id].stream_format == AUDIO_AC_3 )
                     default_bitrate = 192;

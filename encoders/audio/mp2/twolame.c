@@ -67,7 +67,7 @@ static void *start_encoder( void *ptr )
     twolame_set_num_channels( tl_opts, av_get_channel_layout_nb_channels( stream->channel_layout ) );
     twolame_set_error_protection( tl_opts, 1 );
     if( stream->channel_layout == AV_CH_LAYOUT_STEREO )
-        twolame_set_mode( tl_opts, stream->mp2_mode );
+        twolame_set_mode( tl_opts, stream->mp2_mode-1 );
 
     twolame_init_params( tl_opts );
 
