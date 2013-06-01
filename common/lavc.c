@@ -37,7 +37,6 @@ int obe_get_buffer( AVCodecContext *codec, AVFrame *pic )
     if( av_image_alloc( pic->data, pic->linesize, w, h + 1, codec->pix_fmt, 32 ) < 0 )
         return -1;
 
-    pic->type   = FF_BUFFER_TYPE_USER;
     pic->reordered_opaque = codec->reordered_opaque;
     pic->pkt_pts = codec->pkt ? codec->pkt->pts : AV_NOPTS_VALUE;
 
@@ -55,10 +54,7 @@ void obe_release_buffer( AVCodecContext *codec, AVFrame *pic )
 int obe_reget_buffer( AVCodecContext *codec, AVFrame *pic )
 {
     if( pic->data[0] == NULL )
-    {
-        pic->buffer_hints |= FF_BUFFER_HINTS_READABLE;
         return codec->get_buffer( codec, pic );
-    }
 
     pic->reordered_opaque = codec->reordered_opaque;
     pic->pkt_pts = codec->pkt ? codec->pkt->pts : AV_NOPTS_VALUE;
