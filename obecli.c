@@ -79,6 +79,7 @@ static const char * const audio_types[]              = { "undefined", "clean-eff
 static const char * const aac_profiles[]             = { "aac-lc", "he-aac-v1", "he-aac-v2" };
 static const char * const aac_encapsulations[]       = { "adts", "latm", 0 };
 static const char * const mp2_modes[]                = { "auto", "stereo", "joint-stereo", "dual-channel", 0 };
+static const char * const mono_channels[]            = { "left", "right", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 
 static const char * system_opts[] = { "system-type", NULL };
@@ -94,7 +95,7 @@ static const char * stream_opts[] = { "action", "format",
                                       "width", "max-refs",
 
                                       /* Audio options */
-                                      "sdi-audio-pair",
+                                      "sdi-audio-pair", "channel-map", "mono-channel"
                                       /* AAC options */
                                       "aac-profile", "aac-encap",
                                       /* MP2 options */
@@ -599,18 +600,20 @@ static int set_stream( char *command, obecli_command_t *child )
 
             /* Audio Options */
             char *sdi_audio_pair = obe_get_option( stream_opts[22], opts );
+            char *channel_map    = obe_get_option( stream_opts[23], opts );
+            char *mono_channel   = obe_get_option( stream_opts[24], opts );
 
             /* AAC options */
-            char *aac_profile = obe_get_option( stream_opts[23], opts );
-            char *aac_encap   = obe_get_option( stream_opts[24], opts );
+            char *aac_profile = obe_get_option( stream_opts[25], opts );
+            char *aac_encap   = obe_get_option( stream_opts[26], opts );
 
             /* MP2 options */
-            char *mp2_mode    = obe_get_option( stream_opts[25], opts );
+            char *mp2_mode    = obe_get_option( stream_opts[27], opts );
 
             /* NB: remap these and the ttx values below if more encoding options are added - TODO: split them up */
-            char *pid         = obe_get_option( stream_opts[26], opts );
-            char *lang        = obe_get_option( stream_opts[27], opts );
-            char *audio_type  = obe_get_option( stream_opts[28], opts );
+            char *pid         = obe_get_option( stream_opts[28], opts );
+            char *lang        = obe_get_option( stream_opts[29], opts );
+            char *audio_type  = obe_get_option( stream_opts[30], opts );
 
             if( input_stream->stream_type == STREAM_TYPE_VIDEO )
             {
@@ -730,6 +733,12 @@ static int set_stream( char *command, obecli_command_t *child )
                 FAIL_IF_ERROR( mp2_mode && check_enum_value( mp2_mode, mp2_modes ) < 0,
                               "Invalid MP2 mode\n" );
 
+                FAIL_IF_ERROR( channel_map && !av_get_channel_layout( channel_map ),
+                              "Invalid Channel Map\n" );
+
+                FAIL_IF_ERROR( mp2_mode && check_enum_value( mp2_mode, mp2_modes ) < 0,
+                              "Invalid MP2 mode\n" );
+
                 if( action )
                     parse_enum_value( action, stream_actions, &cli.output_streams[output_stream_id].stream_action );
                 if( format )
@@ -737,9 +746,14 @@ static int set_stream( char *command, obecli_command_t *child )
                 if( audio_type )
                     parse_enum_value( audio_type, audio_types, &cli.output_streams[output_stream_id].ts_opts.audio_type );
 
+                uint64_t channel_layout = channel_map ? av_get_channel_layout( channel_map ) : 0;
+
                 if( cli.output_streams[output_stream_id].stream_format == AUDIO_MP2 )
                 {
                     default_bitrate = 256;
+
+                    FAIL_IF_ERROR( channel_map && av_get_channel_layout_nb_channels( channel_layout ) > 2,
+                              "MP2 audio supports only stereo audio\n" );
 
                     if( mp2_mode )
                         parse_enum_value( mp2_mode, mp2_modes, &cli.output_streams[output_stream_id].mp2_mode );
@@ -761,6 +775,7 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 cli.output_streams[output_stream_id].bitrate = obe_otoi( bitrate, default_bitrate );
                 cli.output_streams[output_stream_id].sdi_audio_pair = obe_otoi( sdi_audio_pair, cli.output_streams[output_stream_id].sdi_audio_pair );
+                cli.output_streams[output_stream_id].channel_layout = channel_layout;
 
                 if( lang && strlen( lang ) >= 3 )
                 {
@@ -773,10 +788,10 @@ static int set_stream( char *command, obecli_command_t *child )
                      input_stream->stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
-                char *ttx_lang = obe_get_option( stream_opts[30], opts );
-                char *ttx_type = obe_get_option( stream_opts[31], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[32], opts );
-                char *ttx_page = obe_get_option( stream_opts[33], opts );
+                char *ttx_lang = obe_get_option( stream_opts[32], opts );
+                char *ttx_type = obe_get_option( stream_opts[33], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[34], opts );
+                char *ttx_page = obe_get_option( stream_opts[35], opts );
 
                 FAIL_IF_ERROR( ttx_type && ( check_enum_value( ttx_type, teletext_types ) < 0 ),
                                "Invalid Teletext type\n" );

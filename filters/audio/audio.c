@@ -30,6 +30,7 @@ static void *start_filter( void *ptr )
     obe_t *h = filter_params->h;
     obe_filter_t *filter = filter_params->filter;
     obe_output_stream_t *output_stream;
+    int num_channels;
 
     while( 1 )
     {
@@ -51,6 +52,7 @@ static void *start_filter( void *ptr )
         for( int i = 1; i < h->num_encoders; i++ )
         {
             output_stream = get_output_stream( h, h->encoders[i]->output_stream_id );
+            num_channels = av_get_channel_layout_nb_channels( output_stream->channel_layout );
 
             split_raw_frame = new_raw_frame();
             if( !split_raw_frame )
@@ -61,9 +63,9 @@ static void *start_filter( void *ptr )
             memcpy( split_raw_frame, raw_frame, sizeof(*split_raw_frame) );
             memset( split_raw_frame->audio_frame.audio_data, 0, sizeof(split_raw_frame->audio_frame.audio_data) );
             split_raw_frame->audio_frame.linesize = split_raw_frame->audio_frame.num_channels = 0;
-            split_raw_frame->audio_frame.channel_layout = AV_CH_LAYOUT_STEREO;
+            split_raw_frame->audio_frame.channel_layout = output_stream->channel_layout;
 
-            if( av_samples_alloc( split_raw_frame->audio_frame.audio_data, &split_raw_frame->audio_frame.linesize, 2,
+            if( av_samples_alloc( split_raw_frame->audio_frame.audio_data, &split_raw_frame->audio_frame.linesize, num_channels,
                                   split_raw_frame->audio_frame.num_samples, split_raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
             {
                 syslog( LOG_ERR, "Malloc failed\n" );
@@ -71,8 +73,9 @@ static void *start_filter( void *ptr )
             }
 
             /* TODO: offset the channel pointers by the user's request */
-            av_samples_copy( split_raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.audio_data[(output_stream->sdi_audio_pair-1)<<1], 0, 0,
-                             split_raw_frame->audio_frame.num_samples, 2, split_raw_frame->audio_frame.sample_fmt );
+            av_samples_copy( split_raw_frame->audio_frame.audio_data,
+                             &raw_frame->audio_frame.audio_data[((output_stream->sdi_audio_pair-1)<<1)+output_stream->mono_channel], 0, 0,
+                             split_raw_frame->audio_frame.num_samples, num_channels, split_raw_frame->audio_frame.sample_fmt );
 
             add_to_encode_queue( h, split_raw_frame, h->encoders[i]->output_stream_id );
         }
