@@ -166,7 +166,7 @@ static void *start_encoder( void *ptr )
         goto finish;
     }
 
-    if( av_samples_alloc( audio_planes, NULL, codec->channels, codec->frame_size, codec->sample_fmt, 1 ) < 0 )
+    if( av_samples_alloc( audio_planes, NULL, codec->channels, codec->frame_size, codec->sample_fmt, 0 ) < 0 )
     {
         fprintf( stderr, "Could not allocate audio samples\n" );
         goto finish;
