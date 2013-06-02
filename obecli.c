@@ -760,6 +760,7 @@ static int set_stream( char *command, obecli_command_t *child )
                 }
 
                 cli.output_streams[output_stream_id].bitrate = obe_otoi( bitrate, default_bitrate );
+                cli.output_streams[output_stream_id].sdi_audio_pair = obe_otoi( sdi_audio_pair, cli.output_streams[output_stream_id].sdi_audio_pair );
 
                 if( lang && strlen( lang ) >= 3 )
                 {
@@ -767,8 +768,6 @@ static int set_stream( char *command, obecli_command_t *child )
                     memcpy( cli.output_streams[output_stream_id].ts_opts.lang_code, lang, 3 );
                     cli.output_streams[output_stream_id].ts_opts.lang_code[3] = 0;
                 }
-
-                cli.output_streams[output_stream_id].sdi_audio_pair = obe_otoi( sdi_audio_pair, cli.output_streams[output_stream_id].sdi_audio_pair );
             }
             else if( input_stream->stream_format == MISC_TELETEXT ||
                      input_stream->stream_format == VBI_RAW )
