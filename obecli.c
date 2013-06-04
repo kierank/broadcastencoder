@@ -104,7 +104,7 @@ static const char * stream_opts[] = { "action", "format",
                                       "pid", "lang", "audio-type", "num-ttx", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page",
                                       NULL };
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrough", "ts-id", "program-num", "pmt-pid", "pcr-pid",
-                                      "pcr-period", "pat-period", NULL };
+                                      "pcr-period", "pat-period", "service-name", "provider-name", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
 static const char * output_opts[] = { "target", NULL };
 
@@ -854,6 +854,8 @@ static int set_muxer( char *command, obecli_command_t *child )
         char *pcr_pid     = obe_get_option( muxer_opts[7], opts );
         char *pcr_period  = obe_get_option( muxer_opts[8], opts );
         char *pat_period  = obe_get_option( muxer_opts[9], opts );
+        char *service_name  = obe_get_option( muxer_opts[10], opts );
+        char *provider_name = obe_get_option( muxer_opts[11], opts );
 
         FAIL_IF_ERROR( ts_type && ( check_enum_value( ts_type, ts_types ) < 0 ),
                       "Invalid AVC profile\n" );
@@ -871,6 +873,25 @@ static int set_muxer( char *command, obecli_command_t *child )
         cli.mux_opts.pcr_pid    = obe_otoi( pcr_pid, cli.mux_opts.pcr_pid  );
         cli.mux_opts.pcr_period = obe_otoi( pcr_period, cli.mux_opts.pcr_period );
         cli.mux_opts.pat_period = obe_otoi( pat_period, cli.mux_opts.pat_period );
+
+        if( service_name )
+        {
+             if( cli.mux_opts.service_name )
+                 free( cli.mux_opts.service_name );
+
+             cli.mux_opts.service_name = malloc( strlen( service_name ) + 1 );
+             FAIL_IF_ERROR( !cli.mux_opts.service_name "malloc failed\n" );
+             strcpy( cli.mux_opts.service_name, service_name );
+        }
+        if( provider_name )
+        {
+             if( cli.mux_opts.provider_name )
+                 free( cli.mux_opts.provider_name );
+
+             cli.mux_opts.provider_name = malloc( strlen( provider_name ) + 1 );
+             FAIL_IF_ERROR( !cli.mux_opts.provider_name "malloc failed\n" );
+             strcpy( cli.mux_opts.provider_name, provider_name );
+        }
         obe_free_string_array( opts );
     }
 
@@ -1260,6 +1281,18 @@ static int stop_encode( char *command, obecli_command_t *child )
     {
         free( cli.input.location );
         cli.input.location = NULL;
+    }
+
+    if( cli.mux_opts.service_name )
+    {
+        free( cli.mux_opts.service_name );
+        cli.mux_opts.service_name = NULL;
+    }
+
+    if( cli.mux_opts.provider_name )
+    {
+        free( cli.mux_opts.provider_name );
+        cli.mux_opts.provider_name = NULL;
     }
 
     if( cli.output_streams )
