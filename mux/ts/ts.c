@@ -263,23 +263,12 @@ void *open_muxer( void *ptr )
         }
         else if( stream_format == AUDIO_AAC )
         {
-            /* TODO: handle associated switching */
-            int profile_and_level, num_channels = av_get_channel_layout_nb_channels( output_stream->channel_layout );
-
-            if( num_channels > 2 )
-                profile_and_level = output_stream->aac_opts.aac_profile == AAC_HE_V2 ? LIBMPEGTS_MPEG4_HE_AAC_V2_PROFILE_LEVEL_5 :
-                                    output_stream->aac_opts.aac_profile == AAC_HE_V1 ? LIBMPEGTS_MPEG4_HE_AAC_PROFILE_LEVEL_5 :
-                                                                                       LIBMPEGTS_MPEG4_AAC_PROFILE_LEVEL_5;
-            else
-                profile_and_level = output_stream->aac_opts.aac_profile == AAC_HE_V2 ? LIBMPEGTS_MPEG4_HE_AAC_V2_PROFILE_LEVEL_2 :
+            /* TODO: handle 5.1 audio and associated switching */
+            int profile_and_level = output_stream->aac_opts.aac_profile == AAC_HE_V2 ? LIBMPEGTS_MPEG4_HE_AAC_V2_PROFILE_LEVEL_2 :
                                     output_stream->aac_opts.aac_profile == AAC_HE_V1 ? LIBMPEGTS_MPEG4_HE_AAC_PROFILE_LEVEL_2 :
-                                                                                       LIBMPEGTS_MPEG4_AAC_PROFILE_LEVEL_2;
+                                    LIBMPEGTS_MPEG4_AAC_PROFILE_LEVEL_2;
 
-            /* T-STD ignores LFE channel */
-            if( output_stream->channel_layout & AV_CH_LOW_FREQUENCY )
-                num_channels--;
-
-            if( ts_setup_mpeg4_aac_stream( w, stream->pid, profile_and_level, num_channels ) < 0 )
+            if( ts_setup_mpeg4_aac_stream( w, stream->pid, profile_and_level, 2 ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup AAC stream\n" );
                 goto end;

@@ -194,12 +194,6 @@ enum mp2_mode_e
     MP2_MODE_DUAL_CHANNEL,
 };
 
-enum mono_channel_e
-{
-    MONO_CHANNEL_LEFT,
-    MONO_CHANNEL_RIGHT,
-};
-
 typedef struct
 {
      int type;
@@ -417,7 +411,6 @@ typedef struct
     int bitrate;
     int sdi_audio_pair;
     uint64_t channel_layout;
-    int mono_channel;
 
     /* Metadata */
     obe_audio_metadata_t audio_metadata;
