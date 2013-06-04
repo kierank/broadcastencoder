@@ -880,7 +880,7 @@ static int set_muxer( char *command, obecli_command_t *child )
                  free( cli.mux_opts.service_name );
 
              cli.mux_opts.service_name = malloc( strlen( service_name ) + 1 );
-             FAIL_IF_ERROR( !cli.mux_opts.service_name "malloc failed\n" );
+             FAIL_IF_ERROR( !cli.mux_opts.service_name, "malloc failed\n" );
              strcpy( cli.mux_opts.service_name, service_name );
         }
         if( provider_name )
@@ -889,7 +889,7 @@ static int set_muxer( char *command, obecli_command_t *child )
                  free( cli.mux_opts.provider_name );
 
              cli.mux_opts.provider_name = malloc( strlen( provider_name ) + 1 );
-             FAIL_IF_ERROR( !cli.mux_opts.provider_name "malloc failed\n" );
+             FAIL_IF_ERROR( !cli.mux_opts.provider_name, "malloc failed\n" );
              strcpy( cli.mux_opts.provider_name, provider_name );
         }
         obe_free_string_array( opts );
