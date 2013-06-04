@@ -231,7 +231,7 @@ void *open_muxer( void *ptr )
     if( !mux_opts->passthrough )
         program.pcr_pid = mux_opts->pcr_pid ? mux_opts->pcr_pid : video_pid;
 
-    program.sdt.service_type = height >= 720 ? DVB_SERVICE_TYPE_ADVANCED_CODEC_HD ? DVB_SERVICE_TYPE_ADVANCED_CODEC_SD;
+    program.sdt.service_type = height >= 720 ? DVB_SERVICE_TYPE_ADVANCED_CODEC_HD : DVB_SERVICE_TYPE_ADVANCED_CODEC_SD;
     program.sdt.service_name = mux_opts->service_name ? mux_opts->service_name : service_name;
     program.sdt.provider_name = mux_opts->provider_name ? mux_opts->provider_name : provider_name;;
 
