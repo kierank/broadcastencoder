@@ -775,7 +775,8 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 cli.output_streams[output_stream_id].bitrate = obe_otoi( bitrate, default_bitrate );
                 cli.output_streams[output_stream_id].sdi_audio_pair = obe_otoi( sdi_audio_pair, cli.output_streams[output_stream_id].sdi_audio_pair );
-                cli.output_streams[output_stream_id].channel_layout = channel_layout;
+                if( channel_layout )
+                    cli.output_streams[output_stream_id].channel_layout = channel_layout;
 
                 if( lang && strlen( lang ) >= 3 )
                 {
