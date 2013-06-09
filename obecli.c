@@ -717,7 +717,7 @@ static int set_stream( char *command, obecli_command_t *child )
             else if( input_stream->stream_type == STREAM_TYPE_AUDIO )
             {
                 int default_bitrate = 0, channel_map_idx;
-                uint64_t channel_layouts;
+                uint64_t channel_layout;
 
                 /* Set it to encode by default */
                 cli.output_streams[output_stream_id].stream_action = STREAM_ENCODE;
