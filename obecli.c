@@ -748,7 +748,7 @@ static int set_stream( char *command, obecli_command_t *child )
                               "Invalid Channel Map\n" );
 
                 FAIL_IF_ERROR( mono_channel && check_enum_value( mono_channel, mono_channels ) < 0,
-                              "Invalid Channel Map\n" );
+                              "Invalid Mono channel selection\n" );
 
                 if( action )
                     parse_enum_value( action, stream_actions, &cli.output_streams[output_stream_id].stream_action );
