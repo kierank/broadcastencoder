@@ -79,6 +79,7 @@ static const char * const audio_types[]              = { "undefined", "clean-eff
 static const char * const aac_profiles[]             = { "aac-lc", "he-aac-v1", "he-aac-v2" };
 static const char * const aac_encapsulations[]       = { "adts", "latm", 0 };
 static const char * const mp2_modes[]                = { "auto", "stereo", "joint-stereo", "dual-channel", 0 };
+static const char * const channel_maps[]             = { "", "mono", "stereo", "5.0", "5.1", 0 };
 static const char * const mono_channels[]            = { "left", "right", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 
@@ -95,7 +96,7 @@ static const char * stream_opts[] = { "action", "format",
                                       "width", "max-refs",
 
                                       /* Audio options */
-                                      "sdi-audio-pair", "channel-map", "mono-channel"
+                                      "sdi-audio-pair", "channel-map", "mono-channel",
                                       /* AAC options */
                                       "aac-profile", "aac-encap",
                                       /* MP2 options */
@@ -131,6 +132,15 @@ const static int allowed_resolutions[17][2] =
     {  640,  720 },
     { 0, 0 }
 };
+
+const static uint64_t channel_layouts[] =
+{
+    AV_CH_LAYOUT_STEREO,
+    AV_CH_LAYOUT_MONO,
+    AV_CH_LAYOUT_STEREO,
+    AV_CH_LAYOUT_5POINT0_BACK,
+    AV_CH_LAYOUT_5POINT1_BACK,
+ };
 
 void obe_cli_printf( const char *name, const char *fmt, ... )
 {
@@ -706,7 +716,8 @@ static int set_stream( char *command, obecli_command_t *child )
             }
             else if( input_stream->stream_type == STREAM_TYPE_AUDIO )
             {
-                int default_bitrate = 0;
+                int default_bitrate = 0, channel_map_idx;
+                uint64_t channel_layout;
 
                 /* Set it to encode by default */
                 cli.output_streams[output_stream_id].stream_action = STREAM_ENCODE;
@@ -733,11 +744,11 @@ static int set_stream( char *command, obecli_command_t *child )
                 FAIL_IF_ERROR( mp2_mode && check_enum_value( mp2_mode, mp2_modes ) < 0,
                               "Invalid MP2 mode\n" );
 
-                FAIL_IF_ERROR( channel_map && !av_get_channel_layout( channel_map ),
+                FAIL_IF_ERROR( channel_map && check_enum_value( channel_map, channel_maps ) < 0,
                               "Invalid Channel Map\n" );
 
-                FAIL_IF_ERROR( mp2_mode && check_enum_value( mp2_mode, mp2_modes ) < 0,
-                              "Invalid MP2 mode\n" );
+                FAIL_IF_ERROR( mono_channel && check_enum_value( mono_channel, mono_channels ) < 0,
+                              "Invalid Mono channel selection\n" );
 
                 if( action )
                     parse_enum_value( action, stream_actions, &cli.output_streams[output_stream_id].stream_action );
@@ -745,15 +756,19 @@ static int set_stream( char *command, obecli_command_t *child )
                     parse_enum_value( format, encode_formats, &cli.output_streams[output_stream_id].stream_format );
                 if( audio_type )
                     parse_enum_value( audio_type, audio_types, &cli.output_streams[output_stream_id].ts_opts.audio_type );
+                if( channel_map )
+                    parse_enum_value( channel_map, channel_maps, &channel_map_idx );
+                if( mono_channel )
+                    parse_enum_value( mono_channel, mono_channels, &cli.output_streams[output_stream_id].mono_channel );
 
-                uint64_t channel_layout = channel_map ? av_get_channel_layout( channel_map ) : 0;
+                channel_layout = channel_layouts[channel_map_idx];
 
                 if( cli.output_streams[output_stream_id].stream_format == AUDIO_MP2 )
                 {
                     default_bitrate = 256;
 
                     FAIL_IF_ERROR( channel_map && av_get_channel_layout_nb_channels( channel_layout ) > 2,
-                              "MP2 audio supports only stereo audio\n" );
+                                   "MP2 audio supports only stereo audio\n" );
 
                     if( mp2_mode )
                         parse_enum_value( mp2_mode, mp2_modes, &cli.output_streams[output_stream_id].mp2_mode );
@@ -775,7 +790,8 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 cli.output_streams[output_stream_id].bitrate = obe_otoi( bitrate, default_bitrate );
                 cli.output_streams[output_stream_id].sdi_audio_pair = obe_otoi( sdi_audio_pair, cli.output_streams[output_stream_id].sdi_audio_pair );
-                cli.output_streams[output_stream_id].channel_layout = channel_layout;
+                if( channel_map )
+                    cli.output_streams[output_stream_id].channel_layout = channel_layout;
 
                 if( lang && strlen( lang ) >= 3 )
                 {
