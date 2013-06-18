@@ -183,7 +183,7 @@ static void *open_output( void *ptr )
     struct ip_status status;
     hnd_t ip_handle = NULL;
     int num_muxed_data = 0;
-    uint8_t **muxed_data;
+    AVBufferRef **muxed_data;
     obe_udp_opts_t udp_opts;
 
     struct sched_param param = {0};
@@ -243,17 +243,17 @@ static void *open_output( void *ptr )
         {
             if( output_params->output_opts.output == OUTPUT_RTP )
             {
-                if( write_rtp_pkt( ip_handle, &muxed_data[i][7*sizeof(int64_t)], TS_PACKETS_SIZE, AV_RN64( muxed_data[i] ) ) < 0 )
+                if( write_rtp_pkt( ip_handle, &muxed_data[i]->data[7*sizeof(int64_t)], TS_PACKETS_SIZE, AV_RN64( muxed_data[i]->data ) ) < 0 )
                     syslog( LOG_ERR, "[rtp] Failed to write RTP packet\n" );
             }
             else
             {
-                if( udp_write( ip_handle, &muxed_data[i][7*sizeof(int64_t)], TS_PACKETS_SIZE ) < 0 )
+                if( udp_write( ip_handle, &muxed_data[i]->data[7*sizeof(int64_t)], TS_PACKETS_SIZE ) < 0 )
                     syslog( LOG_ERR, "[udp] Failed to write UDP packet\n" );
             }
 
             remove_from_queue( &h->output_queue );
-            free( muxed_data[i] );
+            av_buffer_unref( &muxed_data[i] );
         }
 
         free( muxed_data );

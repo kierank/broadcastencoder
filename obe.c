@@ -369,7 +369,7 @@ static void destroy_output( obe_t *h )
 {
     pthread_mutex_lock( &h->output_queue.mutex );
     for( int i = 0; i < h->output_queue.size; i++ )
-        destroy_muxed_data( h->output_queue.queue[i] );
+        av_buffer_unref( h->output_queue.queue[i] );
 
     obe_destroy_queue( &h->output_queue );
 }

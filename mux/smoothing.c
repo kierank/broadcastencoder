@@ -24,6 +24,7 @@
 #include <libavutil/mathematics.h>
 #include <libavutil/intreadwrite.h>
 #include <libavutil/fifo.h>
+#include <libavutil/buffer.h>
 #include "common/common.h"
 
 static void *start_smoothing( void *ptr )
@@ -33,7 +34,7 @@ static void *start_smoothing( void *ptr )
     int64_t start_clock = -1, start_pcr, end_pcr, temporal_vbv_size = 0, cur_pcr;
     obe_muxed_data_t **muxed_data = NULL, *start_data, *end_data;
     AVFifoBuffer *fifo_data = NULL, *fifo_pcr = NULL;
-    uint8_t *output_buf;
+    AVBufferRef *output_buf;
 
     struct sched_param param = {0};
     param.sched_priority = 99;
@@ -160,16 +161,11 @@ static void *start_smoothing( void *ptr )
 
         while( av_fifo_size( fifo_data ) >= TS_PACKETS_SIZE )
         {
-            output_buf = malloc( TS_PACKETS_SIZE + 7 * sizeof(int64_t) );
-            if( !output_buf )
-            {
-                syslog( LOG_ERR, "Malloc failed\n" );
-                return NULL;
-            }
-            av_fifo_generic_read( fifo_pcr, output_buf, 7 * sizeof(int64_t), NULL );
-            av_fifo_generic_read( fifo_data, &output_buf[7 * sizeof(int64_t)], TS_PACKETS_SIZE, NULL );
+            output_buf = av_buffer_alloc( TS_PACKETS_SIZE + 7 * sizeof(int64_t) );
+            av_fifo_generic_read( fifo_pcr, output_buf->data, 7 * sizeof(int64_t), NULL );
+            av_fifo_generic_read( fifo_data, &output_buf->data[7 * sizeof(int64_t)], TS_PACKETS_SIZE, NULL );
 
-            cur_pcr = AV_RN64( output_buf );
+            cur_pcr = AV_RN64( output_buf->data );
 
             if( start_clock != -1 )
             {
