@@ -41,6 +41,7 @@ obe_t *obe_setup( void );
 enum obe_system_type_e
 {
     OBE_SYSTEM_TYPE_GENERIC,
+    OBE_SYSTEM_TYPE_LOWEST_LATENCY,
     OBE_SYSTEM_TYPE_LOW_LATENCY,
 };
 
@@ -183,6 +184,14 @@ enum stream_formats_e
     VANC_DTV_DATA_BROADCAST,
     VANC_SMPTE_VBI,
     VANC_SCTE_104,
+};
+
+enum mp2_mode_e
+{
+    MP2_MODE_AUTO,
+    MP2_MODE_STEREO,
+    MP2_MODE_JOINT_STEREO,
+    MP2_MODE_DUAL_CHANNEL,
 };
 
 typedef struct
@@ -408,6 +417,9 @@ typedef struct
 
     /* AAC */
     obe_aac_opts_t aac_opts;
+
+    /* MP2 */
+    int mp2_mode;
 
     /** Mux options **/
     /* MPEG-TS */

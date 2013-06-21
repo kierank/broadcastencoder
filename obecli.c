@@ -62,7 +62,7 @@ static char *line_read = NULL;
 static int running = 0;
 static int system_type_value = OBE_SYSTEM_TYPE_GENERIC;
 
-static const char * const system_types[]             = { "generic", "lowlatency", 0 };
+static const char * const system_types[]             = { "generic", "lowestlatency", "lowlatency", 0 };
 static const char * const input_types[]              = { "url", "decklink", "linsys-sdi", 0 };
 static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50", "720p59.94", "720p60", "1080i50", "1080i59.94", "1080i60",
                                                          "1080p23.98", "1080p24", "1080p25", "1080p29.97", "1080p30", "1080p50", "1080p59.94",
@@ -79,6 +79,7 @@ static const char * const audio_types[]              = { "undefined", "clean-eff
 static const char * const aac_profiles[]             = { "aac-lc", "he-aac-v1", "he-aac-v2" };
 static const char * const aac_encapsulations[]       = { "adts", "latm", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "file", 0 };
+static const char * const mp2_modes[]                = { "auto", "stereo", "joint-stereo", "dual-channel", 0 };
 
 static const char * system_opts[] = { "system-type", NULL };
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", "ttx-location",
@@ -96,6 +97,8 @@ static const char * stream_opts[] = { "action", "format",
                                       "sdi-audio-pair",
                                       /* AAC options */
                                       "aac-profile", "aac-encap",
+                                      /* MP2 options */
+                                      "mp2-mode",
                                       /* TS options */
                                       "pid", "lang", "audio-type", "num-ttx", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page",
                                       NULL };
@@ -601,10 +604,13 @@ static int set_stream( char *command, obecli_command_t *child )
             char *aac_profile = obe_get_option( stream_opts[23], opts );
             char *aac_encap   = obe_get_option( stream_opts[24], opts );
 
+            /* MP2 options */
+            char *mp2_mode    = obe_get_option( stream_opts[25], opts );
+
             /* NB: remap these and the ttx values below if more encoding options are added - TODO: split them up */
-            char *pid         = obe_get_option( stream_opts[25], opts );
-            char *lang        = obe_get_option( stream_opts[26], opts );
-            char *audio_type  = obe_get_option( stream_opts[27], opts );
+            char *pid         = obe_get_option( stream_opts[26], opts );
+            char *lang        = obe_get_option( stream_opts[27], opts );
+            char *audio_type  = obe_get_option( stream_opts[28], opts );
 
             if( input_stream->stream_type == STREAM_TYPE_VIDEO )
             {
@@ -613,8 +619,8 @@ static int set_stream( char *command, obecli_command_t *child )
                 FAIL_IF_ERROR( profile && ( check_enum_value( profile, x264_profile_names ) < 0 ),
                                "Invalid AVC profile\n" );
 
-                FAIL_IF_ERROR( vbv_bufsize && system_type_value == OBE_SYSTEM_TYPE_LOW_LATENCY,
-                               "VBV buffer size is not user-settable in low-latency mode\n" );
+                FAIL_IF_ERROR( vbv_bufsize && system_type_value == OBE_SYSTEM_TYPE_LOWEST_LATENCY,
+                               "VBV buffer size is not user-settable in lowest-latency mode\n" );
 
                 FAIL_IF_ERROR( frame_packing && ( check_enum_value( frame_packing, frame_packing_modes ) < 0 ),
                                "Invalid frame packing mode\n" )
@@ -721,6 +727,9 @@ static int set_stream( char *command, obecli_command_t *child )
                                !cli.output_streams[output_stream_id].ts_opts.write_lang_code && !( lang && strlen( lang ) >= 3 ),
                                "Audio type requires setting a language\n" );
 
+                FAIL_IF_ERROR( mp2_mode && check_enum_value( mp2_mode, mp2_modes ) < 0,
+                              "Invalid MP2 mode\n" );
+
                 if( action )
                     parse_enum_value( action, stream_actions, &cli.output_streams[output_stream_id].stream_action );
                 if( format )
@@ -729,7 +738,12 @@ static int set_stream( char *command, obecli_command_t *child )
                     parse_enum_value( audio_type, audio_types, &cli.output_streams[output_stream_id].ts_opts.audio_type );
 
                 if( cli.output_streams[output_stream_id].stream_format == AUDIO_MP2 )
+                {
                     default_bitrate = 256;
+
+                    if( mp2_mode )
+                        parse_enum_value( mp2_mode, mp2_modes, &cli.output_streams[output_stream_id].mp2_mode );
+                }
                 else if( cli.output_streams[output_stream_id].stream_format == AUDIO_AC_3 )
                     default_bitrate = 192;
                 else if( cli.output_streams[output_stream_id].stream_format == AUDIO_E_AC_3 )
@@ -746,6 +760,7 @@ static int set_stream( char *command, obecli_command_t *child )
                 }
 
                 cli.output_streams[output_stream_id].bitrate = obe_otoi( bitrate, default_bitrate );
+                cli.output_streams[output_stream_id].sdi_audio_pair = obe_otoi( sdi_audio_pair, cli.output_streams[output_stream_id].sdi_audio_pair );
 
                 if( lang && strlen( lang ) >= 3 )
                 {
@@ -753,17 +768,15 @@ static int set_stream( char *command, obecli_command_t *child )
                     memcpy( cli.output_streams[output_stream_id].ts_opts.lang_code, lang, 3 );
                     cli.output_streams[output_stream_id].ts_opts.lang_code[3] = 0;
                 }
-
-                cli.output_streams[output_stream_id].sdi_audio_pair = obe_otoi( sdi_audio_pair, cli.output_streams[output_stream_id].sdi_audio_pair );
             }
             else if( input_stream->stream_format == MISC_TELETEXT ||
                      input_stream->stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
-                char *ttx_lang = obe_get_option( stream_opts[29], opts );
-                char *ttx_type = obe_get_option( stream_opts[30], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[31], opts );
-                char *ttx_page = obe_get_option( stream_opts[32], opts );
+                char *ttx_lang = obe_get_option( stream_opts[30], opts );
+                char *ttx_type = obe_get_option( stream_opts[31], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[32], opts );
+                char *ttx_page = obe_get_option( stream_opts[33], opts );
 
                 FAIL_IF_ERROR( ttx_type && ( check_enum_value( ttx_type, teletext_types ) < 0 ),
                                "Invalid Teletext type\n" );
@@ -1151,14 +1164,14 @@ static int start_encode( char *command, obecli_command_t *child )
         if( input_stream->stream_type == STREAM_TYPE_VIDEO )
         {
             /* x264 calculates the single-frame VBV size later on */
-            FAIL_IF_ERROR( system_type_value == OBE_SYSTEM_TYPE_GENERIC && !cli.output_streams[i].avc_param.rc.i_vbv_buffer_size,
+            FAIL_IF_ERROR( system_type_value != OBE_SYSTEM_TYPE_LOWEST_LATENCY && !cli.output_streams[i].avc_param.rc.i_vbv_buffer_size,
                            "No VBV buffer size chosen\n" );
 
             FAIL_IF_ERROR( !cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate && !cli.output_streams[i].avc_param.rc.i_bitrate,
                            "No bitrate chosen\n" );
 
-            if( cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate && !cli.output_streams[i].avc_param.rc.i_bitrate )
-                cli.output_streams[i].avc_param.rc.i_bitrate = cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate;
+            if( !cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate && cli.output_streams[i].avc_param.rc.i_bitrate )
+                cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate = cli.output_streams[i].avc_param.rc.i_bitrate;
 
             cli.output_streams[i].stream_action = STREAM_ENCODE;
             cli.output_streams[i].stream_format = VIDEO_AVC;
@@ -1203,6 +1216,7 @@ static int start_encode( char *command, obecli_command_t *child )
     }
 
     FAIL_IF_ERROR( !cli.mux_opts.ts_muxrate, "No mux rate selected\n" );
+    FAIL_IF_ERROR( cli.mux_opts.ts_muxrate < 100000, "Mux rate too low - mux rate is in bits/s, not kb/s\n" );
 
     if( !cli.output.target )
     {
