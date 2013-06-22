@@ -610,18 +610,20 @@ static int set_stream( char *command, obecli_command_t *child )
 
             /* Audio Options */
             char *sdi_audio_pair = obe_get_option( stream_opts[22], opts );
+            char *channel_map    = obe_get_option( stream_opts[23], opts );
+            char *mono_channel   = obe_get_option( stream_opts[24], opts );
 
             /* AAC options */
-            char *aac_profile = obe_get_option( stream_opts[23], opts );
-            char *aac_encap   = obe_get_option( stream_opts[24], opts );
+            char *aac_profile = obe_get_option( stream_opts[25], opts );
+            char *aac_encap   = obe_get_option( stream_opts[26], opts );
 
             /* MP2 options */
-            char *mp2_mode    = obe_get_option( stream_opts[25], opts );
+            char *mp2_mode    = obe_get_option( stream_opts[27], opts );
 
             /* NB: remap these and the ttx values below if more encoding options are added - TODO: split them up */
-            char *pid         = obe_get_option( stream_opts[26], opts );
-            char *lang        = obe_get_option( stream_opts[27], opts );
-            char *audio_type  = obe_get_option( stream_opts[28], opts );
+            char *pid         = obe_get_option( stream_opts[28], opts );
+            char *lang        = obe_get_option( stream_opts[29], opts );
+            char *audio_type  = obe_get_option( stream_opts[30], opts );
 
             if( input_stream->stream_type == STREAM_TYPE_VIDEO )
             {
@@ -802,10 +804,10 @@ static int set_stream( char *command, obecli_command_t *child )
                      input_stream->stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
-                char *ttx_lang = obe_get_option( stream_opts[30], opts );
-                char *ttx_type = obe_get_option( stream_opts[31], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[32], opts );
-                char *ttx_page = obe_get_option( stream_opts[33], opts );
+                char *ttx_lang = obe_get_option( stream_opts[32], opts );
+                char *ttx_type = obe_get_option( stream_opts[33], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[34], opts );
+                char *ttx_page = obe_get_option( stream_opts[35], opts );
 
                 FAIL_IF_ERROR( ttx_type && ( check_enum_value( ttx_type, teletext_types ) < 0 ),
                                "Invalid Teletext type\n" );
