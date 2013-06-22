@@ -106,6 +106,8 @@ void *open_muxer( void *ptr )
     obe_encoder_t *encoder;
     obe_muxed_data_t *muxed_data;
     obe_coded_frame_t *coded_frame;
+    char *service_name = "OBE Service";
+    char *provider_name = "Open Broadcast Encoder";
 
     struct sched_param param = {0};
     param.sched_priority = 99;
@@ -229,10 +231,23 @@ void *open_muxer( void *ptr )
     if( !mux_opts->passthrough )
         program.pcr_pid = mux_opts->pcr_pid ? mux_opts->pcr_pid : video_pid;
 
+    program.sdt.service_type = height >= 720 ? DVB_SERVICE_TYPE_ADVANCED_CODEC_HD : DVB_SERVICE_TYPE_ADVANCED_CODEC_SD;
+    program.sdt.service_name = mux_opts->service_name ? mux_opts->service_name : service_name;
+    program.sdt.provider_name = mux_opts->provider_name ? mux_opts->provider_name : provider_name;;
+
     if( ts_setup_transport_stream( w, &params ) < 0 )
     {
         fprintf( stderr, "[ts] Transport stream setup failed\n" );
         goto end;
+    }
+
+    if( mux_opts->ts_type == OBE_TS_TYPE_GENERIC || mux_opts->ts_type == OBE_TS_TYPE_DVB )
+    {
+        if( ts_setup_sdt( w ) < 0 )
+        {
+            fprintf( stderr, "[ts] SDT setup failed\n" );
+            goto end;
+        }
     }
 
     /* setup any streams if necessary */

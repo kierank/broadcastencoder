@@ -79,6 +79,8 @@ static const char * const audio_types[]              = { "undefined", "clean-eff
 static const char * const aac_profiles[]             = { "aac-lc", "he-aac-v1", "he-aac-v2" };
 static const char * const aac_encapsulations[]       = { "adts", "latm", 0 };
 static const char * const mp2_modes[]                = { "auto", "stereo", "joint-stereo", "dual-channel", 0 };
+static const char * const channel_maps[]             = { "", "mono", "stereo", "5.0", "5.1", 0 };
+static const char * const mono_channels[]            = { "left", "right", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 
 static const char * system_opts[] = { "system-type", NULL };
@@ -94,7 +96,7 @@ static const char * stream_opts[] = { "action", "format",
                                       "width", "max-refs",
 
                                       /* Audio options */
-                                      "sdi-audio-pair",
+                                      "sdi-audio-pair", "channel-map", "mono-channel",
                                       /* AAC options */
                                       "aac-profile", "aac-encap",
                                       /* MP2 options */
@@ -103,7 +105,7 @@ static const char * stream_opts[] = { "action", "format",
                                       "pid", "lang", "audio-type", "num-ttx", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page",
                                       NULL };
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrough", "ts-id", "program-num", "pmt-pid", "pcr-pid",
-                                      "pcr-period", "pat-period", NULL };
+                                      "pcr-period", "pat-period", "service-name", "provider-name", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
 static const char * output_opts[] = { "target", NULL };
 
@@ -130,6 +132,15 @@ const static int allowed_resolutions[17][2] =
     {  640,  720 },
     { 0, 0 }
 };
+
+const static uint64_t channel_layouts[] =
+{
+    AV_CH_LAYOUT_STEREO,
+    AV_CH_LAYOUT_MONO,
+    AV_CH_LAYOUT_STEREO,
+    AV_CH_LAYOUT_5POINT0_BACK,
+    AV_CH_LAYOUT_5POINT1_BACK,
+ };
 
 void obe_cli_printf( const char *name, const char *fmt, ... )
 {
@@ -703,7 +714,8 @@ static int set_stream( char *command, obecli_command_t *child )
             }
             else if( input_stream->stream_type == STREAM_TYPE_AUDIO )
             {
-                int default_bitrate = 0;
+                int default_bitrate = 0, channel_map_idx;
+                uint64_t channel_layout;
 
                 /* Set it to encode by default */
                 cli.output_streams[output_stream_id].stream_action = STREAM_ENCODE;
@@ -730,16 +742,31 @@ static int set_stream( char *command, obecli_command_t *child )
                 FAIL_IF_ERROR( mp2_mode && check_enum_value( mp2_mode, mp2_modes ) < 0,
                               "Invalid MP2 mode\n" );
 
+                FAIL_IF_ERROR( channel_map && check_enum_value( channel_map, channel_maps ) < 0,
+                              "Invalid Channel Map\n" );
+
+                FAIL_IF_ERROR( mono_channel && check_enum_value( mono_channel, mono_channels ) < 0,
+                              "Invalid Mono channel selection\n" );
+
                 if( action )
                     parse_enum_value( action, stream_actions, &cli.output_streams[output_stream_id].stream_action );
                 if( format )
                     parse_enum_value( format, encode_formats, &cli.output_streams[output_stream_id].stream_format );
                 if( audio_type )
                     parse_enum_value( audio_type, audio_types, &cli.output_streams[output_stream_id].ts_opts.audio_type );
+                if( channel_map )
+                    parse_enum_value( channel_map, channel_maps, &channel_map_idx );
+                if( mono_channel )
+                    parse_enum_value( mono_channel, mono_channels, &cli.output_streams[output_stream_id].mono_channel );
+
+                channel_layout = channel_layouts[channel_map_idx];
 
                 if( cli.output_streams[output_stream_id].stream_format == AUDIO_MP2 )
                 {
                     default_bitrate = 256;
+
+                    FAIL_IF_ERROR( channel_map && av_get_channel_layout_nb_channels( channel_layout ) > 2,
+                                   "MP2 audio does not support > 2 channels of audio\n" );
 
                     if( mp2_mode )
                         parse_enum_value( mp2_mode, mp2_modes, &cli.output_streams[output_stream_id].mp2_mode );
@@ -761,6 +788,8 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 cli.output_streams[output_stream_id].bitrate = obe_otoi( bitrate, default_bitrate );
                 cli.output_streams[output_stream_id].sdi_audio_pair = obe_otoi( sdi_audio_pair, cli.output_streams[output_stream_id].sdi_audio_pair );
+                if( channel_map )
+                    cli.output_streams[output_stream_id].channel_layout = channel_layout;
 
                 if( lang && strlen( lang ) >= 3 )
                 {
@@ -839,6 +868,8 @@ static int set_muxer( char *command, obecli_command_t *child )
         char *pcr_pid     = obe_get_option( muxer_opts[7], opts );
         char *pcr_period  = obe_get_option( muxer_opts[8], opts );
         char *pat_period  = obe_get_option( muxer_opts[9], opts );
+        char *service_name  = obe_get_option( muxer_opts[10], opts );
+        char *provider_name = obe_get_option( muxer_opts[11], opts );
 
         FAIL_IF_ERROR( ts_type && ( check_enum_value( ts_type, ts_types ) < 0 ),
                       "Invalid AVC profile\n" );
@@ -856,6 +887,25 @@ static int set_muxer( char *command, obecli_command_t *child )
         cli.mux_opts.pcr_pid    = obe_otoi( pcr_pid, cli.mux_opts.pcr_pid  );
         cli.mux_opts.pcr_period = obe_otoi( pcr_period, cli.mux_opts.pcr_period );
         cli.mux_opts.pat_period = obe_otoi( pat_period, cli.mux_opts.pat_period );
+
+        if( service_name )
+        {
+             if( cli.mux_opts.service_name )
+                 free( cli.mux_opts.service_name );
+
+             cli.mux_opts.service_name = malloc( strlen( service_name ) + 1 );
+             FAIL_IF_ERROR( !cli.mux_opts.service_name, "malloc failed\n" );
+             strcpy( cli.mux_opts.service_name, service_name );
+        }
+        if( provider_name )
+        {
+             if( cli.mux_opts.provider_name )
+                 free( cli.mux_opts.provider_name );
+
+             cli.mux_opts.provider_name = malloc( strlen( provider_name ) + 1 );
+             FAIL_IF_ERROR( !cli.mux_opts.provider_name, "malloc failed\n" );
+             strcpy( cli.mux_opts.provider_name, provider_name );
+        }
         obe_free_string_array( opts );
     }
 
@@ -1245,6 +1295,18 @@ static int stop_encode( char *command, obecli_command_t *child )
     {
         free( cli.input.location );
         cli.input.location = NULL;
+    }
+
+    if( cli.mux_opts.service_name )
+    {
+        free( cli.mux_opts.service_name );
+        cli.mux_opts.service_name = NULL;
+    }
+
+    if( cli.mux_opts.provider_name )
+    {
+        free( cli.mux_opts.provider_name );
+        cli.mux_opts.provider_name = NULL;
     }
 
     if( cli.output_streams )

@@ -467,6 +467,8 @@ typedef struct
     int is_3dtv;
 
     /* DVB */
+    char *service_name;
+    char *provider_name;
 
     /* ATSC */
     int sb_leak_rate;
