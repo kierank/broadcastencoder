@@ -337,6 +337,11 @@ static void destroy_mux( obe_t *h )
         destroy_coded_frame( h->mux_queue.queue[i] );
 
     obe_destroy_queue( &h->mux_queue );
+
+    if( h->mux_opts.service_name )
+        free( h->mux_opts.service_name );
+    if( h->mux_opts.provider_name )
+        free( h->mux_opts.provider_name );
 }
 
 int remove_early_frames( obe_t *h, int64_t pts )
@@ -818,6 +823,30 @@ int obe_setup_muxer( obe_t *h, obe_mux_opts_t *mux_opts )
     // TODO sanity check
 
     memcpy( &h->mux_opts, mux_opts, sizeof(obe_mux_opts_t) );
+
+    if( mux_opts->service_name )
+    {
+       h->mux_opts.service_name = malloc( strlen( mux_opts->service_name ) + 1 );
+       if( !h->mux_opts.service_name )
+       {
+           fprintf( stderr, "Malloc failed \n" );
+           return -1;
+        }
+
+        strcpy( h->mux_opts.service_name, mux_opts->service_name );
+    }
+    if( mux_opts->provider_name )
+    {
+       h->mux_opts.provider_name = malloc( strlen( mux_opts->provider_name ) + 1 );
+       if( !h->mux_opts.provider_name )
+       {
+           fprintf( stderr, "Malloc failed \n" );
+           return -1;
+        }
+
+        strcpy( h->mux_opts.provider_name, mux_opts->provider_name );
+    }
+
     return 0;
 }
 

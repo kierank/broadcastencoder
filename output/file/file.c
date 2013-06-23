@@ -47,7 +47,7 @@ static void *open_output( void *ptr )
     struct file_status status;
     FILE *fp = NULL;
     int num_muxed_data = 0;
-    uint8_t **muxed_data;
+    AVBufferRef **muxed_data;
 
     status.output_params = output_params;
     status.fp = &fp;
@@ -89,10 +89,10 @@ static void *open_output( void *ptr )
 
         for( int i = 0; i < num_muxed_data; i++ )
         {
-            fwrite( &muxed_data[i][7*sizeof(int64_t)], 1, TS_PACKETS_SIZE, fp );
+            fwrite( &muxed_data[i]->data[7*sizeof(int64_t)], 1, TS_PACKETS_SIZE, fp );
 
             remove_from_queue( &h->output_queue );
-            free( muxed_data[i] );
+            av_buffer_unref( &muxed_data[i] );
         }
 
         free( muxed_data );

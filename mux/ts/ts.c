@@ -106,6 +106,8 @@ void *open_muxer( void *ptr )
     obe_encoder_t *encoder;
     obe_muxed_data_t *muxed_data;
     obe_coded_frame_t *coded_frame;
+    char *service_name = "OBE Service";
+    char *provider_name = "Open Broadcast Encoder";
 
     struct sched_param param = {0};
     param.sched_priority = 99;
@@ -229,10 +231,23 @@ void *open_muxer( void *ptr )
     if( !mux_opts->passthrough )
         program.pcr_pid = mux_opts->pcr_pid ? mux_opts->pcr_pid : video_pid;
 
+    program.sdt.service_type = height >= 720 ? DVB_SERVICE_TYPE_ADVANCED_CODEC_HD : DVB_SERVICE_TYPE_ADVANCED_CODEC_SD;
+    program.sdt.service_name = mux_opts->service_name ? mux_opts->service_name : service_name;
+    program.sdt.provider_name = mux_opts->provider_name ? mux_opts->provider_name : provider_name;;
+
     if( ts_setup_transport_stream( w, &params ) < 0 )
     {
         fprintf( stderr, "[ts] Transport stream setup failed\n" );
         goto end;
+    }
+
+    if( mux_opts->ts_type == OBE_TS_TYPE_GENERIC || mux_opts->ts_type == OBE_TS_TYPE_DVB )
+    {
+        if( ts_setup_sdt( w ) < 0 )
+        {
+            fprintf( stderr, "[ts] SDT setup failed\n" );
+            goto end;
+        }
     }
 
     /* setup any streams if necessary */
@@ -263,12 +278,23 @@ void *open_muxer( void *ptr )
         }
         else if( stream_format == AUDIO_AAC )
         {
-            /* TODO: handle 5.1 audio and associated switching */
-            int profile_and_level = output_stream->aac_opts.aac_profile == AAC_HE_V2 ? LIBMPEGTS_MPEG4_HE_AAC_V2_PROFILE_LEVEL_2 :
-                                    output_stream->aac_opts.aac_profile == AAC_HE_V1 ? LIBMPEGTS_MPEG4_HE_AAC_PROFILE_LEVEL_2 :
-                                    LIBMPEGTS_MPEG4_AAC_PROFILE_LEVEL_2;
+            /* TODO: handle associated switching */
+            int profile_and_level, num_channels = av_get_channel_layout_nb_channels( output_stream->channel_layout );
 
-            if( ts_setup_mpeg4_aac_stream( w, stream->pid, profile_and_level, 2 ) < 0 )
+            if( num_channels > 2 )
+                profile_and_level = output_stream->aac_opts.aac_profile == AAC_HE_V2 ? LIBMPEGTS_MPEG4_HE_AAC_V2_PROFILE_LEVEL_5 :
+                                    output_stream->aac_opts.aac_profile == AAC_HE_V1 ? LIBMPEGTS_MPEG4_HE_AAC_PROFILE_LEVEL_5 :
+                                                                                       LIBMPEGTS_MPEG4_AAC_PROFILE_LEVEL_5;
+            else
+                profile_and_level = output_stream->aac_opts.aac_profile == AAC_HE_V2 ? LIBMPEGTS_MPEG4_HE_AAC_V2_PROFILE_LEVEL_2 :
+                                    output_stream->aac_opts.aac_profile == AAC_HE_V1 ? LIBMPEGTS_MPEG4_HE_AAC_PROFILE_LEVEL_2 :
+                                                                                       LIBMPEGTS_MPEG4_AAC_PROFILE_LEVEL_2;
+
+            /* T-STD ignores LFE channel */
+            if( output_stream->channel_layout & AV_CH_LOW_FREQUENCY )
+                num_channels--;
+
+            if( ts_setup_mpeg4_aac_stream( w, stream->pid, profile_and_level, num_channels ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup AAC stream\n" );
                 goto end;
