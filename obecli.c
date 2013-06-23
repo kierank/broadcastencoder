@@ -78,7 +78,6 @@ static const char * const teletext_types[]           = { "", "initial", "subtitl
 static const char * const audio_types[]              = { "undefined", "clean-effects", "hearing-impaired", "visual-impaired", 0 };
 static const char * const aac_profiles[]             = { "aac-lc", "he-aac-v1", "he-aac-v2" };
 static const char * const aac_encapsulations[]       = { "adts", "latm", 0 };
-static const char * const output_modules[]           = { "udp", "rtp", "file", 0 };
 static const char * const mp2_modes[]                = { "auto", "stereo", "joint-stereo", "dual-channel", 0 };
 static const char * const channel_maps[]             = { "", "mono", "stereo", "5.0", "5.1", 0 };
 static const char * const mono_channels[]            = { "left", "right", 0 };
