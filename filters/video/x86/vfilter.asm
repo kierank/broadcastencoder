@@ -1,4 +1,3 @@
-%include "x86inc.asm"
 %include "x86util.asm"
 
 SECTION .rodata
@@ -10,70 +9,48 @@ shift: dd 11
 SECTION .text
 
 ;
-; obe_scale_plane( uint16_t *src, int stride, int width, int height, int lshift, int rshift )
-;
-
-%macro SCALE_plane 1
-
-cglobal scale_plane_%1, 6,6
-    imul   r1d, r3d
-    movd    m2, r4d
-    movd    m3, r5d
-.loop
-    mova    m0, [r0]
-    psllw   m1, m0, m2
-    psrlw   m0, m3
-    paddw   m0, m1
-    mova   [r0], m0
-    sub     r1d, mmsize
-    lea     r0, [r0+mmsize]
-    jg .loop
-    REP_RET
-%endmacro
-
-INIT_MMX
-SCALE_plane mmxext
-INIT_XMM
-SCALE_plane sse2
-INIT_AVX
-SCALE_plane avx
-
-;
 ; obe_dither_row_10_to_8( uint16_t *src, uint8_t *dst, const uint16_t *dithers, int width, int stride )
 ;
 
-%macro DITHER_row 1
+%macro DITHER_row 0
 
-cglobal dither_row_10_to_8_%1, 5, 5
+cglobal dither_row_10_to_8, 5, 5, 8
     mova      m2, [r2]
-    mova      m3, [scale]
-    movd      m4, [shift]
-    pxor      m5, m5
+    mova      m5, [scale]
+    movd      m6, [shift]
+    pxor      m7, m7
     lea       r0, [r0+2*r3]
     add       r1, r3
     neg       r3
 
 .loop
     paddw     m0, m2, [r0+2*r3]
+    paddw     m1, m2, [r0+2*r3+16]
 
-    punpcklwd m1, m0, m5
-    punpckhwd m0, m5
-    pmulld    m1, m3
-    pmulld    m0, m3
-    psrld     m1, m4
-    psrld     m0, m4
+    punpcklwd m3, m0, m7
+    punpcklwd m4, m1, m7
+    punpckhwd m0, m7
+    punpckhwd m1, m7
+    pmulld    m3, m5
+    pmulld    m4, m5
+    pmulld    m0, m5
+    pmulld    m1, m5
+    psrld     m3, m6
+    psrld     m4, m6
+    psrld     m0, m6
+    psrld     m1, m6
+    packusdw  m3, m0
+    packusdw  m4, m1
 
-    packusdw  m1, m0
-    packuswb  m1, m5
+    packuswb  m3, m4
+    mova      [r1+r3], m3
 
-    movq      [r1+r3], m1
-
-    add       r3, 8
+    add       r3, mmsize
     jl        .loop
     REP_RET
 %endmacro
 
-INIT_XMM
-DITHER_row sse4
-INIT_AVX
-DITHER_row avx
+INIT_XMM sse4
+DITHER_row
+INIT_XMM avx
+DITHER_row
