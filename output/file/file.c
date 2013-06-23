@@ -23,6 +23,7 @@
 
 #include "common/common.h"
 #include "output/output.h"
+#include <libavutil/buffer.h>
 
 struct file_status
 {
