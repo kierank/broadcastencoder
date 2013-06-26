@@ -335,7 +335,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         anc_buf_pos = anc_buf;
         for( int i = 0; i < num_anc_lines; i++ )
         {
-            parse_vanc_line( &decklink_ctx->non_display_parser, raw_frame, anc_buf_pos, width, anc_lines[i] );
+            parse_vanc_line( h, &decklink_ctx->non_display_parser, raw_frame, anc_buf_pos, width, anc_lines[i] );
             anc_buf_pos += anc_line_stride / 2;
         }
 
@@ -375,7 +375,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 tmp_line++;
             }
 
-            if( decode_video_index_information( &decklink_ctx->non_display_parser, anc_buf_pos, raw_frame, vii_line ) < 0 )
+            if( decode_video_index_information( h, &decklink_ctx->non_display_parser, anc_buf_pos, raw_frame, vii_line ) < 0 )
                 goto fail;
 
             if( !decklink_ctx->has_setup_vbi )
@@ -394,7 +394,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 decklink_ctx->has_setup_vbi = 1;
             }
 
-            if( decode_vbi( &decklink_ctx->non_display_parser, vbi_buf, raw_frame ) < 0 )
+            if( decode_vbi( h, &decklink_ctx->non_display_parser, vbi_buf, raw_frame ) < 0 )
                 goto fail;
 
             av_free( vbi_buf );
@@ -930,8 +930,6 @@ static void *probe_stream( void *ptr )
     decklink_opts->video_format = user_opts->video_format;
 
     decklink_opts->probe = non_display_parser->probe = 1;
-    non_display_parser->teletext_location = user_opts->teletext_location;
-    non_display_parser->wss_output = user_opts->wss_output;
 
     decklink_ctx = &decklink_opts->decklink_ctx;
     decklink_ctx->h = h;
@@ -1087,8 +1085,6 @@ static void *open_input( void *ptr )
     decklink_ctx->last_frame_time = -1;
 
     non_display_parser = &decklink_ctx->non_display_parser;
-    non_display_parser->teletext_location = device->user_opts.teletext_location;
-    non_display_parser->wss_output = user_opts->wss_output;
     non_display_parser->device = device;
 
     /* TODO: wait for encoder */

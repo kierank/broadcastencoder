@@ -444,7 +444,7 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
         while( cur_line != first_active_line[j].line )
         {
             linsys_ctx->pack_line( y_src, u_src, v_src, anc_buf_pos, linsys_ctx->width );
-            parse_vanc_line( &linsys_ctx->non_display_parser, raw_frame, anc_buf_pos, linsys_ctx->width, cur_line );
+            parse_vanc_line( h, &linsys_ctx->non_display_parser, raw_frame, anc_buf_pos, linsys_ctx->width, cur_line );
             anc_buf_pos += anc_line_stride / 2;
 
             y_src += output->stride[0] / 2;
@@ -523,7 +523,7 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
                 tmp_line++;
             }
 
-            if( decode_video_index_information( &linsys_ctx->non_display_parser, anc_buf_pos, raw_frame, vii_line ) < 0 )
+            if( decode_video_index_information( h, &linsys_ctx->non_display_parser, anc_buf_pos, raw_frame, vii_line ) < 0 )
                 goto fail;
         }
 
@@ -543,7 +543,7 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
             linsys_ctx->has_setup_vbi = 1;
         }
 
-        if( decode_vbi( &linsys_ctx->non_display_parser, vbi_buf, raw_frame ) < 0 )
+        if( decode_vbi( h, &linsys_ctx->non_display_parser, vbi_buf, raw_frame ) < 0 )
             goto fail;
 
         av_free( vbi_buf );
@@ -619,7 +619,7 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
         if( add_to_filter_queue( h, raw_frame ) < 0 )
             goto fail;
 
-        if( send_vbi_and_ttx( h, &linsys_ctx->non_display_parser, linsys_ctx->device, pts ) < 0 )
+        if( send_vbi_and_ttx( h, &linsys_ctx->non_display_parser, pts ) < 0 )
             goto fail;
 
         linsys_ctx->non_display_parser.num_vbi = 0;
@@ -1148,8 +1148,6 @@ static void *probe_stream( void *ptr )
     linsys_opts.linsys_ctx.h = h;
     linsys_opts.linsys_ctx.last_frame_time = -1;
     linsys_opts.probe = non_display_parser->probe = 1;
-    non_display_parser->teletext_location = user_opts->teletext_location;
-    non_display_parser->wss_output = user_opts->wss_output;
 
     linsys_opts.num_channels = 8;
     linsys_opts.audio_samples = 2000; /* not important yet when probing */
@@ -1276,8 +1274,6 @@ static void *open_input( void *ptr )
     linsys_ctx->last_frame_time = -1;
 
     non_display_parser = &linsys_ctx->non_display_parser;
-    non_display_parser->teletext_location = device->user_opts.teletext_location;
-    non_display_parser->wss_output = user_opts->wss_output;
     non_display_parser->device = device;
 
     /* TODO: wait for encoder */
