@@ -233,7 +233,7 @@ void *open_muxer( void *ptr )
 
     program.sdt.service_type = height >= 720 ? DVB_SERVICE_TYPE_ADVANCED_CODEC_HD : DVB_SERVICE_TYPE_ADVANCED_CODEC_SD;
     program.sdt.service_name = mux_opts->service_name ? mux_opts->service_name : service_name;
-    program.sdt.provider_name = mux_opts->provider_name ? mux_opts->provider_name : provider_name;;
+    program.sdt.provider_name = mux_opts->provider_name ? mux_opts->provider_name : provider_name;
 
     if( ts_setup_transport_stream( w, &params ) < 0 )
     {
