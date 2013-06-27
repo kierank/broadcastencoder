@@ -1349,7 +1349,7 @@ static int probe_device( char *command, obecli_command_t *child )
             free( cli.output_streams );
 
         cli.num_output_streams = cli.program.num_streams;
-        cli.output_streams = calloc( 1, cli.num_output_streams * sizeof(*cli.output_streams) );
+        cli.output_streams = calloc( cli.num_output_streams, sizeof(*cli.output_streams) );
         if( !cli.output_streams )
         {
             fprintf( stderr, "Malloc failed \n" );
