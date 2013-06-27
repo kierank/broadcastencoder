@@ -126,7 +126,7 @@ static void *start_smoothing( void *ptr )
         muxed_data = malloc( num_muxed_data * sizeof(*muxed_data) );
         if( !muxed_data )
         {
-            pthread_mutex_unlock( &h->output_queue.mutex );
+            pthread_mutex_unlock( &h->mux_smoothing_queue.mutex );
             syslog( LOG_ERR, "Malloc failed\n" );
             return NULL;
         }
