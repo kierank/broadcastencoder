@@ -387,6 +387,17 @@ typedef struct
 
 typedef struct
 {
+    /* Output */
+    pthread_t output_thread;
+    int cancel_thread;
+    obe_output_dest_t output_dest;
+
+    /* Muxed frame queue for transmission */
+    obe_queue_t queue;
+} obe_output_t;
+
+typedef struct
+{
     int output_stream_id;
     int is_video;
 
@@ -413,14 +424,6 @@ typedef struct
     /* MPEG-TS */
     int64_t *pcr_list;
 } obe_muxed_data_t;
-
-typedef struct
-{
-    pthread_mutex_t output_mutex;
-    pthread_cond_t  output_cv;
-    int num_muxed_data;
-    obe_muxed_data_t **muxed_data;
-} obe_output_t;
 
 struct obe_t
 {
@@ -449,6 +452,7 @@ struct obe_t
     int num_output_streams;
     obe_output_stream_t *output_streams;
 
+    /** Individual Threads */
     /* Smoothing (video) */
     pthread_t enc_smoothing_thread;
     int cancel_enc_smoothing_thread;
@@ -462,18 +466,18 @@ struct obe_t
     pthread_t mux_smoothing_thread;
     int cancel_mux_smoothing_thread;
 
-    /* Output */
-    pthread_t output_thread;
-    int cancel_output_thread;
-    obe_output_opts_t output_opts;
-
     /* Filtering */
     int num_filters;
     obe_filter_t *filters[MAX_STREAMS];
 
+    /** Multiple Threads **/
     /* Input or Postfiltered frames for encoding */
     int num_encoders;
     obe_encoder_t *encoders[MAX_STREAMS];
+
+    /* Output data */
+    int num_outputs;
+    obe_output_t **outputs;
 
     /* Encoded frames in smoothing buffer */
     obe_queue_t     enc_smoothing_queue;
@@ -486,9 +490,6 @@ struct obe_t
 
     /* Muxed frames in smoothing buffer */
     obe_queue_t mux_smoothing_queue;
-
-    /* Muxed frame queue for transmission */
-    obe_queue_t output_queue;
 
     /* Statistics and Monitoring */
 

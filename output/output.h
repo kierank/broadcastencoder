@@ -29,12 +29,6 @@ typedef struct
     void* (*open_output)( void *ptr );
 } obe_output_func_t;
 
-typedef struct
-{
-    obe_t *h;
-    obe_output_opts_t output_opts;
-} obe_output_params_t;
-
 extern const obe_output_func_t ip_output;
 
 #endif /* OBE_OUTPUT_H */
