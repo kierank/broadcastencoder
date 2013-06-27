@@ -459,7 +459,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             if( add_to_filter_queue( h, raw_frame ) < 0 )
                 goto fail;
 
-            if( send_vbi_and_ttx( h, &decklink_ctx->non_display_parser, decklink_ctx->device, raw_frame->pts ) < 0 )
+            if( send_vbi_and_ttx( h, &decklink_ctx->non_display_parser, raw_frame->pts ) < 0 )
                 goto fail;
 
             decklink_ctx->non_display_parser.num_vbi = 0;
