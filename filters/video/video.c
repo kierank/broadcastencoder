@@ -585,10 +585,8 @@ static int write_bar_data( obe_user_data_t *user_data )
 static int convert_wss_to_afd( obe_user_data_t *user_data, obe_raw_frame_t *raw_frame )
 {
     user_data->data[0] = (wss_to_afd[user_data->data[0]].afd_code << 3) | (wss_to_afd[user_data->data[0]].is_wide << 2);
-    if( write_afd( user_data, raw_frame ) < 0 )
-        return -1;
 
-    return 0;
+    return write_afd( user_data, raw_frame );
 }
 
 static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stream_t *input_stream )
@@ -623,6 +621,8 @@ static void *start_filter( void *ptr )
     obe_int_input_stream_t *input_stream = filter_params->input_stream;
     obe_raw_frame_t *raw_frame;
     obe_output_stream_t *output_stream = get_output_stream( h, 0 ); /* FIXME when output_stream_id for video is not zero */
+    int h_shift, v_shift;
+    const AVPixFmtDescriptor *pfd;
 
     obe_vid_filter_ctx_t *vfilt = calloc( 1, sizeof(*vfilt) );
     if( !vfilt )
@@ -658,13 +658,18 @@ static void *start_filter( void *ptr )
         if( IS_SD( raw_frame->img.format ) )
             blank_lines( raw_frame );
 
-        if( filter_params->target_csp == X264_CSP_I420 && ( raw_frame->img.csp == PIX_FMT_YUV422P || raw_frame->img.csp == PIX_FMT_YUV422P10 ) )
+        if( av_pix_fmt_get_chroma_sub_sample( raw_frame->img.csp, &h_shift, &v_shift ) < 0 )
+            goto end;
+
+        /* Downconvert if input is 4:2:2 and target is 4:2:0 */
+        if( filter_params->target_csp == X264_CSP_I420 && h_shift == 1 && v_shift == 0 )
         {
             if( downconvert_frame( vfilt, raw_frame, output_stream->avc_param.i_width ) < 0 )
                 goto end;
         }
 
-        if( ( raw_frame->img.csp == PIX_FMT_YUV420P10 || raw_frame->img.csp == PIX_FMT_YUV422P10 ) && X264_BIT_DEPTH == 8 )
+        pfd = av_pix_fmt_desc_get( raw_frame->img.csp );
+        if( pfd->comp[0].depth_minus1+1 == 10 && X264_BIT_DEPTH == 8 )
         {
             if( dither_image( vfilt, raw_frame ) < 0 )
                 goto end;

@@ -337,6 +337,11 @@ static void destroy_mux( obe_t *h )
         destroy_coded_frame( h->mux_queue.queue[i] );
 
     obe_destroy_queue( &h->mux_queue );
+
+    if( h->mux_opts.service_name )
+        free( h->mux_opts.service_name );
+    if( h->mux_opts.provider_name )
+        free( h->mux_opts.provider_name );
 }
 
 int remove_early_frames( obe_t *h, int64_t pts )
@@ -369,7 +374,7 @@ static void destroy_output( obe_t *h )
 {
     pthread_mutex_lock( &h->output_queue.mutex );
     for( int i = 0; i < h->output_queue.size; i++ )
-        destroy_muxed_data( h->output_queue.queue[i] );
+        av_buffer_unref( h->output_queue.queue[i] );
 
     obe_destroy_queue( &h->output_queue );
 }
@@ -706,7 +711,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         return -1;
     }
 
-    if( h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
+    if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY || h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
         x264_param_default_preset( param, "veryfast", "zerolatency" );
     else
         x264_param_default( param );
@@ -727,7 +732,8 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         param->b_tff = stream->tff;
 
     /* A reasonable default. x264 won't go higher than this parameter irrespective of speedcontrol */
-    param->i_frame_reference = 4;
+    if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
+        param->i_frame_reference = 4;
 
     if( stream->sar_num && stream->sar_den )
     {
@@ -743,7 +749,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         param->vui.i_colorprim = 5; // BT.470-2 bg
         param->vui.i_transfer  = 5; // BT.470-2 bg
         param->vui.i_colmatrix = 5; // BT.470-2 bg
-        param->i_keyint_max = param->i_fps_num >> 1;
+        param->i_keyint_max = param->i_fps_num == 50 ? 48 : 24;
     }
     else if( ( param->i_fps_num == 30000 || param->i_fps_num == 60000 ) && param->i_fps_den == 1001 )
     {
@@ -751,7 +757,7 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         param->vui.i_colorprim = 6; // BT.601-6
         param->vui.i_transfer  = 6; // BT.601-6
         param->vui.i_colmatrix = 6; // BT.601-6
-        param->i_keyint_max = (param->i_fps_num / 1000) >> 1;
+        param->i_keyint_max = param->i_fps_num / 1000;
     }
     else
     {
@@ -817,6 +823,30 @@ int obe_setup_muxer( obe_t *h, obe_mux_opts_t *mux_opts )
     // TODO sanity check
 
     memcpy( &h->mux_opts, mux_opts, sizeof(obe_mux_opts_t) );
+
+    if( mux_opts->service_name )
+    {
+       h->mux_opts.service_name = malloc( strlen( mux_opts->service_name ) + 1 );
+       if( !h->mux_opts.service_name )
+       {
+           fprintf( stderr, "Malloc failed \n" );
+           return -1;
+        }
+
+        strcpy( h->mux_opts.service_name, mux_opts->service_name );
+    }
+    if( mux_opts->provider_name )
+    {
+       h->mux_opts.provider_name = malloc( strlen( mux_opts->provider_name ) + 1 );
+       if( !h->mux_opts.provider_name )
+       {
+           fprintf( stderr, "Malloc failed \n" );
+           return -1;
+        }
+
+        strcpy( h->mux_opts.provider_name, mux_opts->provider_name );
+    }
+
     return 0;
 }
 
@@ -928,7 +958,7 @@ int obe_start( obe_t *h )
             if( h->output_streams[i].stream_format == VIDEO_AVC )
             {
                 x264_param_t *x264_param = &h->output_streams[i].avc_param;
-                if( h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
+                if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY )
                 {
                     /* This doesn't need to be particularly accurate since x264 calculates the correct value internally */
                     x264_param->rc.i_vbv_buffer_size = (double)x264_param->rc.i_vbv_max_bitrate * x264_param->i_fps_den / x264_param->i_fps_num;
@@ -977,7 +1007,7 @@ int obe_start( obe_t *h )
 
                 /* Choose the optimal number of audio frames per PES
                  * TODO: This should be set after the encoder has told us the frame size */
-                if( !h->output_streams[i].ts_opts.frames_per_pes && h->obe_system != OBE_SYSTEM_TYPE_LOW_LATENCY &&
+                if( !h->output_streams[i].ts_opts.frames_per_pes && h->obe_system == OBE_SYSTEM_TYPE_GENERIC &&
                     h->output_streams[i].stream_format != AUDIO_E_AC_3 )
                 {
                     int buf_size = h->output_streams[i].stream_format == AUDIO_MP2 || h->output_streams[i].stream_format == AUDIO_AAC ? MISC_AUDIO_BS : AC3_BS_DVB;

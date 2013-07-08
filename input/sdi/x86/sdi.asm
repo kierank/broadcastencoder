@@ -1,4 +1,3 @@
-%include "x86inc.asm"
 %include "x86util.asm"
 
 SECTION_RODATA
@@ -12,13 +11,13 @@ SECTION .text
 
 ; downscale_line( uint16_t *src, uint8_t *dst, int lines );
 
-%macro DOWNSCALE_line 1
+%macro DOWNSCALE_line 0
 
-cglobal downscale_line_%1, 3,3
+cglobal downscale_line, 3,3,2
     imul r2d, 1440
 .loop
     mova   m0, [r0]
-    mova   m1, [r0+mmsize] 
+    mova   m1, [r0+mmsize]
     psrlw  m0, 2
     psrlw  m1, 2
     packuswb m0, m1
@@ -31,15 +30,15 @@ cglobal downscale_line_%1, 3,3
     REP_RET
 %endmacro
 
-INIT_MMX
-DOWNSCALE_line mmx
-INIT_XMM
-DOWNSCALE_line sse2
+INIT_MMX mmx
+DOWNSCALE_line
+INIT_XMM sse2
+DOWNSCALE_line
 
-%macro v210_planar_unpack 2
+%macro v210_planar_unpack 1
 
 ; v210_planar_unpack(const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int width)
-cglobal v210_planar_unpack_%1_%2, 5, 5
+cglobal v210_planar_unpack_%1, 5, 5, 7
     movsxdifnidn r4, r4d
     lea    r1, [r1+2*r4]
     add    r2, r4
@@ -78,12 +77,12 @@ cglobal v210_planar_unpack_%1_%2, 5, 5
     REP_RET
 %endmacro
 
-INIT_XMM
-v210_planar_unpack unaligned, ssse3
-INIT_AVX
-v210_planar_unpack unaligned, avx
+INIT_XMM ssse3
+v210_planar_unpack unaligned
+INIT_XMM avx
+v210_planar_unpack unaligned
 
-INIT_XMM
-v210_planar_unpack aligned, ssse3
-INIT_AVX
-v210_planar_unpack aligned, avx
+INIT_XMM ssse3
+v210_planar_unpack aligned
+INIT_XMM avx
+v210_planar_unpack aligned

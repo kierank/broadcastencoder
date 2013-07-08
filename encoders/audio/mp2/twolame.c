@@ -42,7 +42,7 @@ static void *start_encoder( void *ptr )
     twolame_options *tl_opts = NULL;
     int output_size, frame_size, linesize; /* Linesize in libavresample terminology is the entire buffer size for packed formats */
     int64_t cur_pts = -1;
-    void *audio_buf = NULL;
+    float *audio_buf = NULL;
     uint8_t *output_buf = NULL;
     AVAudioResampleContext *avr = NULL;
     AVFifoBuffer *fifo = NULL;
@@ -53,7 +53,7 @@ static void *start_encoder( void *ptr )
     tl_opts = twolame_init();
     if( !tl_opts )
     {
-        fprintf( stderr, "[twolame] could load options" );
+        fprintf( stderr, "[twolame] could not load options" );
         pthread_mutex_unlock( &encoder->queue.mutex );
         goto end;
     }
@@ -66,6 +66,8 @@ static void *start_encoder( void *ptr )
     twolame_set_original( tl_opts, 1 );
     twolame_set_num_channels( tl_opts, av_get_channel_layout_nb_channels( stream->channel_layout ) );
     twolame_set_error_protection( tl_opts, 1 );
+    if( stream->channel_layout == AV_CH_LAYOUT_STEREO )
+        twolame_set_mode( tl_opts, stream->mp2_mode-1 );
 
     twolame_init_params( tl_opts );
 
@@ -145,7 +147,7 @@ static void *start_encoder( void *ptr )
             break;
         }
 
-        avresample_read( avr, &audio_buf, avresample_available( avr ) );
+        avresample_read( avr, (uint8_t**)&audio_buf, avresample_available( avr ) );
 
         output_size = twolame_encode_buffer_float32_interleaved( tl_opts, audio_buf, raw_frame->audio_frame.num_samples, output_buf, MP2_AUDIO_BUFFER_SIZE );
 

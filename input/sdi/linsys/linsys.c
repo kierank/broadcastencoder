@@ -660,8 +660,8 @@ static int handle_audio_frame( linsys_opts_t *linsys_opts, uint8_t *data )
         return -1;
     }
 
-    if( avresample_convert( linsys_ctx->avr, (void**)raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize,
-                            raw_frame->audio_frame.num_samples, (void**)&data,
+    if( avresample_convert( linsys_ctx->avr, raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize,
+                            raw_frame->audio_frame.num_samples, &data,
                             linsys_ctx->abuffer_size, raw_frame->audio_frame.num_samples ) < 0 )
     {
         syslog( LOG_ERR, "[linsys-sdiaudio] Sample format conversion failed\n" );
