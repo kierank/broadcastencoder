@@ -506,7 +506,7 @@ static void *open_output( void *ptr )
     obe_t *h = output_params->h;
     AVFifoBuffer *fifo_data = NULL;
     int num_muxed_data = 0;
-    uint8_t **muxed_data;
+    AVBufferRef **muxed_data;
 
     fifo_data = av_fifo_alloc( 188 );
     if( !fifo_data )
@@ -552,10 +552,10 @@ static void *open_output( void *ptr )
                 return NULL;
             }
 
-            av_fifo_generic_write( fifo_data, &muxed_data[i][7*sizeof(int64_t)], TS_PACKETS_SIZE, NULL );
+            av_fifo_generic_write( fifo_data, &muxed_data[i]->data[7*sizeof(int64_t)], TS_PACKETS_SIZE, NULL );
 
             remove_from_queue( &h->output_queue );
-            free( muxed_data[i] );
+            av_buffer_unref( muxed_data[i] );
         }
 
         write_packets( linsys_handle, fifo_data );
