@@ -1,5 +1,5 @@
 /* -LICENSE-START-
-** Copyright (c) 2012 Blackmagic Design
+** Copyright (c) 2013 Blackmagic Design
 **
 ** Permission is hereby granted, free of charge, to any person or organization
 ** obtaining a copy of the software and accompanying documentation covered by
@@ -71,6 +71,8 @@ BMD_CONST REFIID IID_IDeckLinkVideoFrameAncillary                 = /* 732E723C-
 BMD_CONST REFIID IID_IDeckLinkAudioInputPacket                    = /* E43D5870-2894-11DE-8C30-0800200C9A66 */ {0xE4,0x3D,0x58,0x70,0x28,0x94,0x11,0xDE,0x8C,0x30,0x08,0x00,0x20,0x0C,0x9A,0x66};
 BMD_CONST REFIID IID_IDeckLinkScreenPreviewCallback               = /* B1D3F49A-85FE-4C5D-95C8-0B5D5DCCD438 */ {0xB1,0xD3,0xF4,0x9A,0x85,0xFE,0x4C,0x5D,0x95,0xC8,0x0B,0x5D,0x5D,0xCC,0xD4,0x38};
 BMD_CONST REFIID IID_IDeckLinkGLScreenPreviewHelper               = /* 504E2209-CAC7-4C1A-9FB4-C5BB6274D22F */ {0x50,0x4E,0x22,0x09,0xCA,0xC7,0x4C,0x1A,0x9F,0xB4,0xC5,0xBB,0x62,0x74,0xD2,0x2F};
+BMD_CONST REFIID IID_IDeckLinkNotificationCallback                = /* B002A1EC-070D-4288-8289-BD5D36E5FF0D */ {0xB0,0x02,0xA1,0xEC,0x07,0x0D,0x42,0x88,0x82,0x89,0xBD,0x5D,0x36,0xE5,0xFF,0x0D};
+BMD_CONST REFIID IID_IDeckLinkNotification                        = /* 0A1FB207-E215-441B-9B19-6FA1575946C5 */ {0x0A,0x1F,0xB2,0x07,0xE2,0x15,0x44,0x1B,0x9B,0x19,0x6F,0xA1,0x57,0x59,0x46,0xC5};
 BMD_CONST REFIID IID_IDeckLinkAttributes                          = /* ABC11843-D966-44CB-96E2-A1CB5D3135C4 */ {0xAB,0xC1,0x18,0x43,0xD9,0x66,0x44,0xCB,0x96,0xE2,0xA1,0xCB,0x5D,0x31,0x35,0xC4};
 BMD_CONST REFIID IID_IDeckLinkKeyer                               = /* 89AFCAF5-65F8-421E-98F7-96FE5F5BFBA3 */ {0x89,0xAF,0xCA,0xF5,0x65,0xF8,0x42,0x1E,0x98,0xF7,0x96,0xFE,0x5F,0x5B,0xFB,0xA3};
 BMD_CONST REFIID IID_IDeckLinkVideoConversion                     = /* 3BBCB8A2-DA2C-42D9-B5D8-88083644E99A */ {0x3B,0xBC,0xB8,0xA2,0xDA,0x2C,0x42,0xD9,0xB5,0xD8,0x88,0x08,0x36,0x44,0xE9,0x9A};
@@ -202,7 +204,9 @@ typedef uint32_t BMDAudioConnection;
 enum _BMDAudioConnection {
     bmdAudioConnectionEmbedded                                   = /* 'embd' */ 0x656D6264,
     bmdAudioConnectionAESEBU                                     = /* 'aes ' */ 0x61657320,
-    bmdAudioConnectionAnalog                                     = /* 'anlg' */ 0x616E6C67
+    bmdAudioConnectionAnalog                                     = /* 'anlg' */ 0x616E6C67,
+    bmdAudioConnectionAnalogXLR                                  = /* 'axlr' */ 0x61786C72,
+    bmdAudioConnectionAnalogRCA                                  = /* 'arca' */ 0x61726361
 };
 
 /* Enum BMDAudioOutputAnalogAESSwitch - Audio output Analog/AESEBU switch */
@@ -285,6 +289,7 @@ enum _BMDDeckLinkAttributeID {
     BMDDeckLinkHasVideoInputAntiAliasingFilter                   = /* 'aafl' */ 0x6161666C,
     BMDDeckLinkHasBypass                                         = /* 'byps' */ 0x62797073,
     BMDDeckLinkSupportsDesktopDisplay                            = /* 'extd' */ 0x65787464,
+    BMDDeckLinkSupportsClockTimingAdjustment                     = /* 'ctad' */ 0x63746164,
 
     /* Integers */
 
@@ -343,6 +348,13 @@ enum _BMD3DPreviewFormat {
     bmd3DPreviewFormatTopBottom                                  = /* 'topb' */ 0x746F7062
 };
 
+/* Enum BMDNotifications - Events that can be subscribed through IDeckLinkNotification */
+
+typedef uint32_t BMDNotifications;
+enum _BMDNotifications {
+    bmdPreferencesChanged                                        = /* 'pref' */ 0x70726566
+};
+
 #if defined(__cplusplus)
 
 // Forward Declarations
@@ -363,6 +375,8 @@ class IDeckLinkVideoFrameAncillary;
 class IDeckLinkAudioInputPacket;
 class IDeckLinkScreenPreviewCallback;
 class IDeckLinkGLScreenPreviewHelper;
+class IDeckLinkNotificationCallback;
+class IDeckLinkNotification;
 class IDeckLinkAttributes;
 class IDeckLinkKeyer;
 class IDeckLinkVideoConversion;
@@ -640,6 +654,23 @@ public:
 
 protected:
     virtual ~IDeckLinkGLScreenPreviewHelper () {}; // call Release method to drop reference count
+};
+
+/* Interface IDeckLinkNotificationCallback - DeckLink Notification Callback Interface */
+
+class IDeckLinkNotificationCallback : public IUnknown
+{
+public:
+    virtual HRESULT Notify (/* in */ BMDNotifications topic, /* in */ uint64_t param1, /* in */ uint64_t param2) = 0;
+};
+
+/* Interface IDeckLinkNotification - DeckLink Notification interface */
+
+class IDeckLinkNotification : public IUnknown
+{
+public:
+    virtual HRESULT Subscribe (/* in */ BMDNotifications topic, /* in */ IDeckLinkNotificationCallback *theCallback) = 0;
+    virtual HRESULT Unsubscribe (/* in */ BMDNotifications topic, /* in */ IDeckLinkNotificationCallback *theCallback) = 0;
 };
 
 /* Interface IDeckLinkAttributes - DeckLink Attribute interface */
