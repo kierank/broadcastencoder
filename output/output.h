@@ -24,6 +24,8 @@
 #ifndef OBE_OUTPUT_H
 #define OBE_OUTPUT_H
 
+#include <libavutil/buffer.h>
+
 typedef struct
 {
     void* (*open_output)( void *ptr );
