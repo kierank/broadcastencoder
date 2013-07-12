@@ -323,10 +323,15 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
 
     if( !vfilt->sws_ctx || raw_frame->reset_obe )
     {
+        if( IS_INTERLACED( raw_frame->img.format ) )
+            vfilt->dst_pix_fmt = raw_frame->img.csp;
+        else
+            vfilt->dst_pix_fmt = raw_frame->img.csp == PIX_FMT_YUV422P10 ? PIX_FMT_YUV420P10 : PIX_FMT_YUV420P;
+
         vfilt->sws_ctx_flags |= SWS_FULL_CHR_H_INP | SWS_ACCURATE_RND | SWS_LANCZOS;
 
         vfilt->sws_ctx = sws_getContext( raw_frame->img.width, raw_frame->img.height, raw_frame->img.csp,
-                                         width, raw_frame->img.height, raw_frame->img.csp,
+                                         width, raw_frame->img.height, vfilt->dst_pix_fmt,
                                          vfilt->sws_ctx_flags, NULL, NULL, NULL );
         if( !vfilt->sws_ctx )
         {
@@ -334,11 +339,6 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
             return -1;
         }
     }
-
-    if( IS_INTERLACED( raw_frame->img.format ) )
-        vfilt->dst_pix_fmt = raw_frame->img.csp;
-    else
-        vfilt->dst_pix_fmt = raw_frame->img.csp == PIX_FMT_YUV422P10 ? PIX_FMT_YUV420P10 : PIX_FMT_YUV420P;
 
     tmp_image.width = width;
     tmp_image.height = raw_frame->img.height;
