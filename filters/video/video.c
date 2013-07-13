@@ -755,7 +755,7 @@ static void *start_filter( void *ptr )
             blank_lines( raw_frame );
 
         /* Resize if necessary. Together with colourspace conversion if progressive */
-        if( raw_frame->img.width != output_stream->avc_param.i_width )
+        if( raw_frame->img.width != output_stream->avc_param.i_width || !IS_INTERLACED( raw_frame->img.format ) )
         {
             if( resize_frame( vfilt, raw_frame, output_stream->avc_param.i_width ) < 0 )
                 goto end;
