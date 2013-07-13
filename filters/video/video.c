@@ -349,10 +349,10 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     tmp_image.width = width;
     tmp_image.height = raw_frame->img.height;
     tmp_image.planes = av_pix_fmt_descriptors[vfilt->dst_pix_fmt].nb_components;
-    tmp_image.format = vfilt->dst_pix_fmt;
+    tmp_image.csp = vfilt->dst_pix_fmt;
 
     if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
-                        tmp_image.format, 16 ) < 0 )
+                        tmp_image.csp, 16 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
