@@ -433,6 +433,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             raw_frame->alloc_img.planes = av_pix_fmt_descriptors[raw_frame->alloc_img.csp].nb_components;
             raw_frame->alloc_img.width = width;
             raw_frame->alloc_img.height = height;
+            raw_frame->alloc_img.format = decklink_opts_->video_format;
             raw_frame->timebase_num = decklink_opts_->timebase_num;
             raw_frame->timebase_den = decklink_opts_->timebase_den;
 
@@ -442,7 +443,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 if( raw_frame->alloc_img.height == 486 )
                     raw_frame->img.height = 480;
 
-                raw_frame->img.format     = decklink_opts_->video_format;
                 raw_frame->img.first_line = first_active_line[j].line;
             }
 

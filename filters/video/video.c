@@ -38,7 +38,6 @@ typedef uint16_t pixel;
 typedef uint8_t pixel;
 #endif
 
-#define PAL_FIRST_NON_BLANKED  24
 #define NTSC_FIRST_NON_BLANKED 22
 
 typedef struct
@@ -258,35 +257,42 @@ static void init_filter( obe_vid_filter_ctx_t *vfilt )
     }
 }
 
+static void blank_line( uint16_t *y, uint16_t *u, uint16_t *v, int width )
+{
+    for( int i = 0; i < width; i++ )
+        y[i] = 0x40;
+
+    for( int i = 0; i < width/2; i++ )
+        u[i] = 0x200;
+
+    for( int i = 0; i < width/2; i++ )
+        v[i] = 0x200;
+}
+
 static void blank_lines( obe_raw_frame_t *raw_frame )
 {
     /* All SDI input is 10-bit 4:2:2 */
     /* FIXME: assumes planar, non-interleaved format */
     uint16_t *y, *u, *v;
-    int cur_line, first_nonblank_line;
+    int cur_line = raw_frame->img.first_line;
 
     y = (uint16_t*)raw_frame->img.plane[0];
     u = (uint16_t*)raw_frame->img.plane[1];
     v = (uint16_t*)raw_frame->img.plane[2];
 
-    cur_line = raw_frame->img.first_line;
-    first_nonblank_line = raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL ? PAL_FIRST_NON_BLANKED : NTSC_FIRST_NON_BLANKED;
-
-    while( cur_line != first_nonblank_line )
+    if( raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL )
+        blank_line( y, u, v, raw_frame->img.width / 2 );
+    else
     {
-        for( int i = 0; i < raw_frame->img.width; i++ )
-            y[i] = 0x40;
-
-        for( int i = 0; i < raw_frame->img.width/2; i++ )
+        while( cur_line != NTSC_FIRST_NON_BLANKED )
         {
-            u[i] = 0x200;
-            v[i] = 0x200;
-        }
+            blank_line( y, u, v, raw_frame->img.width );
 
-        cur_line = sdi_next_line( raw_frame->img.format, cur_line );
-        y += raw_frame->img.stride[0] / 2;
-        u += raw_frame->img.stride[1] / 2;
-        v += raw_frame->img.stride[2] / 2;
+            cur_line = sdi_next_line( raw_frame->img.format, cur_line );
+            y += raw_frame->img.stride[0] / 2;
+            u += raw_frame->img.stride[1] / 2;
+            v += raw_frame->img.stride[2] / 2;
+        }
     }
 }
 

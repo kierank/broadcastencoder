@@ -558,6 +558,7 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
     }
     else
     {
+        raw_frame->alloc_img.format = linsys_opts->video_format;
         if( linsys_ctx->has_vanc )
         {
             /* Just present the coded picture to the encoder */
@@ -604,10 +605,7 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
         }
 
         if( IS_SD( linsys_opts->video_format ) )
-        {
-            raw_frame->img.format     = linsys_opts->video_format;
             raw_frame->img.first_line = first_active_line[j].line;
-        }
 
         raw_frame->timebase_num = linsys_opts->timebase_num;
         raw_frame->timebase_den = linsys_opts->timebase_den;
