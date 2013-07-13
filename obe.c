@@ -76,8 +76,6 @@ obe_raw_frame_t *new_raw_frame( void )
         return NULL;
     }
 
-    raw_frame->alloc_img.format = raw_frame->img.format = -1;
-
     return raw_frame;
 }
 
