@@ -594,6 +594,7 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
             memcpy( raw_frame->img.stride, output->stride, sizeof(output->stride) );
             raw_frame->img.width = linsys_opts->width;
             raw_frame->img.height = linsys_opts->height;
+            raw_frame->img.format = raw_frame->alloc_img.format;
         }
         else
         {
