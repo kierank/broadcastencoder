@@ -555,7 +555,7 @@ static void *open_output( void *ptr )
             av_fifo_generic_write( fifo_data, &muxed_data[i]->data[7*sizeof(int64_t)], TS_PACKETS_SIZE, NULL );
 
             remove_from_queue( &h->output_queue );
-            av_buffer_unref( muxed_data[i] );
+            av_buffer_unref( &muxed_data[i] );
         }
 
         write_packets( linsys_handle, fifo_data );
