@@ -78,7 +78,7 @@ cglobal downsample_chroma_row_%1, 4, 5, 4
     mova m1, [two]
     add       r0, r2
     add       r1, r2
-    lea       r4, [r0+r3]
+    lea       r4, [r0+2*r3]
     neg       r2
 .loop
 

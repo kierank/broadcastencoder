@@ -202,7 +202,7 @@ static void dither_row_10_to_8_c( uint16_t *src, uint8_t *dst, const uint16_t *d
 
 static void downsample_chroma_row_top_c( uint16_t *src, uint16_t *dst, int width, int stride )
 {
-    uint16_t *srcp = src + stride / 2;
+    uint16_t *srcp = src + stride;
 
     for( int i = 0; i < width/2; i++ )
         dst[i] = (3*src[i] + srcp[i] + 2) >> 2;
@@ -210,7 +210,7 @@ static void downsample_chroma_row_top_c( uint16_t *src, uint16_t *dst, int width
 
 static void downsample_chroma_row_bottom_c( uint16_t *src, uint16_t *dst, int width, int stride )
 {
-    uint16_t *srcp = src + stride / 2;
+    uint16_t *srcp = src + stride;
 
     for( int i = 0; i < width/2; i++ )
         dst[i] = (src[i] + 3*srcp[i] + 2) >> 2;
