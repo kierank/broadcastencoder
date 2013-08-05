@@ -42,7 +42,8 @@ static int get_vanc_type( uint8_t did, uint8_t sdid )
 /* TODO/FIXME: check parity, ideally using x86's PF
  *             is it possible to check parity but follow 8-bit backwards compatibility? */
 
-static int parse_afd( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame, uint16_t *line, int line_number, int len )
+static int parse_afd( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame,
+                      uint16_t *line, int line_number, int len )
 {
     obe_int_frame_data_t *tmp, *frame_data;
     obe_user_data_t *tmp2, *user_data;
@@ -92,9 +93,11 @@ static int parse_afd( obe_sdi_non_display_data_t *non_display_data, obe_raw_fram
         return 0;
     }
 
-    if( !non_display_data_was_probed( non_display_data->device, MISC_AFD, VANC_GENERIC, line_number ) )
+    /* Return if user didn't select AFD */
+    if( !check_user_selected_non_display_data( h, MISC_AFD, USER_DATA_LOCATION_FRAME ) )
         return 0;
 
+    /* Return if AFD already exists in frame */
     if( check_active_non_display_data( raw_frame, USER_DATA_AFD ) )
         return 0;
 
@@ -138,7 +141,8 @@ fail:
     return -1;
 }
 
-static int parse_dvb_scte_vbi( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame, uint16_t *line, int line_number, int len )
+static int parse_dvb_scte_vbi( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame,
+                               uint16_t *line, int line_number, int len )
 {
     obe_int_frame_data_t *tmp, *frame_data;
     obe_anc_vbi_t *anc_vbi;
@@ -211,7 +215,8 @@ fail:
     return -1;
 }
 
-static int parse_cdp( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame, uint16_t *line, int line_number, int len )
+static int parse_cdp( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame,
+                      uint16_t *line, int line_number, int len )
 {
     obe_int_frame_data_t *tmp, *frame_data;
     obe_user_data_t *tmp2, *user_data;
@@ -240,9 +245,11 @@ static int parse_cdp( obe_sdi_non_display_data_t *non_display_data, obe_raw_fram
         return 0;
     }
 
-    if( !non_display_data_was_probed( non_display_data->device, CAPTIONS_CEA_708, VANC_GENERIC, line_number ) )
+    /* Return if user didn't select CEA-708 */
+    if( !check_user_selected_non_display_data( h, CAPTIONS_CEA_708, USER_DATA_LOCATION_FRAME ) )
         return 0;
 
+    /* Return if there is already CEA-708 data in the frame */
     if( check_active_non_display_data( raw_frame, USER_DATA_CEA_708_CDP ) )
         return 0;
 
@@ -276,8 +283,8 @@ static int parse_cea_608( uint16_t *line )
 }
 #endif
 
-int parse_vanc_line( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame, uint16_t *line, int width,
-                     int line_number )
+int parse_vanc_line( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame,
+                     uint16_t *line, int width, int line_number )
 {
     int i = 0, j;
     uint16_t vanc_checksum, *pkt_start;
@@ -317,13 +324,13 @@ int parse_vanc_line( obe_sdi_non_display_data_t *non_display_data, obe_raw_frame
                 switch ( get_vanc_type( READ_8( pkt_start[0] ), READ_8( pkt_start[1] ) ) )
                 {
                     case MISC_AFD:
-                        parse_afd( non_display_data, raw_frame, &pkt_start[2], line_number, len );
+                        parse_afd( h, non_display_data, raw_frame, &pkt_start[2], line_number, len );
                         break;
                     case VANC_DVB_SCTE_VBI:
-                        parse_dvb_scte_vbi( non_display_data, raw_frame, &pkt_start[2], line_number, len );
+                        parse_dvb_scte_vbi( h, non_display_data, raw_frame, &pkt_start[2], line_number, len );
                         break;
                     case CAPTIONS_CEA_708:
-                        parse_cdp( non_display_data, raw_frame, &pkt_start[2], line_number, len );
+                        parse_cdp( h, non_display_data, raw_frame, &pkt_start[2], line_number, len );
                         break;
                     default:
                         break;

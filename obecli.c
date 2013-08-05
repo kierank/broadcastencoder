@@ -70,7 +70,6 @@ static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50"
 static const char * const input_video_connections[]  = { "sdi", "hdmi", "optical-sdi", "component", "composite", "s-video", 0 };
 static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", "analogue", 0 };
 static const char * const ttx_locations[]            = { "dvb-ttx", "dvb-vbi", "both", 0 };
-static const char * const wss_outputs[]              = { "afd", "dvb-vbi", "both", 0 };
 static const char * const stream_actions[]           = { "passthrough", "encode", 0 };
 static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", "e-ac3", "aac", 0 };
 static const char * const frame_packing_modes[]      = { "none", "checkerboard", "column", "row", "side-by-side", "top-bottom", "temporal", 0 };
@@ -82,10 +81,10 @@ static const char * const mp2_modes[]                = { "auto", "stereo", "join
 static const char * const channel_maps[]             = { "", "mono", "stereo", "5.0", "5.1", 0 };
 static const char * const mono_channels[]            = { "left", "right", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
+static const char * const addable_streams[]          = { "audio", "ttx" };
 
 static const char * system_opts[] = { "system-type", NULL };
-static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", "ttx-location",
-                                      "wss-output", NULL };
+static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", NULL };
 static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
@@ -103,6 +102,8 @@ static const char * stream_opts[] = { "action", "format",
                                       "mp2-mode",
                                       /* TS options */
                                       "pid", "lang", "audio-type", "num-ttx", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page",
+                                      /* VBI options */
+                                      "vbi-ttx", "vbi-inv-ttx", "vbi-vps", "vbi-wss",
                                       NULL };
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrough", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", "service-name", "provider-name", NULL };
@@ -366,6 +367,7 @@ static char *get_format_name( int stream_format, const obecli_format_name_t *nam
 /* add/remove functions */
 static int add_stream( char *command, obecli_command_t *child )
 {
+    int stream_format = 0;
     obe_output_stream_t *tmp;
     if( !cli.program.num_streams )
     {
@@ -391,8 +393,17 @@ static int add_stream( char *command, obecli_command_t *child )
 
     char *type     = obe_get_option( add_opts[0], opts );
 
-    FAIL_IF_ERROR( strcasecmp( type, "audio" ),
-                   "Only able to add audio streams\n" );
+    FAIL_IF_ERROR( type && ( check_enum_value( type, addable_streams ) < 0 ),
+                   "Stream type is not addable\n" )
+
+    if( !strcasecmp( type, addable_streams[1] ) )
+    {
+        for( int i = 0; i < cli.num_output_streams; i++ )
+        {
+            FAIL_IF_ERROR( cli.output_streams[i].stream_format == MISC_TELETEXT,
+                           "Multiple DVB-TTX PIDs are not supported\n" )
+        }
+    }
 
     tmp = realloc( cli.output_streams, sizeof(*cli.output_streams) * (cli.num_output_streams+1) );
     FAIL_IF_ERROR( !tmp, "malloc failed\n" );
@@ -404,10 +415,19 @@ static int add_stream( char *command, obecli_command_t *child )
         cli.output_streams[i].output_stream_id++;
 
     memset( &cli.output_streams[output_stream_id], 0, sizeof(*cli.output_streams) );
-    cli.output_streams[output_stream_id].input_stream_id = 1; /* FIXME when more stream types are allowed */
+
+    if( !strcasecmp( type, addable_streams[0] ) ) /* Audio */
+    {
+        cli.output_streams[output_stream_id].input_stream_id = 1; /* FIXME when more stream types are allowed */
+        cli.output_streams[output_stream_id].sdi_audio_pair = 1;
+        cli.output_streams[output_stream_id].channel_layout = AV_CH_LAYOUT_STEREO;
+    }
+    else if( !strcasecmp( type, addable_streams[1] ) ) /* DVB-TTX */
+    {
+        cli.output_streams[output_stream_id].input_stream_id = -1;
+        cli.output_streams[output_stream_id].stream_format = stream_format;
+    }
     cli.output_streams[output_stream_id].output_stream_id = output_stream_id;
-    cli.output_streams[output_stream_id].sdi_audio_pair = 1;
-    cli.output_streams[output_stream_id].channel_layout = AV_CH_LAYOUT_STEREO;
 
     printf( "NOTE: output-stream-ids have CHANGED! \n" );
 
@@ -429,6 +449,9 @@ static int remove_stream( char *command, obecli_command_t *child )
 
     FAIL_IF_ERROR( output_stream_id < 0 || output_stream_id == 0 || cli.num_output_streams == 2,
                    "Invalid stream id\n" );
+
+    free( cli.output_streams[output_stream_id].ts_opts.teletext_opts );
+    cli.output_streams[output_stream_id].ts_opts.teletext_opts = NULL;
 
     memmove( &cli.output_streams[output_stream_id], &cli.output_streams[output_stream_id+1], (cli.num_output_streams-1-output_stream_id)*sizeof(*cli.output_streams) );
     tmp = realloc( cli.output_streams, sizeof(*cli.output_streams) * (cli.num_output_streams-1) );
@@ -500,8 +523,6 @@ static int set_input( char *command, obecli_command_t *child )
         char *video_format = obe_get_option( input_opts[2], opts );
         char *video_connection = obe_get_option( input_opts[3], opts );
         char *audio_connection = obe_get_option( input_opts[4], opts );
-        char *ttx_location = obe_get_option( input_opts[5], opts );
-        char *wss_output   = obe_get_option( input_opts[6], opts );
 
         FAIL_IF_ERROR( video_format && ( check_enum_value( video_format, input_video_formats ) < 0 ),
                        "Invalid video format\n" );
@@ -511,12 +532,6 @@ static int set_input( char *command, obecli_command_t *child )
 
         FAIL_IF_ERROR( audio_connection && ( check_enum_value( audio_connection, input_audio_connections ) < 0 ),
                        "Invalid audio connection\n" );
-
-        FAIL_IF_ERROR( ttx_location && ( check_enum_value( ttx_location, ttx_locations ) < 0 ),
-                       "Invalid teletext location\n" );
-
-        FAIL_IF_ERROR( wss_output && ( check_enum_value( wss_output, wss_outputs ) < 0 ),
-                       "Invalid WSS output location\n" );
 
         if( location )
         {
@@ -535,10 +550,6 @@ static int set_input( char *command, obecli_command_t *child )
             parse_enum_value( video_connection, input_video_connections, &cli.input.video_connection );
         if( audio_connection )
             parse_enum_value( audio_connection, input_audio_connections, &cli.input.audio_connection );
-        if( ttx_location )
-            parse_enum_value( ttx_location, ttx_locations, &cli.input.teletext_location );
-        if( wss_output )
-            parse_enum_value( wss_output, wss_outputs, &cli.input.wss_output );
 
         obe_free_string_array( opts );
     }
@@ -553,7 +564,8 @@ static int set_input( char *command, obecli_command_t *child )
 
 static int set_stream( char *command, obecli_command_t *child )
 {
-    obe_input_stream_t *input_stream;
+    obe_input_stream_t *input_stream = NULL;
+    obe_output_stream_t *output_stream;
     int i = 0;
 
     FAIL_IF_ERROR( !cli.num_output_streams, "no output streams \n" );
@@ -573,7 +585,8 @@ static int set_stream( char *command, obecli_command_t *child )
         command[tok_len2] = 0;
 
         int output_stream_id = obe_otoi( command, -1 );
-        input_stream = &cli.program.streams[cli.output_streams[output_stream_id].input_stream_id];
+        output_stream = &cli.output_streams[output_stream_id];
+        input_stream = &cli.program.streams[output_stream->input_stream_id];
 
         FAIL_IF_ERROR( output_stream_id < 0 || output_stream_id > cli.num_output_streams-1,
                        "Invalid stream id\n" );
@@ -800,8 +813,8 @@ static int set_stream( char *command, obecli_command_t *child )
                     cli.output_streams[output_stream_id].ts_opts.lang_code[3] = 0;
                 }
             }
-            else if( input_stream->stream_format == MISC_TELETEXT ||
-                     input_stream->stream_format == VBI_RAW )
+            else if( output_stream->stream_format == MISC_TELETEXT ||
+                     output_stream->stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
                 char *ttx_lang = obe_get_option( stream_opts[32], opts );
@@ -832,6 +845,20 @@ static int set_stream( char *command, obecli_command_t *child )
                     parse_enum_value( ttx_type, teletext_types, &ttx_opts->dvb_teletext_type );
                 ttx_opts->dvb_teletext_magazine_number = obe_otoi( ttx_mag, ttx_opts->dvb_teletext_magazine_number );
                 ttx_opts->dvb_teletext_page_number = obe_otoi( ttx_page, ttx_opts->dvb_teletext_page_number );
+
+                if( output_stream->stream_format == VBI_RAW )
+                {
+                    obe_dvb_vbi_opts_t *vbi_opts = &cli.output_streams[output_stream_id].dvb_vbi_opts;
+                    char *vbi_ttx = obe_get_option( stream_opts[36], opts );
+                    char *vbi_inv_ttx = obe_get_option( stream_opts[37], opts );
+                    char *vbi_vps  = obe_get_option( stream_opts[38], opts );
+                    char *vbi_wss = obe_get_option( stream_opts[39], opts );
+
+                    vbi_opts->ttx = obe_otob( vbi_ttx, vbi_opts->ttx );
+                    vbi_opts->inverted_ttx = obe_otob( vbi_inv_ttx, vbi_opts->inverted_ttx );
+                    vbi_opts->vps = obe_otob( vbi_vps, vbi_opts->vps );
+                    vbi_opts->wss = obe_otob( vbi_wss, vbi_opts->wss );
+                }
             }
 
             cli.output_streams[output_stream_id].ts_opts.pid = obe_otoi( pid, cli.output_streams[output_stream_id].ts_opts.pid );
@@ -1176,15 +1203,22 @@ static int show_input_streams( char *command, obecli_command_t *child )
 static int show_output_streams( char *command, obecli_command_t *child )
 {
     obe_input_stream_t *input_stream;
+    obe_output_stream_t *output_stream;
     char *format_name;
 
     printf( "Encoder outputs: \n" );
 
     for( int i = 0; i < cli.num_output_streams; i++ )
     {
-        input_stream = &cli.program.streams[cli.output_streams[i].input_stream_id];
-        printf( "Output-stream-id: %d - Input-stream-id: %d - ", cli.output_streams[i].output_stream_id, cli.output_streams[i].input_stream_id );
-        if( input_stream->stream_type == STREAM_TYPE_VIDEO )
+        output_stream = &cli.output_streams[i];
+        input_stream = &cli.program.streams[output_stream->input_stream_id];
+        printf( "Output-stream-id: %d - Input-stream-id: %d - ", output_stream->output_stream_id, output_stream->input_stream_id );
+
+        if( output_stream->stream_format == MISC_TELETEXT )
+            printf( "DVB-Teletext\n" );
+        else if( output_stream->stream_format == VBI_RAW )
+            printf( "DVB-VBI\n" );
+        else if( input_stream->stream_type == STREAM_TYPE_VIDEO )
         {
             printf( "Video: AVC \n" );
         }
@@ -1193,10 +1227,7 @@ static int show_output_streams( char *command, obecli_command_t *child )
             format_name = get_format_name( cli.output_streams[i].stream_format, format_names, 0 );
             printf( "Audio: %s - SDI audio pair: %d \n", format_name, cli.output_streams[i].sdi_audio_pair );
         }
-        else if( input_stream->stream_type == MISC_TELETEXT )
-            printf( "DVB-Teletext\n" );
-        else if( input_stream->stream_format == VBI_RAW )
-            printf( "DVB-VBI\n" );
+
     }
 
     printf( "\n" );
@@ -1207,13 +1238,18 @@ static int show_output_streams( char *command, obecli_command_t *child )
 static int start_encode( char *command, obecli_command_t *child )
 {
     obe_input_stream_t *input_stream;
+    obe_output_stream_t *output_stream;
     FAIL_IF_ERROR( running, "Encoder already running\n" );
     FAIL_IF_ERROR( !cli.program.num_streams, "No active devices\n" );
 
     for( int i = 0; i < cli.num_output_streams; i++ )
     {
-        input_stream = &cli.program.streams[cli.output_streams[i].input_stream_id];
-        if( input_stream->stream_type == STREAM_TYPE_VIDEO )
+        output_stream = &cli.output_streams[i];
+        if( output_stream->input_stream_id >= 0 )
+            input_stream = &cli.program.streams[output_stream->input_stream_id];
+        else
+            input_stream = NULL;
+        if( input_stream && input_stream->stream_type == STREAM_TYPE_VIDEO )
         {
             /* x264 calculates the single-frame VBV size later on */
             FAIL_IF_ERROR( system_type_value != OBE_SYSTEM_TYPE_LOWEST_LATENCY && !cli.output_streams[i].avc_param.rc.i_vbv_buffer_size,
@@ -1230,7 +1266,7 @@ static int start_encode( char *command, obecli_command_t *child )
             if( cli.avc_profile >= 0 )
                 x264_param_apply_profile( &cli.output_streams[i].avc_param, x264_profile_names[cli.avc_profile] );
         }
-        else if( input_stream->stream_type == STREAM_TYPE_AUDIO )
+        else if( input_stream && input_stream->stream_type == STREAM_TYPE_AUDIO )
         {
             if( cli.output_streams[i].stream_action == STREAM_PASSTHROUGH && input_stream->stream_format == AUDIO_PCM &&
                 cli.output_streams[i].stream_format != AUDIO_MP2 && cli.output_streams[i].stream_format != AUDIO_AC_3 &&
@@ -1245,24 +1281,27 @@ static int start_encode( char *command, obecli_command_t *child )
                 return -1;
             }
         }
-        else if( input_stream->stream_format == MISC_TELETEXT || input_stream->stream_format == VBI_RAW )
+        else if( output_stream->stream_format == MISC_TELETEXT || output_stream->stream_format == VBI_RAW )
         {
-            int found = input_stream->stream_format == MISC_TELETEXT;
+            int has_ttx = output_stream->stream_format == MISC_TELETEXT;
 
-            /* Search the VBI streams for teletext and complain if teletext isn't set up properly */
-            if( input_stream->stream_format == VBI_RAW )
+            /* Search VBI for teletext and complain if teletext isn't set up properly */
+            if( output_stream->stream_format == VBI_RAW )
             {
-                for( int j = 0; j < input_stream->num_frame_data; j++ )
-                {
-                    if( input_stream->frame_data[j].type == MISC_TELETEXT )
-                    {
-                        found = 1;
-                        break;
-                    }
-                }
+                obe_ts_stream_opts_t *ts_opts = &output_stream->ts_opts;
+                int num_vbi = 0;
+                has_ttx = output_stream->dvb_vbi_opts.ttx;
+
+                num_vbi += output_stream->dvb_vbi_opts.ttx;
+                num_vbi += output_stream->dvb_vbi_opts.inverted_ttx;
+                num_vbi += output_stream->dvb_vbi_opts.vps;
+                num_vbi += output_stream->dvb_vbi_opts.wss;
+
+                FAIL_IF_ERROR( !num_vbi, "No DVB-VBI data added\n" );
+                FAIL_IF_ERROR( !input_stream, "DVB-VBI can only be used with a probed stream\n" );
             }
 
-            FAIL_IF_ERROR( found && !cli.output_streams[i].ts_opts.num_teletexts,
+            FAIL_IF_ERROR( has_ttx && !cli.output_streams[i].ts_opts.num_teletexts,
                            "Teletext stream setup is mandatory\n" );
         }
     }
@@ -1360,7 +1399,11 @@ static int probe_device( char *command, obecli_command_t *child )
             cli.output_streams[i].input_stream_id = i;
             cli.output_streams[i].output_stream_id = cli.program.streams[i].input_stream_id;
             if( cli.program.streams[i].stream_type == STREAM_TYPE_VIDEO )
+            {
                 obe_populate_avc_encoder_params( cli.h, cli.program.streams[i].input_stream_id, &cli.output_streams[i].avc_param );
+                cli.output_streams[i].video_anc.cea_608 = cli.output_streams[i].video_anc.cea_708 = 1;
+                cli.output_streams[i].video_anc.afd = cli.output_streams[i].video_anc.wss_to_afd = 1;
+            }
             else if( cli.program.streams[i].stream_type == STREAM_TYPE_AUDIO )
             {
                 cli.output_streams[i].sdi_audio_pair = 1;

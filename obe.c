@@ -411,6 +411,16 @@ obe_output_stream_t *get_output_stream( obe_t *h, int output_stream_id )
     return NULL;
 }
 
+obe_output_stream_t *get_output_stream_by_format( obe_t *h, int format )
+{
+    for( int i = 0; i < h->num_output_streams; i++ )
+    {
+        if( h->output_streams[i].stream_format == format )
+            return &h->output_streams[i];
+    }
+    return NULL;
+}
+
 obe_t *obe_setup( void )
 {
     openlog( "obe", LOG_NDELAY | LOG_PID, LOG_USER );
@@ -813,6 +823,8 @@ int obe_setup_streams( obe_t *h, obe_output_stream_t *output_streams, int num_st
     }
     memcpy( h->output_streams, output_streams, num_streams * sizeof(*h->output_streams) );
 
+    // TODO sort out VBI
+
     return 0;
 }
 
@@ -824,9 +836,9 @@ int obe_setup_muxer( obe_t *h, obe_mux_opts_t *mux_opts )
 
     if( mux_opts->service_name )
     {
-       h->mux_opts.service_name = malloc( strlen( mux_opts->service_name ) + 1 );
-       if( !h->mux_opts.service_name )
-       {
+        h->mux_opts.service_name = malloc( strlen( mux_opts->service_name ) + 1 );
+        if( !h->mux_opts.service_name )
+        {
            fprintf( stderr, "Malloc failed \n" );
            return -1;
         }
@@ -835,11 +847,11 @@ int obe_setup_muxer( obe_t *h, obe_mux_opts_t *mux_opts )
     }
     if( mux_opts->provider_name )
     {
-       h->mux_opts.provider_name = malloc( strlen( mux_opts->provider_name ) + 1 );
-       if( !h->mux_opts.provider_name )
-       {
-           fprintf( stderr, "Malloc failed \n" );
-           return -1;
+        h->mux_opts.provider_name = malloc( strlen( mux_opts->provider_name ) + 1 );
+        if( !h->mux_opts.provider_name )
+        {
+            fprintf( stderr, "Malloc failed \n" );
+            return -1;
         }
 
         strcpy( h->mux_opts.provider_name, mux_opts->provider_name );
