@@ -365,7 +365,7 @@ static void destroy_mux_smoothing( obe_queue_t *queue )
         destroy_muxed_data( muxed_data );
     }
 
-    obe_destroy_queue( queue )
+    obe_destroy_queue( queue );
 }
 
 int remove_early_frames( obe_t *h, int64_t pts )
