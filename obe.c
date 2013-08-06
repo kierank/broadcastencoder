@@ -357,7 +357,7 @@ static void destroy_mux( obe_t *h )
 
 static void destroy_mux_smoothing( obe_queue_t *queue )
 {
-    obe_coded_frame_t *muxed_data;
+    obe_muxed_data_t *muxed_data;
     pthread_mutex_lock( &queue->mutex );
     for( int i = 0; i < queue->size; i++ )
     {
