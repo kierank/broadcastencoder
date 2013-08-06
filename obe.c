@@ -328,6 +328,19 @@ static void destroy_encoder( obe_encoder_t *encoder )
     free( encoder );
 }
 
+static void destroy_enc_smoothing( obe_queue_t *queue )
+{
+    obe_coded_frame_t *coded_frame;
+    pthread_mutex_lock( &queue->mutex );
+    for( int i = 0; i < queue->size; i++ )
+    {
+        coded_frame = queue->queue[i];
+        destroy_coded_frame( coded_frame );
+    }
+
+    obe_destroy_queue( queue )
+}
+
 static void destroy_mux( obe_t *h )
 {
     pthread_mutex_lock( &h->mux_queue.mutex );
@@ -340,6 +353,19 @@ static void destroy_mux( obe_t *h )
         free( h->mux_opts.service_name );
     if( h->mux_opts.provider_name )
         free( h->mux_opts.provider_name );
+}
+
+static void destroy_mux_smoothing( obe_queue_t *queue )
+{
+    obe_coded_frame_t *muxed_data;
+    pthread_mutex_lock( &queue->mutex );
+    for( int i = 0; i < queue->size; i++ )
+    {
+        coded_frame = queue->queue[i];
+        destroy_muxed_data( muxed_data );
+    }
+
+    obe_destroy_queue( queue )
 }
 
 int remove_early_frames( obe_t *h, int64_t pts )
@@ -368,13 +394,13 @@ int remove_early_frames( obe_t *h, int64_t pts )
 }
 
 /* Output queue */
-static void destroy_output( obe_t *h )
+static void destroy_output( obe_queue_t *queue )
 {
-    pthread_mutex_lock( &h->output_queue.mutex );
-    for( int i = 0; i < h->output_queue.size; i++ )
-        av_buffer_unref( h->output_queue.queue[i] );
+    pthread_mutex_lock( &queue->mutex );
+    for( int i = 0; i < queue->size; i++ )
+        av_buffer_unref( queue->queue[i] );
 
-    obe_destroy_queue( &h->output_queue );
+    obe_destroy_queue( queue );
 }
 
 /** Get items **/
@@ -1273,20 +1299,27 @@ void obe_close( obe_t *h )
 
     fprintf( stderr, "encoders destroyed \n" );
 
-    // FIXME destroy smoothing thread
+    destroy_enc_smoothing( h->enc_smoothing_queue );
+    fprintf( stderr, "encoder smoothing destroyed \n" );
 
     /* Destroy mux */
     destroy_mux( h );
 
     fprintf( stderr, "mux destroyed \n" );
 
+    destroy_mux_smoothing( h->mux_smoothing_queue );
+    fprintf( stderr, "mux smoothing destroyed \n" );
+
     /* Destroy output */
-    destroy_output( h );
+    destroy_output( &h->output_queue );
 
     fprintf( stderr, "output destroyed \n" );
 
     free( h->output_streams );
     /* TODO: free other things */
+
+    /* Destroy lock manager */
+    av_lockmgr_register( NULL )
 
     free( h );
     h = NULL;
