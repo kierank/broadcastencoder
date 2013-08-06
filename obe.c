@@ -338,7 +338,7 @@ static void destroy_enc_smoothing( obe_queue_t *queue )
         destroy_coded_frame( coded_frame );
     }
 
-    obe_destroy_queue( queue )
+    obe_destroy_queue( queue );
 }
 
 static void destroy_mux( obe_t *h )
@@ -361,7 +361,7 @@ static void destroy_mux_smoothing( obe_queue_t *queue )
     pthread_mutex_lock( &queue->mutex );
     for( int i = 0; i < queue->size; i++ )
     {
-        coded_frame = queue->queue[i];
+        muxed_data = queue->queue[i];
         destroy_muxed_data( muxed_data );
     }
 
@@ -1299,7 +1299,7 @@ void obe_close( obe_t *h )
 
     fprintf( stderr, "encoders destroyed \n" );
 
-    destroy_enc_smoothing( h->enc_smoothing_queue );
+    destroy_enc_smoothing( &h->enc_smoothing_queue );
     fprintf( stderr, "encoder smoothing destroyed \n" );
 
     /* Destroy mux */
@@ -1307,7 +1307,7 @@ void obe_close( obe_t *h )
 
     fprintf( stderr, "mux destroyed \n" );
 
-    destroy_mux_smoothing( h->mux_smoothing_queue );
+    destroy_mux_smoothing( &h->mux_smoothing_queue );
     fprintf( stderr, "mux smoothing destroyed \n" );
 
     /* Destroy output */
