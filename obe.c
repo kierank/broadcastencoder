@@ -1319,7 +1319,7 @@ void obe_close( obe_t *h )
     /* TODO: free other things */
 
     /* Destroy lock manager */
-    av_lockmgr_register( NULL )
+    av_lockmgr_register( NULL );
 
     free( h );
     h = NULL;
