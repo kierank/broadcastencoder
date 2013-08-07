@@ -191,9 +191,9 @@ ltwolame="auto"
 swscale="auto"
 avresample="auto"
 lavf="auto"
-readline="auto"
 decklink="auto"
 lzvbi="auto"
+protobuf="auto"
 
 CFLAGS="$CFLAGS -Wall -I."
 CXXFLAGS="$CXXFLAGS -c -Wall -I."
@@ -625,26 +625,6 @@ if [ "$avresample" = "no" ] ; then
     die "libavresample is a mandatory component"
 fi
 
-if [ "$readline" = "auto" ] ; then
-    readline="no"
-    readlineflags="-lreadline"
-    if cc_check "readline/readline.h" "$readlineflags" "rl_initialize();" ; then
-        readline="yes"
-        define HAVE_READLINE
-        LDFLAGSCLI="$readlineflags"
-    fi
-    readlineflags="-lncurses -lreadline"
-    if cc_check "readline/readline.h" "$readlineflags" "rl_initialize();" ; then
-        readline="yes"
-        define HAVE_READLINE
-        LDFLAGSCLI="$readlineflags"
-    fi
-fi
-
-if [ "$readline" = "no" ] ; then
-    die "readline is a mandatory component"
-fi
-
 LMPEGTS_LIBS="-lmpegts"
 if [ "$lmpegts" = "auto" ] ; then
     lmpegts="no"
@@ -687,6 +667,19 @@ fi
 if [ "$lzvbi" = "yes" ] ; then
     define HAVE_LIBZVBI
     LDFLAGS="$LDFLAGS $LZVBI_LIBS"
+fi
+
+PROTOBUF_LIBS="-lprotobuf -lprotobuf-c"
+if [ "$protobuf" = "auto" ] ; then
+    protobuf="no"
+    if cc_check google/protobuf-c/protobuf-c-rpc.h "$PROTOBUF_LIBS" ; then
+        protobuf="yes"
+    fi
+fi
+
+if [ "$protobuf" = "yes" ] ; then
+    define HAVE_PROTOBUF
+    LDFLAGS="$LDFLAGS $PROTOBUF_LIBS"
 fi
 
 if [ "$pic" = "yes" ] ; then
@@ -791,9 +784,8 @@ Mux
 
 libmpegts:  $lmpegts
 
-Frontends
-
-readline:   $readline
+RPC
+protobuf:   $protobuf
 
 EOF
 

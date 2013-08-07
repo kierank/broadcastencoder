@@ -1,0 +1,106 @@
+package obed;
+
+message InputOpts
+{
+    required int32 input_device = 1;
+    required int32 card_idx = 2;
+    required int32 video_format = 3;
+}
+
+message VideoOpts
+{
+    required int32 profile = 1;
+    required int32 bitrate = 2;
+    required int32 vbv_bufsize = 3;
+    required int32 keyint = 4;
+    required int32 bframes = 5;
+    required int32 max_refs = 6;
+    required int32 lookahead = 7;
+    required int32 quality_metric = 8;
+    required int32 pid = 9;
+    required int32 width = 10;
+    required int32 aspect_ratio = 11;
+    required int32 afd_passthrough = 12;
+    required int32 wss_to_afd = 13;
+    required int32 frame_packing = 14;
+}
+
+message AudioOpts
+{
+    required int32 format = 1;
+    required int32 channel_map = 2;
+    required int32 bitrate = 3;
+    required int32 sdi_pair = 4;
+    required int32 aac_encap = 5;
+    required int32 mp2_mode = 6;
+    required int32 mono_channel = 7;
+    required int32 reference_level = 8;
+    required int32 pid  = 9;
+    required string lang_code = 10;
+    required int32 type = 11;
+}
+
+message AncillaryOpts
+{
+    required int32 cea_608 = 1;
+    required int32 cea_708 = 2;
+    required int32 ttx_type = 3;
+    required int32 ttx_lang_code = 4;
+    required int32 ttx_mag_number = 5;
+    required int32 ttx_page_number = 6;
+    required int32 dvb_ttx_enabled = 7;
+    required int32 dvb_ttx_pid = 8;
+    required int32 dvb_vbi_enabled = 9;
+    required int32 dvb_vbi_pid = 10;
+    required int32 dvb_vbi_ttx = 11;
+    required int32 dvb_vbi_inverted_ttx = 12;
+    required int32 dvb_vbi_vps = 13;
+    required int32 dvb_vbi_wss = 14;
+}
+
+message MuxOpts
+{
+    required int32 muxrate = 1;
+    required int32 ts_type = 2;
+    required int32 null_packets = 3;
+    required int32 pcr_pid = 4;
+    required int32 pmt_pid = 5;
+    required int32 program_num = 6;
+    required int32 ts_id = 7;
+    required int32 pat_period = 8;
+    required int32 pcr_period = 9;
+    required string service_name = 10;
+    required string program_name = 11;
+}
+
+message OutputOpts
+{
+    required int32 method = 1;
+    required string ip_address = 2;
+    required int32 port = 3;
+    required int32 ttl = 4;
+    required string miface = 5;
+
+}
+
+message EncoderControl
+{
+    required string encoder_action = 1;
+    required int32 control_version = 2;
+    optional InputOpts input_opts = 3;
+    optional VideoOpts video_opts = 4;
+    repeated AudioOpts audio_opts = 5;
+    optional AncillaryOpts ancillary_opts = 6;
+    optional MuxOpts mux_opts = 7;
+    repeated OutputOpts output_opts = 8;
+}
+
+message EncoderResponse
+{
+    required string encoder_response = 1;
+}
+
+service EncoderConfig
+{
+    rpc EncoderConfig (EncoderControl) returns (EncoderResponse);
+}

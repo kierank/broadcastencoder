@@ -14,7 +14,7 @@ SRCS = obe.c common/lavc.c common/network/udp/udp.c \
 
 SRCCXX =
 
-SRCCLI = obecli.c
+SRCCLI = obed.c proto/obed.pb-c.c
 
 SRCSO =
 
@@ -52,13 +52,13 @@ endif
 
 OBJS = $(SRCS:%.c=%.o)
 OBJSCXX = $(SRCCXX:%.cpp=%.o)
-OBJCLI = $(SRCCLI:%.c=%.o)
+OBJD = $(SRCCLI:%.c=%.o)
 OBJSO = $(SRCSO:%.c=%.o)
 DEP  = depend
 
 .PHONY: all default fprofiled clean distclean install uninstall dox test testclean
 
-default: $(DEP) obecli$(EXE)
+default: $(DEP) obed$(EXE)
 
 libobe.a: .depend $(OBJS) $(OBJSCXX) $(OBJASM)
 	$(AR) rc libobe.a $(OBJS) $(OBJSCXX) $(OBJASM)
@@ -67,7 +67,7 @@ libobe.a: .depend $(OBJS) $(OBJSCXX) $(OBJASM)
 $(SONAME): .depend $(OBJS) $(OBJSCXX) $(OBJASM) $(OBJSO)
 	$(CC) -shared -o $@ $(OBJS) $(OBJASM) $(OBJSO) $(SOFLAGS) $(LDFLAGS)
 
-obecli$(EXE): $(OBJCLI) libobe.a
+obed$(EXE): $(OBJD) libobe.a
 	$(CC) -o $@ $+ $(LDFLAGSCLI) $(LDFLAGS)
 
 %.o: %.asm
@@ -93,7 +93,7 @@ endif
 SRC2 = $(SRCS) $(SRCCLI)
 
 clean:
-	rm -f $(OBJS) $(OBJSCXX) $(OBJASM) $(OBJCLI) $(OBJSO) $(SONAME) *.a obecli obecli.exe .depend TAGS
+	rm -f $(OBJS) $(OBJSCXX) $(OBJASM) $(OBJD) $(OBJSO) $(SONAME) *.a obed obed.exe .depend TAGS
 	rm -f $(SRC2:%.c=%.gcda) $(SRC2:%.c=%.gcno)
 	- sed -e 's/ *-fprofile-\(generate\|use\)//g' config.mak > config.mak2 && mv config.mak2 config.mak
 
@@ -101,12 +101,12 @@ distclean: clean
 	rm -f config.mak config.h config.log
 	rm -rf test/
 
-install: obecli$(EXE) $(SONAME)
+install: obed$(EXE) $(SONAME)
 	install -d $(DESTDIR)$(bindir)
 	install -d $(DESTDIR)$(includedir)
 	install -d $(DESTDIR)$(libdir)
 	install -m 644 libobe.a $(DESTDIR)$(libdir)
-	install obecli$(EXE) $(DESTDIR)$(bindir)
+	install obed$(EXE) $(DESTDIR)$(bindir)
 	$(RANLIB) $(DESTDIR)$(libdir)/libobe.a
 ifeq ($(SYS),MINGW)
 	$(if $(SONAME), install -m 755 $(SONAME) $(DESTDIR)$(bindir))
@@ -118,7 +118,7 @@ endif
 
 uninstall:
 	rm -f $(DESTDIR)$(includedir)/obe.h $(DESTDIR)$(libdir)/libobe.a
-	rm -f $(DESTDIR)$(bindir)/obecli$(EXE)
+	rm -f $(DESTDIR)$(bindir)/obed$(EXE)
 	$(if $(SONAME), rm -f $(DESTDIR)$(libdir)/$(SONAME) $(DESTDIR)$(libdir)/libobe.$(SOSUFFIX))
 
 etags: TAGS
