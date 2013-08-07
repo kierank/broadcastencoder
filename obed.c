@@ -144,6 +144,7 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
             obe_output_stream_t *video_stream = &d.output_streams[0];
             Obed__AncillaryOpts *ancillary_opts_in = encoder_control->ancillary_opts;
             Obed__MuxOpts *ancillary_mux_opts_in = encoder_control->mux_opts;
+            obe_mux_opts_t *mux_opts = &d.mux_opts;
 
             input_opts_out->input_type = input_opts_in->input_device;
             input_opts_out->card_idx = input_opts_in->card_idx;
@@ -167,7 +168,7 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
              * do anything about it */
             if( encoder_control->ancillary_opts->dvb_vbi_enabled )
             {
-                // check input streams
+                // FIXME check input streams
                 d.num_output_streams += 1;
             }
 
@@ -202,10 +203,10 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
             // FIXME decide on threads
 
             /* Video frame ancillary data */
-            video_stream->video_anc.afd_passthrough     = video_opts_in->afd_passthrough;
+            video_stream->video_anc.afd                 = video_opts_in->afd_passthrough;
             video_stream->video_anc.wss_to_afd          = video_opts_in->wss_to_afd;
-            video_stream->video_anc.cea_608             = ancillary_opts->cea_608;
-            video_stream->video_anc.cea_708             = ancillary_opts->cea_708;
+            video_stream->video_anc.cea_608             = ancillary_opts_in->cea_608;
+            video_stream->video_anc.cea_708             = ancillary_opts_in->cea_708;
 
             /* Turn on the 3DTV mux option automatically */
             if( video_stream->avc_param.i_frame_packing >= 0 )
@@ -222,38 +223,59 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
                 Obed__AudioOpts *audio_opts_in = encoder_control->audio_opts[j];
                 obe_output_stream_t *audio_stream = &d.output_streams[i];
 
-                audio_opts_in->stream_action = STREAM_ENCODE;
+                audio_stream->stream_action = STREAM_ENCODE;
+                // FIXME deal with HE-AAC
                 audio_stream->stream_format = formats[audio_opts_in->format];
-                audio_opts_in->ts_opts.pid = audio_opts_in->pid;
+                audio_stream->ts_opts.pid = audio_opts_in->pid;
 
-                audio_stream->channel_map = channel_maps[audio_opts_in->channel_map];
+                audio_stream->channel_layout = channel_layouts[audio_opts_in->channel_map];
                 audio_stream->bitrate = audio_opts_in->bitrate;
-                audio_stream->sdi_pair = audio_opts_in->sdi_pair;
-                audio_stream->aac_encap = audio_opts_in->aac_encap;
+                audio_stream->sdi_audio_pair = audio_opts_in->sdi_pair;
+                audio_stream->aac_opts.latm_output = audio_opts_in->aac_encap;
                 audio_stream->mp2_mode = audio_opts_in->mp2_mode;
                 audio_stream->mono_channel = audio_opts_in->mono_channel;
-                audio_stream->reference_level = audio_opts_in->reference_level;
-            }
-
-            if( encoder_control->ancillary_opts->dvb_ttx_enabled )
-            {
-                // use i
+                // FIXME deal with reference level
+                //audio_stream->reference_level = audio_opts_in->reference_level;
+                /* SNMP will have sanitised this */
+                audio_stream->ts_opts.write_lang_code = 1;
+                strcpy( audio_stream->ts_opts.lang_code, audio_opts_in->lang_code );
             }
 
             if( has_dvb_vbi )
             {
+                obe_output_stream_t *dvb_vbi_stream = &d.output_streams[i];
 
+                i++;
             }
 
-            // mux
+            if( encoder_control->ancillary_opts->dvb_ttx_enabled )
+            {
+                obe_output_stream_t *dvb_ttx_stream = &d.output_streams[i];
 
-            // outputs
+                i++;
+            }
+
+            Obed__MuxOpts *mux_opts_in = encoder_control->mux_opts;
+            mux_opts->ts_muxrate = mux_opts_in->muxrate;
+            mux_opts->ts_type = mux_opts_in->ts_type;
+            mux_opts->cbr = mux_opts_in->null_packets;
+            mux_opts->pcr_pid = mux_opts_in->pcr_pid;
+            mux_opts->pmt_pid = mux_opts_in->pmt_pid;
+            mux_opts->program_num = mux_opts_in->program_num;
+            mux_opts->ts_id = mux_opts_in->ts_id;
+            mux_opts->pat_period = mux_opts_in->pat_period;
+            mux_opts->pcr_period = mux_opts_in->pcr_period;
+            mux_opts->service_name = malloc( strlen( mux_opts_in->service_name ) + 1 );
+            strcpy( mux_opts->service_name, mux_opts_in->service_name );
+            mux_opts->provider_name = malloc( strlen( mux_opts_in->provider_name ) + 1 );
+            strcpy( mux_opts->provider_name, mux_opts_in->provider_name );
+
 
         }
 
     }
 
-    result.encoder_response = malloc( 10 );
+    result.encoder_response = malloc( 3 );
     strcpy( result.encoder_response, "OK" );
     closure( &result, closure_data );
 

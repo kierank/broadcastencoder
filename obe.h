@@ -506,8 +506,14 @@ enum output_e
 
 typedef struct
 {
-    int output;
+    int type;
     char *target;
+} obe_output_dest_t;
+
+typedef struct
+{
+    int num_outputs;
+    obe_output_dest_t *outputs;
 } obe_output_opts_t;
 
 int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts );

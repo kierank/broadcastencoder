@@ -70,7 +70,7 @@ message MuxOpts
     required int32 pat_period = 8;
     required int32 pcr_period = 9;
     required string service_name = 10;
-    required string program_name = 11;
+    required string provider_name = 11;
 }
 
 message OutputOpts

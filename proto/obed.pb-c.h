@@ -114,7 +114,7 @@ struct  _Obed__MuxOpts
   int32_t pat_period;
   int32_t pcr_period;
   char *service_name;
-  char *program_name;
+  char *provider_name;
 };
 #define OBED__MUX_OPTS__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&obed__mux_opts__descriptor) \

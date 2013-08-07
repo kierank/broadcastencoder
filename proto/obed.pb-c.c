@@ -1119,12 +1119,12 @@ static const ProtobufCFieldDescriptor obed__mux_opts__field_descriptors[11] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "program_name",
+    "provider_name",
     11,
     PROTOBUF_C_LABEL_REQUIRED,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    PROTOBUF_C_OFFSETOF(Obed__MuxOpts, program_name),
+    PROTOBUF_C_OFFSETOF(Obed__MuxOpts, provider_name),
     NULL,
     NULL,
     0,            /* packed */
@@ -1138,8 +1138,8 @@ static const unsigned obed__mux_opts__field_indices_by_name[] = {
   8,   /* field[8] = pcr_period */
   3,   /* field[3] = pcr_pid */
   4,   /* field[4] = pmt_pid */
-  10,   /* field[10] = program_name */
   5,   /* field[5] = program_num */
+  10,   /* field[10] = provider_name */
   9,   /* field[9] = service_name */
   6,   /* field[6] = ts_id */
   1,   /* field[1] = ts_type */
