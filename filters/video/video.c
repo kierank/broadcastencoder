@@ -484,15 +484,23 @@ static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_fr
         uint16_t *src = (uint16_t*)img->plane[i];
         uint16_t *dst = (uint16_t*)out->plane[i];
 
-        for( int j = 0; j < height; j++ )
+        for( int j = 0; j < height; j += 2 )
         {
-            if( !((j & 1) ^ bff) )
-                vfilt->downsample_chroma_row_top( src, dst, width*2, img->stride[i] );
-            else
+            uint16_t *srcp = (uint16_t*)src + img->stride[i] / 2;
+            uint16_t *dstp = (uint16_t*)dst + out->stride[i] / 2;
+            if( bff )
+            {
                 vfilt->downsample_chroma_row_bottom( src, dst, width*2, img->stride[i] );
+                vfilt->downsample_chroma_row_top( srcp, dstp, width*2, img->stride[i] );
+            }
+            else
+            {
+                vfilt->downsample_chroma_row_top( src, dst, width*2, img->stride[i] );
+                vfilt->downsample_chroma_row_bottom( srcp, dstp, width*2, img->stride[i] );
+            }
 
-            src += img->stride[i];
-            dst += out->stride[i] / 2;
+            src += img->stride[i] * 2;
+            dst += out->stride[i];
         }
     }
 
