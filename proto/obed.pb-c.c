@@ -831,7 +831,7 @@ static const ProtobufCFieldDescriptor obed__ancillary_opts__field_descriptors[14
     "ttx_lang_code",
     4,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT32,
+    PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
     PROTOBUF_C_OFFSETOF(Obed__AncillaryOpts, ttx_lang_code),
     NULL,

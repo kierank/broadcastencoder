@@ -421,9 +421,9 @@ obe_output_stream_t *get_output_stream_by_format( obe_t *h, int format )
     return NULL;
 }
 
-obe_t *obe_setup( void )
+obe_t *obe_setup( const char *ident )
 {
-    openlog( "obe", LOG_NDELAY | LOG_PID, LOG_USER );
+    openlog( ident, LOG_NDELAY | LOG_PID, LOG_USER );
 
     if( X264_BIT_DEPTH == 9 || X264_BIT_DEPTH > 10 )
     {

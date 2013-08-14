@@ -84,7 +84,7 @@ struct  _Obed__AncillaryOpts
   int32_t cea_608;
   int32_t cea_708;
   int32_t ttx_type;
-  int32_t ttx_lang_code;
+  char *ttx_lang_code;
   int32_t ttx_mag_number;
   int32_t ttx_page_number;
   int32_t dvb_ttx_enabled;
@@ -98,7 +98,7 @@ struct  _Obed__AncillaryOpts
 };
 #define OBED__ANCILLARY_OPTS__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&obed__ancillary_opts__descriptor) \
-    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    , 0, 0, 0, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 
 
 struct  _Obed__MuxOpts

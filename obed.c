@@ -37,7 +37,16 @@
 #include <google/protobuf-c/protobuf-c-rpc.h>
 #include "proto/obed.pb-c.h"
 
-#define CONTROL_VERSION 1
+#define OBE_CONTROL_VERSION 1
+
+static char *ident = "obed0";
+
+enum obe_quality_metric_e
+{
+    QUALITY_METRIC_PSY,
+    QUALITY_METRIC_SSIM,
+    QUALITY_METRIC_PSNR
+};
 
 typedef struct
 {
@@ -62,9 +71,6 @@ static int system_type_value = OBE_SYSTEM_TYPE_GENERIC;
 
 /* Video */
 static const char * const avc_profiles[] = { "main", "high" };
-
-/* Audio */
-const static int formats[] = { AUDIO_MP2, AUDIO_AAC };
 
 const static uint64_t channel_layouts[] =
 {
@@ -111,14 +117,35 @@ static void stop_encode( void )
         d.output_streams = NULL;
     }
 
-    if( d.output.target )
+    for( int i = 0; i < d.output.num_outputs; i++ )
     {
-        free( d.output.target );
-        d.output.target = NULL;
+        if( d.output.outputs[i].target )
+        {
+            free( d.output.outputs[i].target );
+            d.output.outputs[i].target = NULL;
+        }
     }
+    free( d.output.outputs );
 
     memset( &d, 0, sizeof(d) );
     running = 0;
+}
+
+static int add_teletext( obe_output_stream_t *output_stream, Obed__AncillaryOpts *ancillary_opts_in )
+{
+    output_stream->ts_opts.num_teletexts = 1;
+    output_stream->ts_opts.teletext_opts = calloc( 1, sizeof(*output_stream->ts_opts.teletext_opts) );
+    if( !output_stream->ts_opts.teletext_opts )
+        return -1;
+
+    obe_teletext_opts_t *ttx_opts = &output_stream->ts_opts.teletext_opts[0];
+    /* Sanitised by SNMP */
+    strcpy( ttx_opts->dvb_teletext_lang_code, ancillary_opts_in->ttx_lang_code );
+    ttx_opts->dvb_teletext_type = ancillary_opts_in->ttx_type;
+    ttx_opts->dvb_teletext_magazine_number = ancillary_opts_in->ttx_mag_number;
+    ttx_opts->dvb_teletext_page_number = ancillary_opts_in->ttx_page_number;
+
+    return 0;
 }
 
 static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
@@ -130,7 +157,7 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
     int has_dvb_vbi = 0;
     int i = 0;
 
-    if( encoder_control->control_version == 1 )
+    if( encoder_control->control_version == OBE_CONTROL_VERSION )
     {
         if( running == 1 )
             stop_encode();
@@ -143,18 +170,27 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
             Obed__VideoOpts *video_opts_in = encoder_control->video_opts;
             obe_output_stream_t *video_stream = &d.output_streams[0];
             Obed__AncillaryOpts *ancillary_opts_in = encoder_control->ancillary_opts;
-            Obed__MuxOpts *ancillary_mux_opts_in = encoder_control->mux_opts;
+            Obed__MuxOpts *mux_opts_in = encoder_control->mux_opts;
             obe_mux_opts_t *mux_opts = &d.mux_opts;
+
+            d.h = obe_setup( (const char *)ident );
+            if( !d.h )
+                goto fail;
 
             input_opts_out->input_type = input_opts_in->input_device;
             input_opts_out->card_idx = input_opts_in->card_idx;
             input_opts_out->video_format = input_opts_in->video_format;
+
+            printf("\n %i \n", input_opts_out->input_type );
 
             if( obe_probe_device( d.h, &d.input, &d.program ) < 0 )
             {
                 // TODO: syslog error message
                 goto fail;
             }
+
+            if( !d.program.num_streams )
+                goto fail;
 
             /* Add video stream */
             d.num_output_streams++;
@@ -168,8 +204,14 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
              * do anything about it */
             if( encoder_control->ancillary_opts->dvb_vbi_enabled )
             {
-                // FIXME check input streams
-                d.num_output_streams += 1;
+                for( i = 0; i < d.program.num_streams; i++ )
+                {
+                    if( d.program.streams[i].stream_format == VBI_RAW )
+                    {
+                        d.num_output_streams += 1;
+                        break;
+                    }
+                }
             }
 
             d.output_streams = calloc( d.num_output_streams, sizeof(*d.output_streams) );
@@ -199,7 +241,19 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
             video_stream->avc_param.i_width             = video_opts_in->width;
             video_stream->is_wide                       = video_opts_in->aspect_ratio;
 
-            // TODO PSNR/SSIM Quality metric
+            if( video_opts_in->quality_metric )
+            {
+                if( video_opts_in->quality_metric == QUALITY_METRIC_SSIM )
+                {
+                    video_stream->avc_param.rc.i_aq_mode = X264_AQ_AUTOVARIANCE;
+                    video_stream->avc_param.analyse.b_psy = 0;
+                }
+                else
+                {
+                    video_stream->avc_param.rc.i_aq_mode = X264_AQ_NONE;
+                    video_stream->avc_param.analyse.b_psy = 0;
+                }
+            }
             // FIXME decide on threads
 
             /* Video frame ancillary data */
@@ -224,14 +278,21 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
                 obe_output_stream_t *audio_stream = &d.output_streams[i];
 
                 audio_stream->stream_action = STREAM_ENCODE;
-                // FIXME deal with HE-AAC
-                audio_stream->stream_format = formats[audio_opts_in->format];
+                if( audio_opts_in->format == 0 )
+                    audio_stream->stream_format = AUDIO_MP2;
+                else
+                {
+                    /* AAC */
+                    audio_stream->stream_format = AUDIO_AAC;
+                    /* XXX: note the enums */
+                    audio_stream->aac_opts.aac_profile = audio_opts_in->format-1;
+                    audio_stream->aac_opts.latm_output = audio_opts_in->aac_encap;
+                }
                 audio_stream->ts_opts.pid = audio_opts_in->pid;
 
                 audio_stream->channel_layout = channel_layouts[audio_opts_in->channel_map];
                 audio_stream->bitrate = audio_opts_in->bitrate;
                 audio_stream->sdi_audio_pair = audio_opts_in->sdi_pair;
-                audio_stream->aac_opts.latm_output = audio_opts_in->aac_encap;
                 audio_stream->mp2_mode = audio_opts_in->mp2_mode;
                 audio_stream->mono_channel = audio_opts_in->mono_channel;
                 // FIXME deal with reference level
@@ -244,6 +305,20 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
             if( has_dvb_vbi )
             {
                 obe_output_stream_t *dvb_vbi_stream = &d.output_streams[i];
+                obe_dvb_vbi_opts_t *vbi_opts = &dvb_vbi_stream->dvb_vbi_opts;
+
+                dvb_vbi_stream->ts_opts.pid = ancillary_opts_in->dvb_vbi_pid;
+                vbi_opts->ttx = ancillary_opts_in->dvb_vbi_ttx;
+                vbi_opts->inverted_ttx = ancillary_opts_in->dvb_vbi_inverted_ttx;
+                vbi_opts->vps = ancillary_opts_in->dvb_vbi_vps;
+                vbi_opts->wss = ancillary_opts_in->dvb_vbi_wss;
+
+                /* Only one teletext supported */
+                if( vbi_opts->ttx )
+                {
+                    if( add_teletext( dvb_vbi_stream, ancillary_opts_in ) < 0 )
+                        goto fail;
+                }
 
                 i++;
             }
@@ -251,11 +326,12 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
             if( encoder_control->ancillary_opts->dvb_ttx_enabled )
             {
                 obe_output_stream_t *dvb_ttx_stream = &d.output_streams[i];
-
+                /* Only one teletext supported */
+                if( add_teletext( dvb_ttx_stream, ancillary_opts_in ) < 0 )
+                    goto fail;
                 i++;
             }
 
-            Obed__MuxOpts *mux_opts_in = encoder_control->mux_opts;
             mux_opts->ts_muxrate = mux_opts_in->muxrate;
             mux_opts->ts_type = mux_opts_in->ts_type;
             mux_opts->cbr = mux_opts_in->null_packets;
@@ -270,9 +346,43 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
             mux_opts->provider_name = malloc( strlen( mux_opts_in->provider_name ) + 1 );
             strcpy( mux_opts->provider_name, mux_opts_in->provider_name );
 
+            d.output.num_outputs = encoder_control->n_output_opts;
+            d.output.outputs = calloc( d.output.num_outputs, sizeof(*d.output.outputs) );
+            if( !d.output.outputs )
+                goto fail;
 
+            for( int j = 0; j < d.output.num_outputs; j++ )
+            {
+                Obed__OutputOpts *output_opts_in = encoder_control->output_opts[j];
+                obe_output_dest_t *output_dst = &d.output.outputs[j];
+                char tmp[500];
+                char tmp2[20];
+
+                output_dst->type = output_opts_in->method;
+                strcpy( tmp, "udp://" );
+                strcat( tmp, output_opts_in->ip_address );
+                snprintf( tmp2, sizeof(tmp2), ":%d?", output_opts_in->port );
+                strcat( tmp, tmp2 );
+                if( output_opts_in->ttl )
+                {
+                    snprintf( tmp2, sizeof(tmp2), "ttl=%d&", output_opts_in->ttl );
+                    strcat( tmp, tmp2 );
+                }
+                if( output_opts_in->miface )
+                {
+                    snprintf( tmp2, sizeof(tmp2), "miface=%s", output_opts_in->miface );
+                    strcat( tmp, tmp2 );
+                }
+                output_dst->target = malloc( strlen( tmp ) + 1 );
+                if( output_dst->target )
+                    goto fail;
+                strcpy( output_dst->target, tmp );
+            }
+
+            printf("\n end \n");
+            //start encoder
+            //running = 1;
         }
-
     }
 
     result.encoder_response = malloc( 3 );
@@ -282,7 +392,10 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
     return;
 
 fail:
-    closure( NULL, closure_data );
+    result.encoder_response = malloc( 5 );
+    strcpy( result.encoder_response, "FAIL" );
+    closure( &result, closure_data );
+    return;
 }
 
 static Obed__EncoderConfig_Service encoder_config = OBED__ENCODER_CONFIG__INIT(obed__);

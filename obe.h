@@ -35,7 +35,7 @@
 typedef struct obe_t obe_t;
 
 /**** Initialisation Function ****/
-obe_t *obe_setup( void );
+obe_t *obe_setup( const char *ident );
 
 /**** OBE configuration function */
 enum obe_system_type_e
