@@ -440,10 +440,18 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
             if( IS_SD( decklink_opts_->video_format ) )
             {
-                if( raw_frame->alloc_img.height == 486 )
-                    raw_frame->img.height = 480;
-
                 raw_frame->img.first_line = first_active_line[j].line;
+                if( decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC )
+                {
+                    raw_frame->img.height = 480;
+                    while( raw_frame->img.first_line != NTSC_FIRST_CODED_LINE )
+                    {
+                        for( int i = 0; i < raw_frame->img.planes; i++ )
+                            raw_frame->img.plane[i] += raw_frame->img.stride[i];
+
+                        raw_frame->img.first_line = sdi_next_line( INPUT_VIDEO_FORMAT_NTSC, raw_frame->img.first_line );
+                    }
+                }
             }
 
             /* If AFD is present and the stream is SD this will be changed in the video filter */
@@ -974,7 +982,7 @@ static void *probe_stream( void *ptr )
             streams[i]->timebase_den = decklink_opts->timebase_den;
             streams[i]->csp    = PIX_FMT_YUV422P10;
             streams[i]->interlaced = decklink_opts->interlaced;
-            streams[i]->tff = decklink_opts->tff;
+            streams[i]->tff = 1; /* NTSC is bff in baseband but coded as tff */
             streams[i]->sar_num = streams[i]->sar_den = 1; /* The user can choose this when encoding */
 
             if( add_non_display_services( non_display_parser, streams[i], USER_DATA_LOCATION_FRAME ) < 0 )

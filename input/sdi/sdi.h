@@ -81,6 +81,7 @@ typedef struct
     int field_two; /* where relevant */
 } obe_line_number_t;
 
+/* For NTSC this is not the same as the first coded line */
 const static obe_line_number_t first_active_line[] =
 {
     { INPUT_VIDEO_FORMAT_PAL,   23 },

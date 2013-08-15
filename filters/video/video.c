@@ -38,8 +38,6 @@ typedef uint16_t pixel;
 typedef uint8_t pixel;
 #endif
 
-#define NTSC_FIRST_NON_BLANKED 22
-
 typedef struct
 {
     /* cpu flags */
@@ -280,20 +278,7 @@ static void blank_lines( obe_raw_frame_t *raw_frame )
     u = (uint16_t*)raw_frame->img.plane[1];
     v = (uint16_t*)raw_frame->img.plane[2];
 
-    if( raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL )
-        blank_line( y, u, v, raw_frame->img.width / 2 );
-    else
-    {
-        while( cur_line != NTSC_FIRST_NON_BLANKED )
-        {
-            blank_line( y, u, v, raw_frame->img.width );
-
-            cur_line = sdi_next_line( raw_frame->img.format, cur_line );
-            y += raw_frame->img.stride[0] / 2;
-            u += raw_frame->img.stride[1] / 2;
-            v += raw_frame->img.stride[2] / 2;
-        }
-    }
+    blank_line( y, u, v, raw_frame->img.width / 2 );
 }
 
 static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
@@ -475,7 +460,6 @@ static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_fr
                          (const uint8_t *)raw_frame->img.plane[0], raw_frame->img.stride[0],
                           raw_frame->img.width * 2, raw_frame->img.height );
 
-    int bff = raw_frame->img.format == INPUT_VIDEO_FORMAT_NTSC;
     for( int i = 1; i < tmp_image.planes; i++ )
     {
         int num_interleaved = csp_num_interleaved( img->csp, i );
@@ -488,16 +472,8 @@ static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_fr
         {
             uint16_t *srcp = (uint16_t*)src + img->stride[i] / 2;
             uint16_t *dstp = (uint16_t*)dst + out->stride[i] / 2;
-            if( bff )
-            {
-                vfilt->downsample_chroma_row_bottom( src, dst, width*2, img->stride[i] );
-                vfilt->downsample_chroma_row_top( srcp, dstp, width*2, img->stride[i] );
-            }
-            else
-            {
-                vfilt->downsample_chroma_row_top( src, dst, width*2, img->stride[i] );
-                vfilt->downsample_chroma_row_bottom( srcp, dstp, width*2, img->stride[i] );
-            }
+            vfilt->downsample_chroma_row_top( src, dst, width*2, img->stride[i] );
+            vfilt->downsample_chroma_row_bottom( srcp, dstp, width*2, img->stride[i] );
 
             src += img->stride[i] * 2;
             dst += out->stride[i];
@@ -759,7 +735,7 @@ static void *start_filter( void *ptr )
         /* TODO: scale 8-bit to 10-bit
          * TODO: convert from 4:2:0 to 4:2:2 */
 
-        if( IS_SD( raw_frame->img.format ) )
+        if( raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL )
             blank_lines( raw_frame );
 
         /* Resize if necessary. Together with colourspace conversion if progressive */
