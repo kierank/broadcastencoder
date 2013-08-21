@@ -27,6 +27,7 @@
 #include <math.h>
 #include <assert.h>
 #include <string.h>
+#include <syslog.h>
 
 #include "config.h"
 
@@ -181,11 +182,9 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
             input_opts_out->card_idx = input_opts_in->card_idx;
             input_opts_out->video_format = input_opts_in->video_format;
 
-            printf("\n %i \n", input_opts_out->input_type );
-
             if( obe_probe_device( d.h, &d.input, &d.program ) < 0 )
             {
-                // TODO: syslog error message
+                syslog( LOG_ERR, "Input device could not be opened" );
                 goto fail;
             }
 
@@ -209,6 +208,7 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
                     if( d.program.streams[i].stream_format == VBI_RAW )
                     {
                         d.num_output_streams += 1;
+                        has_dvb_vbi = 1;
                         break;
                     }
                 }
@@ -217,6 +217,8 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
             d.output_streams = calloc( d.num_output_streams, sizeof(*d.output_streams) );
             if( !d.output_streams )
                 goto fail;
+
+            video_stream = &d.output_streams[0];
 
             /* Setup video stream */
             video_stream->input_stream_id = 0;
@@ -238,7 +240,8 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
             video_stream->avc_param.i_frame_reference   = video_opts_in->max_refs;
             video_stream->avc_param.i_frame_reference   = video_opts_in->max_refs;
             video_stream->avc_param.i_frame_packing     = video_opts_in->frame_packing;
-            video_stream->avc_param.i_width             = video_opts_in->width;
+            if( video_opts_in->width )
+                video_stream->avc_param.i_width         = video_opts_in->width;
             video_stream->is_wide                       = video_opts_in->aspect_ratio;
 
             if( video_opts_in->quality_metric )
@@ -277,12 +280,12 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
                 Obed__AudioOpts *audio_opts_in = encoder_control->audio_opts[j];
                 obe_output_stream_t *audio_stream = &d.output_streams[i];
 
+                audio_stream->input_stream_id = 1;
                 audio_stream->stream_action = STREAM_ENCODE;
                 if( audio_opts_in->format == 0 )
                     audio_stream->stream_format = AUDIO_MP2;
                 else
                 {
-                    /* AAC */
                     audio_stream->stream_format = AUDIO_AAC;
                     /* XXX: note the enums */
                     audio_stream->aac_opts.aac_profile = audio_opts_in->format-1;
@@ -305,6 +308,7 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
             if( has_dvb_vbi )
             {
                 obe_output_stream_t *dvb_vbi_stream = &d.output_streams[i];
+                dvb_vbi_stream->input_stream_id = 2;
                 obe_dvb_vbi_opts_t *vbi_opts = &dvb_vbi_stream->dvb_vbi_opts;
 
                 dvb_vbi_stream->ts_opts.pid = ancillary_opts_in->dvb_vbi_pid;
@@ -326,6 +330,7 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
             if( encoder_control->ancillary_opts->dvb_ttx_enabled )
             {
                 obe_output_stream_t *dvb_ttx_stream = &d.output_streams[i];
+                dvb_ttx_stream->input_stream_id = 2+has_dvb_vbi;
                 /* Only one teletext supported */
                 if( add_teletext( dvb_ttx_stream, ancillary_opts_in ) < 0 )
                     goto fail;
@@ -374,14 +379,19 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
                     strcat( tmp, tmp2 );
                 }
                 output_dst->target = malloc( strlen( tmp ) + 1 );
-                if( output_dst->target )
+                if( !output_dst->target )
                     goto fail;
                 strcpy( output_dst->target, tmp );
             }
 
-            printf("\n end \n");
-            //start encoder
-            //running = 1;
+            obe_setup_streams( d.h, d.output_streams, d.num_output_streams );
+            obe_setup_muxer( d.h, &d.mux_opts );
+            obe_setup_output( d.h, &d.output );
+            if( obe_start( d.h ) < 0 )
+                goto fail;
+
+            running = 1;
+            printf("\n encoding started \n");
         }
     }
 
