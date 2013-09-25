@@ -440,6 +440,8 @@ typedef struct
 
 int obe_setup_streams( obe_t *h, obe_output_stream_t *output_streams, int num_streams );
 
+/* Only video bitrate and VBV buffer size are currently updatable */
+void obe_update_stream( obe_t *h, obe_output_stream_t *output_stream );
 /**** Muxers *****/
 enum muxers_e
 {
@@ -488,6 +490,9 @@ typedef struct
 } obe_mux_opts_t;
 
 int obe_setup_muxer( obe_t *h, obe_mux_opts_t *mux_opts );
+
+/* Only ts-muxrate can be updated currently */
+int obe_update_muxer( obe_t *h, obe_mux_opts_t *mux_opts );
 
 /**** Output *****/
 enum output_e

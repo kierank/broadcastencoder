@@ -49,6 +49,9 @@ static int set_stream( char *command, obecli_command_t *child );
 static int set_muxer( char *command, obecli_command_t *child );
 static int set_output( char *command, obecli_command_t *child );
 
+static int update_stream( char *command, obecli_command_t *child );
+static int update_mux( char *command, obecli_command_t *child );
+
 static int show_bitdepth( char *command, obecli_command_t *child );
 static int show_decoders( char *command, obecli_command_t *child );
 static int show_encoders( char *command, obecli_command_t *child );
@@ -145,6 +148,14 @@ static obecli_command_t set_commands[] =
     { 0 }
 };
 
+static obecli_command_t update_commands[] =
+{
+    { "stream", "opts streamid:[opts]",   "Set stream options",             update_stream, NULL },
+    { "muxer",  "[name] OR opts [opts]",  "Set muxer name or muxer opts",   update_mux,  NULL },
+    { "mux",    "[name] OR opts [opts]",  "Set muxer name or muxer opts",   update_mux,  NULL },
+    { 0 }
+};
+
 static obecli_command_t main_commands[] =
 {
     { "add",   "[item] ...", "Add stream",               parse_command, add_commands },
@@ -152,6 +163,7 @@ static obecli_command_t main_commands[] =
     { "probe", "[input]",    "Probe input",              probe_device,  NULL },
     { "remove","[item] ...", "Remove stream",            parse_command, remove_commands },
     { "set",   "[item] ...", "Set item",                 parse_command, set_commands },
+    { "update","[item] ...", "Update item",              parse_command, update_commands },
     { "show",  "[item] ...", "Show item",                parse_command, show_commands },
     { "start", "",           "Start encoding",           start_encode,  NULL },
     { "stop",  "",           "Stop encoding",            stop_encode,   NULL },

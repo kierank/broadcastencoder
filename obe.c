@@ -322,9 +322,6 @@ static void destroy_encoder( obe_encoder_t *encoder )
 
     obe_destroy_queue( &encoder->queue );
 
-    if( encoder->encoder_params )
-        free( encoder->encoder_params );
-
     free( encoder );
 }
 
@@ -894,6 +891,32 @@ int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts )
     return 0;
 }
 
+void obe_update_stream( obe_t *h, obe_output_stream_t *output_stream )
+{
+    x264_param_t *avc_param_new = &output_stream->avc_param;
+    obe_output_stream_t *cur_output_stream = get_output_stream( h, output_stream->output_stream_id );
+    x264_param_t *avc_param_old = &cur_output_stream->avc_param;
+
+    obe_encoder_t *encoder = h->encoders[0];
+    pthread_mutex_lock( &encoder->queue.mutex );
+    if( avc_param_new->rc.i_bitrate )
+        avc_param_old->rc.i_bitrate = avc_param_old->rc.i_vbv_max_bitrate = avc_param_new->rc.i_bitrate;
+    if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY )
+    {
+        /* This doesn't need to be particularly accurate since x264 calculates the correct value internally */
+        avc_param_old->rc.i_vbv_buffer_size = (double)avc_param_old->rc.i_vbv_max_bitrate * avc_param_old->i_fps_den / avc_param_old->i_fps_num;
+    }
+    encoder->params_update = 1;
+    pthread_mutex_unlock( &encoder->queue.mutex );
+}
+
+void obe_update_mux( obe_t *h, obe_mux_opts_t *mux_opts )
+{
+    pthread_mutex_lock( &h->mux_queue.mutex );
+    h->mux_opts.ts_muxrate = mux_opts->ts_muxrate;
+    pthread_mutex_unlock( &h->mux_queue.mutex );
+}
+
 int obe_start( obe_t *h )
 {
     obe_int_input_stream_t  *input_stream;
@@ -1002,7 +1025,6 @@ int obe_start( obe_t *h )
                 vid_enc_params->encoder = h->encoders[h->num_encoders];
                 h->encoders[h->num_encoders]->is_video = 1;
 
-                memcpy( &vid_enc_params->avc_param, &h->output_streams[i].avc_param, sizeof(x264_param_t) );
                 if( pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, x264_encoder.start_encoder, (void*)vid_enc_params ) < 0 )
                 {
                     fprintf( stderr, "Couldn't create encode thread \n" );

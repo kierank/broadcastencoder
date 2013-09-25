@@ -109,6 +109,9 @@ static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrou
                                       "pcr-period", "pat-period", "service-name", "provider-name", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
 static const char * output_opts[] = { "target", NULL };
+static const char * update_stream_opts[]  = { "bitrate", "vbv-bufsize" };
+static const char * update_muxer_opts[]  = { "ts-muxrate" };
+
 
 const static int allowed_resolutions[17][2] =
 {
@@ -978,6 +981,69 @@ static int set_output( char *command, obecli_command_t *child )
     return 0;
 }
 
+static int update_stream( char *command, obecli_command_t *child )
+{
+    obe_input_stream_t *input_stream;
+
+    FAIL_IF_ERROR( !cli.num_output_streams, "no output streams \n" );
+
+    if( !strlen( command ) )
+        return -1;
+
+    int tok_len = strcspn( command, " " );
+    int str_len = strlen( command );
+    command[tok_len] = 0;
+
+    if( !strcasecmp( command, "opts" ) && str_len > tok_len )
+    {
+        command += tok_len+1;
+        int tok_len2 = strcspn( command, ":" );
+        int str_len2 = strlen( command );
+        command[tok_len2] = 0;
+
+        int output_stream_id = obe_otoi( command, -1 );
+        input_stream = &cli.program.streams[cli.output_streams[output_stream_id].input_stream_id];
+
+        FAIL_IF_ERROR( output_stream_id < 0 || output_stream_id > cli.num_output_streams-1,
+                       "Invalid stream id\n" );
+
+        if( str_len > str_len2 )
+        {
+            char *params = command + tok_len2 + 1;
+            char **opts = obe_split_options( params, update_stream_opts );
+            if( !opts && params )
+                return -1;
+
+            char *bitrate = obe_get_option( update_stream_opts[0], opts );
+            char *vbv_bufsize = obe_get_option( update_stream_opts[1], opts );
+
+            if( input_stream->stream_type == STREAM_TYPE_VIDEO )
+            {
+                x264_param_t *avc_param = &cli.output_streams[output_stream_id].avc_param;
+
+                if( bitrate )
+                    avc_param->rc.i_vbv_max_bitrate = avc_param->rc.i_bitrate = obe_otoi( bitrate, avc_param->rc.i_bitrate );
+                if( vbv_bufsize )
+                    avc_param->rc.i_vbv_buffer_size = obe_otoi( vbv_bufsize, avc_param->rc.i_vbv_buffer_size );
+                if( bitrate || vbv_bufsize )
+                    obe_update_stream( cli.h, &cli.output_streams[output_stream_id] );
+            }
+            else
+            {
+                fprintf( stderr, "Bitrate reconfiguration only supported for Video\n" );
+                return -1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static int update_mux( char *command, obecli_command_t *child )
+{
+
+    return 0;
+}
 
 /* show functions */
 static int show_bitdepth( char *command, obecli_command_t *child )
