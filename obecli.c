@@ -589,6 +589,7 @@ static int set_stream( char *command, obecli_command_t *child )
                        "Invalid stream id\n" );
 
         input_stream = &cli.program.streams[cli.output_streams[output_stream_id].input_stream_id];
+        output_stream = &cli.output_streams[output_stream_id];
 
         if( str_len > str_len2 )
         {
