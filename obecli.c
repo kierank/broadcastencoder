@@ -1312,7 +1312,6 @@ static int start_encode( char *command, obecli_command_t *child )
             /* Search VBI for teletext and complain if teletext isn't set up properly */
             if( output_stream->stream_format == VBI_RAW )
             {
-                obe_ts_stream_opts_t *ts_opts = &output_stream->ts_opts;
                 int num_vbi = 0;
                 has_ttx = output_stream->dvb_vbi_opts.ttx;
 
