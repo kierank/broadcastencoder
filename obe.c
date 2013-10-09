@@ -1288,13 +1288,12 @@ void obe_close( obe_t *h )
     fprintf( stderr, "mux smoothing cancelled \n" );
 
     /* Cancel output threads */
-    for( int i = 0; h->num_outputs; i++ )
+    for( int i = 0; i < h->num_outputs; i++ )
     {
         pthread_mutex_lock( &h->outputs[i]->queue.mutex );
         h->outputs[i]->cancel_thread = 1;
         pthread_cond_signal( &h->outputs[i]->queue.in_cv );
         pthread_mutex_unlock( &h->outputs[i]->queue.mutex );
-        pthread_join( h->outputs[i]->output_thread, &ret_ptr );
         /* could be blocking on OS so have to cancel thread too */
         pthread_cancel( h->outputs[i]->output_thread );
         pthread_join( h->outputs[i]->output_thread, &ret_ptr );
