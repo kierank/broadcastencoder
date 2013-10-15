@@ -986,7 +986,11 @@ static int set_output( char *command, obecli_command_t *child )
         char *type = obe_get_option( output_opts[0], opts );
         char *target = obe_get_option( output_opts[1], opts );
 
-        cli.output.outputs[output_id].type = obe_otoi( type, cli.output.outputs[output_id].type );
+        FAIL_IF_ERROR( type && ( check_enum_value( type, output_modules ) < 0 ),
+                      "Invalid Output Type\n" );
+
+        if( type )
+            parse_enum_value( type, output_modules, &cli.output.outputs[output_id].type );
         if( target )
         {
              if( cli.output.outputs[output_id].target )
