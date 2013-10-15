@@ -27,7 +27,7 @@
 
 struct file_status
 {
-    obe_output_params_t *output_params;
+    obe_output_t *output;
     FILE **fp;
 };
 
@@ -37,24 +37,24 @@ static void close_output( void *handle )
 
     fclose( *status->fp );
 
-    if( status->output_params->output_opts.target  )
-        free( status->output_params->output_opts.target );
+    if( status->output->output_dest.target  )
+        free( status->output->output_dest.target );
 }
 
 static void *open_output( void *ptr )
 {
-    obe_output_params_t *output_params = ptr;
-    obe_t *h = output_params->h;
+    obe_output_t *output = ptr;
+    obe_output_dest_t *output_dest = &output->output_dest;
     struct file_status status;
     FILE *fp = NULL;
     int num_muxed_data = 0;
     AVBufferRef **muxed_data;
 
-    status.output_params = output_params;
+    status.output = output;
     status.fp = &fp;
     pthread_cleanup_push( close_output, (void*)&status );
 
-    fp = fopen( output_params->output_opts.target, "wb" );
+    fp = fopen( output_dest->target, "wb" );
     if( !fp )
     {
         fprintf( stderr, "[file] Could not open file" );
@@ -63,36 +63,36 @@ static void *open_output( void *ptr )
 
     while( 1 )
     {
-        pthread_mutex_lock( &h->output_queue.mutex );
-        while( !h->output_queue.size && !h->cancel_output_thread )
+        pthread_mutex_lock( &output->queue.mutex );
+        while( !output->queue.size && !output->cancel_thread )
         {
             /* Often this cond_wait is not because of an underflow */
-            pthread_cond_wait( &h->output_queue.in_cv, &h->output_queue.mutex );
+            pthread_cond_wait( &output->queue.in_cv, &output->queue.mutex );
         }
 
-        if( h->cancel_output_thread )
+        if( output->cancel_thread )
         {
-            pthread_mutex_unlock( &h->output_queue.mutex );
+            pthread_mutex_unlock( &output->queue.mutex );
             break;
         }
 
-        num_muxed_data = h->output_queue.size;
+        num_muxed_data = output->queue.size;
 
         muxed_data = malloc( num_muxed_data * sizeof(*muxed_data) );
         if( !muxed_data )
         {
-            pthread_mutex_unlock( &h->output_queue.mutex );
+            pthread_mutex_unlock( &output->queue.mutex );
             syslog( LOG_ERR, "Malloc failed\n" );
             return NULL;
         }
-        memcpy( muxed_data, h->output_queue.queue, num_muxed_data * sizeof(*muxed_data) );
-        pthread_mutex_unlock( &h->output_queue.mutex );
+        memcpy( muxed_data, output->queue.queue, num_muxed_data * sizeof(*muxed_data) );
+        pthread_mutex_unlock( &output->queue.mutex );
 
         for( int i = 0; i < num_muxed_data; i++ )
         {
             fwrite( &muxed_data[i]->data[7*sizeof(int64_t)], 1, TS_PACKETS_SIZE, fp );
 
-            remove_from_queue( &h->output_queue );
+            remove_from_queue( &output->queue );
             av_buffer_unref( &muxed_data[i] );
         }
 
