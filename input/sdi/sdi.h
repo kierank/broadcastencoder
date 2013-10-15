@@ -57,8 +57,6 @@ typedef struct
 
     /* VBI */
     int ntsc;
-    int teletext_location;
-    int wss_output;
     int num_vbi;
     vbi_sliced vbi_slices[100];
     int has_vbi_frame;
@@ -83,6 +81,7 @@ typedef struct
     int field_two; /* where relevant */
 } obe_line_number_t;
 
+/* For NTSC this is not the same as the first coded line */
 const static obe_line_number_t first_active_line[] =
 {
     { INPUT_VIDEO_FORMAT_PAL,   23 },
@@ -124,7 +123,7 @@ void obe_blank_line_uyvy_c( uint16_t *dst, int width );
 int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream, int location );
 int check_probed_non_display_data( obe_sdi_non_display_data_t *non_display_data, int type );
 int check_active_non_display_data( obe_raw_frame_t *raw_frame, int type );
-int non_display_data_was_probed( obe_device_t *device, int type, int source, int line_number );
+int check_user_selected_non_display_data( obe_t *h, int type, int location );
 int add_teletext_service( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream );
 int sdi_next_line( int format, int line_smpte );
 

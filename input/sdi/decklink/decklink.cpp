@@ -335,7 +335,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         anc_buf_pos = anc_buf;
         for( int i = 0; i < num_anc_lines; i++ )
         {
-            parse_vanc_line( &decklink_ctx->non_display_parser, raw_frame, anc_buf_pos, width, anc_lines[i] );
+            parse_vanc_line( h, &decklink_ctx->non_display_parser, raw_frame, anc_buf_pos, width, anc_lines[i] );
             anc_buf_pos += anc_line_stride / 2;
         }
 
@@ -375,7 +375,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 tmp_line++;
             }
 
-            if( decode_video_index_information( &decklink_ctx->non_display_parser, anc_buf_pos, raw_frame, vii_line ) < 0 )
+            if( decode_video_index_information( h, &decklink_ctx->non_display_parser, anc_buf_pos, raw_frame, vii_line ) < 0 )
                 goto fail;
 
             if( !decklink_ctx->has_setup_vbi )
@@ -394,7 +394,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 decklink_ctx->has_setup_vbi = 1;
             }
 
-            if( decode_vbi( &decklink_ctx->non_display_parser, vbi_buf, raw_frame ) < 0 )
+            if( decode_vbi( h, &decklink_ctx->non_display_parser, vbi_buf, raw_frame ) < 0 )
                 goto fail;
 
             av_free( vbi_buf );
@@ -433,17 +433,25 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             raw_frame->alloc_img.planes = av_pix_fmt_descriptors[raw_frame->alloc_img.csp].nb_components;
             raw_frame->alloc_img.width = width;
             raw_frame->alloc_img.height = height;
+            raw_frame->alloc_img.format = decklink_opts_->video_format;
             raw_frame->timebase_num = decklink_opts_->timebase_num;
             raw_frame->timebase_den = decklink_opts_->timebase_den;
 
             memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
             if( IS_SD( decklink_opts_->video_format ) )
             {
-                if( raw_frame->alloc_img.height == 486 )
-                    raw_frame->img.height = 480;
-
-                raw_frame->img.format     = decklink_opts_->video_format;
                 raw_frame->img.first_line = first_active_line[j].line;
+                if( decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC )
+                {
+                    raw_frame->img.height = 480;
+                    while( raw_frame->img.first_line != NTSC_FIRST_CODED_LINE )
+                    {
+                        for( int i = 0; i < raw_frame->img.planes; i++ )
+                            raw_frame->img.plane[i] += raw_frame->img.stride[i];
+
+                        raw_frame->img.first_line = sdi_next_line( INPUT_VIDEO_FORMAT_NTSC, raw_frame->img.first_line );
+                    }
+                }
             }
 
             /* If AFD is present and the stream is SD this will be changed in the video filter */
@@ -459,7 +467,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             if( add_to_filter_queue( h, raw_frame ) < 0 )
                 goto fail;
 
-            if( send_vbi_and_ttx( h, &decklink_ctx->non_display_parser, decklink_ctx->device, raw_frame->pts ) < 0 )
+            if( send_vbi_and_ttx( h, &decklink_ctx->non_display_parser, raw_frame->pts ) < 0 )
                 goto fail;
 
             decklink_ctx->non_display_parser.num_vbi = 0;
@@ -930,8 +938,6 @@ static void *probe_stream( void *ptr )
     decklink_opts->video_format = user_opts->video_format;
 
     decklink_opts->probe = non_display_parser->probe = 1;
-    non_display_parser->teletext_location = user_opts->teletext_location;
-    non_display_parser->wss_output = user_opts->wss_output;
 
     decklink_ctx = &decklink_opts->decklink_ctx;
     decklink_ctx->h = h;
@@ -976,7 +982,7 @@ static void *probe_stream( void *ptr )
             streams[i]->timebase_den = decklink_opts->timebase_den;
             streams[i]->csp    = PIX_FMT_YUV422P10;
             streams[i]->interlaced = decklink_opts->interlaced;
-            streams[i]->tff = decklink_opts->tff;
+            streams[i]->tff = 1; /* NTSC is bff in baseband but coded as tff */
             streams[i]->sar_num = streams[i]->sar_den = 1; /* The user can choose this when encoding */
 
             if( add_non_display_services( non_display_parser, streams[i], USER_DATA_LOCATION_FRAME ) < 0 )
@@ -1087,8 +1093,6 @@ static void *open_input( void *ptr )
     decklink_ctx->last_frame_time = -1;
 
     non_display_parser = &decklink_ctx->non_display_parser;
-    non_display_parser->teletext_location = device->user_opts.teletext_location;
-    non_display_parser->wss_output = user_opts->wss_output;
     non_display_parser->device = device;
 
     /* TODO: wait for encoder */

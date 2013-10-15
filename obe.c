@@ -76,8 +76,6 @@ obe_raw_frame_t *new_raw_frame( void )
         return NULL;
     }
 
-    raw_frame->alloc_img.format = raw_frame->img.format = -1;
-
     return raw_frame;
 }
 
@@ -330,6 +328,19 @@ static void destroy_encoder( obe_encoder_t *encoder )
     free( encoder );
 }
 
+static void destroy_enc_smoothing( obe_queue_t *queue )
+{
+    obe_coded_frame_t *coded_frame;
+    pthread_mutex_lock( &queue->mutex );
+    for( int i = 0; i < queue->size; i++ )
+    {
+        coded_frame = queue->queue[i];
+        destroy_coded_frame( coded_frame );
+    }
+
+    obe_destroy_queue( queue );
+}
+
 static void destroy_mux( obe_t *h )
 {
     pthread_mutex_lock( &h->mux_queue.mutex );
@@ -342,6 +353,19 @@ static void destroy_mux( obe_t *h )
         free( h->mux_opts.service_name );
     if( h->mux_opts.provider_name )
         free( h->mux_opts.provider_name );
+}
+
+static void destroy_mux_smoothing( obe_queue_t *queue )
+{
+    obe_muxed_data_t *muxed_data;
+    pthread_mutex_lock( &queue->mutex );
+    for( int i = 0; i < queue->size; i++ )
+    {
+        muxed_data = queue->queue[i];
+        destroy_muxed_data( muxed_data );
+    }
+
+    obe_destroy_queue( queue );
 }
 
 int remove_early_frames( obe_t *h, int64_t pts )
@@ -370,13 +394,13 @@ int remove_early_frames( obe_t *h, int64_t pts )
 }
 
 /* Output queue */
-static void destroy_output( obe_t *h )
+static void destroy_output( obe_output_t *output )
 {
-    pthread_mutex_lock( &h->output_queue.mutex );
-    for( int i = 0; i < h->output_queue.size; i++ )
-        av_buffer_unref( h->output_queue.queue[i] );
+    pthread_mutex_lock( &output->queue.mutex );
+    for( int i = 0; i < output->queue.size; i++ )
+        av_buffer_unref( output->queue.queue[i] );
 
-    obe_destroy_queue( &h->output_queue );
+    obe_destroy_queue( &output->queue );
 }
 
 /** Get items **/
@@ -408,6 +432,16 @@ obe_output_stream_t *get_output_stream( obe_t *h, int output_stream_id )
     for( int i = 0; i < h->num_output_streams; i++ )
     {
         if( h->output_streams[i].output_stream_id == output_stream_id )
+            return &h->output_streams[i];
+    }
+    return NULL;
+}
+
+obe_output_stream_t *get_output_stream_by_format( obe_t *h, int format )
+{
+    for( int i = 0; i < h->num_output_streams; i++ )
+    {
+        if( h->output_streams[i].stream_format == format )
             return &h->output_streams[i];
     }
     return NULL;
@@ -789,7 +823,10 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         if( param->i_width >= 1280 && param->i_height >= 720 )
             param->sc.max_preset = 7; /* on the conservative side for HD */
         else
+        {
             param->sc.max_preset = 10;
+            param->i_bframe_adaptive = X264_B_ADAPT_TRELLIS;
+        }
 
         param->rc.i_lookahead = param->i_keyint_max;
     }
@@ -815,6 +852,8 @@ int obe_setup_streams( obe_t *h, obe_output_stream_t *output_streams, int num_st
     }
     memcpy( h->output_streams, output_streams, num_streams * sizeof(*h->output_streams) );
 
+    // TODO sort out VBI
+
     return 0;
 }
 
@@ -826,9 +865,9 @@ int obe_setup_muxer( obe_t *h, obe_mux_opts_t *mux_opts )
 
     if( mux_opts->service_name )
     {
-       h->mux_opts.service_name = malloc( strlen( mux_opts->service_name ) + 1 );
-       if( !h->mux_opts.service_name )
-       {
+        h->mux_opts.service_name = malloc( strlen( mux_opts->service_name ) + 1 );
+        if( !h->mux_opts.service_name )
+        {
            fprintf( stderr, "Malloc failed \n" );
            return -1;
         }
@@ -837,11 +876,11 @@ int obe_setup_muxer( obe_t *h, obe_mux_opts_t *mux_opts )
     }
     if( mux_opts->provider_name )
     {
-       h->mux_opts.provider_name = malloc( strlen( mux_opts->provider_name ) + 1 );
-       if( !h->mux_opts.provider_name )
-       {
-           fprintf( stderr, "Malloc failed \n" );
-           return -1;
+        h->mux_opts.provider_name = malloc( strlen( mux_opts->provider_name ) + 1 );
+        if( !h->mux_opts.provider_name )
+        {
+            fprintf( stderr, "Malloc failed \n" );
+            return -1;
         }
 
         strcpy( h->mux_opts.provider_name, mux_opts->provider_name );
@@ -852,9 +891,42 @@ int obe_setup_muxer( obe_t *h, obe_mux_opts_t *mux_opts )
 
 int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts )
 {
-    // TODO sanity check
+    // TODO further sanity checks
+    if( output_opts->num_outputs <= 0 )
+    {
+       fprintf( stderr, "Invalid number of outputs \n" );
+       return -1;
+    }
 
-    memcpy( &h->output_opts, output_opts, sizeof(obe_output_opts_t) );
+    h->outputs = malloc( output_opts->num_outputs * sizeof(*h->outputs) );
+    if( !h->outputs )
+    {
+       fprintf( stderr, "Malloc failed\n" );
+       return -1;
+    }
+
+    for( int i = 0; i < output_opts->num_outputs; i++ )
+    {
+        h->outputs[i] = calloc( 1, sizeof(*h->outputs[i]) );
+        if( !h->outputs[i] )
+        {
+           fprintf( stderr, "Malloc failed\n" );
+           return -1;
+        }
+        h->outputs[i]->output_dest.type = output_opts->outputs[i].type;
+        if( output_opts->outputs[i].target )
+        {
+            h->outputs[i]->output_dest.target = malloc( strlen( output_opts->outputs[i].target ) + 1 );
+            if( !h->outputs[i]->output_dest.target )
+            {
+                fprintf( stderr, "Malloc failed\n" );
+                return -1;
+            }
+            strcpy( h->outputs[i]->output_dest.target, output_opts->outputs[i].target );
+        }
+    }
+    h->num_outputs = output_opts->num_outputs;
+
     return 0;
 }
 
@@ -865,7 +937,6 @@ int obe_start( obe_t *h )
     obe_aud_filter_params_t *aud_filter_params;
     obe_vid_enc_params_t *vid_enc_params;
     obe_aud_enc_params_t *aud_enc_params;
-    obe_output_params_t  *out_params;
 
     obe_input_func_t  input;
     obe_aud_enc_func_t audio_encoder;
@@ -882,7 +953,6 @@ int obe_start( obe_t *h )
     obe_init_queue( &h->enc_smoothing_queue );
     obe_init_queue( &h->mux_queue );
     obe_init_queue( &h->mux_smoothing_queue );
-    obe_init_queue( &h->output_queue );
     pthread_mutex_init( &h->obe_clock_mutex, NULL );
     pthread_cond_init( &h->obe_clock_cv, NULL );
 
@@ -904,41 +974,25 @@ int obe_start( obe_t *h )
         goto fail;
     }
 
-    if( h->output_opts.output == OUTPUT_UDP || h->output_opts.output == OUTPUT_RTP )
-        output = ip_output;
-    else if( h->output_opts.output == OUTPUT_FILE )
-        output = file_output;
-    else
+    /* Open Output Threads */
+    for( int i = 0; i < h->num_outputs; i++ )
     {
-        fprintf( stderr, "Invalid output device \n" );
-        goto fail;
-    }
-
-    /* Open Output Thread */
-    out_params = calloc( 1, sizeof(*out_params) );
-    if( !out_params )
-    {
-        fprintf( stderr, "Malloc failed \n" );
-        goto fail;
-    }
-
-    memcpy( &out_params->output_opts, &h->output_opts, sizeof(h->output_opts) );
-    if( h->output_opts.target )
-    {
-        out_params->output_opts.target = malloc( strlen( h->output_opts.target ) + 1 );
-        if( !out_params->output_opts.target )
+        obe_init_queue( &h->outputs[i]->queue );
+        if( h->outputs[i]->output_dest.type == OUTPUT_UDP || h->outputs[i]->output_dest.type == OUTPUT_RTP )
+            output = ip_output;
+        else if( h->outputs[i]->output_dest.type == OUTPUT_FILE )
+            output = file_output;
+        else
         {
-            fprintf( stderr, "Malloc failed \n" );
+            fprintf( stderr, "Invalid output device \n" );
             goto fail;
         }
-        strcpy( out_params->output_opts.target, h->output_opts.target );
-    }
-    out_params->h = h;
 
-    if( pthread_create( &h->output_thread, NULL, output.open_output, (void*)out_params ) < 0 )
-    {
-        fprintf( stderr, "Couldn't create output thread \n" );
-        goto fail;
+        if( pthread_create( &h->outputs[i]->output_thread, NULL, output.open_output, (void*)h->outputs[i] ) < 0 )
+        {
+            fprintf( stderr, "Couldn't create output thread \n" );
+            goto fail;
+        }
     }
 
     /* Open Encoder Threads */
@@ -1241,15 +1295,17 @@ void obe_close( obe_t *h )
 
     fprintf( stderr, "mux smoothing cancelled \n" );
 
-    /* Cancel output_thread */
-    pthread_mutex_lock( &h->output_queue.mutex );
-    h->cancel_output_thread = 1;
-    pthread_cond_signal( &h->output_queue.in_cv );
-    pthread_mutex_unlock( &h->output_queue.mutex );
-    pthread_join( h->output_thread, &ret_ptr );
-    /* could be blocking on OS so have to cancel thread too */
-    pthread_cancel( h->output_thread );
-    pthread_join( h->output_thread, &ret_ptr );
+    /* Cancel output threads */
+    for( int i = 0; i < h->num_outputs; i++ )
+    {
+        pthread_mutex_lock( &h->outputs[i]->queue.mutex );
+        h->outputs[i]->cancel_thread = 1;
+        pthread_cond_signal( &h->outputs[i]->queue.in_cv );
+        pthread_mutex_unlock( &h->outputs[i]->queue.mutex );
+        /* could be blocking on OS so have to cancel thread too */
+        pthread_cancel( h->outputs[i]->output_thread );
+        pthread_join( h->outputs[i]->output_thread, &ret_ptr );
+    }
 
     fprintf( stderr, "output thread cancelled \n" );
 
@@ -1271,20 +1327,30 @@ void obe_close( obe_t *h )
 
     fprintf( stderr, "encoders destroyed \n" );
 
-    // FIXME destroy smoothing thread
+    destroy_enc_smoothing( &h->enc_smoothing_queue );
+    fprintf( stderr, "encoder smoothing destroyed \n" );
 
     /* Destroy mux */
     destroy_mux( h );
 
     fprintf( stderr, "mux destroyed \n" );
 
+    destroy_mux_smoothing( &h->mux_smoothing_queue );
+    fprintf( stderr, "mux smoothing destroyed \n" );
+
     /* Destroy output */
-    destroy_output( h );
+    for( int i = 0; i < h->num_outputs; i++ )
+        destroy_output( h->outputs[i] );
+
+    free( h->outputs );
 
     fprintf( stderr, "output destroyed \n" );
 
     free( h->output_streams );
     /* TODO: free other things */
+
+    /* Destroy lock manager */
+    av_lockmgr_register( NULL );
 
     free( h );
     h = NULL;

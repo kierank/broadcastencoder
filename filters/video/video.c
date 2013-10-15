@@ -38,9 +38,6 @@ typedef uint16_t pixel;
 typedef uint8_t pixel;
 #endif
 
-#define PAL_FIRST_NON_BLANKED  24
-#define NTSC_FIRST_NON_BLANKED 22
-
 typedef struct
 {
     /* cpu flags */
@@ -49,10 +46,14 @@ typedef struct
     /* upscaling */
     void (*scale_plane)( uint16_t *src, int stride, int width, int height, int lshift, int rshift );
 
-    /* downscaling */
+    /* resize */
     struct SwsContext *sws_ctx;
     int sws_ctx_flags;
     enum PixelFormat dst_pix_fmt;
+
+    /* downsample */
+    void (*downsample_chroma_row_top)( uint16_t *src, uint16_t *dst, int width, int stride );
+    void (*downsample_chroma_row_bottom)( uint16_t *src, uint16_t *dst, int width, int stride );
 
     /* dither */
     void (*dither_row_10_to_8)( uint16_t *src, uint8_t *dst, const uint16_t *dithers, int width, int stride );
@@ -197,6 +198,22 @@ static void dither_row_10_to_8_c( uint16_t *src, uint8_t *dst, const uint16_t *d
 
 }
 
+static void downsample_chroma_row_top_c( uint16_t *src, uint16_t *dst, int width, int stride )
+{
+    uint16_t *srcp = src + stride;
+
+    for( int i = 0; i < width/2; i++ )
+        dst[i] = (3*src[i] + srcp[i] + 2) >> 2;
+}
+
+static void downsample_chroma_row_bottom_c( uint16_t *src, uint16_t *dst, int width, int stride )
+{
+    uint16_t *srcp = src + stride;
+
+    for( int i = 0; i < width/2; i++ )
+        dst[i] = (src[i] + 3*srcp[i] + 2) >> 2;
+}
+
 static void init_filter( obe_vid_filter_ctx_t *vfilt )
 {
     vfilt->avutil_cpu = av_get_cpu_flags();
@@ -214,14 +231,40 @@ static void init_filter( obe_vid_filter_ctx_t *vfilt )
         vfilt->scale_plane = obe_scale_plane_avx;
 #endif
 
+    /* downsampling */
+    vfilt->downsample_chroma_row_top = downsample_chroma_row_top_c;
+    vfilt->downsample_chroma_row_bottom = downsample_chroma_row_bottom_c;
+
+    /* dither */
     vfilt->dither_row_10_to_8 = dither_row_10_to_8_c;
+
+    if( vfilt->avutil_cpu & AV_CPU_FLAG_SSE2 )
+    {
+        vfilt->downsample_chroma_row_top = obe_downsample_chroma_row_top_sse2;
+        vfilt->downsample_chroma_row_bottom = obe_downsample_chroma_row_bottom_sse2;
+    }
 
     if( vfilt->avutil_cpu & AV_CPU_FLAG_SSE4 )
         vfilt->dither_row_10_to_8 = obe_dither_row_10_to_8_sse4;
 
     if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX )
+    {
+        vfilt->downsample_chroma_row_top = obe_downsample_chroma_row_top_avx;
+        vfilt->downsample_chroma_row_bottom = obe_downsample_chroma_row_bottom_avx;
         vfilt->dither_row_10_to_8 = obe_dither_row_10_to_8_avx;
+    }
+}
 
+static void blank_line( uint16_t *y, uint16_t *u, uint16_t *v, int width )
+{
+    for( int i = 0; i < width; i++ )
+        y[i] = 0x40;
+
+    for( int i = 0; i < width/2; i++ )
+        u[i] = 0x200;
+
+    for( int i = 0; i < width/2; i++ )
+        v[i] = 0x200;
 }
 
 static void blank_lines( obe_raw_frame_t *raw_frame )
@@ -229,31 +272,13 @@ static void blank_lines( obe_raw_frame_t *raw_frame )
     /* All SDI input is 10-bit 4:2:2 */
     /* FIXME: assumes planar, non-interleaved format */
     uint16_t *y, *u, *v;
-    int cur_line, first_nonblank_line;
+    int cur_line = raw_frame->img.first_line;
 
     y = (uint16_t*)raw_frame->img.plane[0];
     u = (uint16_t*)raw_frame->img.plane[1];
     v = (uint16_t*)raw_frame->img.plane[2];
 
-    cur_line = raw_frame->img.first_line;
-    first_nonblank_line = raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL ? PAL_FIRST_NON_BLANKED : NTSC_FIRST_NON_BLANKED;
-
-    while( cur_line != first_nonblank_line )
-    {
-        for( int i = 0; i < raw_frame->img.width; i++ )
-            y[i] = 0x40;
-
-        for( int i = 0; i < raw_frame->img.width/2; i++ )
-        {
-            u[i] = 0x200;
-            v[i] = 0x200;
-        }
-
-        cur_line = sdi_next_line( raw_frame->img.format, cur_line );
-        y += raw_frame->img.stride[0] / 2;
-        u += raw_frame->img.stride[1] / 2;
-        v += raw_frame->img.stride[2] / 2;
-    }
+    blank_line( y, u, v, raw_frame->img.width / 2 );
 }
 
 static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
@@ -283,14 +308,18 @@ static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
     return 0;
 }
 
-static int downconvert_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame, int width )
+static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame, int width )
 {
     obe_image_t tmp_image = {0};
 
     if( !vfilt->sws_ctx || raw_frame->reset_obe )
     {
+        if( IS_INTERLACED( raw_frame->img.format ) )
+            vfilt->dst_pix_fmt = raw_frame->img.csp;
+        else
+            vfilt->dst_pix_fmt = raw_frame->img.csp == PIX_FMT_YUV422P10 ? PIX_FMT_YUV420P10 : PIX_FMT_YUV420P;
+
         vfilt->sws_ctx_flags |= SWS_FULL_CHR_H_INP | SWS_ACCURATE_RND | SWS_LANCZOS;
-        vfilt->dst_pix_fmt = raw_frame->img.csp == PIX_FMT_YUV422P10 ? PIX_FMT_YUV420P10 : PIX_FMT_YUV420P;
 
         vfilt->sws_ctx = sws_getContext( raw_frame->img.width, raw_frame->img.height, raw_frame->img.csp,
                                          width, raw_frame->img.height, vfilt->dst_pix_fmt,
@@ -302,14 +331,14 @@ static int downconvert_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_
         }
     }
 
-    tmp_image.csp = vfilt->dst_pix_fmt;
     tmp_image.width = width;
     tmp_image.height = raw_frame->img.height;
     tmp_image.planes = av_pix_fmt_descriptors[vfilt->dst_pix_fmt].nb_components;
+    tmp_image.csp = vfilt->dst_pix_fmt;
     tmp_image.format = raw_frame->img.format;
 
     if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
-                        vfilt->dst_pix_fmt, 16 ) < 0 )
+                        tmp_image.csp, 16 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
@@ -406,6 +435,57 @@ static int dither_image( obe_raw_frame_t *raw_frame, int16_t *error_buf )
 }
 
 #endif
+
+static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
+{
+    obe_image_t *img = &raw_frame->img;
+    obe_image_t tmp_image = {0};
+    obe_image_t *out = &tmp_image;
+
+    /* FIXME: support 8-bit. Note hardcoded width*2 below. */
+    tmp_image.csp = PIX_FMT_YUV420P10;
+    tmp_image.width = raw_frame->img.width;
+    tmp_image.height = raw_frame->img.height;
+    tmp_image.planes = av_pix_fmt_descriptors[tmp_image.csp].nb_components;
+    tmp_image.format = raw_frame->img.format;
+
+    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
+                        tmp_image.csp, 16 ) < 0 )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+
+    av_image_copy_plane( (uint8_t*)tmp_image.plane[0], tmp_image.stride[0],
+                         (const uint8_t *)raw_frame->img.plane[0], raw_frame->img.stride[0],
+                          raw_frame->img.width * 2, raw_frame->img.height );
+
+    for( int i = 1; i < tmp_image.planes; i++ )
+    {
+        int num_interleaved = csp_num_interleaved( img->csp, i );
+        int height = obe_cli_csps[out->csp].height[i] * img->height;
+        int width = obe_cli_csps[out->csp].width[i] * img->width / num_interleaved;
+        uint16_t *src = (uint16_t*)img->plane[i];
+        uint16_t *dst = (uint16_t*)out->plane[i];
+
+        for( int j = 0; j < height; j += 2 )
+        {
+            uint16_t *srcp = (uint16_t*)src + img->stride[i] / 2;
+            uint16_t *dstp = (uint16_t*)dst + out->stride[i] / 2;
+            vfilt->downsample_chroma_row_top( src, dst, width*2, img->stride[i] );
+            vfilt->downsample_chroma_row_bottom( srcp, dstp, width*2, img->stride[i] );
+
+            src += img->stride[i] * 2;
+            dst += out->stride[i];
+        }
+    }
+
+    raw_frame->release_data( raw_frame );
+    memcpy( &raw_frame->alloc_img, out, sizeof(obe_image_t) );
+    memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
+
+    return 0;
+}
 
 static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
@@ -655,16 +735,24 @@ static void *start_filter( void *ptr )
         /* TODO: scale 8-bit to 10-bit
          * TODO: convert from 4:2:0 to 4:2:2 */
 
-        if( IS_SD( raw_frame->img.format ) )
+        if( raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL )
             blank_lines( raw_frame );
+
+        /* Resize if necessary. Together with colourspace conversion if progressive */
+        if( raw_frame->img.width != output_stream->avc_param.i_width || (!IS_INTERLACED( raw_frame->img.format ) &&
+                                                                          filter_params->target_csp == X264_CSP_I420 ) )
+        {
+            if( resize_frame( vfilt, raw_frame, output_stream->avc_param.i_width ) < 0 )
+                goto end;
+        }
 
         if( av_pix_fmt_get_chroma_sub_sample( raw_frame->img.csp, &h_shift, &v_shift ) < 0 )
             goto end;
 
-        /* Downconvert if input is 4:2:2 and target is 4:2:0 */
-        if( filter_params->target_csp == X264_CSP_I420 && h_shift == 1 && v_shift == 0 )
+        /* Downconvert using interlaced scaling if input is 4:2:2 and target is 4:2:0 */
+        if( h_shift == 1 && v_shift == 0 && filter_params->target_csp == X264_CSP_I420 )
         {
-            if( downconvert_frame( vfilt, raw_frame, output_stream->avc_param.i_width ) < 0 )
+            if( downconvert_image_interlaced( vfilt, raw_frame ) < 0 )
                 goto end;
         }
 

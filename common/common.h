@@ -78,6 +78,9 @@
 /* Audio sample patterns */
 #define MAX_AUDIO_SAMPLE_PATTERN 5
 
+/* NTSC */
+#define NTSC_FIRST_CODED_LINE 23
+
 static inline int obe_clip3( int v, int i_min, int i_max )
 {
     return ( (v < i_min) ? i_min : (v > i_max) ? i_max : v );
@@ -203,7 +206,7 @@ typedef struct
     int     planes;    /* number of planes */
     uint8_t *plane[4]; /* pointers for each plane */
     int     stride[4]; /* strides for each plane */
-    int     format;    /* image format (SD SDI only) */
+    int     format;    /* image format */
     int     first_line; /* first line of image (SD from SDI only) */
 } obe_image_t;
 
@@ -387,6 +390,17 @@ typedef struct
 
 typedef struct
 {
+    /* Output */
+    pthread_t output_thread;
+    int cancel_thread;
+    obe_output_dest_t output_dest;
+
+    /* Muxed frame queue for transmission */
+    obe_queue_t queue;
+} obe_output_t;
+
+typedef struct
+{
     int output_stream_id;
     int is_video;
 
@@ -413,14 +427,6 @@ typedef struct
     /* MPEG-TS */
     int64_t *pcr_list;
 } obe_muxed_data_t;
-
-typedef struct
-{
-    pthread_mutex_t output_mutex;
-    pthread_cond_t  output_cv;
-    int num_muxed_data;
-    obe_muxed_data_t **muxed_data;
-} obe_output_t;
 
 struct obe_t
 {
@@ -449,6 +455,7 @@ struct obe_t
     int num_output_streams;
     obe_output_stream_t *output_streams;
 
+    /** Individual Threads */
     /* Smoothing (video) */
     pthread_t enc_smoothing_thread;
     int cancel_enc_smoothing_thread;
@@ -462,18 +469,18 @@ struct obe_t
     pthread_t mux_smoothing_thread;
     int cancel_mux_smoothing_thread;
 
-    /* Output */
-    pthread_t output_thread;
-    int cancel_output_thread;
-    obe_output_opts_t output_opts;
-
     /* Filtering */
     int num_filters;
     obe_filter_t *filters[MAX_STREAMS];
 
+    /** Multiple Threads **/
     /* Input or Postfiltered frames for encoding */
     int num_encoders;
     obe_encoder_t *encoders[MAX_STREAMS];
+
+    /* Output data */
+    int num_outputs;
+    obe_output_t **outputs;
 
     /* Encoded frames in smoothing buffer */
     obe_queue_t     enc_smoothing_queue;
@@ -486,9 +493,6 @@ struct obe_t
 
     /* Muxed frames in smoothing buffer */
     obe_queue_t mux_smoothing_queue;
-
-    /* Muxed frame queue for transmission */
-    obe_queue_t output_queue;
 
     /* Statistics and Monitoring */
 
@@ -533,6 +537,7 @@ int remove_from_output_queue( obe_t *h );
 obe_int_input_stream_t *get_input_stream( obe_t *h, int input_stream_id );
 obe_encoder_t *get_encoder( obe_t *h, int stream_id );
 obe_output_stream_t *get_output_stream( obe_t *h, int stream_id );
+obe_output_stream_t *get_output_stream_by_format( obe_t *h, int format );
 
 int64_t get_wallclock_in_mpeg_ticks( void );
 void sleep_mpeg_ticks( int64_t i_delay );

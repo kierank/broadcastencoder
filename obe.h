@@ -99,20 +99,6 @@ enum input_type_e
 //    INPUT_DEVICE_ASI,
 };
 
-enum teletext_location_e
-{
-    TELETEXT_LOCATION_DVB_TTX,
-    TELETEXT_LOCATION_DVB_VBI,
-    TELETEXT_LOCATION_DVB_TTX_AND_VBI,
-};
-
-enum wss_output_e
-{
-    WSS_OUTPUT_AFD,
-    WSS_OUTPUT_DVB_VBI,
-    WSS_OUTPUT_AFD_AND_DVB_VBI,
-};
-
 typedef struct
 {
     int input_type;
@@ -123,9 +109,6 @@ typedef struct
     int video_format;
     int video_connection;
     int audio_connection;
-
-    int teletext_location;
-    int wss_output;
 } obe_input_t;
 
 /**** Stream Formats ****/
@@ -318,7 +301,8 @@ typedef struct
     int num_teletexts;
     obe_teletext_opts_t *teletext_opts;
 
-    // TODO Teletext/VBI indentifier
+    /* DVB-VBI and DVB-TTX */
+    int data_identifier;
 } obe_ts_stream_opts_t;
 
 /* Convert from SMPTE line notation (e.g. Line 284) to analogue line notation (e.g Line 21 Field 2)
@@ -384,6 +368,23 @@ typedef struct
     int latm_output;
 } obe_aac_opts_t;
 
+/**** Ancillary Data ****/
+typedef struct
+{
+     unsigned int cea_608: 1;
+     unsigned int cea_708: 1;
+     unsigned int afd: 1;
+     unsigned int wss_to_afd: 1;
+} obe_frame_anc_opts_t;
+
+typedef struct
+{
+     unsigned int ttx: 1;
+     unsigned int inverted_ttx: 1;
+     unsigned int vps: 1;
+     unsigned int wss: 1;
+} obe_dvb_vbi_opts_t;
+
 /* Stream Options:
  *
  * input_stream_id - stream id of the INPUT stream
@@ -409,6 +410,7 @@ typedef struct
 
     /* Video */
     int is_wide;
+    obe_frame_anc_opts_t video_anc;
 
     /* AVC */
     x264_param_t avc_param;
@@ -427,6 +429,9 @@ typedef struct
 
     /* MP2 */
     int mp2_mode;
+
+    /* DVB-VBI */
+    obe_dvb_vbi_opts_t dvb_vbi_opts;
 
     /** Mux options **/
     /* MPEG-TS */
@@ -502,8 +507,14 @@ enum output_e
 
 typedef struct
 {
-    int output;
+    int type;
     char *target;
+} obe_output_dest_t;
+
+typedef struct
+{
+    int num_outputs;
+    obe_output_dest_t *outputs;
 } obe_output_opts_t;
 
 int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts );

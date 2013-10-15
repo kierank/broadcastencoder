@@ -170,6 +170,11 @@ die() {
 
 rm -f config.h config.mak config.log
 
+SRCPATH="$(cd $(dirname $0); pwd)"
+[ "$SRCPATH" = "$(pwd)" ] && SRCPATH=.
+[ -n "$(echo $SRCPATH | grep ' ')" ] && die "Out of tree builds are impossible with whitespace in source path."
+[ -e "$SRCPATH/config.h" -o -e "$SRCPATH/x264_config.h" ] && die "Out of tree builds are impossible with config.h/x264_config.h in source dir."
+
 prefix='/usr/local'
 exec_prefix='${prefix}'
 bindir='${exec_prefix}/bin'
@@ -731,6 +736,7 @@ fi
 # generate config files
 
 cat > config.mak << EOF
+SRCPATH=$SRCPATH
 prefix=$prefix
 exec_prefix=$exec_prefix
 bindir=$bindir
@@ -788,10 +794,6 @@ libmpegts:  $lmpegts
 Frontends
 
 readline:   $readline
-
-Monitoring
-
-net-snmp:   no
 
 EOF
 
