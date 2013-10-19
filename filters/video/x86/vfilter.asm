@@ -83,7 +83,6 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
     lea       r6, [r0+2*r1]
 
 %ifidn %1, 8
-    add       r1, r6
     pxor      m7, m7
 
 .loop1
@@ -110,13 +109,13 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
     add       r4, mmsize
     jl        .loop1
 
-.loop2
-    ; bottom field
     mov       r4, org_w
     add       r0, r1
     add       r6, r1
     add       r2, r3
 
+.loop2
+    ; bottom field
     mova      m2, [r0+r4]
     mova      m5, [r6+r4]
 
