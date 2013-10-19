@@ -61,6 +61,7 @@ static char *line_read = NULL;
 
 static int running = 0;
 static int system_type_value = OBE_SYSTEM_TYPE_GENERIC;
+static int filter_bit_depth_value = OBE_BIT_DEPTH_10;
 
 static const char * const system_types[]             = { "generic", "lowestlatency", "lowlatency", 0 };
 static const char * const input_types[]              = { "url", "decklink", "linsys-sdi", 0 };
@@ -82,8 +83,9 @@ static const char * const channel_maps[]             = { "", "mono", "stereo", "
 static const char * const mono_channels[]            = { "left", "right", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 static const char * const addable_streams[]          = { "audio", "ttx" };
+static const char * const filter_bit_depths[]        = { "10", "8" };
 
-static const char * system_opts[] = { "system-type", NULL };
+static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", NULL };
 static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
@@ -484,6 +486,7 @@ static int set_obe( char *command, obecli_command_t *child )
             return -1;
 
         char *system_type     = obe_get_option( system_opts[0], opts );
+        char *filter_bit_depth     = obe_get_option( system_opts[1], opts );
 
         FAIL_IF_ERROR( system_type && ( check_enum_value( system_type, system_types ) < 0 ),
                        "Invalid system type\n" );
@@ -491,10 +494,11 @@ static int set_obe( char *command, obecli_command_t *child )
         FAIL_IF_ERROR( cli.program.num_streams, "Cannot change OBE options after probing\n" )
 
         if( system_type )
-        {
             parse_enum_value( system_type, system_types, &system_type_value );
-            obe_set_config( cli.h, system_type_value );
-        }
+        if( filter_bit_depth )
+            parse_enum_value( filter_bit_depth, filter_bit_depths, &filter_bit_depth_value );
+
+        obe_set_config( cli.h, system_type_value, filter_bit_depth_value );
 
         obe_free_string_array( opts );
     }

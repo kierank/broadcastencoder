@@ -45,7 +45,14 @@ enum obe_system_type_e
     OBE_SYSTEM_TYPE_LOW_LATENCY,
 };
 
-int obe_set_config( obe_t *h, int system_type );
+/* Internal filter bit depth */
+enum obe_internal_bit_depth
+{
+    OBE_BIT_DEPTH_10,
+    OBE_BIT_DEPTH_8,
+};
+
+int obe_set_config( obe_t *h, int system_type, int filter_bit_depth );
 
 enum input_video_connection_e
 {

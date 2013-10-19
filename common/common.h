@@ -432,6 +432,7 @@ struct obe_t
 {
     int is_active;
     int obe_system;
+    int filter_bit_depth;
 
     /* OBE recovered clock */
     pthread_mutex_t obe_clock_mutex;

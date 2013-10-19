@@ -476,7 +476,7 @@ obe_t *obe_setup( void )
     return h;
 }
 
-int obe_set_config( obe_t *h, int system_type )
+int obe_set_config( obe_t *h, int system_type, int filter_bit_depth )
 {
     if( system_type < OBE_SYSTEM_TYPE_GENERIC && system_type > OBE_SYSTEM_TYPE_LOW_LATENCY )
     {
@@ -484,7 +484,20 @@ int obe_set_config( obe_t *h, int system_type )
         return -1;
     }
 
+    if( filter_bit_depth > OBE_BIT_DEPTH_8 && filter_bit_depth < OBE_BIT_DEPTH_10 )
+    {
+        fprintf( stderr, "Invalid OBE bit depth\n" );
+        return -1;
+    }
+
+    if( filter_bit_depth == OBE_BIT_DEPTH_8 && X264_BIT_DEPTH == 10 )
+    {
+        fprintf( stderr, "8-bit filtering is not supported in 10-bit mode\n" );
+        return -1;
+    }
+
     h->obe_system = system_type;
+    h->filter_bit_depth = filter_bit_depth;
 
     return 0;
 }
