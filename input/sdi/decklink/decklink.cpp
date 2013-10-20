@@ -624,7 +624,6 @@ static int open_card( decklink_opts_t *decklink_opts )
 
     if( h->filter_bit_depth == OBE_BIT_DEPTH_10 && !decklink_opts->probe )
     {
-        avcodec_register_all();
         decklink_ctx->dec = avcodec_find_decoder( AV_CODEC_ID_V210 );
         if( !decklink_ctx->dec )
         {

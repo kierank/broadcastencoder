@@ -473,6 +473,8 @@ obe_t *obe_setup( void )
         return NULL;
     }
 
+    avcodec_register_all();
+
     return h;
 }
 
