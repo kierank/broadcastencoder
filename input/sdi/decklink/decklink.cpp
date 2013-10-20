@@ -126,7 +126,7 @@ typedef struct
     int has_setup_vbi;
 
     /* Ancillary */
-    void (*unpack_line) ( uint32_t *src, uint16_t *dst, int width );
+    void (*unpack_line) ( uint16_t *dsty, intptr_t i_dsty, uint16_t *dstc, intptr_t i_dstc, uint32_t *src, intptr_t i_src, int w, int h );
     void (*downscale_line) ( uint16_t *src, uint8_t *dst, int lines );
     void (*blank_line) ( uint16_t *dst, int width );
     obe_sdi_non_display_data_t non_display_parser;
@@ -298,7 +298,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
             /* NTSC starts on line 4 */
             line = decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC ? 4 : 1;
-            anc_line_stride = FFALIGN( (width * 2 * sizeof(uint16_t)), 16 );
+            anc_line_stride = FFALIGN( (width * 2 * sizeof(uint16_t)), 32 );
 
             /* Overallocate slightly for VANC buffer
              * Some VBI services stray into the active picture so allocate some extra space */
@@ -315,7 +315,10 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                  * Some buggy decklink cards will randomly refuse access to a particular line so
                  * work around this issue by blanking the line */
                 if( ancillary->GetBufferForVerticalBlankingLine( line, &anc_line ) == S_OK )
-                    decklink_ctx->unpack_line( (uint32_t*)anc_line, anc_buf_pos, width );
+                {
+                    uint16_t *uv = anc_buf_pos + width;
+                    decklink_ctx->unpack_line( anc_buf_pos, anc_line_stride, uv, anc_line_stride, (uint32_t*)anc_line, stride, width, 1 );
+                }
                 else
                     decklink_ctx->blank_line( anc_buf_pos, width );
 
@@ -351,7 +354,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 num_vbi_lines = NUM_ACTIVE_VBI_LINES + ( decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC );
                 for( int i = 0; i < num_vbi_lines; i++ )
                 {
-                    decklink_ctx->unpack_line( frame_ptr, anc_buf_pos, width );
+                    /* Second plane is irrelevant for UYVY */
+                    decklink_ctx->unpack_line( anc_buf_pos, anc_line_stride, NULL, 0, (uint32_t*)frame_ptr, stride, width, 1 );
                     anc_buf_pos += anc_line_stride / 2;
                     frame_ptr += stride / 4;
                     last_line = sdi_next_line( decklink_opts_->video_format, last_line );

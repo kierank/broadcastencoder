@@ -47,49 +47,48 @@ void obe_v210_planar_unpack_c( const uint32_t *src, uint16_t *y, uint16_t *u, ui
 }
 
 /* Convert v210 to the native HD-SDI pixel format. */
-void obe_v210_line_to_nv20_c( uint32_t *src, uint16_t *dst, int width )
+void obe_v210_line_to_nv20_c( uint16_t *dsty, intptr_t i_dsty, uint16_t *dstc, intptr_t i_dstc, uint32_t *src, intptr_t i_src, int width, int h )
 {
     int w;
     uint32_t val;
-    uint16_t *uv = dst + width;
     for( w = 0; w < width - 5; w += 6 )
     {
-        READ_PIXELS( uv, dst, uv );
-        READ_PIXELS( dst, uv, dst );
-        READ_PIXELS( uv, dst, uv );
-        READ_PIXELS( dst, uv, dst );
+        READ_PIXELS( dstc, dsty, dstc );
+        READ_PIXELS( dsty, dstc, dsty );
+        READ_PIXELS( dstc, dsty, dstc );
+        READ_PIXELS( dsty, dstc, dsty );
     }
 
     if( w < width - 1 )
     {
-        READ_PIXELS(uv, dst, uv);
+        READ_PIXELS(dstc, dsty, dstc);
 
         val    = av_le2ne32( *src++ );
-        *dst++ =  val & 0x3ff;
+        *dsty++ =  val & 0x3ff;
     }
 
     if( w < width - 3 )
     {
-        *uv++  = (val >> 10) & 0x3ff;
-        *dst++ = (val >> 20) & 0x3ff;
+        *dstc++  = (val >> 10) & 0x3ff;
+        *dsty++ = (val >> 20) & 0x3ff;
 
         val    = av_le2ne32( *src++ );
-        *uv++  =  val & 0x3ff;
-        *dst++ = (val >> 10) & 0x3ff;
+        *dstc++  =  val & 0x3ff;
+        *dsty++ = (val >> 10) & 0x3ff;
     }
 }
 
 /* Convert v210 to the native SD-SDI pixel format.
  * Width is always 720 samples */
-void obe_v210_line_to_uyvy_c( uint32_t *src, uint16_t *dst, int width )
+void obe_v210_line_to_uyvy_c( uint16_t *dsty, intptr_t i_dsty, uint16_t *dstc, intptr_t i_dstc, uint32_t *src, intptr_t i_src, int width, int h )
 {
     uint32_t val;
     for( int i = 0; i < width; i += 6 )
     {
-        READ_PIXELS( dst, dst, dst );
-        READ_PIXELS( dst, dst, dst );
-        READ_PIXELS( dst, dst, dst );
-        READ_PIXELS( dst, dst, dst );
+        READ_PIXELS( dsty, dsty, dsty );
+        READ_PIXELS( dsty, dsty, dsty );
+        READ_PIXELS( dsty, dsty, dsty );
+        READ_PIXELS( dsty, dsty, dsty );
     }
 }
 
