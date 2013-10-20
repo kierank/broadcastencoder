@@ -63,6 +63,13 @@ DITHER_row
 ; obe_downsample_chroma_fields_BITS( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height )
 ;
 
+%macro NEXT_field 0
+    mov       r4, org_w
+    add       r0, r1
+    add       r6, r1
+    add       r2, r3
+%endmacro
+
 %macro DOWNSAMPLE_chroma_fields 1
 %ifidn %1, 8
 cglobal downsample_chroma_fields_%1, 6, 8, 8
@@ -90,51 +97,48 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
     mova      m2, [r0+r4]
     mova      m5, [r6+r4]
 
-    punpcklwd m3, m2, m7
-    punpckhwd m2, m7
-    punpcklwd m4, m5, m7
-    punpckhwd m5, m7
+    punpcklbw m3, m2, m7
+    punpckhbw m2, m7
+    punpcklbw m4, m5, m7
+    punpckhbw m5, m7
 
     pmullw    m2, m0
     pmullw    m3, m0
     paddw     m4, m1
     paddw     m5, m1
-    paddw     m2, m3
-    paddw     m4, m5
+    paddw     m2, m5
+    paddw     m3, m4
     psrlw     m2, 2
-    psrlw     m4, 2
+    psrlw     m3, 2
 
-    packuswb  m2, m4
-    mova      [r2+r4], m2
+    packuswb  m3, m2
+    mova      [r2+r4], m3
     add       r4, mmsize
     jl        .loop1
 
-    mov       r4, org_w
-    add       r0, r1
-    add       r6, r1
-    add       r2, r3
+    NEXT_field
 
 .loop2
     ; bottom field
     mova      m2, [r0+r4]
     mova      m5, [r6+r4]
 
-    punpcklwd m3, m2, m7
-    punpckhwd m2, m7
-    punpcklwd m4, m5, m7
-    punpckhwd m5, m7
+    punpcklbw m3, m2, m7
+    punpckhbw m2, m7
+    punpcklbw m4, m5, m7
+    punpckhbw m5, m7
 
-    pmullw    m2, m1
-    pmullw    m3, m1
-    paddw     m4, m0
-    paddw     m5, m0
-    paddw     m2, m3
-    paddw     m4, m5
+    pmullw    m4, m0
+    pmullw    m5, m0
+    paddw     m2, m1
+    paddw     m3, m1
+    paddw     m2, m5
+    paddw     m3, m4
     psrlw     m2, 2
-    psrlw     m4, 2
+    psrlw     m3, 2
 
-    packuswb  m2, m4
-    mova      [r2+r4], m2
+    packuswb  m3, m2
+    mova      [r2+r4], m3
     add       r4, mmsize
     jl        .loop2
 
@@ -151,10 +155,7 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
     add       r4, mmsize
     jl        .loop1
 
-    mov       r4, org_w
-    add       r0, r1
-    add       r6, r1
-    add       r2, r3
+    NEXT_field
 
 .loop2
     ; bottom field
@@ -167,11 +168,11 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
     add       r4, mmsize
     jl        .loop2
 %endif
+    mov       r4, org_w
     add       r2, r3
     add       r0, r1
     lea       r0, [r0+2*r1]
     lea       r6, [r0+2*r1]
-    mov       r4, org_w
 
     sub       h, 2
     jg        .loop1
