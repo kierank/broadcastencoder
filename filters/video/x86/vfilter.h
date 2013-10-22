@@ -33,7 +33,7 @@ void obe_downsample_chroma_fields_10_sse2( void *src_ptr, int src_stride, void *
 void obe_downsample_chroma_fields_8_avx( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
 void obe_downsample_chroma_fields_10_avx( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
 
-void obe_dither_row_10_to_8_sse4( uint16_t *src, uint8_t *dst, const uint16_t *dither, int width, int stride );
-void obe_dither_row_10_to_8_avx( uint16_t *src, uint8_t *dst, const uint16_t *dither, int width, int stride );
+void obe_dither_plane_10_to_8_sse4( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height );
+void obe_dither_plane_10_to_8_avx( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height );
 
 #endif

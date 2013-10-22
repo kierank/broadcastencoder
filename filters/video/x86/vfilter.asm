@@ -12,52 +12,75 @@ three: times 8 dw 3
 
 SECTION .text
 
+cextern dithers
+
 ;
-; obe_dither_row_10_to_8( uint16_t *src, uint8_t *dst, const uint16_t *dithers, int width, int stride )
+; obe_dither_plane_10_to_8( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height )
 ;
 
-%macro DITHER_row 0
+%macro dither_plane 0
 
-cglobal dither_row_10_to_8, 5, 5, 8
-    mova      m2, [r2]
+cglobal dither_plane_10_to_8, 6, 9, 11
+%define cur_row r6
+%define dither r7
+%define org_w r8
     mova      m5, [scale]
-    movd      m6, [shift]
-    pxor      m7, m7
-    lea       r0, [r0+2*r3]
-    add       r1, r3
-    neg       r3
+    lea       r0, [r0+2*r4]
+    add       r2, r4
+    neg       r4
+    mov       org_w, r4
+    xor       cur_row, cur_row
+    pxor      m6, m6
 
-.loop
-    paddw     m0, m2, [r0+2*r3]
-    paddw     m1, m2, [r0+2*r3+16]
+.loop1
+    mov       dither, cur_row
+    and       dither, 7
+    shl       dither, 4
+    add       dither, dithers
+    mova      m2, [dither]
 
-    punpcklwd m3, m0, m7
-    punpcklwd m4, m1, m7
-    punpckhwd m0, m7
-    punpckhwd m1, m7
+.loop2
+    paddw     m0, m2, [r0+2*r4]
+    paddw     m1, m2, [r0+2*r4+mmsize]
+
+    punpcklwd m3, m0, m6
+    punpcklwd m4, m1, m6
+    punpckhwd m0, m6
+    punpckhwd m1, m6
+
     pmulld    m3, m5
     pmulld    m4, m5
     pmulld    m0, m5
     pmulld    m1, m5
-    psrld     m3, m6
-    psrld     m4, m6
-    psrld     m0, m6
-    psrld     m1, m6
+
+    psrld     m3, 11
+    psrld     m4, 11
+    psrld     m0, 11
+    psrld     m1, 11
     packusdw  m3, m0
     packusdw  m4, m1
 
     packuswb  m3, m4
-    mova      [r1+r3], m3
+    mova      [r2+r4], m3
 
-    add       r3, mmsize
-    jl        .loop
+    add       r4, mmsize
+    jl        .loop2
+
+    add       r0, r1
+    add       r2, r3
+    mov       r4, org_w
+
+    inc       cur_row
+    cmp       cur_row, r5
+    jl        .loop1
+
     REP_RET
 %endmacro
 
 INIT_XMM sse4
-DITHER_row
+dither_plane
 INIT_XMM avx
-DITHER_row
+dither_plane
 
 ;
 ; obe_downsample_chroma_fields_BITS( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height )

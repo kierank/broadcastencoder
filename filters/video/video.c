@@ -57,7 +57,7 @@ typedef struct
     void (*downsample_chroma_fields)( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
 
     /* dither */
-    void (*dither_row_10_to_8)( uint16_t *src, uint8_t *dst, const uint16_t *dithers, int width, int stride );
+    void (*dither_plane_10_to_8)( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height );
     int16_t *error_buf;
 } obe_vid_filter_ctx_t;
 
@@ -177,26 +177,32 @@ static void scale_plane_c( uint16_t *src, int stride, int width, int height, int
     }
 }
 
-static void dither_row_10_to_8_c( uint16_t *src, uint8_t *dst, const uint16_t *dither, int width, int stride )
+static void dither_plane_10_to_8_c( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height )
 {
     const int scale = 511;
     const uint16_t shift = 11;
 
-    int k;
-    for (k = 0; k < width-7; k+=8)
+    for( int j = 0; j < height; j++ )
     {
-        dst[k+0] = (src[k+0] + dither[0])*scale>>shift;
-        dst[k+1] = (src[k+1] + dither[1])*scale>>shift;
-        dst[k+2] = (src[k+2] + dither[2])*scale>>shift;
-        dst[k+3] = (src[k+3] + dither[3])*scale>>shift;
-        dst[k+4] = (src[k+4] + dither[4])*scale>>shift;
-        dst[k+5] = (src[k+5] + dither[5])*scale>>shift;
-        dst[k+6] = (src[k+6] + dither[6])*scale>>shift;
-        dst[k+7] = (src[k+7] + dither[7])*scale>>shift;
-    }
-    for (; k < width; k++)
-        dst[k] = (src[k] + dither[k&7])*scale>>shift;
+        const uint16_t *dither = obe_dithers[j&7];
+        int k;
+        for (k = 0; k < width-7; k+=8)
+        {
+            dst[k+0] = (src[k+0] + dither[0])*scale>>shift;
+            dst[k+1] = (src[k+1] + dither[1])*scale>>shift;
+            dst[k+2] = (src[k+2] + dither[2])*scale>>shift;
+            dst[k+3] = (src[k+3] + dither[3])*scale>>shift;
+            dst[k+4] = (src[k+4] + dither[4])*scale>>shift;
+            dst[k+5] = (src[k+5] + dither[5])*scale>>shift;
+            dst[k+6] = (src[k+6] + dither[6])*scale>>shift;
+            dst[k+7] = (src[k+7] + dither[7])*scale>>shift;
+        }
+        for (; k < width; k++)
+            dst[k] = (src[k] + dither[k&7])*scale>>shift;
 
+        src += src_stride / 2;
+        dst += dst_stride;
+    }
 }
 
 /* Note: srcf is the next field (two pixels down) */
@@ -269,7 +275,7 @@ static void init_filter( obe_t *h, obe_vid_filter_ctx_t *vfilt )
 #endif
 
     /* dither */
-    vfilt->dither_row_10_to_8 = dither_row_10_to_8_c;
+    vfilt->dither_plane_10_to_8 = dither_plane_10_to_8_c;
 
     /* downsampling */
     if( h->filter_bit_depth == OBE_BIT_DEPTH_8 )
@@ -286,7 +292,7 @@ static void init_filter( obe_t *h, obe_vid_filter_ctx_t *vfilt )
     }
 
     if( vfilt->avutil_cpu & AV_CPU_FLAG_SSE4 )
-        vfilt->dither_row_10_to_8 = obe_dither_row_10_to_8_sse4;
+        vfilt->dither_plane_10_to_8 = obe_dither_plane_10_to_8_sse4;
 
     if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX )
     {
@@ -294,7 +300,7 @@ static void init_filter( obe_t *h, obe_vid_filter_ctx_t *vfilt )
             vfilt->downsample_chroma_fields = obe_downsample_chroma_fields_8_avx;
         else
             vfilt->downsample_chroma_fields = obe_downsample_chroma_fields_10_avx;
-        vfilt->dither_row_10_to_8 = obe_dither_row_10_to_8_avx;
+        vfilt->dither_plane_10_to_8 = obe_dither_plane_10_to_8_avx;
     }
 }
 
@@ -561,15 +567,7 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
         uint16_t *src = (uint16_t*)img->plane[i];
         uint8_t *dst = out->plane[i];
 
-        for( int j = 0; j < height; j++ )
-        {
-            const uint16_t *dither = obe_dithers[j&7];
-
-            vfilt->dither_row_10_to_8( src, dst, dither, width, img->stride[i] );
-
-            src += img->stride[i] / 2;
-            dst += out->stride[i];
-        }
+        vfilt->dither_plane_10_to_8( src, img->stride[i], dst, out->stride[i], width, height );
     }
 
     raw_frame->release_data( raw_frame );
