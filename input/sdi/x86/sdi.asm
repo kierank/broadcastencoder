@@ -112,7 +112,7 @@ cglobal v210_line_to_nv20, 7,7,7
 %define org_w r6m
 %define h     dword r7m
 %endif
-    shl    r5, 2
+    add    r6, r6
     add    r0, r6
     add    r2, r6
     neg    r6

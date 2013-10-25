@@ -104,7 +104,7 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
     mova      m0, [three]
     mova      m1, [two]
 %ifidn %1, 10
-    shl       r4d, 1
+    add       r4d, r4d
 %endif
     add       r0, r4
     add       r2, r4
