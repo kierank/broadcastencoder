@@ -1118,7 +1118,7 @@ static void *autoconf_input( void *ptr )
     {
         streams[i] = (obe_int_input_stream_t*)calloc( 1, sizeof(*streams[i]) );
         if( !streams[i] )
-            goto finish;
+            return NULL;
 
         /* TODO: make it take a continuous set of stream-ids */
         pthread_mutex_lock( &h->device_list_mutex );
@@ -1165,7 +1165,7 @@ static void *autoconf_input( void *ptr )
     device = new_device();
 
     if( !device )
-        goto finish;
+        return NULL;
 
     device->num_input_streams = 2;
     memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
