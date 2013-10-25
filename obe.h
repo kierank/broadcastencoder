@@ -255,6 +255,9 @@ typedef struct
 /* Only one program is returned */
 int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *program );
 
+/* Allows a guessed configuration of a device without probe */
+int obe_autoconf_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *program );
+
 enum stream_action_e
 {
     STREAM_PASSTHROUGH,

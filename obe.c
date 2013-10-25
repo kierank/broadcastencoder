@@ -739,6 +739,110 @@ fail:
     return -1;
 }
 
+int obe_autoconf_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *program )
+{
+    void *ret_ptr;
+    obe_int_input_stream_t *stream_in;
+    obe_input_stream_t *stream_out;
+    obe_input_probe_t args;
+
+    obe_input_func_t  input;
+
+    int i = 0;
+    int prev_devices = h->num_devices;
+    int cur_devices;
+
+    if( !input_device )
+    {
+        fprintf( stderr, "Invalid input pointer \n" );
+        return -1;
+    }
+
+    if( h->num_devices == MAX_DEVICES )
+    {
+        fprintf( stderr, "No more devices allowed \n" );
+        return -1;
+    }
+
+#if HAVE_DECKLINK
+    if( input_device->input_type == INPUT_DEVICE_DECKLINK )
+        input = decklink_input;
+#endif
+    else if( input_device->input_type == INPUT_DEVICE_LINSYS_SDI )
+        input = linsys_sdi_input;
+    else
+    {
+        fprintf( stderr, "Invalid input device \n" );
+        return -1;
+    }
+
+    args.h = h;
+    memcpy( &args.user_opts, input_device, sizeof(*input_device) );
+
+    if( obe_validate_input_params( input_device ) < 0 )
+        goto fail;
+
+    input.autoconf_input( &args );
+
+    cur_devices = h->num_devices;
+
+    if( prev_devices == cur_devices )
+    {
+        fprintf( stderr, "Could not probe device \n" );
+        program = NULL;
+        return -1;
+    }
+
+    // TODO metadata etc
+    program->num_streams = h->devices[h->num_devices-1]->num_input_streams;
+    program->streams = calloc( program->num_streams, sizeof(*program->streams) );
+    if( !program->streams )
+    {
+        fprintf( stderr, "Malloc failed \n" );
+        return -1;
+    }
+
+    h->devices[h->num_devices-1]->probed_streams = program->streams;
+
+    for( i = 0; i < program->num_streams; i++ )
+    {
+        stream_in = h->devices[h->num_devices-1]->streams[i];
+        stream_out = &program->streams[i];
+
+        stream_out->input_stream_id = stream_in->input_stream_id;
+        stream_out->stream_type = stream_in->stream_type;
+        stream_out->stream_format = stream_in->stream_format;
+
+        stream_out->bitrate = stream_in->bitrate;
+
+        stream_out->num_frame_data = stream_in->num_frame_data;
+        stream_out->frame_data = stream_in->frame_data;
+
+        if( stream_in->stream_type == STREAM_TYPE_VIDEO )
+        {
+            memcpy( &stream_out->csp, &stream_in->csp, offsetof( obe_input_stream_t, timebase_num ) - offsetof( obe_input_stream_t, csp ) );
+            stream_out->timebase_num = stream_in->timebase_num;
+            stream_out->timebase_den = stream_in->timebase_den;
+        }
+        else if( stream_in->stream_type == STREAM_TYPE_AUDIO )
+        {
+            memcpy( &stream_out->channel_layout, &stream_in->channel_layout,
+            offsetof( obe_input_stream_t, bitrate ) - offsetof( obe_input_stream_t, channel_layout ) );
+            stream_out->aac_is_latm = stream_in->is_latm;
+        }
+
+        memcpy( stream_out->lang_code, stream_in->lang_code, 4 );
+    }
+
+    return 0;
+
+fail:
+    if( args.user_opts.location )
+        free( args.user_opts.location );
+
+    return -1;
+}
+
 int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t *param )
 {
     obe_int_input_stream_t *stream = get_input_stream( h, input_stream_id );

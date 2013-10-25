@@ -1405,20 +1405,8 @@ static int stop_encode( char *command, obecli_command_t *child )
     return 0;
 }
 
-static int probe_device( char *command, obecli_command_t *child )
+static int set_defaults( void )
 {
-    if( !strlen( command ) )
-        return -1;
-
-    FAIL_IF_ERROR( strcasecmp( command, "input" ), "%s is not a valid item to probe\n", command )
-
-    /* TODO check for validity */
-
-    if( obe_probe_device( cli.h, &cli.input, &cli.program ) < 0 )
-        return -1;
-
-    show_input_streams( NULL, NULL );
-
     if( cli.program.num_streams )
     {
         if( cli.output_streams )
@@ -1448,6 +1436,46 @@ static int probe_device( char *command, obecli_command_t *child )
             }
         }
     }
+}
+
+static int autoconf_device( char *command, obecli_command_t *child )
+{
+    if( !strlen( command ) )
+        return -1;
+
+    FAIL_IF_ERROR( strcasecmp( command, "input" ), "%s is not a valid item to probe\n", command )
+
+    /* TODO check for validity */
+
+    if( obe_autoconf_device( cli.h, &cli.input, &cli.program ) < 0 )
+        return -1;
+
+    show_input_streams( NULL, NULL );
+
+    if( set_defaults() < 0 )
+        return -1;
+
+    show_output_streams( NULL, NULL );
+
+    return 0;
+}
+
+static int probe_device( char *command, obecli_command_t *child )
+{
+    if( !strlen( command ) )
+        return -1;
+
+    FAIL_IF_ERROR( strcasecmp( command, "input" ), "%s is not a valid item to probe\n", command )
+
+    /* TODO check for validity */
+
+    if( obe_probe_device( cli.h, &cli.input, &cli.program ) < 0 )
+        return -1;
+
+    show_input_streams( NULL, NULL );
+
+    if( set_defaults() < 0 )
+        return -1;
 
     show_output_streams( NULL, NULL );
 

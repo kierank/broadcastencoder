@@ -27,6 +27,7 @@
 typedef struct
 {
     void* (*probe_input)( void *ptr );
+    void* (*autoconf_input)( void *ptr );
     void* (*open_input)( void *ptr );
 } obe_input_func_t;
 

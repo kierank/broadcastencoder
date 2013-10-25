@@ -42,6 +42,7 @@ static int remove_stream( char *command, obecli_command_t *child );
 
 static int parse_command( char *command, obecli_command_t *commmand_list );
 static int probe_device( char *command, obecli_command_t *child );
+static int autoconf_device( char *command, obecli_command_t *child );
 
 static int set_obe( char *command, obecli_command_t *child );
 static int set_input( char *command, obecli_command_t *child );
@@ -149,6 +150,7 @@ static obecli_command_t set_commands[] =
 
 static obecli_command_t main_commands[] =
 {
+    { "autoconf", "[input]",    "Auto configure input",  autoconf_device,  NULL },
     { "add",   "[item] ...", "Add stream",               parse_command, add_commands },
     { "help",  "[item] ...", "Display help",             show_help,     NULL },
     { "probe", "[input]",    "Probe input",              probe_device,  NULL },

@@ -54,6 +54,9 @@ struct obe_to_decklink_video
     uint32_t bmd_name;
     int timebase_num;
     int timebase_den;
+    int width;
+    int height;
+    int interlaced;
 };
 
 const static struct obe_to_decklink video_conn_tab[] =
@@ -77,23 +80,23 @@ const static struct obe_to_decklink audio_conn_tab[] =
 
 const static struct obe_to_decklink_video video_format_tab[] =
 {
-    { INPUT_VIDEO_FORMAT_PAL,             bmdModePAL,           1,    25 },
-    { INPUT_VIDEO_FORMAT_NTSC,            bmdModeNTSC,          1001, 30000 },
-    { INPUT_VIDEO_FORMAT_720P_50,         bmdModeHD720p50,      1,    50 },
-    { INPUT_VIDEO_FORMAT_720P_5994,       bmdModeHD720p5994,    1001, 60000 },
-    { INPUT_VIDEO_FORMAT_720P_60,         bmdModeHD720p60,      1,    60 },
-    { INPUT_VIDEO_FORMAT_1080I_50,        bmdModeHD1080i50,     1,    25 },
-    { INPUT_VIDEO_FORMAT_1080I_5994,      bmdModeHD1080i5994,   1001, 30000 },
-    { INPUT_VIDEO_FORMAT_1080I_60,        bmdModeHD1080i6000,   1,    60 },
-    { INPUT_VIDEO_FORMAT_1080P_2398,      bmdModeHD1080p2398,   1001, 24000 },
-    { INPUT_VIDEO_FORMAT_1080P_24,        bmdModeHD1080p24,     1,    24 },
-    { INPUT_VIDEO_FORMAT_1080P_25,        bmdModeHD1080p25,     1,    25 },
-    { INPUT_VIDEO_FORMAT_1080P_2997,      bmdModeHD1080p2997,   1001, 30000 },
-    { INPUT_VIDEO_FORMAT_1080P_30,        bmdModeHD1080p30,     1,    30 },
-    { INPUT_VIDEO_FORMAT_1080P_50,        bmdModeHD1080p50,     1,    50 },
-    { INPUT_VIDEO_FORMAT_1080P_5994,      bmdModeHD1080p5994,   1001, 60000 },
-    { INPUT_VIDEO_FORMAT_1080P_60,        bmdModeHD1080p6000,   1,    60 },
-    { -1, -1, -1, -1 },
+    { INPUT_VIDEO_FORMAT_PAL,             bmdModePAL,           1,    25,    720, 576,   1 },
+    { INPUT_VIDEO_FORMAT_NTSC,            bmdModeNTSC,          1001, 30000, 720, 480,   1 },
+    { INPUT_VIDEO_FORMAT_720P_50,         bmdModeHD720p50,      1,    50,    1280, 720,  0 },
+    { INPUT_VIDEO_FORMAT_720P_5994,       bmdModeHD720p5994,    1001, 60000, 1280, 720,  0 },
+    { INPUT_VIDEO_FORMAT_720P_60,         bmdModeHD720p60,      1,    60,    1280, 720,  0 },
+    { INPUT_VIDEO_FORMAT_1080I_50,        bmdModeHD1080i50,     1,    25,    1920, 1080, 1 },
+    { INPUT_VIDEO_FORMAT_1080I_5994,      bmdModeHD1080i5994,   1001, 30000, 1920, 1080, 1 },
+    { INPUT_VIDEO_FORMAT_1080I_60,        bmdModeHD1080i6000,   1,    60,    1920, 1080, 1 },
+    { INPUT_VIDEO_FORMAT_1080P_2398,      bmdModeHD1080p2398,   1001, 24000, 1920, 1080, 0 },
+    { INPUT_VIDEO_FORMAT_1080P_24,        bmdModeHD1080p24,     1,    24,    1920, 1080, 0 },
+    { INPUT_VIDEO_FORMAT_1080P_25,        bmdModeHD1080p25,     1,    25,    1920, 1080, 0 },
+    { INPUT_VIDEO_FORMAT_1080P_2997,      bmdModeHD1080p2997,   1001, 30000, 1920, 1080, 0 },
+    { INPUT_VIDEO_FORMAT_1080P_30,        bmdModeHD1080p30,     1,    30,    1920, 1080, 0 },
+    { INPUT_VIDEO_FORMAT_1080P_50,        bmdModeHD1080p50,     1,    50,    1920, 1080, 0 },
+    { INPUT_VIDEO_FORMAT_1080P_5994,      bmdModeHD1080p5994,   1001, 60000, 1920, 1080, 0 },
+    { INPUT_VIDEO_FORMAT_1080P_60,        bmdModeHD1080p6000,   1,    60,    1920, 1080, 0 },
+    { -1, -1, -1, -1, -1, -1, -1 },
 };
 
 class DeckLinkCaptureDelegate;
@@ -1103,6 +1106,81 @@ finish:
     return NULL;
 }
 
+static void *autoconf_input( void *ptr )
+{
+    obe_int_input_stream_t *streams[MAX_STREAMS];
+    obe_input_probe_t *probe_ctx = (obe_input_probe_t*)ptr;
+    obe_t *h = probe_ctx->h;
+    obe_input_t *user_opts = &probe_ctx->user_opts;
+    obe_device_t *device;
+
+    for( int i = 0; i < 2; i++ )
+    {
+        streams[i] = (obe_int_input_stream_t*)calloc( 1, sizeof(*streams[i]) );
+        if( !streams[i] )
+            goto finish;
+
+        /* TODO: make it take a continuous set of stream-ids */
+        pthread_mutex_lock( &h->device_list_mutex );
+        streams[i]->input_stream_id = h->cur_input_stream_id++;
+        pthread_mutex_unlock( &h->device_list_mutex );
+
+        if( i == 0 )
+        {
+            int j;
+            for( j = 0; video_format_tab[j].obe_name != -1; j++ )
+            {
+                if( video_format_tab[j].obe_name == user_opts->video_format )
+                    break;
+            }
+
+            if( video_format_tab[j].obe_name == -1 )
+            {
+                fprintf( stderr, "[decklink] Unsupported video format\n" );
+                goto finish;
+            }
+
+            streams[i]->stream_type = STREAM_TYPE_VIDEO;
+            streams[i]->stream_format = VIDEO_UNCOMPRESSED;
+            streams[i]->width  = video_format_tab[j].width;
+            streams[i]->height = video_format_tab[j].height;
+            streams[i]->timebase_num = video_format_tab[j].timebase_num;
+            streams[i]->timebase_den = video_format_tab[j].timebase_den;
+            streams[i]->csp    = PIX_FMT_YUV422P10;
+            streams[i]->interlaced = video_format_tab[j].interlaced;
+            streams[i]->tff = 1; /* NTSC is bff in baseband but coded as tff */
+            streams[i]->sar_num = streams[i]->sar_den = 1; /* The user can choose this when encoding */
+        }
+        else if( i == 1 )
+        {
+            streams[i]->stream_type = STREAM_TYPE_AUDIO;
+            streams[i]->stream_format = AUDIO_PCM;
+            streams[i]->num_channels  = 16;
+            streams[i]->sample_format = AV_SAMPLE_FMT_S32P;
+            /* TODO: support other sample rates */
+            streams[i]->sample_rate = 48000;
+        }
+    }
+
+    device = new_device();
+
+    if( !device )
+        goto finish;
+
+    device->num_input_streams = 2;
+    memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
+    device->device_type = INPUT_DEVICE_DECKLINK;
+    memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
+
+    /* add device */
+    add_device( h, device );
+
+finish:
+    free( probe_ctx );
+
+    return NULL;
+}
+
 static void *open_input( void *ptr )
 {
     obe_input_params_t *input = (obe_input_params_t*)ptr;
@@ -1151,4 +1229,4 @@ static void *open_input( void *ptr )
     return NULL;
 }
 
-const obe_input_func_t decklink_input = { probe_stream, open_input };
+const obe_input_func_t decklink_input = { probe_stream, autoconf_input, open_input };
