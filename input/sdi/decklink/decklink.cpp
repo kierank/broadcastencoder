@@ -1137,7 +1137,7 @@ static void *autoconf_input( void *ptr )
             if( video_format_tab[j].obe_name == -1 )
             {
                 fprintf( stderr, "[decklink] Unsupported video format\n" );
-                goto finish;
+                return NULL;
             }
 
             streams[i]->stream_type = STREAM_TYPE_VIDEO;
