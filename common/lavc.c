@@ -32,9 +32,8 @@ int obe_get_buffer( AVCodecContext *codec, AVFrame *pic )
 
     avcodec_align_dimensions2( codec, &w, &h, stride );
 
-    /* Only EDGE_EMU codecs are used
-     * Allocate an extra line so that SIMD can modify the entire stride for every active line */
-    if( av_image_alloc( pic->data, pic->linesize, w, h + 1, codec->pix_fmt, 32 ) < 0 )
+    /* Only EDGE_EMU codecs are used */
+    if( av_image_alloc( pic->data, pic->linesize, w, h, codec->pix_fmt, 32 ) < 0 )
         return -1;
 
     pic->reordered_opaque = codec->reordered_opaque;
