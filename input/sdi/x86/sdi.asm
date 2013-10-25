@@ -118,10 +118,10 @@ cglobal v210_line_to_nv20, 7,7,7
     neg    r6
     mov   src, r4
     mov org_w, r6
-    mova   m2, [v210_mask]
-    mova   m3, [v210_luma_shuf]
-    mova   m4, [v210_chroma_shuf]
-    mova   m5, [v210_mult] ; also functions as vpermd index for avx2
+    mova   m2, [v210_nv20_mask]
+    mova   m3, [v210_nv20_luma_shuf]
+    mova   m4, [v210_nv20_chroma_shuf]
+    mova   m5, [v210_nv20_mult] ; also functions as vpermd index for avx2
     pshufd m6, m5, q1102
 
 ALIGN 16
