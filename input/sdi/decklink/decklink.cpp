@@ -1175,9 +1175,6 @@ static void *autoconf_input( void *ptr )
     /* add device */
     add_device( h, device );
 
-finish:
-    free( probe_ctx );
-
     return NULL;
 }
 
