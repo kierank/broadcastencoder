@@ -1,0 +1,3 @@
+[submodule "proto"]
+	path = proto
+	url = git@192.168.0.37:/home/git/proto
