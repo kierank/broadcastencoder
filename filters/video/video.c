@@ -272,7 +272,6 @@ static void blank_lines( obe_raw_frame_t *raw_frame )
     /* All SDI input is 10-bit 4:2:2 */
     /* FIXME: assumes planar, non-interleaved format */
     uint16_t *y, *u, *v;
-    int cur_line = raw_frame->img.first_line;
 
     y = (uint16_t*)raw_frame->img.plane[0];
     u = (uint16_t*)raw_frame->img.plane[1];
