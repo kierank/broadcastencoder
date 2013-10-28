@@ -329,11 +329,6 @@ static int obe_otoi( char *str, int def )
     return ret;
 }
 
-static char *obe_otos( char *str, char *def )
-{
-    return str ? str : def;
-}
-
 static int check_enum_value( const char *arg, const char * const *names )
 {
     for( int i = 0; names[i]; i++ )
