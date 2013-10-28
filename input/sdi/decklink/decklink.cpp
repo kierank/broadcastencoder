@@ -64,7 +64,7 @@ const static struct obe_to_decklink video_conn_tab[] =
     { INPUT_VIDEO_CONNECTION_COMPONENT,   bmdVideoConnectionComponent },
     { INPUT_VIDEO_CONNECTION_COMPOSITE,   bmdVideoConnectionComposite },
     { INPUT_VIDEO_CONNECTION_S_VIDEO,     bmdVideoConnectionSVideo },
-    { -1, -1 },
+    { -1, 0 },
 };
 
 const static struct obe_to_decklink audio_conn_tab[] =
@@ -72,7 +72,7 @@ const static struct obe_to_decklink audio_conn_tab[] =
     { INPUT_AUDIO_EMBEDDED,               bmdAudioConnectionEmbedded },
     { INPUT_AUDIO_AES_EBU,                bmdAudioConnectionAESEBU },
     { INPUT_AUDIO_ANALOGUE,               bmdAudioConnectionAnalog },
-    { -1, -1 },
+    { -1, 0 },
 };
 
 const static struct obe_to_decklink_video video_format_tab[] =
@@ -93,7 +93,7 @@ const static struct obe_to_decklink_video video_format_tab[] =
     { INPUT_VIDEO_FORMAT_1080P_50,        bmdModeHD1080p50,     1,    50 },
     { INPUT_VIDEO_FORMAT_1080P_5994,      bmdModeHD1080p5994,   1001, 60000 },
     { INPUT_VIDEO_FORMAT_1080P_60,        bmdModeHD1080p6000,   1,    60 },
-    { -1, -1, -1, -1 },
+    { -1, 0, -1, -1 },
 };
 
 class DeckLinkCaptureDelegate;

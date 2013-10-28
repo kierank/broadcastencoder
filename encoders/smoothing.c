@@ -52,7 +52,7 @@ static void *start_smoothing( void *ptr )
         }
     }
 
-    int64_t send_delta = 0;
+    //int64_t send_delta = 0;
 
     while( 1 )
     {
