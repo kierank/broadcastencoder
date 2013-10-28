@@ -50,7 +50,7 @@ void obe_v210_planar_unpack_c( const uint32_t *src, uint16_t *y, uint16_t *u, ui
 void obe_v210_line_to_nv20_c( uint32_t *src, uint16_t *dst, int width )
 {
     int w;
-    uint32_t val;
+    uint32_t val = 0;
     uint16_t *uv = dst + width;
     for( w = 0; w < width - 5; w += 6 )
     {
