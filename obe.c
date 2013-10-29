@@ -559,6 +559,13 @@ static int obe_validate_input_params( obe_input_t *input_device )
     return 0;
 }
 
+static int __pthread_cancel( pthread_t thread )
+{
+    if ( thread )
+        return pthread_cancel( thread );
+    return -1;
+}
+
 static int __pthread_join( pthread_t thread, void **retval )
 {
     if ( thread )
@@ -665,7 +672,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
             break;
     }
 
-    pthread_cancel( thread );
+    __pthread_cancel( thread );
     __pthread_join( thread, &ret_ptr );
 
     cur_devices = h->num_devices;
@@ -1230,7 +1237,7 @@ void obe_close( obe_t *h )
     /* Cancel input thread */
     for( int i = 0; i < h->num_devices; i++ )
     {
-        pthread_cancel( h->devices[i]->device_thread );
+        __pthread_cancel( h->devices[i]->device_thread );
         __pthread_join( h->devices[i]->device_thread, &ret_ptr );
     }
 
@@ -1304,7 +1311,7 @@ void obe_close( obe_t *h )
         pthread_mutex_unlock( &h->outputs[i]->queue.mutex );
         __pthread_join( h->outputs[i]->output_thread, &ret_ptr );
         /* could be blocking on OS so have to cancel thread too */
-        pthread_cancel( h->outputs[i]->output_thread );
+        __pthread_cancel( h->outputs[i]->output_thread );
         __pthread_join( h->outputs[i]->output_thread, &ret_ptr );
     }
 
