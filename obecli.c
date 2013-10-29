@@ -1091,6 +1091,7 @@ static int update_mux( char *command, obecli_command_t *child )
             FAIL_IF_ERROR( !muxrate, "No mux rate selected\n" );
             FAIL_IF_ERROR( muxrate < 100000, "Mux rate too low - mux rate is in bits/s, not kb/s\n" );
             cli.mux_opts.ts_muxrate = muxrate;
+            obe_update_mux( cli.h, &cli.mux_opts );
         }
     }
 
