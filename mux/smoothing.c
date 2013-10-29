@@ -34,7 +34,7 @@ static void *start_smoothing( void *ptr )
     int64_t start_clock = -1, start_pcr, end_pcr, temporal_vbv_size = 0, cur_pcr;
     obe_muxed_data_t **muxed_data = NULL, *start_data, *end_data;
     AVFifoBuffer *fifo_data = NULL, *fifo_pcr = NULL;
-    AVBufferRef *output_buf;
+    AVBufferRef **output_buffers = NULL;
 
     struct sched_param param = {0};
     param.sched_priority = 99;
@@ -52,6 +52,13 @@ static void *start_smoothing( void *ptr )
     if( !fifo_pcr )
     {
         fprintf( stderr, "[mux-smoothing] Could not allocate pcr fifo" );
+        return NULL;
+    }
+
+    output_buffers = malloc( h->num_outputs * sizeof(*output_buffers) );
+    if( !output_buffers )
+    {
+        fprintf( stderr, "[mux-smoothing] Could not allocate output buffers" );
         return NULL;
     }
 
@@ -127,7 +134,7 @@ static void *start_smoothing( void *ptr )
         muxed_data = malloc( num_muxed_data * sizeof(*muxed_data) );
         if( !muxed_data )
         {
-            pthread_mutex_unlock( &h->output_queue.mutex );
+            pthread_mutex_unlock( &h->mux_smoothing_queue.mutex );
             syslog( LOG_ERR, "Malloc failed\n" );
             return NULL;
         }
@@ -162,11 +169,21 @@ static void *start_smoothing( void *ptr )
 
         while( av_fifo_size( fifo_data ) >= TS_PACKETS_SIZE )
         {
-            output_buf = av_buffer_alloc( TS_PACKETS_SIZE + 7 * sizeof(int64_t) );
-            av_fifo_generic_read( fifo_pcr, output_buf->data, 7 * sizeof(int64_t), NULL );
-            av_fifo_generic_read( fifo_data, &output_buf->data[7 * sizeof(int64_t)], TS_PACKETS_SIZE, NULL );
+            output_buffers[0] = av_buffer_alloc( TS_PACKETS_SIZE + 7 * sizeof(int64_t) );
+            av_fifo_generic_read( fifo_pcr, output_buffers[0]->data, 7 * sizeof(int64_t), NULL );
+            av_fifo_generic_read( fifo_data, &output_buffers[0]->data[7 * sizeof(int64_t)], TS_PACKETS_SIZE, NULL );
 
-            cur_pcr = AV_RN64( output_buf->data );
+            for( int i = 1; i < h->num_outputs; i++ )
+            {
+                output_buffers[i] = av_buffer_ref( output_buffers[0] );
+                if( !output_buffers[i] )
+                {
+                    syslog( LOG_ERR, "Malloc failed\n" );
+                    return NULL;
+                }
+            }
+
+            cur_pcr = AV_RN64( output_buffers[0]->data );
 
             if( start_clock != -1 )
             {
@@ -179,14 +196,18 @@ static void *start_smoothing( void *ptr )
                 start_pcr = cur_pcr;
             }
 
-            if( add_to_queue( &h->output_queue, output_buf ) < 0 )
-                return NULL;
-            output_buf = NULL;
+            for( int i = 0; i < h->num_outputs; i++ )
+            {
+                if( add_to_queue( &h->outputs[i]->queue, output_buffers[i] ) < 0 )
+                    return NULL;
+                output_buffers[i] = NULL;
+            }
         }
     }
 
     av_fifo_free( fifo_data );
     av_fifo_free( fifo_pcr );
+    free( output_buffers );
 
     return NULL;
 }

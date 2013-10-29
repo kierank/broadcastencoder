@@ -108,10 +108,9 @@ static const char * stream_opts[] = { "action", "format",
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrough", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", "service-name", "provider-name", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
-static const char * output_opts[] = { "target", NULL };
+static const char * output_opts[] = { "type", "target", NULL };
 static const char * update_stream_opts[]  = { "bitrate", "vbv-bufsize" };
 static const char * update_muxer_opts[]  = { "ts-muxrate" };
-
 
 const static int allowed_resolutions[17][2] =
 {
@@ -588,11 +587,11 @@ static int set_stream( char *command, obecli_command_t *child )
         command[tok_len2] = 0;
 
         int output_stream_id = obe_otoi( command, -1 );
-        output_stream = &cli.output_streams[output_stream_id];
-        input_stream = &cli.program.streams[output_stream->input_stream_id];
-
         FAIL_IF_ERROR( output_stream_id < 0 || output_stream_id > cli.num_output_streams-1,
                        "Invalid stream id\n" );
+
+        input_stream = &cli.program.streams[cli.output_streams[output_stream_id].input_stream_id];
+        output_stream = &cli.output_streams[output_stream_id];
 
         if( str_len > str_len2 )
         {
@@ -944,6 +943,25 @@ static int set_muxer( char *command, obecli_command_t *child )
     return 0;
 }
 
+static int set_outputs( char *command, obecli_command_t *child )
+{
+    int num_outputs = 0;
+    if( !strlen( command ) )
+        return -1;
+
+    int tok_len = strcspn( command, " " );
+    int str_len = strlen( command );
+    command[tok_len] = 0;
+
+    num_outputs = obe_otoi( command, num_outputs );
+
+    FAIL_IF_ERROR( num_outputs <= 0, "Invalid number of outputs" );
+    cli.output.outputs = calloc( num_outputs, sizeof(*cli.output.outputs) );
+    FAIL_IF_ERROR( !cli.output.outputs, "Malloc failed" );
+    cli.output.num_outputs = num_outputs;
+    return 0;
+}
+
 static int set_output( char *command, obecli_command_t *child )
 {
     if( !strlen( command ) )
@@ -955,27 +973,36 @@ static int set_output( char *command, obecli_command_t *child )
 
     if( !strcasecmp( command, "opts" ) && str_len > tok_len )
     {
-        char *params = command + tok_len + 1;
+        command += tok_len+1;
+        int tok_len2 = strcspn( command, ":" );
+        int str_len2 = strlen( command );
+        command[tok_len2] = 0;
+        int output_id = obe_otoi( command, -1 );
+        FAIL_IF_ERROR( output_id < 0 || output_id > cli.output.num_outputs-1, "Invalid output id\n" );
+
+        char *params = command + tok_len2 + 1;
         char **opts = obe_split_options( params, output_opts );
         if( !opts && params )
             return -1;
 
-        char *target = obe_get_option( output_opts[0], opts );
+        char *type = obe_get_option( output_opts[0], opts );
+        char *target = obe_get_option( output_opts[1], opts );
+
+        FAIL_IF_ERROR( type && ( check_enum_value( type, output_modules ) < 0 ),
+                      "Invalid Output Type\n" );
+
+        if( type )
+            parse_enum_value( type, output_modules, &cli.output.outputs[output_id].type );
         if( target )
         {
-             if( cli.output.target )
-                 free( cli.output.target );
+             if( cli.output.outputs[output_id].target )
+                 free( cli.output.outputs[output_id].target );
 
-             cli.output.target = malloc( strlen( target ) + 1 );
-             FAIL_IF_ERROR( !cli.output.target, "malloc failed\n" );
-             strcpy( cli.output.target, target );
+             cli.output.outputs[output_id].target = malloc( strlen( target ) + 1 );
+             FAIL_IF_ERROR( !cli.output.outputs[output_id].target, "malloc failed\n" );
+             strcpy( cli.output.outputs[output_id].target, target );
         }
         obe_free_string_array( opts );
-    }
-    else
-    {
-        FAIL_IF_ERROR( parse_enum_value( command, output_modules, &cli.output.output ) < 0,
-                       "Invalid output %s\n", command )
     }
 
     return 0;
@@ -1354,7 +1381,6 @@ static int start_encode( char *command, obecli_command_t *child )
             /* Search VBI for teletext and complain if teletext isn't set up properly */
             if( output_stream->stream_format == VBI_RAW )
             {
-                obe_ts_stream_opts_t *ts_opts = &output_stream->ts_opts;
                 int num_vbi = 0;
                 has_ttx = output_stream->dvb_vbi_opts.ttx;
 
@@ -1375,10 +1401,15 @@ static int start_encode( char *command, obecli_command_t *child )
     FAIL_IF_ERROR( !cli.mux_opts.ts_muxrate, "No mux rate selected\n" );
     FAIL_IF_ERROR( cli.mux_opts.ts_muxrate < 100000, "Mux rate too low - mux rate is in bits/s, not kb/s\n" );
 
-    if( ( cli.output.output == OUTPUT_UDP || cli.output.output == OUTPUT_RTP ) && !cli.output.target )
+    FAIL_IF_ERROR( !cli.output.num_outputs, "No outputs selected\n" );
+    for( int i = 0; i < cli.output.num_outputs; i++ )
     {
-        fprintf( stderr, "No output target chosen\n" );
-        return -1;
+        if( ( cli.output.outputs[i].type == OUTPUT_UDP || cli.output.outputs[i].type == OUTPUT_RTP ) &&
+             !cli.output.outputs[i].target )
+        {
+            fprintf( stderr, "No output target chosen. Output-ID %d\n", i );
+            return -1;
+        }
     }
 
     obe_setup_streams( cli.h, cli.output_streams, cli.num_output_streams );
@@ -1422,11 +1453,12 @@ static int stop_encode( char *command, obecli_command_t *child )
         cli.output_streams = NULL;
     }
 
-    if( cli.output.target )
+    for( int i = 0; i < cli.output.num_outputs; i++ )
     {
-        free( cli.output.target );
-        cli.output.target = NULL;
+        if( cli.output.outputs[i].target )
+            free( cli.output.outputs[i].target );
     }
+    free( cli.output.outputs );
 
     memset( &cli, 0, sizeof(cli) );
     running = 0;
@@ -1531,7 +1563,7 @@ int main( int argc, char **argv )
     cli.avc_profile = -1;
 
     printf( "\nOpen Broadcast Encoder command line interface.\n" );
-    printf( "Version 0.1 \n" );
+    printf( "Version 1.0 \n" );
     printf( "\n" );
 
     while( 1 )

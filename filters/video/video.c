@@ -198,20 +198,21 @@ static void dither_row_10_to_8_c( uint16_t *src, uint8_t *dst, const uint16_t *d
 
 }
 
+/* Note: srcf is the next field (two pixels down) */
 static void downsample_chroma_row_top_c( uint16_t *src, uint16_t *dst, int width, int stride )
 {
-    uint16_t *srcp = src + stride;
+    uint16_t *srcf = src + stride;
 
     for( int i = 0; i < width/2; i++ )
-        dst[i] = (3*src[i] + srcp[i] + 2) >> 2;
+        dst[i] = (3*src[i] + srcf[i] + 2) >> 2;
 }
 
 static void downsample_chroma_row_bottom_c( uint16_t *src, uint16_t *dst, int width, int stride )
 {
-    uint16_t *srcp = src + stride;
+    uint16_t *srcf = src + stride;
 
     for( int i = 0; i < width/2; i++ )
-        dst[i] = (src[i] + 3*srcp[i] + 2) >> 2;
+        dst[i] = (src[i] + 3*srcf[i] + 2) >> 2;
 }
 
 static void init_filter( obe_vid_filter_ctx_t *vfilt )
