@@ -1068,6 +1068,31 @@ static int update_stream( char *command, obecli_command_t *child )
 
 static int update_mux( char *command, obecli_command_t *child )
 {
+    if( !strlen( command ) )
+        return -1;
+
+    int tok_len = strcspn( command, " " );
+    int str_len = strlen( command );
+    command[tok_len] = 0;
+
+    if( !strcasecmp( command, "mpegts" ) )
+        cli.mux_opts.muxer = MUXERS_MPEGTS;
+    else if( !strcasecmp( command, "opts" ) && str_len > tok_len )
+    {
+        char *params = command + tok_len + 1;
+        char **opts = obe_split_options( params, update_muxer_opts );
+        if( !opts && params )
+            return -1;
+
+        char *ts_muxrate  = obe_get_option( update_muxer_opts[0], opts );
+        if( ts_muxrate )
+        {
+            int muxrate = obe_otoi( ts_muxrate, cli.mux_opts.ts_muxrate );
+            FAIL_IF_ERROR( !muxrate, "No mux rate selected\n" );
+            FAIL_IF_ERROR( muxrate < 100000, "Mux rate too low - mux rate is in bits/s, not kb/s\n" );
+            cli.mux_opts.ts_muxrate = muxrate;
+        }
+    }
 
     return 0;
 }

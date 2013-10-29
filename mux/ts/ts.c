@@ -399,6 +399,7 @@ void *open_muxer( void *ptr )
 
         if( h->mux_params_update )
         {
+            params.muxrate = mux_opts->ts_muxrate;
             ts_update_transport_stream( w, &params );
             h->mux_params_update = 0;
         }

@@ -950,6 +950,7 @@ void obe_update_mux( obe_t *h, obe_mux_opts_t *mux_opts )
 {
     pthread_mutex_lock( &h->mux_queue.mutex );
     h->mux_opts.ts_muxrate = mux_opts->ts_muxrate;
+    h->mux_params_update = 1;
     pthread_mutex_unlock( &h->mux_queue.mutex );
 }
 
