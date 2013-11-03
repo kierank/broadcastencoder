@@ -401,6 +401,7 @@ static void destroy_output( obe_output_t *output )
         av_buffer_unref( output->queue.queue[i] );
 
     obe_destroy_queue( &output->queue );
+    free( output );
 }
 
 /** Get items **/
