@@ -163,7 +163,7 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
         if( running == 1 )
             stop_encode();
 
-        if( encoder_control->input_opts )
+        if( !strcmp( encoder_control->encoder_action, "START" ) )
         {
             /* only messages with all options are legal currently */
             Obed__InputOpts *input_opts_in = encoder_control->input_opts;
