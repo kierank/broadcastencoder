@@ -1,5 +1,5 @@
 /*****************************************************************************
- * obe.d: Open Broadcast Encoder daemon
+ * obed.c: Open Broadcast Encoder daemon
  *****************************************************************************
  * Copyright (C) 2013 Open Broadcast Systems Ltd.
  *
@@ -281,6 +281,7 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
                 obe_output_stream_t *audio_stream = &d.output_streams[i];
 
                 audio_stream->input_stream_id = 1;
+                audio_stream->output_stream_id = i;
                 audio_stream->stream_action = STREAM_ENCODE;
                 if( audio_opts_in->format == 0 )
                     audio_stream->stream_format = AUDIO_MP2;
@@ -309,6 +310,7 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
             {
                 obe_output_stream_t *dvb_vbi_stream = &d.output_streams[i];
                 dvb_vbi_stream->input_stream_id = 2;
+                dvb_vbi_stream->output_stream_id = i;
                 obe_dvb_vbi_opts_t *vbi_opts = &dvb_vbi_stream->dvb_vbi_opts;
 
                 dvb_vbi_stream->ts_opts.pid = ancillary_opts_in->dvb_vbi_pid;
@@ -331,6 +333,7 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
             {
                 obe_output_stream_t *dvb_ttx_stream = &d.output_streams[i];
                 dvb_ttx_stream->input_stream_id = 2+has_dvb_vbi;
+                dvb_ttx_stream->output_stream_id = i;
                 /* Only one teletext supported */
                 if( add_teletext( dvb_ttx_stream, ancillary_opts_in ) < 0 )
                     goto fail;
