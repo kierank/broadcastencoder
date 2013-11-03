@@ -401,6 +401,7 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
     result.encoder_response = malloc( 3 );
     strcpy( result.encoder_response, "OK" );
     closure( &result, closure_data );
+    free( result.encoder_response );
 
     return;
 
@@ -408,6 +409,8 @@ fail:
     result.encoder_response = malloc( 5 );
     strcpy( result.encoder_response, "FAIL" );
     closure( &result, closure_data );
+    free( result.encoder_response );
+
     return;
 }
 
