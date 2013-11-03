@@ -328,6 +328,19 @@ static void destroy_encoder( obe_encoder_t *encoder )
     free( encoder );
 }
 
+static void destroy_enc_smoothing( obe_queue_t *queue )
+{
+    obe_coded_frame_t *coded_frame;
+    pthread_mutex_lock( &queue->mutex );
+    for( int i = 0; i < queue->size; i++ )
+    {
+        coded_frame = queue->queue[i];
+        destroy_coded_frame( coded_frame );
+    }
+
+    obe_destroy_queue( queue );
+}
+
 static void destroy_mux( obe_t *h )
 {
     pthread_mutex_lock( &h->mux_queue.mutex );
@@ -340,6 +353,19 @@ static void destroy_mux( obe_t *h )
         free( h->mux_opts.service_name );
     if( h->mux_opts.provider_name )
         free( h->mux_opts.provider_name );
+}
+
+static void destroy_mux_smoothing( obe_queue_t *queue )
+{
+    obe_muxed_data_t *muxed_data;
+    pthread_mutex_lock( &queue->mutex );
+    for( int i = 0; i < queue->size; i++ )
+    {
+        muxed_data = queue->queue[i];
+        destroy_muxed_data( muxed_data );
+    }
+
+    obe_destroy_queue( queue );
 }
 
 int remove_early_frames( obe_t *h, int64_t pts )
@@ -533,6 +559,13 @@ static int obe_validate_input_params( obe_input_t *input_device )
     return 0;
 }
 
+static int __pthread_join( pthread_t thread, void **retval )
+{
+    if ( thread )
+        return pthread_join( thread, retval );
+    return -1;
+}
+
 int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *program )
 {
     pthread_t thread;
@@ -633,7 +666,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     }
 
     pthread_cancel( thread );
-    pthread_join( thread, &ret_ptr );
+    __pthread_join( thread, &ret_ptr );
 
     cur_devices = h->num_devices;
 
@@ -797,7 +830,10 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
         if( param->i_width >= 1280 && param->i_height >= 720 )
             param->sc.max_preset = 7; /* on the conservative side for HD */
         else
+        {
             param->sc.max_preset = 10;
+            param->i_bframe_adaptive = X264_B_ADAPT_TRELLIS;
+        }
 
         param->rc.i_lookahead = param->i_keyint_max;
     }
@@ -1195,7 +1231,7 @@ void obe_close( obe_t *h )
     for( int i = 0; i < h->num_devices; i++ )
     {
         pthread_cancel( h->devices[i]->device_thread );
-        pthread_join( h->devices[i]->device_thread, &ret_ptr );
+        __pthread_join( h->devices[i]->device_thread, &ret_ptr );
     }
 
     fprintf( stderr, "input cancelled \n" );
@@ -1207,7 +1243,7 @@ void obe_close( obe_t *h )
         h->filters[i]->cancel_thread = 1;
         pthread_cond_signal( &h->filters[i]->queue.in_cv );
         pthread_mutex_unlock( &h->filters[i]->queue.mutex );
-        pthread_join( h->filters[i]->filter_thread, &ret_ptr );
+        __pthread_join( h->filters[i]->filter_thread, &ret_ptr );
     }
 
     fprintf( stderr, "filters cancelled \n" );
@@ -1219,7 +1255,7 @@ void obe_close( obe_t *h )
         h->encoders[i]->cancel_thread = 1;
         pthread_cond_signal( &h->encoders[i]->queue.in_cv );
         pthread_mutex_unlock( &h->encoders[i]->queue.mutex );
-        pthread_join( h->encoders[i]->encoder_thread, &ret_ptr );
+        __pthread_join( h->encoders[i]->encoder_thread, &ret_ptr );
     }
 
     fprintf( stderr, "encoders cancelled \n" );
@@ -1235,7 +1271,8 @@ void obe_close( obe_t *h )
         pthread_mutex_lock( &h->obe_clock_mutex );
         pthread_cond_broadcast( &h->obe_clock_cv );
         pthread_mutex_unlock( &h->obe_clock_mutex );
-        pthread_join( h->enc_smoothing_thread, &ret_ptr );
+        if ( h->enc_smoothing_thread )
+            __pthread_join( h->enc_smoothing_thread, &ret_ptr );
     }
 
     fprintf( stderr, "encoder smoothing cancelled \n" );
@@ -1245,7 +1282,7 @@ void obe_close( obe_t *h )
     h->cancel_mux_thread = 1;
     pthread_cond_signal( &h->mux_queue.in_cv );
     pthread_mutex_unlock( &h->mux_queue.mutex );
-    pthread_join( h->mux_thread, &ret_ptr );
+    __pthread_join( h->mux_thread, &ret_ptr );
 
     fprintf( stderr, "mux cancelled \n" );
 
@@ -1254,21 +1291,20 @@ void obe_close( obe_t *h )
     h->cancel_mux_smoothing_thread = 1;
     pthread_cond_signal( &h->mux_smoothing_queue.in_cv );
     pthread_mutex_unlock( &h->mux_smoothing_queue.mutex );
-    pthread_join( h->mux_smoothing_thread, &ret_ptr );
+    __pthread_join( h->mux_smoothing_thread, &ret_ptr );
 
     fprintf( stderr, "mux smoothing cancelled \n" );
 
     /* Cancel output threads */
-    for( int i = 0; h->num_outputs; i++ )
+    for( int i = 0; i < h->num_outputs; i++ )
     {
         pthread_mutex_lock( &h->outputs[i]->queue.mutex );
         h->outputs[i]->cancel_thread = 1;
         pthread_cond_signal( &h->outputs[i]->queue.in_cv );
         pthread_mutex_unlock( &h->outputs[i]->queue.mutex );
-        pthread_join( h->outputs[i]->output_thread, &ret_ptr );
         /* could be blocking on OS so have to cancel thread too */
         pthread_cancel( h->outputs[i]->output_thread );
-        pthread_join( h->outputs[i]->output_thread, &ret_ptr );
+        __pthread_join( h->outputs[i]->output_thread, &ret_ptr );
     }
 
     fprintf( stderr, "output thread cancelled \n" );
@@ -1291,12 +1327,16 @@ void obe_close( obe_t *h )
 
     fprintf( stderr, "encoders destroyed \n" );
 
-    // FIXME destroy smoothing thread
+    destroy_enc_smoothing( &h->enc_smoothing_queue );
+    fprintf( stderr, "encoder smoothing destroyed \n" );
 
     /* Destroy mux */
     destroy_mux( h );
 
     fprintf( stderr, "mux destroyed \n" );
+
+    destroy_mux_smoothing( &h->mux_smoothing_queue );
+    fprintf( stderr, "mux smoothing destroyed \n" );
 
     /* Destroy output */
     for( int i = 0; i < h->num_outputs; i++ )
@@ -1308,6 +1348,9 @@ void obe_close( obe_t *h )
 
     free( h->output_streams );
     /* TODO: free other things */
+
+    /* Destroy lock manager */
+    av_lockmgr_register( NULL );
 
     free( h );
     h = NULL;

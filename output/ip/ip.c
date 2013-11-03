@@ -59,18 +59,6 @@ struct ip_status
     hnd_t *ip_handle;
 };
 
-static int64_t obe_gettime(void)
-{
-    struct timeval tv;
-    gettimeofday(&tv,NULL);
-    return (int64_t)tv.tv_sec * 1000000 + tv.tv_usec;
-}
-
-static uint64_t obe_ntp_time(void)
-{
-  return (obe_gettime() / 1000) * 1000 + NTP_OFFSET_US;
-}
-
 static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
 {
     obe_rtp_ctx *p_rtp = calloc( 1, sizeof(*p_rtp) );
@@ -93,6 +81,18 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
     return 0;
 }
 #if 0
+static int64_t obe_gettime(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv,NULL);
+    return (int64_t)tv.tv_sec * 1000000 + tv.tv_usec;
+}
+
+static uint64_t obe_ntp_time(void)
+{
+  return (obe_gettime() / 1000) * 1000 + NTP_OFFSET_US;
+}
+
 static int write_rtcp_pkt( hnd_t handle )
 {
     obe_rtp_ctx *p_rtp = handle;
@@ -173,6 +173,8 @@ static void close_output( void *handle )
     }
     if( status->output->output_dest.target  )
         free( status->output->output_dest.target );
+
+    pthread_mutex_unlock( &status->output->queue.mutex );
 }
 
 static void *open_output( void *ptr )

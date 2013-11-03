@@ -78,6 +78,9 @@
 /* Audio sample patterns */
 #define MAX_AUDIO_SAMPLE_PATTERN 5
 
+/* NTSC */
+#define NTSC_FIRST_CODED_LINE 23
+
 static inline int obe_clip3( int v, int i_min, int i_max )
 {
     return ( (v < i_min) ? i_min : (v > i_max) ? i_max : v );
