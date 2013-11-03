@@ -175,7 +175,7 @@ public:
     {
         pthread_mutex_init( &ref_mutex_, NULL );
         pthread_mutex_lock( &ref_mutex_ );
-        ref_ = 0;
+        ref_ = 1;
         pthread_mutex_unlock( &ref_mutex_ );
     }
     virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv) { return E_NOINTERFACE; }
