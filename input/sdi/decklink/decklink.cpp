@@ -655,7 +655,7 @@ static int open_card( decklink_opts_t *decklink_opts )
     }
 
     syslog( LOG_INFO, "Opened DeckLink PCI card %d (%s)", decklink_opts->card_idx, model_name );
-    free( model_name );
+    free( (char *)model_name );
 
     if( decklink_ctx->p_card->QueryInterface( IID_IDeckLinkInput, (void**)&decklink_ctx->p_input) != S_OK )
     {
