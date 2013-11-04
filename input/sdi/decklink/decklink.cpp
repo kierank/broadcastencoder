@@ -944,8 +944,6 @@ static void *probe_stream( void *ptr )
     decklink_ctx->h = h;
     decklink_ctx->last_frame_time = -1;
 
-    decklink_ctx = &decklink_opts->decklink_ctx;
-
     if( open_card( decklink_opts ) < 0 )
         goto finish;
 
