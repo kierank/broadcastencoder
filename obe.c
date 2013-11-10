@@ -50,6 +50,7 @@ obe_device_t *new_device( void )
         syslog( LOG_ERR, "Malloc failed\n" );
         return NULL;
     }
+    pthread_mutex_init( &device->device_mutex, NULL );
 
     return device;
 }
@@ -963,7 +964,6 @@ int obe_start( obe_t *h )
     /* TODO: decide upon thread priorities */
 
     /* Setup mutexes and cond vars */
-    pthread_mutex_init( &h->devices[0]->device_mutex, NULL );
     pthread_mutex_init( &h->drop_mutex, NULL );
     obe_init_queue( &h->enc_smoothing_queue );
     obe_init_queue( &h->mux_queue );
