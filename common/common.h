@@ -189,6 +189,8 @@ typedef struct
     pthread_mutex_t device_mutex;
     pthread_t device_thread;
 
+    int active;
+
     int num_input_streams;
     obe_int_input_stream_t *streams[MAX_STREAMS];
 

@@ -240,18 +240,34 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     {
         if( videoframe->GetFlags() & bmdFrameHasNoInputSource )
         {
-            syslog( LOG_ERR, "Decklink card index %i: No input signal detected", decklink_opts_->card_idx );
+            syslog( LOG_ERR, "inputDropped: Decklink card index %i: No input signal detected", decklink_opts_->card_idx );
+            if( !decklink_opts_->probe )
+            {
+                pthread_mutex_lock( &decklink_ctx->device->device_mutex );
+                decklink_ctx->device->active = 0;
+                pthread_mutex_unlock( &decklink_ctx->device->device_mutex );
+            }
             return S_OK;
         }
         else if( decklink_opts_->probe )
             decklink_opts_->probe_success = 1;
+
+        if( !decklink_opts_->probe )
+        {
+            pthread_mutex_lock( &decklink_ctx->device->device_mutex );
+            decklink_ctx->device->active = 1;
+            pthread_mutex_unlock( &decklink_ctx->device->device_mutex );
+        }
 
         /* use SDI ticks as clock source */
         videoframe->GetStreamTime( &stream_time, &frame_duration, OBE_CLOCK );
         obe_clock_tick( h, (int64_t)stream_time );
 
         if( decklink_ctx->last_frame_time == -1 )
+        {
             decklink_ctx->last_frame_time = obe_mdate();
+            syslog( LOG_INFO, "inputActive: Decklink input active" );
+        }
         else
         {
             int64_t cur_frame_time = obe_mdate();

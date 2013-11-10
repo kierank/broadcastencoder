@@ -149,7 +149,7 @@ static int add_teletext( obe_output_stream_t *output_stream, Obed__AncillaryOpts
     return 0;
 }
 
-static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
+static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                                   const Obed__EncoderControl      *encoder_control,
                                   Obed__EncoderResponse_Closure   closure,
                                   void                            *closure_data )
@@ -157,6 +157,8 @@ static void obed__encoder_config( Obed__EncoderConfig_Service     *service,
     Obed__EncoderResponse result = OBED__ENCODER_RESPONSE__INIT;
     int has_dvb_vbi = 0;
     int i = 0;
+
+    printf("\n encoder config \n");
 
     if( encoder_control->control_version == OBE_CONTROL_VERSION )
     {
@@ -414,7 +416,23 @@ fail:
     return;
 }
 
-static Obed__EncoderConfig_Service encoder_config = OBED__ENCODER_CONFIG__INIT(obed__);
+static void obed__encoder_status(Obed__EncoderCommunicate_Service *service,
+                                 const Obed__EncoderControl *input,
+                                 Obed__EncoderStatusResponse_Closure closure,
+                                 void *closure_data)
+{
+    Obed__EncoderStatusResponse result = OBED__ENCODER_STATUS_RESPONSE__INIT;
+
+    result.status_version = 1;
+    result.has_input_active = 1;
+    result.input_active = obe_input_status( d.h );
+
+    printf("\n encoder status %i \n", result.input_active);
+
+    closure( &result, closure_data );
+}
+
+static Obed__EncoderCommunicate_Service encoder_communicate = OBED__ENCODER_COMMUNICATE__INIT(obed__);
 
 int main( int argc, char **argv )
 {
@@ -426,8 +444,10 @@ int main( int argc, char **argv )
     keep_running = 1;
     signal( SIGTERM, stop_server );
     signal( SIGINT, stop_server );
+    // TODO SIGPIPE
 
-    server = protobuf_c_rpc_server_new( address_type, name, (ProtobufCService *) &encoder_config, NULL );
+    server = protobuf_c_rpc_server_new( address_type, name, (ProtobufCService *) &encoder_communicate, NULL );
+    fprintf( stderr, "RPC server activated\n" );
 
     while( keep_running )
     {

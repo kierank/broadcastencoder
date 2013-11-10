@@ -519,7 +519,9 @@ typedef struct
 int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts );
 
 int obe_start( obe_t *h );
-int obe_stop( obe_t *h );
+
+/* 0 if inactive, 1 if active */
+int obe_input_status( obe_t *h );
 
 void obe_close( obe_t *h );
 

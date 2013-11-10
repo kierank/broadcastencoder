@@ -1229,6 +1229,19 @@ fail:
     return -1;
 };
 
+int obe_input_status( obe_t *h )
+{
+    int ret = 0;
+    if( h && h->devices[0] )
+    {
+        pthread_mutex_lock( &h->devices[0]->device_mutex );
+        ret = h->devices[0]->active;
+        pthread_mutex_unlock( &h->devices[0]->device_mutex );
+    }
+
+    return ret;
+}
+
 void obe_close( obe_t *h )
 {
     void *ret_ptr;
