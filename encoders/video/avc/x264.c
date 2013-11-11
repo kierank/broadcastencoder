@@ -29,8 +29,8 @@
 
 static void x264_logger( void *p_unused, int i_level, const char *psz_fmt, va_list arg )
 {
-    if( i_level <= X264_LOG_INFO )
-        vsyslog( i_level == X264_LOG_INFO ? LOG_INFO : i_level == X264_LOG_WARNING ? LOG_WARNING : LOG_ERR, psz_fmt, arg );
+    if( i_level <= X264_LOG_WARNING )
+        vsyslog( i_level == X264_LOG_WARNING ? LOG_WARNING : LOG_ERR, psz_fmt, arg );
 }
 
 static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_frame )
