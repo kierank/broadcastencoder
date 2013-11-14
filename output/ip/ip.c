@@ -106,7 +106,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
 
     p_rtp->ssrc = av_get_random_seed();
 
-    if( p_rtp->column_data || p_rtp->row_data )
+    if( p_rtp->fec_columns || p_rtp->fec_rows )
     {
         p_rtp->fec_pkt_len = FFALIGN( FEC_PACKET_SIZE, 32 );
         p_rtp->column_data = calloc( output_dest->fec_columns, p_rtp->fec_pkt_len );
