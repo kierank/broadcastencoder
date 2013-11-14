@@ -201,7 +201,12 @@ static void write_fec_header( hnd_t handle, bs_t *s, int row, uint16_t snbase )
     bs_write1( s, 1 );             // E
     bs_write( s, 7, MPEG_TS_PAYLOAD_TYPE ); // PT Recovery
     bs_write( s, 24, 0 ); // Mask
-    bs_write32( s, 0 );   // TS Recovery (left blank and updated with packets)
+    bs_flush( s );
+
+    /* skip timestamp field */
+    uint8_t *ptr = &s->p_start[(bs_pos( s ) + 32) >> 3];
+
+    bs_init( s, ptr, 4 );
     bs_write1( s, 0 );    // N
     bs_write1( s, row );  // D
     bs_write( s, 3, 0 ); // Type
@@ -254,24 +259,24 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
          * Write the headers in advance */
         if( row_idx == p_rtp->fec_rows-1 )
         {
+            bs_init( &s, row, RTP_HEADER_SIZE+FEC_HEADER_SIZE );
+            write_rtp_header( &s, FEC_PAYLOAD_TYPE, p_rtp->row_seq++, 0, 0 );
+            write_fec_header( p_rtp, &s, 1, p_rtp->seq + 1 - p_rtp->fec_columns );
+            bs_flush( &s );
+
             if( write_fec_packet( p_rtp->row_handle, row, FEC_PACKET_SIZE ) )
                 return -1;
-
-            bs_init( &s, row, RTP_HEADER_SIZE );
-            write_rtp_header( &s, FEC_PAYLOAD_TYPE, p_rtp->row_seq++, 0, 0 );
-            write_fec_header( p_rtp, &s, 1, p_rtp->seq+1 );
-            bs_flush( &s );
         }
 
         if( column_idx == p_rtp->fec_columns-1 )
         {
+            bs_init( &s, column, RTP_HEADER_SIZE+FEC_HEADER_SIZE );
+            write_rtp_header( &s, FEC_PAYLOAD_TYPE, p_rtp->column_seq++, 0, 0 );
+            write_fec_header( p_rtp, &s, 0, p_rtp->seq + 1 - (p_rtp->fec_columns*p_rtp->fec_rows) );
+            bs_flush( &s );
+
             if( write_fec_packet( p_rtp->column_handle, column, FEC_PACKET_SIZE ) )
                 return -1;
-
-            bs_init( &s, column, RTP_HEADER_SIZE );
-            write_rtp_header( &s, FEC_PAYLOAD_TYPE, p_rtp->column_seq++, 0, 0 );
-            write_fec_header( p_rtp, &s, 0, p_rtp->seq+1 );
-            bs_flush( &s );
         }
     }
 
