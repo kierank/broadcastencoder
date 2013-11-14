@@ -196,7 +196,7 @@ static void write_fec_header( hnd_t handle, bs_t *s, int row, uint16_t snbase )
     obe_rtp_ctx *p_rtp = handle;
 
     bs_write( s, 16, snbase );     // SNBase low bits
-    bs_write( s, 16, RTP_PACKET_SIZE ); // Length Recovery
+    bs_write( s, 16, TS_PACKETS_SIZE ); // Length Recovery
     bs_write1( s, 1 );             // RFC2733 Extension
     bs_write( s, 7, MPEG_TS_PAYLOAD_TYPE ); // PT Recovery
     bs_write( s, 24, 0 ); // Mask
