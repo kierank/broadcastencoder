@@ -508,6 +508,9 @@ typedef struct
 {
     int type;
     char *target;
+
+    int fec_columns;
+    int fec_rows;
 } obe_output_dest_t;
 
 typedef struct

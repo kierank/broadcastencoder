@@ -108,7 +108,7 @@ static const char * stream_opts[] = { "action", "format",
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrough", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", "service-name", "provider-name", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
-static const char * output_opts[] = { "type", "target", NULL };
+static const char * output_opts[] = { "type", "target", "fec-columns", "fec-rows", NULL };
 
 const static int allowed_resolutions[17][2] =
 {
@@ -978,6 +978,8 @@ static int set_output( char *command, obecli_command_t *child )
 
         char *type = obe_get_option( output_opts[0], opts );
         char *target = obe_get_option( output_opts[1], opts );
+        char *fec_columns = obe_get_option( output_opts[2], opts );
+        char *fec_rows = obe_get_option( output_opts[3], opts );
 
         FAIL_IF_ERROR( type && ( check_enum_value( type, output_modules ) < 0 ),
                       "Invalid Output Type\n" );
@@ -993,6 +995,10 @@ static int set_output( char *command, obecli_command_t *child )
              FAIL_IF_ERROR( !cli.output.outputs[output_id].target, "malloc failed\n" );
              strcpy( cli.output.outputs[output_id].target, target );
         }
+        if( fec_columns )
+            cli.output.outputs[output_id].fec_columns = obe_otoi( fec_columns, cli.output.outputs[output_id].fec_columns );
+        if( fec_rows )
+            cli.output.outputs[output_id].fec_rows = obe_otoi( fec_columns, cli.output.outputs[output_id].fec_rows );
         obe_free_string_array( opts );
     }
 
