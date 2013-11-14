@@ -254,6 +254,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         *row_ts ^= ts_90;
 
         xor_packet_c( &column[RTP_HEADER_SIZE+FEC_HEADER_SIZE], p_rtp->pkt, RTP_PACKET_SIZE );
+        xor_packet_c( &row[RTP_HEADER_SIZE+FEC_HEADER_SIZE], p_rtp->pkt, RTP_PACKET_SIZE );
 
         /* Check if we can send packets. Start with rows to match other encoders
          * Write the headers in advance */
@@ -272,7 +273,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         {
             bs_init( &s, column, RTP_HEADER_SIZE+FEC_HEADER_SIZE );
             write_rtp_header( &s, FEC_PAYLOAD_TYPE, p_rtp->column_seq++, 0, 0 );
-            write_fec_header( p_rtp, &s, 0, p_rtp->seq + 1 - (p_rtp->fec_columns*p_rtp->fec_rows) );
+            write_fec_header( p_rtp, &s, 0, p_rtp->seq - (p_rtp->fec_columns*(p_rtp->fec_rows-1)) );
             bs_flush( &s );
 
             if( write_fec_packet( p_rtp->column_handle, column, FEC_PACKET_SIZE ) )
