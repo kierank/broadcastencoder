@@ -268,7 +268,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
                 return -1;
         }
 
-        if( row_idx == p_rtp->fec_columns-1 )
+        if( row_idx == p_rtp->fec_rows-1 )
         {
             bs_init( &s, column, RTP_HEADER_SIZE+FEC_HEADER_SIZE );
             write_rtp_header( &s, FEC_PAYLOAD_TYPE, p_rtp->column_seq++, 0, 0 );
