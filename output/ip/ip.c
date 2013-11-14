@@ -243,8 +243,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     if( p_rtp->fec_columns || p_rtp->fec_rows )
     {
         /* Note the mods are a little confusing */
-        int column_idx = p_rtp->seq % p_rtp->fec_rows;
-        int row_idx = p_rtp->seq % p_rtp->fec_columns;
+        int column_idx = p_rtp->seq % p_rtp->fec_columns;
+        int row_idx = (p_rtp->seq / p_rtp->fec_columns) % p_rtp->fec_rows;
         uint8_t *column = &p_rtp->column_data[column_idx*p_rtp->fec_pkt_len];
         uint8_t *row = &p_rtp->row_data[row_idx*p_rtp->fec_pkt_len];
 
@@ -257,7 +257,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
 
         /* Check if we can send packets. Start with rows to match other encoders
          * Write the headers in advance */
-        if( column_idx == p_rtp->fec_rows-1 )
+        if( column_idx == p_rtp->fec_columns-1 )
         {
             bs_init( &s, row, RTP_HEADER_SIZE+FEC_HEADER_SIZE );
             write_rtp_header( &s, FEC_PAYLOAD_TYPE, p_rtp->row_seq++, 0, 0 );
