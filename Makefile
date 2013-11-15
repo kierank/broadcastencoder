@@ -103,23 +103,10 @@ distclean: clean
 
 install: obed$(EXE) $(SONAME)
 	install -d $(DESTDIR)$(bindir)
-	install -d $(DESTDIR)$(includedir)
-	install -d $(DESTDIR)$(libdir)
-	install -m 644 libobe.a $(DESTDIR)$(libdir)
 	install obed$(EXE) $(DESTDIR)$(bindir)
-	$(RANLIB) $(DESTDIR)$(libdir)/libobe.a
-ifeq ($(SYS),MINGW)
-	$(if $(SONAME), install -m 755 $(SONAME) $(DESTDIR)$(bindir))
-else
-	$(if $(SONAME), ln -f -s $(SONAME) $(DESTDIR)$(libdir)/libobe.$(SOSUFFIX))
-	$(if $(SONAME), install -m 755 $(SONAME) $(DESTDIR)$(libdir))
-endif
-	$(if $(IMPLIBNAME), install -m 644 $(IMPLIBNAME) $(DESTDIR)$(libdir))
 
 uninstall:
-	rm -f $(DESTDIR)$(includedir)/obe.h $(DESTDIR)$(libdir)/libobe.a
 	rm -f $(DESTDIR)$(bindir)/obed$(EXE)
-	$(if $(SONAME), rm -f $(DESTDIR)$(libdir)/$(SONAME) $(DESTDIR)$(libdir)/libobe.$(SOSUFFIX))
 
 etags: TAGS
 
