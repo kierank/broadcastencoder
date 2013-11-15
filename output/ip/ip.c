@@ -249,8 +249,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         *column_ts ^= ts_90;
         *row_ts ^= ts_90;
 
-        xor_packet_c( &column[RTP_HEADER_SIZE+FEC_HEADER_SIZE], p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
-        xor_packet_c( &row[RTP_HEADER_SIZE+FEC_HEADER_SIZE], p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
+        xor_packet_c( &column[RTP_HEADER_SIZE+FEC_HEADER_SIZE], &p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
+        xor_packet_c( &row[RTP_HEADER_SIZE+FEC_HEADER_SIZE], &p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
 
         /* Check if we can send packets. Start with rows to match other encoders */
         if( column_idx == p_rtp->fec_columns-1 )
