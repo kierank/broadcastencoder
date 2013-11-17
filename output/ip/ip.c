@@ -178,36 +178,40 @@ static int write_rtcp_pkt( hnd_t handle )
     return 0;
 }
 #endif
-static void write_rtp_header( bs_t *s, uint8_t payload_type, uint16_t seq, uint32_t ts_90, uint32_t ssrc )
+static void write_rtp_header( uint8_t *data, uint8_t payload_type, uint16_t seq, uint32_t ts_90, uint32_t ssrc )
 {
-    bs_write( s, 2, RTP_VERSION ); // version
-    bs_write1( s, 0 );             // padding
-    bs_write1( s, 0 );             // extension
-    bs_write( s, 4, 0 );           // CSRC count
-    bs_write1( s, 0 );             // marker
-    bs_write( s, 7, payload_type ); // payload type
-    bs_write( s, 16, seq );         // sequence number
-    bs_write32( s, ts_90 );         // timestamp
-    bs_write32( s, ssrc );          // ssrc
+    *data++ = RTP_VERSION << 6;
+    *data++ = payload_type & 0x7f;
+    *data++ = seq >> 8;
+    *data++ = seq & 0xff;
+    *data++ = ts_90 >> 24;
+    *data++ = (ts_90 >> 16) & 0xff;
+    *data++ = (ts_90 >>  8) & 0xff;
+    *data++ = ts_90 & 0xff;
+    *data++ = ssrc >> 24;
+    *data++ = (ssrc >> 16) & 0xff;
+    *data++ = (ssrc >>  8) & 0xff;
+    *data++ = ssrc & 0xff;
 }
 
-static void write_fec_header( hnd_t handle, bs_t *s, int row, uint16_t snbase, uint32_t timestamp )
+static void write_fec_header( hnd_t handle, uint8_t *data, int row, uint16_t snbase )
 {
     obe_rtp_ctx *p_rtp = handle;
 
-    bs_write( s, 16, snbase );     // SNBase low bits
-    bs_write( s, 16, TS_PACKETS_SIZE ); // Length Recovery
-    bs_write1( s, 1 );             // RFC2733 Extension
-    bs_write( s, 7, MPEG_TS_PAYLOAD_TYPE ); // PT Recovery
-    bs_write( s, 24, 0 ); // Mask
-    bs_write32( s, timestamp );
-    bs_write1( s, 0 );    // N
-    bs_write1( s, row );  // D
-    bs_write( s, 3, 0 ); // Type
-    bs_write( s, 3, 0 ); // Index
-    bs_write( s, 8, row ? 1 : p_rtp->fec_columns ); // Offset
-    bs_write( s, 8, row ? p_rtp->fec_columns : p_rtp->fec_rows ); // NA
-    bs_write( s, 8, 0 ); // SNBase ext bits
+    *data++ = snbase >> 8;
+    *data++ = snbase & 0xff;
+    *data++ = TS_PACKETS_SIZE >> 8;
+    *data++ = TS_PACKETS_SIZE & 0xff;
+    *data++ = 1 << 7 | MPEG_TS_PAYLOAD_TYPE;
+    /* marker */
+    *data++ = 0;
+    *data++ = 0;
+    *data++ = 0;
+     data   += 4; /* skip already written timestamp */
+    *data++ = (row & 1) << 6;
+    *data++ = row ? 1 : p_rtp->fec_columns;
+    *data++ = row ? p_rtp->fec_columns : p_rtp->fec_rows;
+    *data++ = 0; // SNBase ext bits
 }
 
 static int write_fec_packet( hnd_t udp_handle, uint8_t *data, int len )
@@ -223,12 +227,9 @@ static int write_fec_packet( hnd_t udp_handle, uint8_t *data, int len )
 static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestamp )
 {
     obe_rtp_ctx *p_rtp = handle;
-    bs_t s;
-    bs_init( &s, p_rtp->pkt, RTP_HEADER_SIZE );
 
     uint32_t ts_90 = timestamp / 300;
-    write_rtp_header( &s, MPEG_TS_PAYLOAD_TYPE, p_rtp->seq, ts_90, p_rtp->ssrc );
-    bs_flush( &s );
+    write_rtp_header( p_rtp->pkt, MPEG_TS_PAYLOAD_TYPE, p_rtp->seq, ts_90, p_rtp->ssrc );
 
     memcpy( &p_rtp->pkt[RTP_HEADER_SIZE], data, len );
 
@@ -244,10 +245,14 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         uint8_t *row = &p_rtp->row_data[row_idx*p_rtp->fec_pkt_len];
 
         /* Doesn't seem possible currently to do this in place */
-        uint32_t *column_ts = (uint32_t*)&column[RTP_HEADER_SIZE+TS_OFFSET];
-        uint32_t *row_ts = (uint32_t*)&row[RTP_HEADER_SIZE+TS_OFFSET];
-        *column_ts ^= ts_90;
-        *row_ts ^= ts_90;
+        uint8_t *column_ts = &column[RTP_HEADER_SIZE+TS_OFFSET];
+        uint8_t *row_ts = &row[RTP_HEADER_SIZE+TS_OFFSET];
+        *column_ts++ ^= ts_90 >> 24;
+        *row_ts++    ^= ts_90 >> 24;
+        *column_ts++ ^= (ts_90 >> 16) & 0xff;
+        *row_ts++    ^= (ts_90 >> 16) & 0xff;
+        *column_ts++ ^= (ts_90) & 0xff;
+        *row_ts++    ^= (ts_90) & 0xff;
 
         xor_packet_c( &column[RTP_HEADER_SIZE+FEC_HEADER_SIZE], &p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
         xor_packet_c( &row[RTP_HEADER_SIZE+FEC_HEADER_SIZE], &p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
@@ -255,10 +260,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         /* Check if we can send packets. Start with rows to match other encoders */
         if( column_idx == p_rtp->fec_columns-1 )
         {
-            bs_init( &s, row, RTP_HEADER_SIZE+FEC_HEADER_SIZE );
-            write_rtp_header( &s, FEC_PAYLOAD_TYPE, p_rtp->row_seq++, 0, 0 );
-            write_fec_header( p_rtp, &s, 1, p_rtp->seq + 1 - p_rtp->fec_columns, *row_ts );
-            bs_flush( &s );
+            write_rtp_header( row, FEC_PAYLOAD_TYPE, p_rtp->row_seq++, 0, 0 );
+            write_fec_header( p_rtp, &row[RTP_HEADER_SIZE], 1, p_rtp->seq + 1 - p_rtp->fec_columns );
 
             if( write_fec_packet( p_rtp->row_handle, row, FEC_PACKET_SIZE ) )
                 return -1;
@@ -266,10 +269,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
 
         if( row_idx == p_rtp->fec_rows-1 )
         {
-            bs_init( &s, column, RTP_HEADER_SIZE+FEC_HEADER_SIZE );
-            write_rtp_header( &s, FEC_PAYLOAD_TYPE, p_rtp->column_seq++, 0, 0 );
-            write_fec_header( p_rtp, &s, 0, p_rtp->seq - (p_rtp->fec_columns*(p_rtp->fec_rows-1)), *column_ts );
-            bs_flush( &s );
+            write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++, 0, 0 );
+            write_fec_header( p_rtp, &column[RTP_HEADER_SIZE], 0, p_rtp->seq - (p_rtp->fec_columns*(p_rtp->fec_rows-1)) );
 
             if( write_fec_packet( p_rtp->column_handle, column, FEC_PACKET_SIZE ) )
                 return -1;
