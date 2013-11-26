@@ -266,7 +266,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         if( decklink_ctx->last_frame_time == -1 )
         {
             decklink_ctx->last_frame_time = obe_mdate();
-            syslog( LOG_INFO, "inputActive: Decklink input active" );
+            syslog( LOG_INFO, "inputActivate: Decklink input active" );
         }
         else
         {
