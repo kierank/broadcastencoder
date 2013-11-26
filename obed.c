@@ -158,8 +158,6 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
     int has_dvb_vbi = 0;
     int i = 0;
 
-    printf("\n encoder config \n");
-
     if( encoder_control->control_version == OBE_CONTROL_VERSION )
     {
         if( running == 1 )
@@ -396,7 +394,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 goto fail;
 
             running = 1;
-            printf("\n encoding started \n");
+            printf("Encoding started \n");
         }
     }
 
@@ -426,8 +424,6 @@ static void obed__encoder_status(Obed__EncoderCommunicate_Service *service,
     result.status_version = 1;
     result.has_input_active = 1;
     result.input_active = obe_input_status( d.h );
-
-    printf("\n encoder status %i \n", result.input_active);
 
     closure( &result, closure_data );
 }
