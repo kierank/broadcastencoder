@@ -175,7 +175,7 @@ public:
     {
         pthread_mutex_init( &ref_mutex_, NULL );
         pthread_mutex_lock( &ref_mutex_ );
-        ref_ = 0;
+        ref_ = 1;
         pthread_mutex_unlock( &ref_mutex_ );
     }
     virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv) { return E_NOINTERFACE; }
@@ -959,8 +959,6 @@ static void *probe_stream( void *ptr )
     decklink_ctx = &decklink_opts->decklink_ctx;
     decklink_ctx->h = h;
     decklink_ctx->last_frame_time = -1;
-
-    decklink_ctx = &decklink_opts->decklink_ctx;
 
     if( open_card( decklink_opts ) < 0 )
         goto finish;

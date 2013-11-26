@@ -178,6 +178,7 @@ void obe_destroy_queue( obe_queue_t *queue )
     pthread_mutex_unlock( &queue->mutex );
     pthread_mutex_destroy( &queue->mutex );
     pthread_cond_destroy( &queue->in_cv );
+    pthread_cond_destroy( &queue->out_cv );
 }
 
 int add_to_queue( obe_queue_t *queue, void *item )
