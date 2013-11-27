@@ -55,7 +55,7 @@ typedef struct
     hnd_t udp_handle;
 
     uint8_t pkt[FFALIGN( RTP_PACKET_SIZE, 32 )];
-    uint16_t seq;
+    uint64_t seq;
     uint32_t ssrc;
 
     uint32_t pkt_cnt;
@@ -72,8 +72,8 @@ typedef struct
     uint8_t *column_data;
     uint8_t *row_data;
 
-    uint16_t column_seq;
-    uint16_t row_seq;
+    uint64_t column_seq;
+    uint64_t row_seq;
 
 } obe_rtp_ctx;
 
@@ -229,7 +229,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     obe_rtp_ctx *p_rtp = handle;
 
     uint32_t ts_90 = timestamp / 300;
-    write_rtp_header( p_rtp->pkt, MPEG_TS_PAYLOAD_TYPE, p_rtp->seq, ts_90, p_rtp->ssrc );
+    write_rtp_header( p_rtp->pkt, MPEG_TS_PAYLOAD_TYPE, p_rtp->seq & 0xffff, ts_90, p_rtp->ssrc );
 
     memcpy( &p_rtp->pkt[RTP_HEADER_SIZE], data, len );
 
@@ -244,7 +244,6 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         uint8_t *column = &p_rtp->column_data[column_idx*p_rtp->fec_pkt_len];
         uint8_t *row = &p_rtp->row_data[row_idx*p_rtp->fec_pkt_len];
 
-        /* Doesn't seem possible currently to do this in place */
         uint8_t *column_ts = &column[RTP_HEADER_SIZE+TS_OFFSET];
         uint8_t *row_ts = &row[RTP_HEADER_SIZE+TS_OFFSET];
         *column_ts++ ^= ts_90 >> 24;
@@ -260,17 +259,17 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         /* Check if we can send packets. Start with rows to match other encoders */
         if( column_idx == p_rtp->fec_columns-1 )
         {
-            write_rtp_header( row, FEC_PAYLOAD_TYPE, p_rtp->row_seq++, 0, 0 );
-            write_fec_header( p_rtp, &row[RTP_HEADER_SIZE], 1, p_rtp->seq + 1 - p_rtp->fec_columns );
+            write_rtp_header( row, FEC_PAYLOAD_TYPE, p_rtp->row_seq++ & 0xffff, 0, 0 );
+            write_fec_header( p_rtp, &row[RTP_HEADER_SIZE], 1, (p_rtp->seq + 1 - p_rtp->fec_columns) & 0xffff );
 
             if( write_fec_packet( p_rtp->row_handle, row, FEC_PACKET_SIZE ) )
                 return -1;
         }
 
-        if( row_idx == p_rtp->fec_rows-1 )
+        if( row_idx == 0 && p_rtp->seq >= (p_rtp->fec_columns * p_rtp->fec_rows) )
         {
-            write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++, 0, 0 );
-            write_fec_header( p_rtp, &column[RTP_HEADER_SIZE], 0, p_rtp->seq - (p_rtp->fec_columns*(p_rtp->fec_rows-1)) );
+            write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++ & 0xffff, 0, 0 );
+            write_fec_header( p_rtp, &column[RTP_HEADER_SIZE], 0, (p_rtp->seq - (p_rtp->fec_columns*p_rtp->fec_rows)) & 0xffff );
 
             if( write_fec_packet( p_rtp->column_handle, column, FEC_PACKET_SIZE ) )
                 return -1;
