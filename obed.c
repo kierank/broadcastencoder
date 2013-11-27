@@ -81,6 +81,16 @@ const static uint64_t channel_layouts[] =
     AV_CH_LAYOUT_5POINT1_BACK,
 };
 
+const static int video_formats[] =
+{
+    INPUT_VIDEO_FORMAT_PAL,
+    INPUT_VIDEO_FORMAT_NTSC,
+    INPUT_VIDEO_FORMAT_720P_50,
+    INPUT_VIDEO_FORMAT_720P_5994,
+    INPUT_VIDEO_FORMAT_1080I_50,
+    INPUT_VIDEO_FORMAT_1080I_5994,
+};
+
 /* server options */
 static volatile int keep_running;
 
@@ -180,7 +190,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
 
             input_opts_out->input_type = input_opts_in->input_device;
             input_opts_out->card_idx = input_opts_in->card_idx;
-            input_opts_out->video_format = input_opts_in->video_format;
+            input_opts_out->video_format = video_formats[input_opts_in->video_format];
 
             if( obe_probe_device( d.h, &d.input, &d.program ) < 0 )
             {
