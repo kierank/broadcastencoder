@@ -295,6 +295,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         *row_ts++    ^= ts_90 >> 24;
         *column_ts++ ^= (ts_90 >> 16) & 0xff;
         *row_ts++    ^= (ts_90 >> 16) & 0xff;
+        *column_ts++ ^= (ts_90 >>  8) & 0xff;
+        *row_ts++    ^= (ts_90 >>  8) & 0xff;
         *column_ts++ ^= (ts_90) & 0xff;
         *row_ts++    ^= (ts_90) & 0xff;
 
