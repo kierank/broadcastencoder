@@ -98,6 +98,8 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         return -1;
     }
 
+    if( !udp_opts->local_port )
+        udp_opts->local_port = udp_opts->port;
     if( udp_open( &p_rtp->udp_handle, udp_opts ) < 0 )
     {
         fprintf( stderr, "[rtp] Could not create udp output" );
