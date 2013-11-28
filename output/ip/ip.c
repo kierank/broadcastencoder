@@ -201,11 +201,25 @@ static void write_fec_header( hnd_t handle, uint8_t *data, int row, uint16_t snb
 {
     obe_rtp_ctx *p_rtp = handle;
 
+    uint16_t length_recovery;
+    uint8_t payload_recovery;
+
+    if( row )
+    {
+        length_recovery = p_rtp->fec_columns & 1 ? TS_PACKETS_SIZE : 0;
+        payload_recovery = p_rtp->fec_columns & 1 ? MPEG_TS_PAYLOAD_TYPE : 0;
+    }
+    else
+    {
+        length_recovery = p_rtp->fec_rows & 1 ? TS_PACKETS_SIZE : 0;
+        payload_recovery = p_rtp->fec_rows & 1 ? MPEG_TS_PAYLOAD_TYPE : 0;
+    }
+
     *data++ = snbase >> 8;
     *data++ = snbase & 0xff;
-    *data++ = TS_PACKETS_SIZE >> 8;
-    *data++ = TS_PACKETS_SIZE & 0xff;
-    *data++ = 1 << 7 | MPEG_TS_PAYLOAD_TYPE;
+    *data++ = length_recovery >> 8;
+    *data++ = length_recovery & 0xff;
+    *data++ = 1 << 7 | payload_recovery;
     /* marker */
     *data++ = 0;
     *data++ = 0;
