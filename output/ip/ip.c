@@ -252,7 +252,14 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     memcpy( &p_rtp->pkt[RTP_HEADER_SIZE], data, len );
 
     if( udp_write( p_rtp->udp_handle, p_rtp->pkt, RTP_PACKET_SIZE ) < 0 )
+    {
+        /* Increase the sequence number even if writing fails. This helps with
+         * testing packet loss with iptables */
+        p_rtp->seq++;
+        p_rtp->pkt_cnt++;
+        p_rtp->octet_cnt += len;
         return -1;
+    }
 
     if( p_rtp->fec_columns && p_rtp->fec_rows )
     {
