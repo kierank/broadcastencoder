@@ -279,15 +279,18 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
                 return -1;
         }
 
-        if( row_idx == column_idx && p_rtp->seq >= (p_rtp->fec_columns * p_rtp->fec_rows) )
+        if( p_rtp->seq >= (p_rtp->fec_columns * p_rtp->fec_rows + column_idx*(p_rtp->fec_columns+1)) )
         {
-            write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++ & 0xffff, 0, 0 );
-            write_fec_header( p_rtp, &column[RTP_HEADER_SIZE], 0, (p_rtp->seq - (p_rtp->fec_columns*p_rtp->fec_rows)) & 0xffff );
+            int deoffsetted_seq = (p_rtp->seq - column_idx) - (column_idx*p_rtp->fec_columns);
+            if( deoffsetted_seq % ( p_rtp->fec_columns * p_rtp->fec_rows ) == 0 )
+            {
+                write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++ & 0xffff, 0, 0 );
+                write_fec_header( p_rtp, &column[RTP_HEADER_SIZE], 0, (p_rtp->seq - (p_rtp->fec_columns*p_rtp->fec_rows)) & 0xffff );
 
-            if( write_fec_packet( p_rtp->column_handle, column, FEC_PACKET_SIZE ) )
-                return -1;
+                if( write_fec_packet( p_rtp->column_handle, column, FEC_PACKET_SIZE ) )
+                    return -1;
+            }
         }
-
 
         uint8_t *row_ts = &row[RTP_HEADER_SIZE+TS_OFFSET];
         *row_ts++ ^= ts_90 >> 24;
