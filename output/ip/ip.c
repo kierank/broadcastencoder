@@ -246,20 +246,17 @@ static int write_fec_packet( hnd_t udp_handle, uint8_t *data, int len )
 static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestamp )
 {
     obe_rtp_ctx *p_rtp = handle;
+    int ret = 0;
+
+    /* Throughout this function, don't exit early because the decoder is expecting a sequence number increase
+     * and consistent FEC packets. Return -1 at the end so the user knows there was a failure to submit a packet. */
 
     uint32_t ts_90 = timestamp / 300;
     write_rtp_header( p_rtp->pkt, MPEG_TS_PAYLOAD_TYPE, p_rtp->seq & 0xffff, ts_90, p_rtp->ssrc );
     memcpy( &p_rtp->pkt[RTP_HEADER_SIZE], data, len );
 
     if( udp_write( p_rtp->udp_handle, p_rtp->pkt, RTP_PACKET_SIZE ) < 0 )
-    {
-        /* Increase the sequence number even if writing fails. This helps with
-         * testing packet loss with iptables */
-        p_rtp->seq++;
-        p_rtp->pkt_cnt++;
-        p_rtp->octet_cnt += len;
-        return -1;
-    }
+        ret = -1;
 
     if( p_rtp->fec_columns && p_rtp->fec_rows )
     {
@@ -275,8 +272,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
             write_rtp_header( row, FEC_PAYLOAD_TYPE, p_rtp->row_seq++ & 0xffff, 0, 0 );
             write_fec_header( p_rtp, &row[RTP_HEADER_SIZE], 1, (p_rtp->seq - column_idx) & 0xffff );
 
-            if( write_fec_packet( p_rtp->row_handle, row, FEC_PACKET_SIZE ) )
-                return -1;
+            if( write_fec_packet( p_rtp->row_handle, row, FEC_PACKET_SIZE ) < 0 )
+                ret = -1;
         }
 
         if( p_rtp->seq >= (p_rtp->fec_columns * p_rtp->fec_rows + column_idx*(p_rtp->fec_columns+1)) )
@@ -287,8 +284,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
                 write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++ & 0xffff, 0, 0 );
                 write_fec_header( p_rtp, &column[RTP_HEADER_SIZE], 0, (p_rtp->seq - (p_rtp->fec_columns*p_rtp->fec_rows)) & 0xffff );
 
-                if( write_fec_packet( p_rtp->column_handle, column, FEC_PACKET_SIZE ) )
-                    return -1;
+                if( write_fec_packet( p_rtp->column_handle, column, FEC_PACKET_SIZE ) < 0 )
+                    ret = -1;
             }
         }
 
@@ -315,7 +312,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     p_rtp->pkt_cnt++;
     p_rtp->octet_cnt += len;
 
-    return 0;
+    return ret;
 }
 
 static void rtp_close( hnd_t handle )
