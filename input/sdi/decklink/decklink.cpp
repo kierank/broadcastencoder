@@ -168,6 +168,32 @@ struct decklink_status
     decklink_opts_t *decklink_opts;
 };
 
+static void setup_pixel_funcs( decklink_opts_t *decklink_opts )
+{
+    decklink_ctx_t *decklink_ctx = &decklink_opts->decklink_ctx;
+
+    int cpu_flags = av_get_cpu_flags();
+
+    /* Setup VBI and VANC unpack functions */
+    if( IS_SD( decklink_opts->video_format ) )
+    {
+        decklink_ctx->unpack_line = obe_v210_line_to_uyvy_c;
+        decklink_ctx->downscale_line = obe_downscale_line_c;
+        decklink_ctx->blank_line = obe_blank_line_uyvy_c;
+
+        if( cpu_flags & AV_CPU_FLAG_MMX )
+            decklink_ctx->downscale_line = obe_downscale_line_mmx;
+
+        if( cpu_flags & AV_CPU_FLAG_SSE2 )
+            decklink_ctx->downscale_line = obe_downscale_line_sse2;
+    }
+    else
+    {
+        decklink_ctx->unpack_line = obe_v210_line_to_nv20_c;
+        decklink_ctx->blank_line = obe_blank_line_nv20_c;
+    }
+};
+
 class DeckLinkCaptureDelegate : public IDeckLinkInputCallback
 {
 public:
@@ -578,10 +604,12 @@ static int open_card( decklink_opts_t *decklink_opts )
     int         found_mode;
     int         ret = 0;
     int         i;
-    int         cpu_flags;
     const int   sample_rate = 48000;
     const char *model_name;
     BMDDisplayMode wanted_mode_id;
+    IDeckLinkAttributes *decklink_attributes = NULL;
+    uint32_t    flags = 0;
+    bool        supported;
 
     IDeckLinkDisplayModeIterator *p_display_iterator = NULL;
     IDeckLinkIterator *decklink_iterator = NULL;
@@ -657,7 +685,7 @@ static int open_card( decklink_opts_t *decklink_opts )
     syslog( LOG_INFO, "Opened DeckLink PCI card %d (%s)", decklink_opts->card_idx, model_name );
     free( (char *)model_name );
 
-    if( decklink_ctx->p_card->QueryInterface( IID_IDeckLinkInput, (void**)&decklink_ctx->p_input) != S_OK )
+    if( decklink_ctx->p_card->QueryInterface( IID_IDeckLinkInput, (void**)&decklink_ctx->p_input ) != S_OK )
     {
         fprintf( stderr, "[decklink] Card has no inputs\n" );
         ret = -1;
@@ -665,7 +693,7 @@ static int open_card( decklink_opts_t *decklink_opts )
     }
 
     /* Set up the video and audio sources. */
-    if( decklink_ctx->p_card->QueryInterface( IID_IDeckLinkConfiguration, (void**)&decklink_ctx->p_config) != S_OK )
+    if( decklink_ctx->p_card->QueryInterface( IID_IDeckLinkConfiguration, (void**)&decklink_ctx->p_config ) != S_OK )
     {
         fprintf( stderr, "[decklink] Failed to get configuration interface\n" );
         ret = -1;
@@ -694,6 +722,133 @@ static int open_card( decklink_opts_t *decklink_opts )
         goto finish;
     }
 
+    result = decklink_ctx->p_card->QueryInterface(IID_IDeckLinkAttributes, (void**)&decklink_attributes );
+    if( result != S_OK )
+    {
+        fprintf(stderr, "[decklink] Could not obtain the IDeckLinkAttributes interface\n" );
+        ret = -1;
+        goto finish;
+    }
+
+    result = decklink_ctx->p_card->QueryInterface(IID_IDeckLinkAttributes, (void**)&decklink_attributes );
+    if( result != S_OK )
+    {
+        fprintf(stderr, "[decklink] Could not obtain the IDeckLinkAttributes interface\n" );
+        ret = -1;
+        goto finish;
+    }
+
+    result = decklink_attributes->GetFlag( BMDDeckLinkSupportsInputFormatDetection, &supported );
+    if( result != S_OK )
+    {
+        fprintf(stderr, "[decklink] Could not query card for format detection\n" );
+        ret = -1;
+        goto finish;
+    }
+
+    if( supported )
+    {
+
+    }
+    else
+    {
+        /* Get the list of display modes. */
+        result = decklink_ctx->p_input->GetDisplayModeIterator( &p_display_iterator );
+        if( result != S_OK )
+        {
+            fprintf( stderr, "[decklink] Failed to enumerate display modes\n" );
+            ret = -1;
+            goto finish;
+        }
+
+        for( i = 0; video_format_tab[i].obe_name != -1; i++ )
+        {
+            if( video_format_tab[i].obe_name == decklink_opts->video_format )
+                break;
+        }
+
+        if( video_format_tab[i].obe_name == -1 )
+        {
+            fprintf( stderr, "[decklink] Unsupported video format\n" );
+            ret = -1;
+            goto finish;
+        }
+
+        wanted_mode_id = video_format_tab[i].bmd_name;
+        found_mode = false;
+        decklink_opts->timebase_num = video_format_tab[i].timebase_num;
+        decklink_opts->timebase_den = video_format_tab[i].timebase_den;
+
+        for (;;)
+        {
+            IDeckLinkDisplayMode *p_display_mode;
+            result = p_display_iterator->Next( &p_display_mode );
+            if( result != S_OK || !p_display_mode )
+                break;
+
+            BMDDisplayMode mode_id = p_display_mode->GetDisplayMode();
+
+            BMDTimeValue frame_duration, time_scale;
+            result = p_display_mode->GetFrameRate( &frame_duration, &time_scale );
+            if( result != S_OK )
+            {
+                fprintf( stderr, "[decklink] Failed to get frame rate\n" );
+                ret = -1;
+                p_display_mode->Release();
+                goto finish;
+            }
+
+            if( wanted_mode_id == mode_id )
+            {
+                found_mode = true;
+                decklink_opts->width = p_display_mode->GetWidth();
+                decklink_opts->coded_height = p_display_mode->GetHeight();
+
+                switch( p_display_mode->GetFieldDominance() )
+                {
+                    case bmdProgressiveFrame:
+                        decklink_opts->interlaced = 0;
+                        decklink_opts->tff        = 0;
+                        break;
+                    case bmdProgressiveSegmentedFrame:
+                        /* Assume tff interlaced - this mode should not be used in broadcast */
+                        decklink_opts->interlaced = 1;
+                        decklink_opts->tff        = 1;
+                        break;
+                    case bmdUpperFieldFirst:
+                        decklink_opts->interlaced = 1;
+                        decklink_opts->tff        = 1;
+                        break;
+                    case bmdLowerFieldFirst:
+                        decklink_opts->interlaced = 1;
+                        decklink_opts->tff        = 0;
+                        break;
+                    case bmdUnknownFieldDominance:
+                    default:
+                        /* Assume progressive */
+                        decklink_opts->interlaced = 0;
+                        decklink_opts->tff        = 0;
+                        break;
+                }
+            }
+
+            p_display_mode->Release();
+        }
+
+        decklink_opts->height = decklink_opts->coded_height;
+        if( decklink_opts->coded_height == 486 )
+            decklink_opts->height = 480;
+
+        if( !found_mode )
+        {
+            fprintf( stderr, "[decklink] Unsupported video mode\n" );
+            ret = -1;
+            goto finish;
+        }
+
+        setup_pixel_funcs( decklink_opts );
+    }
+
     /* Setup audio connection */
     for( i = 0; audio_conn_tab[i].obe_name != -1; i++ )
     {
@@ -716,122 +871,7 @@ static int open_card( decklink_opts_t *decklink_opts )
         goto finish;
     }
 
-    /* Get the list of display modes. */
-    result = decklink_ctx->p_input->GetDisplayModeIterator( &p_display_iterator );
-    if( result != S_OK )
-    {
-        fprintf( stderr, "[decklink] Failed to enumerate display modes\n" );
-        ret = -1;
-        goto finish;
-    }
-
-    for( i = 0; video_format_tab[i].obe_name != -1; i++ )
-    {
-        if( video_format_tab[i].obe_name == decklink_opts->video_format )
-            break;
-    }
-
-    if( video_format_tab[i].obe_name == -1 )
-    {
-        fprintf( stderr, "[decklink] Unsupported video format\n" );
-        ret = -1;
-        goto finish;
-    }
-
-    wanted_mode_id = video_format_tab[i].bmd_name;
-    found_mode = false;
-    decklink_opts->timebase_num = video_format_tab[i].timebase_num;
-    decklink_opts->timebase_den = video_format_tab[i].timebase_den;
-
-    for (;;)
-    {
-        IDeckLinkDisplayMode *p_display_mode;
-        result = p_display_iterator->Next( &p_display_mode );
-        if( result != S_OK || !p_display_mode )
-            break;
-
-        BMDDisplayMode mode_id = p_display_mode->GetDisplayMode();
-
-        BMDTimeValue frame_duration, time_scale;
-        result = p_display_mode->GetFrameRate( &frame_duration, &time_scale );
-        if( result != S_OK )
-        {
-            fprintf( stderr, "[decklink] Failed to get frame rate\n" );
-            ret = -1;
-            p_display_mode->Release();
-            goto finish;
-        }
-
-        if( wanted_mode_id == mode_id )
-        {
-            found_mode = true;
-            decklink_opts->width = p_display_mode->GetWidth();
-            decklink_opts->coded_height = p_display_mode->GetHeight();
-
-            switch( p_display_mode->GetFieldDominance() )
-            {
-                case bmdProgressiveFrame:
-                    decklink_opts->interlaced = 0;
-                    decklink_opts->tff        = 0;
-                    break;
-                case bmdProgressiveSegmentedFrame:
-                    /* Assume tff interlaced - this mode should not be used in broadcast */
-                    decklink_opts->interlaced = 1;
-                    decklink_opts->tff        = 1;
-                    break;
-                case bmdUpperFieldFirst:
-                    decklink_opts->interlaced = 1;
-                    decklink_opts->tff        = 1;
-                    break;
-                case bmdLowerFieldFirst:
-                    decklink_opts->interlaced = 1;
-                    decklink_opts->tff        = 0;
-                    break;
-                case bmdUnknownFieldDominance:
-                default:
-                    /* Assume progressive */
-                    decklink_opts->interlaced = 0;
-                    decklink_opts->tff        = 0;
-                    break;
-            }
-        }
-
-        p_display_mode->Release();
-    }
-
-    decklink_opts->height = decklink_opts->coded_height;
-    if( decklink_opts->coded_height == 486 )
-        decklink_opts->height = 480;
-
-    if( !found_mode )
-    {
-        fprintf( stderr, "[decklink] Unsupported video mode\n" );
-        ret = -1;
-        goto finish;
-    }
-
-    cpu_flags = av_get_cpu_flags();
-
-    /* Setup VBI and VANC unpack functions */
-    if( IS_SD( decklink_opts->video_format ) )
-    {
-        decklink_ctx->unpack_line = obe_v210_line_to_uyvy_c;
-        decklink_ctx->downscale_line = obe_downscale_line_c;
-        decklink_ctx->blank_line = obe_blank_line_uyvy_c;
-
-        if( cpu_flags & AV_CPU_FLAG_MMX )
-            decklink_ctx->downscale_line = obe_downscale_line_mmx;
-
-        if( cpu_flags & AV_CPU_FLAG_SSE2 )
-            decklink_ctx->downscale_line = obe_downscale_line_sse2;
-    }
-    else
-    {
-        decklink_ctx->unpack_line = obe_v210_line_to_nv20_c;
-        decklink_ctx->blank_line = obe_blank_line_nv20_c;
-    }
-
-    result = decklink_ctx->p_input->EnableVideoInput( wanted_mode_id, bmdFormat10BitYUV, 0 );
+    result = decklink_ctx->p_input->EnableVideoInput( wanted_mode_id, bmdFormat10BitYUV, flags );
     if( result != S_OK )
     {
         fprintf( stderr, "[decklink] Failed to enable video input\n" );
@@ -891,6 +931,9 @@ finish:
 
     if( p_display_iterator )
         p_display_iterator->Release();
+
+    if( decklink_attributes )
+        decklink_attributes->Release();
 
     if( ret )
         close_card( decklink_opts );
