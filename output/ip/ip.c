@@ -266,6 +266,13 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         uint8_t *row = &p_rtp->row_data[row_idx*p_rtp->fec_pkt_len];
         uint8_t *column = &p_rtp->column_data[column_idx*p_rtp->fec_pkt_len];
 
+        uint8_t *row_ts = &row[RTP_HEADER_SIZE+TS_OFFSET];
+        *row_ts++ ^= ts_90 >> 24;
+        *row_ts++ ^= (ts_90 >> 16) & 0xff;
+        *row_ts++ ^= (ts_90 >>  8) & 0xff;
+        *row_ts++ ^= (ts_90) & 0xff;
+        xor_packet_c( &row[RTP_HEADER_SIZE+FEC_HEADER_SIZE], &p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
+
         /* Check if we can send packets. Start with rows to match the suggestion in the ProMPEG spec */
         if( column_idx == (p_rtp->fec_columns-1) )
         {
@@ -286,15 +293,10 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
 
                 if( write_fec_packet( p_rtp->column_handle, column, FEC_PACKET_SIZE ) < 0 )
                     ret = -1;
+
+                printf("\n");
             }
         }
-
-        uint8_t *row_ts = &row[RTP_HEADER_SIZE+TS_OFFSET];
-        *row_ts++ ^= ts_90 >> 24;
-        *row_ts++ ^= (ts_90 >> 16) & 0xff;
-        *row_ts++ ^= (ts_90 >>  8) & 0xff;
-        *row_ts++ ^= (ts_90) & 0xff;
-        xor_packet_c( &row[RTP_HEADER_SIZE+FEC_HEADER_SIZE], &p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
 
         if( p_rtp->seq >= column_idx*(p_rtp->fec_columns+1) )
         {
@@ -305,6 +307,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
             *column_ts++ ^= (ts_90) & 0xff;
 
             xor_packet_c( &column[RTP_HEADER_SIZE+FEC_HEADER_SIZE], &p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
+
+            printf(" %"PRIu64" ", p_rtp->seq );
         }
     }
 
