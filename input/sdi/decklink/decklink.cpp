@@ -192,7 +192,44 @@ static void setup_pixel_funcs( decklink_opts_t *decklink_opts )
         decklink_ctx->unpack_line = obe_v210_line_to_nv20_c;
         decklink_ctx->blank_line = obe_blank_line_nv20_c;
     }
-};
+}
+
+static void get_format_opts( decklink_opts_t *decklink_opts, IDeckLinkDisplayMode *p_display_mode )
+{
+    decklink_opts->width = p_display_mode->GetWidth();
+    decklink_opts->coded_height = p_display_mode->GetHeight();
+
+    switch( p_display_mode->GetFieldDominance() )
+    {
+        case bmdProgressiveFrame:
+            decklink_opts->interlaced = 0;
+            decklink_opts->tff        = 0;
+            break;
+        case bmdProgressiveSegmentedFrame:
+            /* Assume tff interlaced - this mode should not be used in broadcast */
+            decklink_opts->interlaced = 1;
+            decklink_opts->tff        = 1;
+            break;
+        case bmdUpperFieldFirst:
+            decklink_opts->interlaced = 1;
+            decklink_opts->tff        = 1;
+            break;
+        case bmdLowerFieldFirst:
+            decklink_opts->interlaced = 1;
+            decklink_opts->tff        = 0;
+            break;
+        case bmdUnknownFieldDominance:
+        default:
+            /* Assume progressive */
+            decklink_opts->interlaced = 0;
+            decklink_opts->tff        = 0;
+            break;
+    }
+
+    decklink_opts->height = decklink_opts->coded_height;
+    if( decklink_opts->coded_height == 486 )
+        decklink_opts->height = 480;
+}
 
 class DeckLinkCaptureDelegate : public IDeckLinkInputCallback
 {
@@ -226,9 +263,33 @@ public:
         return new_ref;
     }
 
-    virtual HRESULT STDMETHODCALLTYPE VideoInputFormatChanged(BMDVideoInputFormatChangedEvents, IDeckLinkDisplayMode*, BMDDetectedVideoInputFormatFlags)
+    virtual HRESULT STDMETHODCALLTYPE VideoInputFormatChanged(BMDVideoInputFormatChangedEvents events, IDeckLinkDisplayMode *p_display_mode, BMDDetectedVideoInputFormatFlags)
     {
-        syslog( LOG_WARNING, "Video input format changed" );
+        decklink_ctx_t *decklink_ctx = &decklink_opts_->decklink_ctx;
+        int i = 0;
+        if( events & bmdVideoInputDisplayModeChanged )
+        {
+            BMDDisplayMode mode_id = p_display_mode->GetDisplayMode();
+            syslog( LOG_WARNING, "Video input format changed" );
+
+            for( i = 0; video_format_tab[i].obe_name != -1; i++ )
+            {
+                if( video_format_tab[i].bmd_name == mode_id )
+                    break;
+            }
+
+            if( video_format_tab[i].obe_name == -1 )
+            {
+                syslog( LOG_WARNING, "Unsupported video format" );
+                return S_OK;
+            }
+
+            decklink_opts_->timebase_num = video_format_tab[i].timebase_num;
+            decklink_opts_->timebase_den = video_format_tab[i].timebase_den;
+
+            get_format_opts( decklink_opts_, p_display_mode );
+            setup_pixel_funcs( decklink_opts_ );
+        }
         return S_OK;
     }
 
@@ -802,43 +863,12 @@ static int open_card( decklink_opts_t *decklink_opts )
             if( wanted_mode_id == mode_id )
             {
                 found_mode = true;
-                decklink_opts->width = p_display_mode->GetWidth();
-                decklink_opts->coded_height = p_display_mode->GetHeight();
-
-                switch( p_display_mode->GetFieldDominance() )
-                {
-                    case bmdProgressiveFrame:
-                        decklink_opts->interlaced = 0;
-                        decklink_opts->tff        = 0;
-                        break;
-                    case bmdProgressiveSegmentedFrame:
-                        /* Assume tff interlaced - this mode should not be used in broadcast */
-                        decklink_opts->interlaced = 1;
-                        decklink_opts->tff        = 1;
-                        break;
-                    case bmdUpperFieldFirst:
-                        decklink_opts->interlaced = 1;
-                        decklink_opts->tff        = 1;
-                        break;
-                    case bmdLowerFieldFirst:
-                        decklink_opts->interlaced = 1;
-                        decklink_opts->tff        = 0;
-                        break;
-                    case bmdUnknownFieldDominance:
-                    default:
-                        /* Assume progressive */
-                        decklink_opts->interlaced = 0;
-                        decklink_opts->tff        = 0;
-                        break;
-                }
+                get_format_opts( decklink_opts, p_display_mode );
+                setup_pixel_funcs( decklink_opts );
             }
 
             p_display_mode->Release();
         }
-
-        decklink_opts->height = decklink_opts->coded_height;
-        if( decklink_opts->coded_height == 486 )
-            decklink_opts->height = 480;
 
         if( !found_mode )
         {
@@ -846,8 +876,6 @@ static int open_card( decklink_opts_t *decklink_opts )
             ret = -1;
             goto finish;
         }
-
-        setup_pixel_funcs( decklink_opts );
     }
 
     /* Setup audio connection */
@@ -997,7 +1025,7 @@ static void *probe_stream( void *ptr )
 
     if( !decklink_opts->probe_success )
     {
-        fprintf( stderr, "[decklink] No valid frames received - check input format\n" );
+        fprintf( stderr, "[decklink] No valid frames received - check connection and input format\n" );
         goto finish;
     }
 
