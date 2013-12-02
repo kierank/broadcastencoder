@@ -235,12 +235,14 @@ static void write_fec_header( hnd_t handle, uint8_t *data, int row, uint16_t snb
 
 static int write_fec_packet( hnd_t udp_handle, uint8_t *data, int len )
 {
+    int ret = 0;
+
     if( udp_write( udp_handle, data, len ) < 0 )
-        return -1;
+        ret = -1;
 
     memset( data, 0, len );
 
-    return 0;
+    return ret;
 }
 
 static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestamp )
