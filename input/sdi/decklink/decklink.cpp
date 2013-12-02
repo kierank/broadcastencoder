@@ -748,7 +748,8 @@ static int open_card( decklink_opts_t *decklink_opts )
 
     if( supported )
     {
-
+        wanted_mode_id = bmdModeNTSC;
+        flags = bmdVideoInputEnableFormatDetection;
     }
     else
     {
