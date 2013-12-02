@@ -265,7 +265,6 @@ public:
 
     virtual HRESULT STDMETHODCALLTYPE VideoInputFormatChanged(BMDVideoInputFormatChangedEvents events, IDeckLinkDisplayMode *p_display_mode, BMDDetectedVideoInputFormatFlags)
     {
-        decklink_ctx_t *decklink_ctx = &decklink_opts_->decklink_ctx;
         int i = 0;
         if( events & bmdVideoInputDisplayModeChanged )
         {
@@ -284,6 +283,7 @@ public:
                 return S_OK;
             }
 
+            decklink_opts_->video_format = video_format_tab[i].obe_name;
             decklink_opts_->timebase_num = video_format_tab[i].timebase_num;
             decklink_opts_->timebase_den = video_format_tab[i].timebase_den;
 
