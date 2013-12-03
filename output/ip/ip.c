@@ -295,8 +295,6 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
 
                 if( write_fec_packet( p_rtp->column_handle, column, FEC_PACKET_SIZE ) < 0 )
                     ret = -1;
-
-                printf("\n");
             }
         }
 
@@ -309,8 +307,6 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
             *column_ts++ ^= (ts_90) & 0xff;
 
             xor_packet_c( &column[RTP_HEADER_SIZE+FEC_HEADER_SIZE], &p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
-
-            printf(" %"PRIu64" ", p_rtp->seq );
         }
     }
 
