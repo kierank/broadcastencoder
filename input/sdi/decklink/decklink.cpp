@@ -265,6 +265,7 @@ public:
 
     virtual HRESULT STDMETHODCALLTYPE VideoInputFormatChanged(BMDVideoInputFormatChangedEvents events, IDeckLinkDisplayMode *p_display_mode, BMDDetectedVideoInputFormatFlags)
     {
+        decklink_ctx_t *decklink_ctx = &decklink_opts_->decklink_ctx;
         int i = 0;
         if( events & bmdVideoInputDisplayModeChanged )
         {
@@ -289,6 +290,11 @@ public:
 
             get_format_opts( decklink_opts_, p_display_mode );
             setup_pixel_funcs( decklink_opts_ );
+
+            decklink_ctx->p_input->PauseStreams();
+            decklink_ctx->p_input->EnableVideoInput( p_display_mode->GetDisplayMode(), bmdFormat10BitYUV, bmdVideoInputEnableFormatDetection );
+            decklink_ctx->p_input->FlushStreams();
+            decklink_ctx->p_input->StartStreams();
         }
         return S_OK;
     }
