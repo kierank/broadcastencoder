@@ -67,6 +67,7 @@ typedef struct
 
     int fec_columns;
     int fec_rows;
+    int column_phase;
 
     int fec_pkt_len;
     uint8_t *column_data;
@@ -116,7 +117,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         /* Set SSRC for both streams to zero as per specification */
         p_rtp->ssrc = 0;
         p_rtp->fec_pkt_len = FFALIGN( FEC_PACKET_SIZE, 32 );
-        p_rtp->column_data = calloc( output_dest->fec_columns, p_rtp->fec_pkt_len );
+        p_rtp->column_data = calloc( output_dest->fec_columns*2, p_rtp->fec_pkt_len );
         p_rtp->row_data = calloc( output_dest->fec_rows, p_rtp->fec_pkt_len );
         if( !p_rtp->column_data || !p_rtp->row_data )
         {
@@ -264,8 +265,14 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     {
         int row_idx = (p_rtp->seq / p_rtp->fec_columns) % p_rtp->fec_rows;
         int column_idx = p_rtp->seq % p_rtp->fec_columns;
+
+        if( row_idx == 0 && column_idx == 0 && p_rtp->seq >= p_rtp->fec_columns*p_rtp->fec_rows )
+        {
+            p_rtp->column_phase ^= 1;
+        }
+
         uint8_t *row = &p_rtp->row_data[row_idx*p_rtp->fec_pkt_len];
-        uint8_t *column = &p_rtp->column_data[column_idx*p_rtp->fec_pkt_len];
+        uint8_t *column = &p_rtp->column_data[(column_idx*2+p_rtp->column_phase)*p_rtp->fec_pkt_len];
 
         uint8_t *row_ts = &row[RTP_HEADER_SIZE+TS_OFFSET];
         *row_ts++ ^= ts_90 >> 24;
@@ -292,12 +299,20 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
                 ret = -1;
         }
 
-        if( row_idx == 0 )
+        /* Pre-write the RTP and FEC header */
+        if( row_idx == (p_rtp->fec_rows-1) )
         {
             write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++ & 0xffff, 0, 0 );
-            write_fec_header( p_rtp, &column[RTP_HEADER_SIZE], 0, (p_rtp->seq - (p_rtp->fec_columns*p_rtp->fec_rows)) & 0xffff );
+            write_fec_header( p_rtp, &column[RTP_HEADER_SIZE], 0, (p_rtp->seq - (p_rtp->fec_columns*(p_rtp->fec_rows-1))) & 0xffff );
+        }
 
-            if( write_fec_packet( p_rtp->column_handle, column, FEC_PACKET_SIZE ) < 0 )
+        /* Interleave the column FEC data from the previous matrix */
+        if( p_rtp->seq >= p_rtp->fec_columns*p_rtp->fec_rows && p_rtp->seq % p_rtp->fec_rows == 0 )
+        {
+            uint64_t send_column_idx = (p_rtp->seq % (p_rtp->fec_columns*p_rtp->fec_rows)) / p_rtp->fec_rows;
+            uint8_t *column_tx = &p_rtp->column_data[(send_column_idx*2+!p_rtp->column_phase)*p_rtp->fec_pkt_len];
+
+            if( write_fec_packet( p_rtp->column_handle, column_tx, FEC_PACKET_SIZE ) < 0 )
                 ret = -1;
         }
     }
