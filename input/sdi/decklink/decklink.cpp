@@ -272,7 +272,7 @@ public:
             BMDDisplayMode mode_id = p_display_mode->GetDisplayMode();
             syslog( LOG_WARNING, "Video input format changed" );
 
-            if( !decklink_opts_->timebase_num )
+            if( decklink_ctx->last_frame_time == -1 )
             {
                 for( i = 0; video_format_tab[i].obe_name != -1; i++ )
                 {
