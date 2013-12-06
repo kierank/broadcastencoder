@@ -1004,6 +1004,8 @@ static int set_output( char *command, obecli_command_t *child )
             cli.output.outputs[output_id].fec_columns = obe_otoi( fec_columns, cli.output.outputs[output_id].fec_columns );
         if( fec_rows )
             cli.output.outputs[output_id].fec_rows = obe_otoi( fec_rows, cli.output.outputs[output_id].fec_rows );
+        if( fec_type )
+            parse_enum_value( fec_type, fec_types, &cli.output.outputs[output_id].fec_type );
         obe_free_string_array( opts );
     }
 
