@@ -817,74 +817,69 @@ static int open_card( decklink_opts_t *decklink_opts )
     }
 
     if( supported )
-    {
-        wanted_mode_id = bmdModeNTSC;
         flags = bmdVideoInputEnableFormatDetection;
-    }
-    else
+
+    /* Get the list of display modes. */
+    result = decklink_ctx->p_input->GetDisplayModeIterator( &p_display_iterator );
+    if( result != S_OK )
     {
-        /* Get the list of display modes. */
-        result = decklink_ctx->p_input->GetDisplayModeIterator( &p_display_iterator );
+        fprintf( stderr, "[decklink] Failed to enumerate display modes\n" );
+        ret = -1;
+        goto finish;
+    }
+
+    for( i = 0; video_format_tab[i].obe_name != -1; i++ )
+    {
+        if( video_format_tab[i].obe_name == decklink_opts->video_format )
+            break;
+    }
+
+    if( video_format_tab[i].obe_name == -1 )
+    {
+        fprintf( stderr, "[decklink] Unsupported video format\n" );
+        ret = -1;
+        goto finish;
+    }
+
+    wanted_mode_id = video_format_tab[i].bmd_name;
+    found_mode = false;
+    decklink_opts->timebase_num = video_format_tab[i].timebase_num;
+    decklink_opts->timebase_den = video_format_tab[i].timebase_den;
+
+    for (;;)
+    {
+        IDeckLinkDisplayMode *p_display_mode;
+        result = p_display_iterator->Next( &p_display_mode );
+        if( result != S_OK || !p_display_mode )
+            break;
+
+        BMDDisplayMode mode_id = p_display_mode->GetDisplayMode();
+
+        BMDTimeValue frame_duration, time_scale;
+        result = p_display_mode->GetFrameRate( &frame_duration, &time_scale );
         if( result != S_OK )
         {
-            fprintf( stderr, "[decklink] Failed to enumerate display modes\n" );
+            fprintf( stderr, "[decklink] Failed to get frame rate\n" );
             ret = -1;
-            goto finish;
-        }
-
-        for( i = 0; video_format_tab[i].obe_name != -1; i++ )
-        {
-            if( video_format_tab[i].obe_name == decklink_opts->video_format )
-                break;
-        }
-
-        if( video_format_tab[i].obe_name == -1 )
-        {
-            fprintf( stderr, "[decklink] Unsupported video format\n" );
-            ret = -1;
-            goto finish;
-        }
-
-        wanted_mode_id = video_format_tab[i].bmd_name;
-        found_mode = false;
-        decklink_opts->timebase_num = video_format_tab[i].timebase_num;
-        decklink_opts->timebase_den = video_format_tab[i].timebase_den;
-
-        for (;;)
-        {
-            IDeckLinkDisplayMode *p_display_mode;
-            result = p_display_iterator->Next( &p_display_mode );
-            if( result != S_OK || !p_display_mode )
-                break;
-
-            BMDDisplayMode mode_id = p_display_mode->GetDisplayMode();
-
-            BMDTimeValue frame_duration, time_scale;
-            result = p_display_mode->GetFrameRate( &frame_duration, &time_scale );
-            if( result != S_OK )
-            {
-                fprintf( stderr, "[decklink] Failed to get frame rate\n" );
-                ret = -1;
-                p_display_mode->Release();
-                goto finish;
-            }
-
-            if( wanted_mode_id == mode_id )
-            {
-                found_mode = true;
-                get_format_opts( decklink_opts, p_display_mode );
-                setup_pixel_funcs( decklink_opts );
-            }
-
             p_display_mode->Release();
-        }
-
-        if( !found_mode )
-        {
-            fprintf( stderr, "[decklink] Unsupported video mode\n" );
-            ret = -1;
             goto finish;
         }
+
+        if( wanted_mode_id == mode_id )
+        {
+            found_mode = true;
+            get_format_opts( decklink_opts, p_display_mode );
+            setup_pixel_funcs( decklink_opts );
+        }
+
+        p_display_mode->Release();
+    }
+
+    if( !found_mode )
+    {
+        fprintf( stderr, "[decklink] Unsupported video mode\n" );
+        ret = -1;
+        goto finish;
     }
 
     /* Setup audio connection */
