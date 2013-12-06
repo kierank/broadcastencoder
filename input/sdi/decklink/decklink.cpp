@@ -272,29 +272,32 @@ public:
             BMDDisplayMode mode_id = p_display_mode->GetDisplayMode();
             syslog( LOG_WARNING, "Video input format changed" );
 
-            for( i = 0; video_format_tab[i].obe_name != -1; i++ )
+            if( !decklink_opts_->timebase_num )
             {
-                if( video_format_tab[i].bmd_name == mode_id )
-                    break;
+                for( i = 0; video_format_tab[i].obe_name != -1; i++ )
+                {
+                    if( video_format_tab[i].bmd_name == mode_id )
+                        break;
+                }
+
+                if( video_format_tab[i].obe_name == -1 )
+                {
+                    syslog( LOG_WARNING, "Unsupported video format" );
+                    return S_OK;
+                }
+
+                decklink_opts_->video_format = video_format_tab[i].obe_name;
+                decklink_opts_->timebase_num = video_format_tab[i].timebase_num;
+                decklink_opts_->timebase_den = video_format_tab[i].timebase_den;
+
+                get_format_opts( decklink_opts_, p_display_mode );
+                setup_pixel_funcs( decklink_opts_ );
+
+                decklink_ctx->p_input->PauseStreams();
+                decklink_ctx->p_input->EnableVideoInput( p_display_mode->GetDisplayMode(), bmdFormat10BitYUV, bmdVideoInputEnableFormatDetection );
+                decklink_ctx->p_input->FlushStreams();
+                decklink_ctx->p_input->StartStreams();
             }
-
-            if( video_format_tab[i].obe_name == -1 )
-            {
-                syslog( LOG_WARNING, "Unsupported video format" );
-                return S_OK;
-            }
-
-            decklink_opts_->video_format = video_format_tab[i].obe_name;
-            decklink_opts_->timebase_num = video_format_tab[i].timebase_num;
-            decklink_opts_->timebase_den = video_format_tab[i].timebase_den;
-
-            get_format_opts( decklink_opts_, p_display_mode );
-            setup_pixel_funcs( decklink_opts_ );
-
-            decklink_ctx->p_input->PauseStreams();
-            decklink_ctx->p_input->EnableVideoInput( p_display_mode->GetDisplayMode(), bmdFormat10BitYUV, bmdVideoInputEnableFormatDetection );
-            decklink_ctx->p_input->FlushStreams();
-            decklink_ctx->p_input->StartStreams();
         }
         return S_OK;
     }
