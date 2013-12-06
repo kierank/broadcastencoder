@@ -65,6 +65,7 @@ typedef struct
     hnd_t column_handle;
     hnd_t row_handle;
 
+    int fec_type;
     int fec_columns;
     int fec_rows;
     int column_phase;
@@ -246,7 +247,7 @@ static int write_fec_packet( hnd_t udp_handle, uint8_t *data, int len )
     return ret;
 }
 
-static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestamp )
+static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestamp, int fec_type )
 {
     obe_rtp_ctx *p_rtp = handle;
     int ret = 0;
@@ -266,7 +267,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         int row_idx = (p_rtp->seq / p_rtp->fec_columns) % p_rtp->fec_rows;
         int column_idx = p_rtp->seq % p_rtp->fec_columns;
 
-        if( row_idx == 0 && column_idx == 0 && p_rtp->seq >= p_rtp->fec_columns*p_rtp->fec_rows )
+        if( fec_type == FEC_TYPE_COP3_BLOCK_ALIGNED && row_idx == 0 && column_idx == 0 && p_rtp->seq >= p_rtp->fec_columns*p_rtp->fec_rows )
         {
             p_rtp->column_phase ^= 1;
         }
@@ -281,13 +282,16 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         *row_ts++ ^= (ts_90) & 0xff;
         xor_packet_c( &row[RTP_HEADER_SIZE+FEC_HEADER_SIZE], &p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
 
-        uint8_t *column_ts = &column[RTP_HEADER_SIZE+TS_OFFSET];
-        *column_ts++ ^= ts_90 >> 24;
-        *column_ts++ ^= (ts_90 >> 16) & 0xff;
-        *column_ts++ ^= (ts_90 >>  8) & 0xff;
-        *column_ts++ ^= (ts_90) & 0xff;
+        if( fec_type == FEC_TYPE_COP3_BLOCK_ALIGNED )
+        {
+            uint8_t *column_ts = &column[RTP_HEADER_SIZE+TS_OFFSET];
+            *column_ts++ ^= ts_90 >> 24;
+            *column_ts++ ^= (ts_90 >> 16) & 0xff;
+            *column_ts++ ^= (ts_90 >>  8) & 0xff;
+            *column_ts++ ^= (ts_90) & 0xff;
 
-        xor_packet_c( &column[RTP_HEADER_SIZE+FEC_HEADER_SIZE], &p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
+            xor_packet_c( &column[RTP_HEADER_SIZE+FEC_HEADER_SIZE], &p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
+        }
 
         /* Check if we can send packets. Start with rows to match the suggestion in the ProMPEG spec */
         if( column_idx == (p_rtp->fec_columns-1) )
@@ -300,20 +304,44 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         }
 
         /* Pre-write the RTP and FEC header */
-        if( row_idx == (p_rtp->fec_rows-1) )
+        if( fec_type == FEC_TYPE_COP3_BLOCK_ALIGNED && row_idx == (p_rtp->fec_rows-1) )
         {
             write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++ & 0xffff, 0, 0 );
             write_fec_header( p_rtp, &column[RTP_HEADER_SIZE], 0, (p_rtp->seq - (p_rtp->fec_columns*(p_rtp->fec_rows-1))) & 0xffff );
         }
 
         /* Interleave the column FEC data from the previous matrix */
-        if( p_rtp->seq >= p_rtp->fec_columns*p_rtp->fec_rows && p_rtp->seq % p_rtp->fec_rows == 0 )
+        if( fec_type == FEC_TYPE_COP3_BLOCK_ALIGNED && p_rtp->seq >= p_rtp->fec_columns*p_rtp->fec_rows && p_rtp->seq % p_rtp->fec_rows == 0 )
         {
             uint64_t send_column_idx = (p_rtp->seq % (p_rtp->fec_columns*p_rtp->fec_rows)) / p_rtp->fec_rows;
             uint8_t *column_tx = &p_rtp->column_data[(send_column_idx*2+!p_rtp->column_phase)*p_rtp->fec_pkt_len];
 
             if( write_fec_packet( p_rtp->column_handle, column_tx, FEC_PACKET_SIZE ) < 0 )
                 ret = -1;
+        }
+
+        if( fec_type == FEC_TYPE_COP3_NON_BLOCK_ALIGNED && p_rtp->seq >= (p_rtp->fec_columns * p_rtp->fec_rows + column_idx*(p_rtp->fec_columns+1)) )
+        {
+            int deoffsetted_seq = (p_rtp->seq - column_idx) - (column_idx*p_rtp->fec_columns);
+            if( deoffsetted_seq % ( p_rtp->fec_columns * p_rtp->fec_rows ) == 0 )
+            {
+                write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++ & 0xffff, 0, 0 );
+                write_fec_header( p_rtp, &column[RTP_HEADER_SIZE], 0, (p_rtp->seq - (p_rtp->fec_columns*p_rtp->fec_rows)) & 0xffff );
+
+                if( write_fec_packet( p_rtp->column_handle, column, FEC_PACKET_SIZE ) < 0 )
+                    ret = -1;
+            }
+        }
+
+        if( fec_type == FEC_TYPE_COP3_NON_BLOCK_ALIGNED && p_rtp->seq >= column_idx*(p_rtp->fec_columns+1) )
+        {
+            uint8_t *column_ts = &column[RTP_HEADER_SIZE+TS_OFFSET];
+            *column_ts++ ^= ts_90 >> 24;
+            *column_ts++ ^= (ts_90 >> 16) & 0xff;
+            *column_ts++ ^= (ts_90 >>  8) & 0xff;
+            *column_ts++ ^= (ts_90) & 0xff;
+
+            xor_packet_c( &column[RTP_HEADER_SIZE+FEC_HEADER_SIZE], &p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
         }
     }
 
@@ -428,7 +456,7 @@ static void *open_output( void *ptr )
         {
             if( output_dest->type == OUTPUT_RTP )
             {
-                if( write_rtp_pkt( ip_handle, &muxed_data[i]->data[7*sizeof(int64_t)], TS_PACKETS_SIZE, AV_RN64( muxed_data[i]->data ) ) < 0 )
+                if( write_rtp_pkt( ip_handle, &muxed_data[i]->data[7*sizeof(int64_t)], TS_PACKETS_SIZE, AV_RN64( muxed_data[i]->data ), output_dest->fec_type ) < 0 )
                     syslog( LOG_ERR, "[rtp] Failed to write RTP packet\n" );
             }
             else

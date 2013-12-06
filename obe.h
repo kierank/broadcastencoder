@@ -504,11 +504,18 @@ enum output_e
  *
  */
 
+enum fec_type_e
+{
+    FEC_TYPE_COP3_BLOCK_ALIGNED,
+    FEC_TYPE_COP3_NON_BLOCK_ALIGNED,
+};
+
 typedef struct
 {
     int type;
     char *target;
 
+    int fec_type;
     int fec_columns;
     int fec_rows;
 } obe_output_dest_t;
