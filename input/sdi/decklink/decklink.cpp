@@ -800,14 +800,6 @@ static int open_card( decklink_opts_t *decklink_opts )
         goto finish;
     }
 
-    result = decklink_ctx->p_card->QueryInterface(IID_IDeckLinkAttributes, (void**)&decklink_attributes );
-    if( result != S_OK )
-    {
-        fprintf(stderr, "[decklink] Could not obtain the IDeckLinkAttributes interface\n" );
-        ret = -1;
-        goto finish;
-    }
-
     result = decklink_attributes->GetFlag( BMDDeckLinkSupportsInputFormatDetection, &supported );
     if( result != S_OK )
     {
