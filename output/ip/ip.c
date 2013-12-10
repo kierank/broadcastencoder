@@ -42,12 +42,14 @@
 #define RTP_HEADER_SIZE 12
 #define COP3_FEC_HEADER_SIZE 16
 #define LDPC_ADU_HEADER_SIZE 3
+#define LDPC_ADU_FOOTER_SIZE 6
+#define LDPC_FEC_HEADER_SIZE 8
 #define TS_OFFSET 8
 
 #define RTP_PACKET_SIZE (RTP_HEADER_SIZE+TS_PACKETS_SIZE)
 #define COP3_FEC_PACKET_SIZE (RTP_PACKET_SIZE+COP3_FEC_HEADER_SIZE)
-#define LDPC_ADU_SIZE (RTP_PACKET_SIZE+LDPC_ADU_HEADER_SIZE)
-#define LDPC_PACKET_SIZE LDPC_ADU_SIZE
+#define LDPC_ADU_SIZE (LDPC_ADU_HEADER_SIZE+RTP_PACKET_SIZE+LDPC_ADU_FOOTER_SIZE)
+#define LDPC_PACKET_SIZE (LDPC_FEC_HEADER_SIZE+LDPC_ADU_SIZE)
 
 #define RTCP_SR_PACKET_TYPE 200
 #define RTCP_PACKET_SIZE 28
@@ -83,6 +85,8 @@ typedef struct
     uint64_t row_seq;
 
     /* LDPC FECFRAME */
+    hnd_t ldpc_handle;
+
     of_session_t *ses;
     of_ldpc_parameters_t ldpc_params;
 
@@ -132,6 +136,13 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
     {
         int total_symbols;
 
+        udp_opts->port += 2;
+        if( udp_open( &p_rtp->ldpc_handle, udp_opts ) < 0 )
+        {
+            fprintf( stderr, "[rtp] Could not create LDPC FEC output \n" );
+            return -1;
+        }
+
         if( of_create_codec_instance( &p_rtp->ses, OF_CODEC_LDPC_STAIRCASE_STABLE, OF_ENCODER, 2 ) > 0 )
         {
             fprintf( stderr, "[rtp] could not create fec encoder instance \n" );
@@ -179,7 +190,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
             p_rtp->encoding_symbols_tab[i] = &p_rtp->source_symbols[i*LDPC_ADU_SIZE];
 
         for( int j = 0; j < p_rtp->ldpc_params.nb_repair_symbols; j++ )
-            p_rtp->encoding_symbols_tab[i+j] = &p_rtp->repair_symbols[j*LDPC_PACKET_SIZE];
+            p_rtp->encoding_symbols_tab[i+j] = &p_rtp->repair_symbols[j*LDPC_PACKET_SIZE + LDPC_FEC_HEADER_SIZE];
     }
     else if( p_rtp->fec_columns && p_rtp->fec_rows )
     {
@@ -320,6 +331,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     obe_rtp_ctx *p_rtp = handle;
     int ret = 0;
     uint8_t *pkt_ptr = p_rtp->pkt;
+    uint8_t *src_pkt_ptr = p_rtp->pkt;
 
     /* Throughout this function, don't exit early because the decoder is expecting a sequence number increase
      * and consistent FEC packets. Return -1 at the end so the user knows there was a failure to submit a packet. */
@@ -331,21 +343,41 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         *pkt_ptr++ = 0; // Flow ID
         *pkt_ptr++ = LDPC_ADU_SIZE >> 8;
         *pkt_ptr++ = LDPC_ADU_SIZE & 0xff;
+        src_pkt_ptr = pkt_ptr;
     }
 
     uint32_t ts_90 = timestamp / 300;
     write_rtp_header( pkt_ptr, MPEG_TS_PAYLOAD_TYPE, p_rtp->seq & 0xffff, ts_90, p_rtp->ssrc );
     memcpy( &pkt_ptr[RTP_HEADER_SIZE], data, len );
-
-    if( udp_write( p_rtp->udp_handle, pkt_ptr, RTP_PACKET_SIZE ) < 0 )
-        ret = -1;
+    pkt_ptr += RTP_PACKET_SIZE;
 
     if( fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE )
     {
-        int src_pkt_idx = p_rtp->seq % p_rtp->ldpc_params.nb_source_symbols;
-        pkt_ptr = &p_rtp->source_symbols[src_pkt_idx * LDPC_ADU_SIZE];
+        uint64_t sbn = p_rtp->seq / p_rtp->ldpc_params.nb_source_symbols;
+        uint64_t esi = p_rtp->seq % p_rtp->ldpc_params.nb_source_symbols;
+        *pkt_ptr++ = (sbn >> 8) & 0xff;
+        *pkt_ptr++ = sbn & 0xff;
+        *pkt_ptr++ = (esi >> 8) & 0xff;
+        *pkt_ptr++ = esi & 0xff;
+        *pkt_ptr++ = (p_rtp->ldpc_params.nb_source_symbols >> 8) & 0xff;
+        *pkt_ptr++ = p_rtp->ldpc_params.nb_source_symbols & 0xff;
+    }
 
-        if( src_pkt_idx == 0 && p_rtp->seq >= p_rtp->ldpc_params.nb_source_symbols )
+    if( udp_write( p_rtp->udp_handle, src_pkt_ptr, RTP_PACKET_SIZE ) < 0 )
+        ret = -1;
+
+    if( fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE && p_rtp->seq >= p_rtp->ldpc_params.nb_source_symbols )
+    {
+        int fec_interval = p_rtp->ldpc_params.nb_source_symbols / p_rtp->ldpc_params.nb_repair_symbols;
+        int fec_idx = p_rtp->seq % p_rtp->ldpc_params.nb_source_symbols;
+        if( fec_idx % fec_interval == 0 )
+        {
+            if( udp_write( p_rtp->ldpc_handle, &p_rtp->repair_symbols[(fec_idx / fec_interval)*LDPC_PACKET_SIZE], LDPC_PACKET_SIZE ) < 0 )
+                ret = -1;
+        }
+
+        int src_pkt_idx = p_rtp->seq % p_rtp->ldpc_params.nb_source_symbols;
+        if( src_pkt_idx == (p_rtp->ldpc_params.nb_source_symbols-1) )
         {
             for( int i = 0; i < p_rtp->ldpc_params.nb_repair_symbols; i++ )
             {
