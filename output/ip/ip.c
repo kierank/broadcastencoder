@@ -146,7 +146,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
 
         total_symbols = p_rtp->ldpc_params.nb_source_symbols + p_rtp->ldpc_params.nb_repair_symbols;
 
-        if( of_set_fec_parameters( p_rtp->ses, (of_session_t*)&p_rtp->ldpc_params ) > 0 )
+        if( of_set_fec_parameters( p_rtp->ses, (of_parameters_t*)&p_rtp->ldpc_params ) > 0 )
         {
             fprintf( stderr, "[rtp] could not create fec encoder instance \n" );
             return -1;
