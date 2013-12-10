@@ -82,7 +82,7 @@ static const char * const channel_maps[]             = { "", "mono", "stereo", "
 static const char * const mono_channels[]            = { "left", "right", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 static const char * const addable_streams[]          = { "audio", "ttx" };
-static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned" };
+static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned", "ldpc" };
 
 static const char * system_opts[] = { "system-type", NULL };
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", NULL };

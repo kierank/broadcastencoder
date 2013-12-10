@@ -508,6 +508,7 @@ enum fec_type_e
 {
     FEC_TYPE_COP3_BLOCK_ALIGNED,
     FEC_TYPE_COP3_NON_BLOCK_ALIGNED,
+    FEC_TYPE_FECFRAME_LDPC_STAIRCASE,
 };
 
 typedef struct
