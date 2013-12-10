@@ -376,8 +376,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
                 ret = -1;
         }
 
-        int src_pkt_idx = p_rtp->seq % p_rtp->ldpc_params.nb_source_symbols;
-        if( src_pkt_idx == (p_rtp->ldpc_params.nb_source_symbols-1) )
+        if( fec_idx == (p_rtp->ldpc_params.nb_source_symbols-1) )
         {
             for( int i = 0; i < p_rtp->ldpc_params.nb_repair_symbols; i++ )
             {
