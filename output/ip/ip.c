@@ -178,8 +178,8 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         for( i = 0; i < p_rtp->ldpc_params.nb_source_symbols; i++ )
             p_rtp->encoding_symbols_tab[i] = &p_rtp->source_symbols[i*LDPC_ADU_SIZE];
 
-        for( ; i < total_symbols; i++ )
-            p_rtp->encoding_symbols_tab[i] = &p_rtp->repair_symbols[i*LDPC_PACKET_SIZE];
+        for( int j = 0; j < p_rtp->ldpc_params.nb_repair_symbols; j++ )
+            p_rtp->encoding_symbols_tab[i+j] = &p_rtp->repair_symbols[j*LDPC_PACKET_SIZE];
     }
     else if( p_rtp->fec_columns && p_rtp->fec_rows )
     {
