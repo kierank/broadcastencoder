@@ -84,7 +84,7 @@ typedef struct
 
     /* LDPC FECFRAME */
     of_session_t *ses;
-    of_parameters_t ldpc_params;
+    of_ldpc_parameters_t ldpc_params;
 
     uint8_t *source_symbols;
     uint8_t *repair_symbols;
@@ -142,10 +142,11 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         p_rtp->ldpc_params.nb_source_symbols = 100;
         p_rtp->ldpc_params.nb_repair_symbols = 25;
         p_rtp->ldpc_params.encoding_symbol_length = LDPC_ADU_SIZE;
+        p_rtp->ldpc_params.N1 = 3;
 
         total_symbols = p_rtp->ldpc_params.nb_source_symbols + p_rtp->ldpc_params.nb_repair_symbols;
 
-        if( of_set_fec_parameters( p_rtp->ses, &p_rtp->ldpc_params ) > 0 )
+        if( of_set_fec_parameters( p_rtp->ses, (of_session_t*)&p_rtp->ldpc_params ) > 0 )
         {
             fprintf( stderr, "[rtp] could not create fec encoder instance \n" );
             return -1;
