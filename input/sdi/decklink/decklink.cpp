@@ -194,6 +194,12 @@ static void setup_pixel_funcs( decklink_opts_t *decklink_opts )
     {
         decklink_ctx->unpack_line = obe_v210_line_to_nv20_c;
         decklink_ctx->blank_line = obe_blank_line_nv20_c;
+
+        if( cpu_flags & AV_CPU_FLAG_SSSE3 )
+            decklink_ctx->unpack_line = obe_v210_line_to_nv20_ssse3;
+
+        if( cpu_flags & AV_CPU_FLAG_AVX )
+            decklink_ctx->unpack_line = obe_v210_line_to_nv20_avx;
     }
 }
 
