@@ -51,7 +51,6 @@ void obe_v210_line_to_nv20_c( uint16_t *dsty, intptr_t i_dsty, uint16_t *dstc, i
 {
     int w;
     uint32_t val = 0;
-    uint16_t *uv = dst + width;
 
     for( w = 0; w < width - 5; w += 6 )
     {
