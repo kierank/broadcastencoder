@@ -302,6 +302,14 @@ static void init_filter( obe_t *h, obe_vid_filter_ctx_t *vfilt )
             vfilt->downsample_chroma_fields = obe_downsample_chroma_fields_10_avx;
         vfilt->dither_plane_10_to_8 = obe_dither_plane_10_to_8_avx;
     }
+
+    if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX2 )
+    {
+        if( h->filter_bit_depth == OBE_BIT_DEPTH_8 )
+            vfilt->downsample_chroma_fields = obe_downsample_chroma_fields_8_avx2;
+        else
+            vfilt->downsample_chroma_fields = obe_downsample_chroma_fields_10_avx2;
+    }
 }
 
 static void blank_line( uint16_t *y, uint16_t *u, uint16_t *v, int width )

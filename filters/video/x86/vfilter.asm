@@ -7,8 +7,8 @@ scale: times 4 dd 511
 shift: dd 11
 
 align 32
-two:   times 8 dw 2
-three: times 8 dw 3
+two:   times 16 dw 2
+three: times 16 dw 3
 
 SECTION .text
 
@@ -207,5 +207,9 @@ DOWNSAMPLE_chroma_fields 8
 DOWNSAMPLE_chroma_fields 10
 
 INIT_XMM avx
+DOWNSAMPLE_chroma_fields 8
+DOWNSAMPLE_chroma_fields 10
+
+INIT_YMM avx2
 DOWNSAMPLE_chroma_fields 8
 DOWNSAMPLE_chroma_fields 10
