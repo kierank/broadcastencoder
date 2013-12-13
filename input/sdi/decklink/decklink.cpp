@@ -936,6 +936,7 @@ static int open_card( decklink_opts_t *decklink_opts )
         goto finish;
     }
 
+    pix_fmt = h->filter_bit_depth == OBE_BIT_DEPTH_10 ? bmdFormat10BitYUV : bmdFormat8BitYUV;
     result = decklink_ctx->p_input->EnableVideoInput( wanted_mode_id, pix_fmt, flags );
     if( result != S_OK )
     {
