@@ -50,7 +50,9 @@ void obe_v210_planar_unpack_c( const uint32_t *src, uint16_t *y, uint16_t *u, ui
 void obe_v210_line_to_nv20_c( uint16_t *dsty, intptr_t i_dsty, uint16_t *dstc, intptr_t i_dstc, uint32_t *src, intptr_t i_src, int width, int h )
 {
     int w;
-    uint32_t val;
+    uint32_t val = 0;
+    uint16_t *uv = dst + width;
+
     for( w = 0; w < width - 5; w += 6 )
     {
         READ_PIXELS( dstc, dsty, dstc );
@@ -158,6 +160,13 @@ int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_
     }
 
     stream->num_frame_data = count;
+
+    if( !stream->num_frame_data )
+    {
+        stream->frame_data = NULL;
+        return 0;
+    }
+
     stream->frame_data = calloc( stream->num_frame_data, sizeof(*stream->frame_data) );
     if( !stream->frame_data && stream->num_frame_data )
         return -1;

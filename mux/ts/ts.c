@@ -387,7 +387,6 @@ void *open_muxer( void *ptr )
     {
         video_found = 0;
         video_dts = 0;
-        int64_t lowest_pts = -1, largest_pts = -1;
 
         pthread_mutex_lock( &h->mux_queue.mutex );
 

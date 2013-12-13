@@ -329,40 +329,12 @@ static void blank_lines( obe_raw_frame_t *raw_frame )
     /* All SDI input is 10-bit 4:2:2 */
     /* FIXME: assumes planar, non-interleaved format */
     uint16_t *y, *u, *v;
-    int cur_line = raw_frame->img.first_line;
 
     y = (uint16_t*)raw_frame->img.plane[0];
     u = (uint16_t*)raw_frame->img.plane[1];
     v = (uint16_t*)raw_frame->img.plane[2];
 
     blank_line( y, u, v, raw_frame->img.width / 2 );
-}
-
-static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
-{
-    obe_image_t *img = &raw_frame->img;
-
-    /* TODO: when frames are needed for reference we can't scale in-place */
-
-    /* this function mimics how swscale does upconversion. 8-bit is converted
-     * to 16-bit through left shifting the orginal value with 8 and then adding
-     * the original value to that. This effectively keeps the full color range
-     * while also being fast. for n-bit we basically do the same thing, but we
-     * discard the lower 16-n bits. */
-    const int lshift = 16-obe_cli_csps[img->csp].bit_depth;
-    const int rshift = 2*obe_cli_csps[img->csp].bit_depth - 16;
-    for( int i = 0; i < img->planes; i++ )
-    {
-        uint16_t *src = (uint16_t*)img->plane[i];
-        int height = obe_cli_csps[img->csp].height[i] * img->height;
-        int width = obe_cli_csps[img->csp].width[i] * img->width;
-
-        vfilt->scale_plane( src, img->stride[i], width, height, lshift, rshift );
-    }
-
-    img->csp = img->csp == PIX_FMT_YUV420P ? PIX_FMT_YUV420P10 : PIX_FMT_YUV422P10;
-
-    return 0;
 }
 
 static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame, int width )

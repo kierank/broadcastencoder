@@ -212,7 +212,7 @@ struct linsys_status
 
 static inline void obe_decode_line( linsys_ctx_t *linsys_ctx, const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v )
 {
-    uint32_t val;
+    uint32_t val = 0;
     int w;
 
     w = (linsys_ctx->width / 6) * 6;

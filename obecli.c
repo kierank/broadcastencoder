@@ -331,11 +331,6 @@ static int obe_otoi( char *str, int def )
     return ret;
 }
 
-static char *obe_otos( char *str, char *def )
-{
-    return str ? str : def;
-}
-
 static int check_enum_value( const char *arg, const char * const *names )
 {
     for( int i = 0; names[i]; i++ )
@@ -952,7 +947,6 @@ static int set_outputs( char *command, obecli_command_t *child )
         return -1;
 
     int tok_len = strcspn( command, " " );
-    int str_len = strlen( command );
     command[tok_len] = 0;
 
     num_outputs = obe_otoi( command, num_outputs );
@@ -977,7 +971,6 @@ static int set_output( char *command, obecli_command_t *child )
     {
         command += tok_len+1;
         int tok_len2 = strcspn( command, ":" );
-        int str_len2 = strlen( command );
         command[tok_len2] = 0;
         int output_id = obe_otoi( command, -1 );
         FAIL_IF_ERROR( output_id < 0 || output_id > cli.output.num_outputs-1, "Invalid output id\n" );
