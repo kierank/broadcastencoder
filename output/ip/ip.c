@@ -134,7 +134,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
 
     if( output_dest->fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE )
     {
-        int total_symbols;
+        int n;
 
         udp_opts->port += 2;
         if( udp_open( &p_rtp->ldpc_handle, udp_opts ) < 0 )
@@ -156,7 +156,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         p_rtp->ldpc_params.prng_seed = rand();
         p_rtp->ldpc_params.N1 = 3;
 
-        total_symbols = p_rtp->ldpc_params.nb_source_symbols + p_rtp->ldpc_params.nb_repair_symbols;
+        n = p_rtp->ldpc_params.nb_source_symbols + p_rtp->ldpc_params.nb_repair_symbols;
 
         if( of_set_fec_parameters( p_rtp->ses, (of_parameters_t*)&p_rtp->ldpc_params ) > 0 )
         {
@@ -178,7 +178,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
             return -1;
         }
 
-        p_rtp->encoding_symbols_tab = malloc( total_symbols * sizeof(*p_rtp->encoding_symbols_tab) );
+        p_rtp->encoding_symbols_tab = malloc( n * sizeof(*p_rtp->encoding_symbols_tab) );
         if( !p_rtp->encoding_symbols_tab )
         {
             fprintf( stderr, "[rtp] could not allocate encoding symbols table \n" );
@@ -189,6 +189,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         for( i = 0; i < p_rtp->ldpc_params.nb_source_symbols; i++ )
             p_rtp->encoding_symbols_tab[i] = &p_rtp->source_symbols[i*LDPC_ADU_SIZE];
 
+        /* offset the encoding symbols table so FEC is applied after the header */
         for( int j = 0; j < p_rtp->ldpc_params.nb_repair_symbols; j++ )
             p_rtp->encoding_symbols_tab[i+j] = &p_rtp->repair_symbols[j*LDPC_PACKET_SIZE + LDPC_FEC_HEADER_SIZE];
     }
@@ -370,22 +371,39 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     {
         int fec_interval = p_rtp->ldpc_params.nb_source_symbols / p_rtp->ldpc_params.nb_repair_symbols;
         int fec_idx = p_rtp->seq % p_rtp->ldpc_params.nb_source_symbols;
-        if( fec_idx % fec_interval == 0 )
-        {
-            if( udp_write( p_rtp->ldpc_handle, &p_rtp->repair_symbols[(fec_idx / fec_interval)*LDPC_PACKET_SIZE], LDPC_PACKET_SIZE ) < 0 )
-                ret = -1;
-        }
 
         if( fec_idx == (p_rtp->ldpc_params.nb_source_symbols-1) )
         {
+            uint64_t sbn = p_rtp->seq / p_rtp->ldpc_params.nb_source_symbols;
+            int n = p_rtp->ldpc_params.nb_source_symbols + p_rtp->ldpc_params.nb_repair_symbols;
+
             for( int i = 0; i < p_rtp->ldpc_params.nb_repair_symbols; i++ )
             {
-                if( of_build_repair_symbol( p_rtp->ses, (void**)p_rtp->encoding_symbols_tab, p_rtp->ldpc_params.nb_source_symbols+i ) > 0 )
+                int k = n+i;
+                int esi = p_rtp->ldpc_params.nb_source_symbols+i;
+                uint8_t *repair_symbol = p_rtp->repair_symbols[i*LDPC_PACKET_SIZE];
+
+                *repair_symbol++ = (sbn >> 8) & 0xff;
+                *repair_symbol++ = sbn & 0xff;
+                *repair_symbol++ = (esi >> 8) & 0xff;
+                *repair_symbol++ = esi & 0xff;
+                *repair_symbol++ = (k >> 8) & 0xff;
+                *repair_symbol++ = k & 0xff;
+                *repair_symbol++ = (n >> 8) & 0xff;
+                *repair_symbol++ = n & 0xff;
+
+                if( of_build_repair_symbol( p_rtp->ses, (void**)p_rtp->encoding_symbols_tab, esi ) > 0 )
                 {
                     ret = -1;
                     break;
                 }
             }
+        }
+
+        if( fec_idx % fec_interval == 0 )
+        {
+            if( udp_write( p_rtp->ldpc_handle, &p_rtp->repair_symbols[(fec_idx / fec_interval)*LDPC_PACKET_SIZE], LDPC_PACKET_SIZE ) < 0 )
+                ret = -1;
         }
     }
     else if( p_rtp->fec_columns && p_rtp->fec_rows )
