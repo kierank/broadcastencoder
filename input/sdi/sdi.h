@@ -114,8 +114,8 @@ const static obe_line_number_t field_start_lines[] =
 };
 
 void obe_v210_planar_unpack_c( const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int width );
-void obe_v210_line_to_nv20_c( uint16_t *dsty, intptr_t i_dsty, uint16_t *dstc, intptr_t i_dstc, uint32_t *src, intptr_t i_src, int width, int h );
-void obe_v210_line_to_uyvy_c( uint16_t *dsty, intptr_t i_dsty, uint16_t *dstc, intptr_t i_dstc, uint32_t *src, intptr_t i_src, int width, int h );
+void obe_v210_line_to_nv20_c( uint16_t *dsty, intptr_t i_dsty, uint16_t *dstc, intptr_t i_dstc, uint32_t *src, intptr_t i_src, intptr_t width, intptr_t h );
+void obe_v210_line_to_uyvy_c( uint16_t *dsty, intptr_t i_dsty, uint16_t *dstc, intptr_t i_dstc, uint32_t *src, intptr_t i_src, intptr_t width, intptr_t h );
 void obe_yuv422p10_line_to_nv20_c( uint16_t *y, uint16_t *u, uint16_t *v, uint16_t *dst, int width );
 void obe_yuv422p10_line_to_uyvy_c( uint16_t *y, uint16_t *u, uint16_t *v, uint16_t *dst, int width );
 void obe_downscale_line_c( uint16_t *src, uint8_t *dst, int lines );
