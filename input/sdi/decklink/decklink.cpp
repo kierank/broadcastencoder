@@ -129,7 +129,7 @@ typedef struct
     int has_setup_vbi;
 
     /* Ancillary */
-    void (*unpack_line) ( uint16_t *dsty, intptr_t i_dsty, uint16_t *dstc, intptr_t i_dstc, uint32_t *src, intptr_t i_src, int w, int h );
+    void (*unpack_line) ( uint16_t *dsty, intptr_t i_dsty, uint16_t *dstc, intptr_t i_dstc, uint32_t *src, intptr_t i_src, intptr_t w, intptr_t h );
     void (*downscale_line) ( uint16_t *src, uint8_t *dst, int lines );
     void (*blank_line) ( uint16_t *dst, int width );
     obe_sdi_non_display_data_t non_display_parser;

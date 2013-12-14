@@ -99,7 +99,7 @@ v210_planar_unpack aligned
 ;-----------------------------------------------------------------------------
 ; void obe_v210_line_to_nv20( uint16_t *dsty, intptr_t i_dsty,
 ;                             uint16_t *dstc, intptr_t i_dstc,
-;                             uint32_t *src, intptr_t i_src, int w, int h )
+;                             uint32_t *src, intptr_t i_src, intptr_t w, intptr_t h )
 ;-----------------------------------------------------------------------------
 %if ARCH_X86_64
 cglobal v210_line_to_nv20, 8,10,7

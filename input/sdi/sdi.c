@@ -47,7 +47,7 @@ void obe_v210_planar_unpack_c( const uint32_t *src, uint16_t *y, uint16_t *u, ui
 }
 
 /* Convert v210 to the native HD-SDI pixel format. */
-void obe_v210_line_to_nv20_c( uint16_t *dsty, intptr_t i_dsty, uint16_t *dstc, intptr_t i_dstc, uint32_t *src, intptr_t i_src, int width, int h )
+void obe_v210_line_to_nv20_c( uint16_t *dsty, intptr_t i_dsty, uint16_t *dstc, intptr_t i_dstc, uint32_t *src, intptr_t i_src, intptr_t width, intptr_t h )
 {
     int w;
     uint32_t val = 0;
@@ -81,7 +81,7 @@ void obe_v210_line_to_nv20_c( uint16_t *dsty, intptr_t i_dsty, uint16_t *dstc, i
 
 /* Convert v210 to the native SD-SDI pixel format.
  * Width is always 720 samples */
-void obe_v210_line_to_uyvy_c( uint16_t *dsty, intptr_t i_dsty, uint16_t *dstc, intptr_t i_dstc, uint32_t *src, intptr_t i_src, int width, int h )
+void obe_v210_line_to_uyvy_c( uint16_t *dsty, intptr_t i_dsty, uint16_t *dstc, intptr_t i_dstc, uint32_t *src, intptr_t i_src, intptr_t width, intptr_t h )
 {
     uint32_t val;
     for( int i = 0; i < width; i += 6 )
