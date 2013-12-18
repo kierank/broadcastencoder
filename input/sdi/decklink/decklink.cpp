@@ -1083,6 +1083,8 @@ static void *probe_stream( void *ptr )
         if( !streams[i] )
             goto finish;
 
+        streams[i]->input_stream_id = cur_input_stream_id++;
+
         if( i == 0 )
         {
             streams[i]->stream_type = STREAM_TYPE_VIDEO;
