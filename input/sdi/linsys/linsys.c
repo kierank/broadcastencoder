@@ -1270,7 +1270,7 @@ static void *open_input( void *ptr )
     linsys_ctx->last_frame_time = -1;
 
     non_display_parser = &linsys_ctx->non_display_parser;
-    non_display_parser->device = device;
+    non_display_parser->device = &h->device;
 
     /* TODO: wait for encoder */
 
