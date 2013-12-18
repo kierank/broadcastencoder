@@ -441,7 +441,6 @@ struct obe_t
 
     /* Devices */
     obe_device_t device;
-    int cur_input_stream_id;
 
     /* Frame drop flags
      * TODO: make this work for multiple inputs and outputs */
