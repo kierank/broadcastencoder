@@ -134,7 +134,6 @@ typedef struct
     void (*blank_line) ( uint16_t *dst, int width );
     obe_sdi_non_display_data_t non_display_parser;
 
-    obe_device_t *device;
     obe_t *h;
 } decklink_ctx_t;
 
@@ -600,10 +599,10 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             raw_frame->sar_width = raw_frame->sar_height = 1;
             raw_frame->pts = stream_time;
 
-            for( int i = 0; i < decklink_ctx->device->num_input_streams; i++ )
+            for( int i = 0; i < h->device.num_input_streams; i++ )
             {
-                if( decklink_ctx->device->streams[i]->stream_format == VIDEO_UNCOMPRESSED )
-                    raw_frame->input_stream_id = decklink_ctx->device->streams[i]->input_stream_id;
+                if( h->device.streams[i]->stream_format == VIDEO_UNCOMPRESSED )
+                    raw_frame->input_stream_id = h->device.streams[i]->input_stream_id;
             }
 
             if( add_to_filter_queue( h, raw_frame ) < 0 )
@@ -652,10 +651,10 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         raw_frame->pts = packet_time;
         raw_frame->release_data = obe_release_audio_data;
         raw_frame->release_frame = obe_release_frame;
-        for( int i = 0; i < decklink_ctx->device->num_input_streams; i++ )
+        for( int i = 0; i < h->device.num_input_streams; i++ )
         {
-            if( decklink_ctx->device->streams[i]->stream_format == AUDIO_PCM )
-                raw_frame->input_stream_id = decklink_ctx->device->streams[i]->input_stream_id;
+            if( h->device.streams[i]->stream_format == AUDIO_PCM )
+                raw_frame->input_stream_id = h->device.streams[i]->input_stream_id;
         }
 
         if( add_to_filter_queue( decklink_ctx->h, raw_frame ) < 0 )
@@ -1036,7 +1035,7 @@ static void *probe_stream( void *ptr )
     obe_input_t *user_opts = &probe_ctx->user_opts;
     obe_device_t *device;
     obe_int_input_stream_t *streams[MAX_STREAMS];
-    int cur_stream = 2;
+    int cur_stream = 2, cur_input_stream_id = 0;
     obe_sdi_non_display_data_t *non_display_parser;
     decklink_ctx_t *decklink_ctx;
 
@@ -1084,11 +1083,6 @@ static void *probe_stream( void *ptr )
         if( !streams[i] )
             goto finish;
 
-        /* TODO: make it take a continuous set of stream-ids */
-        pthread_mutex_lock( &h->device_list_mutex );
-        streams[i]->input_stream_id = h->cur_input_stream_id++;
-        pthread_mutex_unlock( &h->device_list_mutex );
-
         if( i == 0 )
         {
             streams[i]->stream_type = STREAM_TYPE_VIDEO;
@@ -1122,9 +1116,7 @@ static void *probe_stream( void *ptr )
         if( !streams[cur_stream] )
             goto finish;
 
-        pthread_mutex_lock( &h->device_list_mutex );
-        streams[cur_stream]->input_stream_id = h->cur_input_stream_id++;
-        pthread_mutex_unlock( &h->device_list_mutex );
+        streams[cur_stream]->input_stream_id = cur_input_stream_id++;
 
         streams[cur_stream]->stream_type = STREAM_TYPE_MISC;
         streams[cur_stream]->stream_format = VBI_RAW;
@@ -1140,9 +1132,7 @@ static void *probe_stream( void *ptr )
         if( !streams[cur_stream] )
             goto finish;
 
-        pthread_mutex_lock( &h->device_list_mutex );
-        streams[cur_stream]->input_stream_id = h->cur_input_stream_id++;
-        pthread_mutex_unlock( &h->device_list_mutex );
+        streams[cur_stream]->input_stream_id = cur_input_stream_id++;
 
         streams[cur_stream]->stream_type = STREAM_TYPE_MISC;
         streams[cur_stream]->stream_format = MISC_TELETEXT;
@@ -1165,7 +1155,8 @@ static void *probe_stream( void *ptr )
     memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
 
     /* add device */
-    add_device( h, device );
+    memcpy( &h->device, device, sizeof(*device) );
+    free( device );
 
 finish:
     if( decklink_opts )
@@ -1183,6 +1174,7 @@ static void *autoconf_input( void *ptr )
     obe_t *h = probe_ctx->h;
     obe_input_t *user_opts = &probe_ctx->user_opts;
     obe_device_t *device;
+    int cur_input_stream_id = 0;
 
     for( int i = 0; i < 2; i++ )
     {
@@ -1190,10 +1182,7 @@ static void *autoconf_input( void *ptr )
         if( !streams[i] )
             return NULL;
 
-        /* TODO: make it take a continuous set of stream-ids */
-        pthread_mutex_lock( &h->device_list_mutex );
-        streams[i]->input_stream_id = h->cur_input_stream_id++;
-        pthread_mutex_unlock( &h->device_list_mutex );
+        streams[i]->input_stream_id = cur_input_stream_id++;
 
         if( i == 0 )
         {
@@ -1243,7 +1232,8 @@ static void *autoconf_input( void *ptr )
     memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
 
     /* add device */
-    add_device( h, device );
+    memcpy( &h->device, device, sizeof(*device) );
+    free( device );
 
     return NULL;
 }
@@ -1277,7 +1267,6 @@ static void *open_input( void *ptr )
 
     decklink_ctx = &decklink_opts->decklink_ctx;
 
-    decklink_ctx->device = device;
     decklink_ctx->h = h;
     decklink_ctx->last_frame_time = -1;
 

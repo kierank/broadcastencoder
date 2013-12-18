@@ -44,7 +44,6 @@
 #include <time.h>
 #include "obe.h"
 
-#define MAX_DEVICES 1
 #define MAX_STREAMS 40
 #define MAX_CHANNELS 16
 
@@ -441,9 +440,7 @@ struct obe_t
     int64_t         obe_clock_last_wallclock; /* from cpu clock */
 
     /* Devices */
-    pthread_mutex_t device_list_mutex;
-    int num_devices;
-    obe_device_t *devices[MAX_DEVICES];
+    obe_device_t device;
     int cur_input_stream_id;
 
     /* Frame drop flags
