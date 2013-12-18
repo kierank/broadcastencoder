@@ -1288,5 +1288,5 @@ static void *open_input( void *ptr )
     return NULL;
 }
 
-const obe_input_func_t linsys_sdi_input = { probe_stream, open_input };
+const obe_input_func_t linsys_sdi_input = { probe_stream, NULL, open_input };
 
