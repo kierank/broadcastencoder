@@ -1243,8 +1243,7 @@ static void *open_input( void *ptr )
 {
     obe_input_params_t *input = ptr;
     obe_t *h = input->h;
-    obe_device_t *device = input->device;
-    obe_input_t *user_opts = &device->user_opts;
+    obe_input_t *user_opts = &h->device.user_opts;
     linsys_opts_t *linsys_opts;
     linsys_ctx_t *linsys_ctx;
     obe_sdi_non_display_data_t *non_display_parser;

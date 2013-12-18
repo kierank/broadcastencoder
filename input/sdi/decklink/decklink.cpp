@@ -1242,8 +1242,7 @@ static void *open_input( void *ptr )
 {
     obe_input_params_t *input = (obe_input_params_t*)ptr;
     obe_t *h = input->h;
-    obe_device_t *device = input->device;
-    obe_input_t *user_opts = &device->user_opts;
+    obe_input_t *user_opts = &h->device.user_opts;
     decklink_ctx_t *decklink_ctx;
     obe_sdi_non_display_data_t *non_display_parser;
     struct decklink_status status;
