@@ -1266,7 +1266,6 @@ static void *open_input( void *ptr )
 
     linsys_ctx = &linsys_opts->linsys_ctx;
 
-    linsys_ctx->device = device;
     linsys_ctx->h = h;
     linsys_ctx->last_frame_time = -1;
 
