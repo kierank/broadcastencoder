@@ -29,7 +29,8 @@
 
 static void convert_param( obe_t *h, x264_param_t *param, obe_x264_opts_t *obe_param, obe_int_input_stream_t *stream )
 {
-    /* Apply preset/tune first so we can change other parameters down the line */
+    /* Apply preset/tune first so we can change other parameters down the line
+     * FIXME: apply PSNR/SSIM modes */
     if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY || h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
     {
         char *preset = obe_param->preset == OBE_X264_PRESET_VERYFAST ? "veryfast" : "superfast";
@@ -40,6 +41,20 @@ static void convert_param( obe_t *h, x264_param_t *param, obe_x264_opts_t *obe_p
 
     char *profile = obe_param->profile == OBE_X264_PROFILE_HIGH ? "high" : "main";
     x264_param_apply_profile( param, profile );
+
+    param->rc.i_vbv_max_bitrate = obe_param->vbv_maxrate;
+    param->rc.i_vbv_buffer_size = obe_param->vbv_bufsize;
+    param->rc.i_bitrate         = obe_param->bitrate;
+    param->i_keyint_max        = obe_param->keyint;
+    param->rc.i_lookahead      = obe_param->lookahead;
+    param->i_threads           = obe_param->threads;
+    param->i_bframe            = obe_param->bframes;
+    param->i_bframe_pyramid    = obe_param->b_pyramid;
+    param->analyse.i_weighted_pred = obe_param->weightp;
+    param->b_interlaced        = obe_param->interlaced;
+    param->b_tff               = obe_param->tff;
+    param->b_intra_refresh     = obe_param->intra_refresh;
+    param->i_frame_reference   = obe_param->max_refs;
 
     /* Effectively a dummy SAR that gets updated when the first frame arrives */
     if( stream->sar_num && stream->sar_den )
@@ -209,10 +224,11 @@ static void *start_encoder( void *ptr )
     obe_coded_frame_t *coded_frame;
     x264_param_t *param = NULL;
     obe_int_input_stream_t *input_stream = get_input_stream( h, 0 ); /* FIXME if this changes */
+    obe_output_stream_t *output_stream = get_output_stream( h, 0 ); /* FIXME if this changes */
 
     /* TODO: check for width, height changes */
 
-    encoder->encoder_params = malloc( sizeof(enc_params->avc_param) );
+    encoder->encoder_params = malloc( sizeof(x264_param_t) );
     if( !encoder->encoder_params )
     {
         pthread_mutex_unlock( &encoder->queue.mutex );
@@ -220,7 +236,7 @@ static void *start_encoder( void *ptr )
         goto end;
     }
     param = encoder->encoder_params;
-    convert_param( h, param, encoder->encoder_params, input_stream );
+    convert_param( h, param, &output_stream->avc_param, input_stream );
     param->pf_log = x264_logger;
 
     /* Lock the mutex until we verify and fetch new parameters */
