@@ -33,7 +33,7 @@ typedef struct
 {
     obe_t *h;
     obe_encoder_t *encoder;
-    x264_param_t avc_param;
+    obe_x264_opts_t avc_param;
 } obe_vid_enc_params_t;
 
 extern const obe_vid_enc_func_t x264_encoder;

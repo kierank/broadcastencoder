@@ -24,6 +24,7 @@
 #include "common/common.h"
 #include "mux/mux.h"
 #include <libmpegts.h>
+#include <x264.h>
 
 #define MIN_PID 0x30
 #define MAX_PID 0x1fff
@@ -54,12 +55,10 @@ static const int vbi_service_ids[][2] =
 
 static const int avc_profiles[][2] =
 {
-    { 66,  AVC_BASELINE },
     { 77,  AVC_MAIN },
     { 100, AVC_HIGH },
     { 110, AVC_HIGH_10 },
     { 122, AVC_HIGH_422 },
-    { 244, AVC_HIGH_444_PRED },
     { 0, 0 },
 };
 
@@ -89,8 +88,7 @@ void *open_muxer( void *ptr )
     obe_t *h = mux_params->h;
     obe_mux_opts_t *mux_opts = &h->mux_opts;
     int cur_pid = MIN_PID;
-    int stream_format, video_pid = 0, video_found = 0, width = 0,
-    height = 0, has_dds = 0, len = 0, num_frames = 0;
+    int stream_format, video_pid = 0, video_found = 0, has_dds = 0, len = 0, num_frames = 0;
     uint8_t *output;
     int64_t first_video_pts = -1, video_dts, first_video_real_pts = -1;
     int64_t *pcr_list;
@@ -212,10 +210,9 @@ void *open_muxer( void *ptr )
         if( stream_format == VIDEO_AVC )
         {
             encoder_wait( h, output_stream->output_stream_id );
-
-            width = output_stream->avc_param.i_width;
-            height = output_stream->avc_param.i_height;
             video_pid = stream->pid;
+
+            program.sdt.service_type = input_stream->height >= 720 ? DVB_SERVICE_TYPE_ADVANCED_CODEC_HD : DVB_SERVICE_TYPE_ADVANCED_CODEC_SD;
         }
         else if( stream_format == AUDIO_MP2 )
             stream->audio_frame_size = (double)MP2_NUM_SAMPLES * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
@@ -233,7 +230,6 @@ void *open_muxer( void *ptr )
     if( !mux_opts->passthrough )
         program.pcr_pid = mux_opts->pcr_pid ? mux_opts->pcr_pid : video_pid;
 
-    program.sdt.service_type = height >= 720 ? DVB_SERVICE_TYPE_ADVANCED_CODEC_HD : DVB_SERVICE_TYPE_ADVANCED_CODEC_SD;
     program.sdt.service_name = mux_opts->service_name ? mux_opts->service_name : service_name;
     program.sdt.provider_name = mux_opts->provider_name ? mux_opts->provider_name : provider_name;
 
@@ -267,6 +263,7 @@ void *open_muxer( void *ptr )
 
         if( stream_format == VIDEO_AVC )
         {
+            /* FIXME when linking to x264 is removed */
             x264_param_t *p_param = encoder->encoder_params;
             int j = 0;
             while( avc_profiles[j][0] && p_param->i_profile != avc_profiles[j][0] )
@@ -309,7 +306,7 @@ void *open_muxer( void *ptr )
             subtitles.composition_page_id = input_stream->composition_page_id;
             subtitles.ancillary_page_id = input_stream->ancillary_page_id;
             /* A lot of streams don't have DDS flagged correctly so we assume all HD uses DDS */
-            has_dds = width >= 1280 && height >= 720;
+            has_dds = 0; //width >= 1280 && height >= 720;
             if( ts_setup_dvb_subtitles( w, stream->pid, has_dds, 1, &subtitles ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup DVB Subtitle stream\n" );

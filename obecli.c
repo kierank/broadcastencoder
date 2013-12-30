@@ -29,6 +29,7 @@
 
 #include "config.h"
 
+#include <stdarg.h>
 #include <signal.h>
 #define _GNU_SOURCE
 
@@ -50,7 +51,6 @@ typedef struct
     obe_output_stream_t *output_streams;
     obe_mux_opts_t mux_opts;
     obe_output_opts_t output;
-    int avc_profile;
 } obecli_ctx_t;
 
 obecli_ctx_t cli;
@@ -82,9 +82,11 @@ static const char * const mp2_modes[]                = { "auto", "stereo", "join
 static const char * const channel_maps[]             = { "", "mono", "stereo", "5.0", "5.1", 0 };
 static const char * const mono_channels[]            = { "left", "right", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
-static const char * const addable_streams[]          = { "audio", "ttx" };
-static const char * const filter_bit_depths[]        = { "10", "8" };
-static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned" };
+static const char * const addable_streams[]          = { "audio", "ttx", 0 };
+static const char * const filter_bit_depths[]        = { "10", "8", 0 };
+static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned", 0 };
+static const char * const csps[]                     = { "4:2:0", "4:2:2", 0 };
+static const char * const profile_names[]            = { "high", "main", 0 };
 
 static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", NULL };
@@ -640,9 +642,9 @@ static int set_stream( char *command, obecli_command_t *child )
 
             if( input_stream->stream_type == STREAM_TYPE_VIDEO )
             {
-                x264_param_t *avc_param = &cli.output_streams[output_stream_id].avc_param;
+                obe_x264_opts_t *avc_param = &cli.output_streams[output_stream_id].avc_param;
 
-                FAIL_IF_ERROR( profile && ( check_enum_value( profile, x264_profile_names ) < 0 ),
+                FAIL_IF_ERROR( profile && ( check_enum_value( profile, profile_names ) < 0 ),
                                "Invalid AVC profile\n" );
 
                 FAIL_IF_ERROR( vbv_bufsize && system_type_value == OBE_SYSTEM_TYPE_LOWEST_LATENCY,
@@ -650,6 +652,9 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 FAIL_IF_ERROR( frame_packing && ( check_enum_value( frame_packing, frame_packing_modes ) < 0 ),
                                "Invalid frame packing mode\n" )
+
+                FAIL_IF_ERROR( csp && ( check_enum_value( csp, csps ) < 0 ),
+                               "Invalid colourspace\n" )
 
                 if( aspect_ratio )
                 {
@@ -668,63 +673,59 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 if( width )
                 {
-                    int i_width = obe_otoi( width, avc_param->i_width );
-                    while( allowed_resolutions[i][0] && ( allowed_resolutions[i][1] != avc_param->i_height ||
+                    int i_width = obe_otoi( width, avc_param->width );
+                    while( allowed_resolutions[i][0] && ( allowed_resolutions[i][1] != input_stream->height ||
                            allowed_resolutions[i][0] != i_width ) )
                        i++;
 
                     FAIL_IF_ERROR( !allowed_resolutions[i][0], "Invalid resolution. \n" );
-                    avc_param->i_width = i_width;
+                    avc_param->width = i_width;
                 }
 
                 /* Set it to encode by default */
                 cli.output_streams[output_stream_id].stream_action = STREAM_ENCODE;
                 cli.output_streams[output_stream_id].stream_format = VIDEO_AVC;
-                avc_param->rc.i_vbv_max_bitrate = obe_otoi( vbv_maxrate, 0 );
-                avc_param->rc.i_vbv_buffer_size = obe_otoi( vbv_bufsize, 0 );
-                avc_param->rc.i_bitrate         = obe_otoi( bitrate, 0 );
-                avc_param->i_keyint_max        = obe_otoi( keyint, avc_param->i_keyint_max );
-                avc_param->rc.i_lookahead      = obe_otoi( lookahead, avc_param->rc.i_lookahead );
-                avc_param->i_threads           = obe_otoi( threads, avc_param->i_threads );
-                avc_param->i_bframe            = obe_otoi( bframes, avc_param->i_bframe );
-                avc_param->i_bframe_pyramid    = obe_otoi( b_pyramid, avc_param->i_bframe_pyramid );
-                avc_param->analyse.i_weighted_pred = obe_otoi( weightp, avc_param->analyse.i_weighted_pred );
-                avc_param->b_interlaced        = obe_otob( interlaced, avc_param->b_interlaced );
-                avc_param->b_tff               = obe_otob( tff, avc_param->b_tff );
-                avc_param->b_intra_refresh     = obe_otob( intra_refresh, avc_param->b_intra_refresh );
-                avc_param->i_frame_reference   = obe_otoi( max_refs, avc_param->i_frame_reference );
+                avc_param->vbv_bufsize = obe_otoi( vbv_bufsize, 0 );
+                avc_param->vbv_maxrate = obe_otoi( vbv_maxrate, 0 );
+                avc_param->bitrate         = obe_otoi( bitrate, 0 );
+                avc_param->keyint          = obe_otoi( keyint, avc_param->keyint );
+                avc_param->lookahead       = obe_otoi( lookahead, avc_param->lookahead );
+                avc_param->threads         = obe_otoi( threads, avc_param->threads );
+                avc_param->bframes         = obe_otoi( bframes, avc_param->bframes );
+                avc_param->b_pyramid       = obe_otoi( b_pyramid, avc_param->b_pyramid );
+                avc_param->weightp         = obe_otoi( weightp, avc_param->weightp );
+                avc_param->interlaced      = obe_otob( interlaced, avc_param->interlaced );
+                avc_param->tff             = obe_otob( tff, avc_param->tff );
+                avc_param->intra_refresh   = obe_otob( intra_refresh, avc_param->intra_refresh );
+                avc_param->max_refs        = obe_otoi( max_refs, avc_param->max_refs );
 
                 if( profile )
-                    parse_enum_value( profile, x264_profile_names, &cli.avc_profile );
+                    parse_enum_value( profile, profile_names, &avc_param->profile );
 
                 if( level )
                 {
                     if( !strcasecmp( level, "1b" ) )
-                        avc_param->i_level_idc = 9;
+                        avc_param->level = 9;
                     else if( obe_otof( level, 7.0 ) < 6 )
-                        avc_param->i_level_idc = (int)( 10*obe_otof( level, 0.0 ) + .5 );
+                        avc_param->level = (int)( 10*obe_otof( level, 0.0 ) + .5 );
                     else
-                        avc_param->i_level_idc = obe_otoi( level, avc_param->i_level_idc );
+                        avc_param->level = obe_otoi( level, avc_param->level );
                 }
 
                 if( frame_packing )
                 {
-                    parse_enum_value( frame_packing, frame_packing_modes, &avc_param->i_frame_packing );
-                    avc_param->i_frame_packing--;
+                    parse_enum_value( frame_packing, frame_packing_modes, &avc_param->frame_packing );
+                    avc_param->frame_packing--;
                 }
 
                 if( csp )
-                {
-                    avc_param->i_csp = obe_otoi( csp, 420 ) == 422 || strcasecmp( csp, "4:2:2" ) ? X264_CSP_I422 : X264_CSP_I420;
-                    if( X264_BIT_DEPTH == 10 )
-                        avc_param->i_csp |= X264_CSP_HIGH_DEPTH;
-                }
+                    avc_param->csp = obe_otoi( csp, 420 ) == 422 || strcasecmp( csp, "4:2:2" ) ? CSP_422 : CSP_420;
 
                 if( filler )
-                    avc_param->i_nal_hrd = obe_otob( filler, 0 ) ? X264_NAL_HRD_FAKE_CBR : X264_NAL_HRD_FAKE_VBR;
+                    avc_param->filler = obe_otob( filler, avc_param->filler );
 
                 /* Turn on the 3DTV mux option automatically */
-                if( avc_param->i_frame_packing >= 0 )
+                if( avc_param->frame_packing >= 0 )
                     cli.mux_opts.is_3dtv = 1;
             }
             else if( input_stream->stream_type == STREAM_TYPE_AUDIO )
@@ -1018,12 +1019,6 @@ static int set_output( char *command, obecli_command_t *child )
 
 
 /* show functions */
-static int show_bitdepth( char *command, obecli_command_t *child )
-{
-    printf( "AVC output bit depth: %i bits per sample\n", x264_bit_depth );
-
-    return 0;
-}
 
 static int show_decoders( char *command, obecli_command_t *child )
 {
@@ -1290,19 +1285,17 @@ static int start_encode( char *command, obecli_command_t *child )
         if( input_stream && input_stream->stream_type == STREAM_TYPE_VIDEO )
         {
             /* x264 calculates the single-frame VBV size later on */
-            FAIL_IF_ERROR( system_type_value != OBE_SYSTEM_TYPE_LOWEST_LATENCY && !cli.output_streams[i].avc_param.rc.i_vbv_buffer_size,
+            FAIL_IF_ERROR( system_type_value != OBE_SYSTEM_TYPE_LOWEST_LATENCY && !cli.output_streams[i].avc_param.vbv_bufsize,
                            "No VBV buffer size chosen\n" );
 
-            FAIL_IF_ERROR( !cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate && !cli.output_streams[i].avc_param.rc.i_bitrate,
+            FAIL_IF_ERROR( !cli.output_streams[i].avc_param.vbv_maxrate && !cli.output_streams[i].avc_param.bitrate,
                            "No bitrate chosen\n" );
 
-            if( !cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate && cli.output_streams[i].avc_param.rc.i_bitrate )
-                cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate = cli.output_streams[i].avc_param.rc.i_bitrate;
+            if( !cli.output_streams[i].avc_param.vbv_maxrate && cli.output_streams[i].avc_param.bitrate )
+                cli.output_streams[i].avc_param.vbv_maxrate = cli.output_streams[i].avc_param.bitrate;
 
             cli.output_streams[i].stream_action = STREAM_ENCODE;
             cli.output_streams[i].stream_format = VIDEO_AVC;
-            if( cli.avc_profile >= 0 )
-                x264_param_apply_profile( &cli.output_streams[i].avc_param, x264_profile_names[cli.avc_profile] );
         }
         else if( input_stream && input_stream->stream_type == STREAM_TYPE_AUDIO )
         {
@@ -1442,6 +1435,8 @@ static int set_defaults( void )
             }
         }
     }
+
+    return 0;
 }
 
 static int autoconf_device( char *command, obecli_command_t *child )
@@ -1533,8 +1528,6 @@ int main( int argc, char **argv )
         return -1;
     }
 
-    cli.avc_profile = -1;
-
     printf( "\nOpen Broadcast Encoder command line interface.\n" );
     printf( "Version 1.0 \n" );
     printf( "\n" );
@@ -1572,7 +1565,6 @@ int main( int argc, char **argv )
                     fprintf( stderr, "obe_setup failed\n" );
                     return -1;
                 }
-                cli.avc_profile = -1;
             }
         }
     }

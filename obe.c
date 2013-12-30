@@ -31,6 +31,8 @@
 #include "mux/mux.h"
 #include "output/output.h"
 
+#include <x264.h>
+
 /** Utilities **/
 int64_t obe_mdate( void )
 {
@@ -846,7 +848,7 @@ fail:
     return -1;
 }
 
-int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t *param )
+int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, obe_x264_opts_t *param )
 {
     obe_int_input_stream_t *stream = get_input_stream( h, input_stream_id );
     if( !stream )
@@ -868,90 +870,24 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t
     }
 
     if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY || h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
-        x264_param_default_preset( param, "veryfast", "zerolatency" );
-    else
-        x264_param_default( param );
-
-    param->b_deterministic = 0;
-    param->b_vfr_input = 0;
-    param->b_pic_struct = 1;
-    param->b_open_gop = 1;
-    param->rc.i_rc_method = X264_RC_ABR;
-
-    param->i_width = stream->width;
-    param->i_height = stream->height;
-
-    param->i_fps_num = stream->timebase_den;
-    param->i_fps_den = stream->timebase_num;
-    param->b_interlaced = stream->interlaced;
-    if( param->b_interlaced )
-        param->b_tff = stream->tff;
-
-    /* A reasonable default. x264 won't go higher than this parameter irrespective of speedcontrol */
-    if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
-        param->i_frame_reference = 4;
-
-    if( stream->sar_num && stream->sar_den )
     {
-        param->vui.i_sar_width  = stream->sar_num;
-        param->vui.i_sar_height = stream->sar_den;
-    }
-
-    param->vui.i_overscan = 2;
-
-    if( ( param->i_fps_num == 25 || param->i_fps_num == 50 ) && param->i_fps_den == 1 )
-    {
-        param->vui.i_vidformat = 1; // PAL
-        param->vui.i_colorprim = 5; // BT.470-2 bg
-        param->vui.i_transfer  = 5; // BT.470-2 bg
-        param->vui.i_colmatrix = 5; // BT.470-2 bg
-        param->i_keyint_max = param->i_fps_num == 50 ? 48 : 24;
-    }
-    else if( ( param->i_fps_num == 30000 || param->i_fps_num == 60000 ) && param->i_fps_den == 1001 )
-    {
-        param->vui.i_vidformat = 2; // NTSC
-        param->vui.i_colorprim = 6; // BT.601-6
-        param->vui.i_transfer  = 6; // BT.601-6
-        param->vui.i_colmatrix = 6; // BT.601-6
-        param->i_keyint_max = param->i_fps_num / 1000;
+        param->preset = OBE_X264_PRESET_VERYFAST;
+        param->tune = OBE_X264_TUNE_ZEROLATENCY;
     }
     else
     {
-        param->vui.i_vidformat = 5; // undefined
-        param->vui.i_colorprim = 2; // undefined
-        param->vui.i_transfer  = 2; // undefined
-        param->vui.i_colmatrix = 2; // undefined
+        param->bframes = 3;
+        param->b_pyramid = 2;
+        /* A reasonable default. x264 won't go higher than this parameter irrespective of speedcontrol */
+        param->max_refs = 4;
     }
 
-    /* Change to BT.709 for HD resolutions */
-    if( param->i_width >= 1280 && param->i_height >= 720 )
-    {
-        param->vui.i_colorprim = 1;
-        param->vui.i_transfer  = 1;
-        param->vui.i_colmatrix = 1;
-    }
+    param->width = stream->width;
 
-    x264_param_apply_profile( param, X264_BIT_DEPTH == 10 ? "high10" : "high" );
-    param->i_nal_hrd = X264_NAL_HRD_FAKE_VBR;
-    param->b_aud = 1;
-    param->i_log_level = X264_LOG_INFO;
-
-    //param->rc.f_vbv_buffer_init = 0.1;
-
-    if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
-    {
-        param->sc.f_speed = 1.0;
-        param->sc.b_alt_timer = 1;
-        if( param->i_width >= 1280 && param->i_height >= 720 )
-            param->sc.max_preset = 7; /* on the conservative side for HD */
-        else
-        {
-            param->sc.max_preset = 10;
-            param->i_bframe_adaptive = X264_B_ADAPT_TRELLIS;
-        }
-
-        param->rc.i_lookahead = param->i_keyint_max;
-    }
+    if( ( stream->timebase_num == 25 || stream->timebase_num == 50 ) && stream->timebase_den == 1 )
+        param->keyint = stream->timebase_num == 50 ? 48 : 24;
+    else if( ( stream->timebase_num == 30000 || stream->timebase_num == 60000 ) && stream->timebase_den == 1001 )
+        param->keyint = stream->timebase_num / 1000;
 
     return 0;
 }
@@ -1127,13 +1063,6 @@ int obe_start( obe_t *h )
 
             if( h->output_streams[i].stream_format == VIDEO_AVC )
             {
-                x264_param_t *x264_param = &h->output_streams[i].avc_param;
-                if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY )
-                {
-                    /* This doesn't need to be particularly accurate since x264 calculates the correct value internally */
-                    x264_param->rc.i_vbv_buffer_size = (double)x264_param->rc.i_vbv_max_bitrate * x264_param->i_fps_den / x264_param->i_fps_num;
-                }
-
                 vid_enc_params = calloc( 1, sizeof(*vid_enc_params) );
                 if( !vid_enc_params )
                 {
@@ -1144,7 +1073,7 @@ int obe_start( obe_t *h )
                 vid_enc_params->encoder = h->encoders[h->num_encoders];
                 h->encoders[h->num_encoders]->is_video = 1;
 
-                memcpy( &vid_enc_params->avc_param, &h->output_streams[i].avc_param, sizeof(x264_param_t) );
+                memcpy( &vid_enc_params->avc_param, &h->output_streams[i].avc_param, sizeof(h->output_streams[i].avc_param) );
                 if( pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, x264_encoder.start_encoder, (void*)vid_enc_params ) < 0 )
                 {
                     fprintf( stderr, "Couldn't create encode thread \n" );
@@ -1274,7 +1203,7 @@ int obe_start( obe_t *h )
                 vid_filter_params->h = h;
                 vid_filter_params->filter = h->filters[h->num_filters];
                 vid_filter_params->input_stream = input_stream;
-                vid_filter_params->target_csp = h->output_streams[i].avc_param.i_csp & X264_CSP_MASK;
+                vid_filter_params->target_csp = h->output_streams[i].avc_param.csp;
 
                 if( pthread_create( &h->filters[h->num_filters]->filter_thread, NULL, video_filter.start_filter, vid_filter_params ) < 0 )
                 {

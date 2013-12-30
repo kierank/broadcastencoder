@@ -31,6 +31,7 @@
 #include "x86/vfilter.h"
 #include "input/sdi/sdi.h"
 
+#include <x264.h>
 
 #if X264_BIT_DEPTH > 8
 typedef uint16_t pixel;
@@ -760,11 +761,11 @@ static void *start_filter( void *ptr )
 
             const AVPixFmtDescriptor *pfd = av_pix_fmt_desc_get( raw_frame->img.csp );
             /* Resize if necessary. Together with colourspace conversion if progressive */
-            if( ( !IS_INTERLACED( raw_frame->img.format ) && filter_params->target_csp == X264_CSP_I420 ) ||
-                raw_frame->img.width != output_stream->avc_param.i_width ||
+            if( ( !IS_INTERLACED( raw_frame->img.format ) && filter_params->target_csp == CSP_420 ) ||
+                raw_frame->img.width != output_stream->avc_param.width ||
                 !(pfd->flags&AV_PIX_FMT_FLAG_PLANAR) )
             {
-                if( resize_frame( vfilt, raw_frame, output_stream->avc_param.i_width ) < 0 )
+                if( resize_frame( vfilt, raw_frame, output_stream->avc_param.width ) < 0 )
                     goto end;
             }
 
@@ -772,7 +773,7 @@ static void *start_filter( void *ptr )
                 goto end;
 
             /* Downconvert using interlaced scaling if input is 4:2:2 and target is 4:2:0 */
-            if( h_shift == 1 && v_shift == 0 && filter_params->target_csp == X264_CSP_I420 )
+            if( h_shift == 1 && v_shift == 0 && filter_params->target_csp == CSP_420 )
             {
                 if( downconvert_image_interlaced( vfilt, raw_frame ) < 0 )
                     goto end;

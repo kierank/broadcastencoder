@@ -22,6 +22,7 @@
  *****************************************************************************/
 
 #include "common/common.h"
+#include <x264.h>
 
 static void *start_smoothing( void *ptr )
 {

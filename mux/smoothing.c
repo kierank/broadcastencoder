@@ -27,6 +27,8 @@
 #include <libavutil/buffer.h>
 #include "common/common.h"
 
+#include <x264.h>
+
 static void *start_smoothing( void *ptr )
 {
     obe_t *h = ptr;

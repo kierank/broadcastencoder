@@ -26,7 +26,6 @@
 
 #include <inttypes.h>
 #include <libavutil/audioconvert.h>
-#include <x264.h>
 
 #define OBE_VERSION_MAJOR 0
 #define OBE_VERSION_MINOR 1
@@ -326,11 +325,61 @@ int obe_convert_smpte_to_analogue( int format, int line_smpte, int *line_analogu
 int obe_convert_analogue_to_smpte( int format, int line_analogue, int field, int *line_smpte );
 
 /**** AVC Encoding ****/
+enum obe_x264_preset_e
+{
+    OBE_X264_PRESET_VERYFAST,
+    OBE_X264_PRESET_SUPERFAST,
+};
+
+enum obe_x264_tune_e
+{
+    OBE_X264_TUNE_ZEROLATENCY,
+};
+
+enum obe_x264_profile_e
+{
+    OBE_X264_PROFILE_HIGH,
+    OBE_X264_PROFILE_MAIN,
+};
+
+enum obe_csp_e
+{
+    CSP_420,
+    CSP_422,
+};
+
+typedef struct
+{
+    int preset;
+    int tune;
+    int profile;
+    int level;
+    int vbv_maxrate;
+    int vbv_bufsize;
+    int bitrate;
+    int keyint;
+    int lookahead;
+    int threads;
+    int bframes;
+    int b_pyramid;
+    int weightp;
+    int interlaced;
+    int tff;
+    int frame_packing;
+    int csp;
+    int bit_depth;
+    int filler;
+    int intra_refresh;
+    int width;
+    int max_refs;
+
+} obe_x264_opts_t;
+
 /* Use this function to let OBE guess the encoding profile.
  * You can use the functions in the x264 API for tweaking or edit the parameter struct directly.
  * Be aware that some parameters will affect hardware support.
  */
-int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, x264_param_t *param );
+int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, obe_x264_opts_t *param  );
 
 /**** 3DTV ****/
 /* Arrangements - Frame Packing */
@@ -423,7 +472,7 @@ typedef struct
     obe_frame_anc_opts_t video_anc;
 
     /* AVC */
-    x264_param_t avc_param;
+    obe_x264_opts_t avc_param;
 
     /* Audio */
     int bitrate;

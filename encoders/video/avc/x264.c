@@ -25,6 +25,101 @@
 #include "encoders/video/video.h"
 #include <libavutil/mathematics.h>
 
+#include <x264.h>
+
+static void convert_param( obe_t *h, x264_param_t *param, obe_x264_opts_t *obe_param, obe_int_input_stream_t *stream )
+{
+    /* Apply preset/tune first so we can change other parameters down the line */
+    if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY || h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
+    {
+        char *preset = obe_param->preset == OBE_X264_PRESET_VERYFAST ? "veryfast" : "superfast";
+        x264_param_default_preset( param, preset, "zerolatency" );
+    }
+    else
+        x264_param_default( param );
+
+    char *profile = obe_param->profile == OBE_X264_PROFILE_HIGH ? "high" : "main";
+    x264_param_apply_profile( param, profile );
+
+    /* Effectively a dummy SAR that gets updated when the first frame arrives */
+    if( stream->sar_num && stream->sar_den )
+    {
+        param->vui.i_sar_width  = stream->sar_num;
+        param->vui.i_sar_height = stream->sar_den;
+    }
+
+    param->vui.i_overscan = 2;
+
+    param->b_deterministic = 0;
+    param->b_vfr_input = 0;
+    param->b_pic_struct = 1;
+    param->b_open_gop = 1;
+    param->rc.i_rc_method = X264_RC_ABR;
+
+    param->i_width = stream->width;
+    param->i_height = stream->height;
+
+    param->i_fps_num = stream->timebase_den;
+    param->i_fps_den = stream->timebase_num;
+    param->b_interlaced = stream->interlaced;
+    if( param->b_interlaced )
+        param->b_tff = 1;
+
+    if( ( param->i_fps_num == 25 || param->i_fps_num == 50 ) && param->i_fps_den == 1 )
+    {
+        param->vui.i_vidformat = 1; // PAL
+        param->vui.i_colorprim = 5; // BT.470-2 bg
+        param->vui.i_transfer  = 5; // BT.470-2 bg
+        param->vui.i_colmatrix = 5; // BT.470-2 bg
+    }
+    else if( ( param->i_fps_num == 30000 || param->i_fps_num == 60000 ) && param->i_fps_den == 1001 )
+    {
+        param->vui.i_vidformat = 2; // NTSC
+        param->vui.i_colorprim = 6; // BT.601-6
+        param->vui.i_transfer  = 6; // BT.601-6
+        param->vui.i_colmatrix = 6; // BT.601-6
+    }
+    else
+    {
+        param->vui.i_vidformat = 5; // undefined
+        param->vui.i_colorprim = 2; // undefined
+        param->vui.i_transfer  = 2; // undefined
+        param->vui.i_colmatrix = 2; // undefined
+    }
+
+    /* Change to BT.709 for HD resolutions */
+    if( param->i_width >= 1280 && param->i_height >= 720 )
+    {
+        param->vui.i_colorprim = 1;
+        param->vui.i_transfer  = 1;
+        param->vui.i_colmatrix = 1;
+    }
+
+    param->i_nal_hrd = obe_param->filler ? X264_NAL_HRD_FAKE_CBR : X264_NAL_HRD_FAKE_VBR;
+    param->b_aud = 1;
+    param->i_log_level = X264_LOG_INFO;
+
+    if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
+    {
+        param->sc.f_speed = 1.0;
+        param->sc.b_alt_timer = 1;
+        if( param->i_height >= 720 )
+            param->sc.max_preset = 7; /* on the conservative side for HD */
+        else
+        {
+            param->sc.max_preset = 10;
+            param->i_bframe_adaptive = X264_B_ADAPT_TRELLIS;
+        }
+
+        param->rc.i_lookahead = param->i_keyint_max;
+    }
+    else if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY )
+    {
+        /* This doesn't need to be particularly accurate since x264 calculates the correct value internally */
+        param->rc.i_vbv_max_bitrate = (double)obe_param->vbv_bufsize * param->i_fps_den / param->i_fps_num;
+    }
+}
+
 static void x264_logger( void *p_unused, int i_level, const char *psz_fmt, va_list arg )
 {
     if( i_level <= X264_LOG_INFO )
@@ -112,22 +207,10 @@ static void *start_encoder( void *ptr )
     float buffer_fill;
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
+    x264_param_t *param = NULL;
+    obe_int_input_stream_t *input_stream = get_input_stream( h, 0 ); /* FIXME if this changes */
 
     /* TODO: check for width, height changes */
-
-    /* Lock the mutex until we verify and fetch new parameters */
-    pthread_mutex_lock( &encoder->queue.mutex );
-
-    enc_params->avc_param.pf_log = x264_logger;
-    s = x264_encoder_open( &enc_params->avc_param );
-    if( !s )
-    {
-        pthread_mutex_unlock( &encoder->queue.mutex );
-        fprintf( stderr, "[x264]: encoder configuration failed\n" );
-        goto end;
-    }
-
-    x264_encoder_parameters( s, &enc_params->avc_param );
 
     encoder->encoder_params = malloc( sizeof(enc_params->avc_param) );
     if( !encoder->encoder_params )
@@ -136,12 +219,27 @@ static void *start_encoder( void *ptr )
         syslog( LOG_ERR, "Malloc failed\n" );
         goto end;
     }
-    memcpy( encoder->encoder_params, &enc_params->avc_param, sizeof(enc_params->avc_param) );
+    param = encoder->encoder_params;
+    convert_param( h, param, encoder->encoder_params, input_stream );
+    param->pf_log = x264_logger;
+
+    /* Lock the mutex until we verify and fetch new parameters */
+    pthread_mutex_lock( &encoder->queue.mutex );
+
+    s = x264_encoder_open( param );
+    if( !s )
+    {
+        pthread_mutex_unlock( &encoder->queue.mutex );
+        fprintf( stderr, "[x264]: encoder configuration failed\n" );
+        goto end;
+    }
+
+    x264_encoder_parameters( s, param );
 
     encoder->is_ready = 1;
     /* XXX: This will need fixing for soft pulldown streams */
-    frame_duration = av_rescale_q( 1, (AVRational){enc_params->avc_param.i_fps_den, enc_params->avc_param.i_fps_num}, (AVRational){1, OBE_CLOCK} );
-    buffer_duration = frame_duration * enc_params->avc_param.sc.i_buffer_size;
+    frame_duration = av_rescale_q( 1, (AVRational){param->i_fps_den, param->i_fps_num}, (AVRational){1, OBE_CLOCK} );
+    buffer_duration = frame_duration * param->sc.i_buffer_size;
 
     /* Broadcast because input and muxer can be stuck waiting for encoder */
     pthread_cond_broadcast( &encoder->queue.in_cv );
@@ -169,7 +267,7 @@ static void *start_encoder( void *ptr )
             h->enc_smoothing_buffer_complete = 0;
             pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
             syslog( LOG_INFO, "Speedcontrol reset\n" );
-            x264_speedcontrol_sync( s, enc_params->avc_param.sc.i_buffer_size, enc_params->avc_param.sc.f_buffer_init, 0 );
+            x264_speedcontrol_sync( s, param->sc.i_buffer_size, param->sc.f_buffer_init, 0 );
             h->encoder_drop = 0;
         }
         pthread_mutex_unlock( &h->drop_mutex );
@@ -197,13 +295,13 @@ static void *start_encoder( void *ptr )
 
         /* If the AFD has changed, then change the SAR. x264 will write the SAR at the next keyframe
          * TODO: allow user to force keyframes in order to be frame accurate */
-        if( raw_frame->sar_width  != enc_params->avc_param.vui.i_sar_width ||
-            raw_frame->sar_height != enc_params->avc_param.vui.i_sar_height )
+        if( raw_frame->sar_width  != param->vui.i_sar_width ||
+            raw_frame->sar_height != param->vui.i_sar_height )
         {
-            enc_params->avc_param.vui.i_sar_width  = raw_frame->sar_width;
-            enc_params->avc_param.vui.i_sar_height = raw_frame->sar_height;
+            param->vui.i_sar_width  = raw_frame->sar_width;
+            param->vui.i_sar_height = raw_frame->sar_height;
 
-            pic.param = &enc_params->avc_param;
+            pic.param = param;
         }
 
         /* Update speedcontrol based on the system state */
@@ -230,7 +328,7 @@ static void *start_encoder( void *ptr )
                 else
                     buffer_fill = (float)(-1 * last_frame_delta)/buffer_duration;
 
-                x264_speedcontrol_sync( s, buffer_fill, enc_params->avc_param.sc.i_buffer_size, 1 );
+                x264_speedcontrol_sync( s, buffer_fill, param->sc.i_buffer_size, 1 );
             }
 
             pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );

@@ -51,7 +51,6 @@ static int set_muxer( char *command, obecli_command_t *child );
 static int set_output( char *command, obecli_command_t *child );
 static int set_outputs( char *command, obecli_command_t *child );
 
-static int show_bitdepth( char *command, obecli_command_t *child );
 static int show_decoders( char *command, obecli_command_t *child );
 static int show_encoders( char *command, obecli_command_t *child );
 static int show_help( char *command, obecli_command_t *child );
@@ -124,7 +123,6 @@ static obecli_command_t remove_commands[] =
 
 static obecli_command_t show_commands[] =
 {
-    { "bitdepth", "",  "Show AVC encoder bit depth", show_bitdepth, NULL },
     { "decoders", "",  "Show supported decoders",    show_decoders, NULL },
     { "encoders", "",  "Show supported encoders",    show_encoders, NULL },
     //{ "filters",  "",  "Show supported filters",   show_filters, NULL },
