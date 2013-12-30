@@ -71,7 +71,7 @@ static void convert_param( obe_t *h, x264_param_t *param, obe_x264_opts_t *obe_p
     param->b_open_gop = 1;
     param->rc.i_rc_method = X264_RC_ABR;
 
-    param->i_width = stream->width;
+    param->i_width = obe_param->width;
     param->i_height = stream->height;
 
     param->i_fps_num = stream->timebase_den;
@@ -131,7 +131,7 @@ static void convert_param( obe_t *h, x264_param_t *param, obe_x264_opts_t *obe_p
     else if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY )
     {
         /* This doesn't need to be particularly accurate since x264 calculates the correct value internally */
-        param->rc.i_vbv_max_bitrate = (double)obe_param->vbv_bufsize * param->i_fps_den / param->i_fps_num;
+        param->rc.i_vbv_buffer_size = (double)param->rc.i_vbv_max_bitrate * param->i_fps_den / param->i_fps_num;
     }
 }
 
