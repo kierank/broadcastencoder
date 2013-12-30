@@ -84,6 +84,7 @@ static const char * const mono_channels[]            = { "left", "right", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
 static const char * const addable_streams[]          = { "audio", "ttx" };
 static const char * const filter_bit_depths[]        = { "10", "8" };
+static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned" };
 
 static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", NULL };
@@ -110,7 +111,7 @@ static const char * stream_opts[] = { "action", "format",
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrough", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", "service-name", "provider-name", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
-static const char * output_opts[] = { "type", "target", NULL };
+static const char * output_opts[] = { "type", "target", "fec-columns", "fec-rows", "fec-type", NULL };
 
 const static int allowed_resolutions[17][2] =
 {
@@ -982,9 +983,15 @@ static int set_output( char *command, obecli_command_t *child )
 
         char *type = obe_get_option( output_opts[0], opts );
         char *target = obe_get_option( output_opts[1], opts );
+        char *fec_columns = obe_get_option( output_opts[2], opts );
+        char *fec_rows = obe_get_option( output_opts[3], opts );
+        char *fec_type = obe_get_option( output_opts[4], opts );
 
         FAIL_IF_ERROR( type && ( check_enum_value( type, output_modules ) < 0 ),
                       "Invalid Output Type\n" );
+
+        FAIL_IF_ERROR( fec_type && ( check_enum_value( fec_type, fec_types ) < 0 ),
+                      "Invalid FEC type\n" );
 
         if( type )
             parse_enum_value( type, output_modules, &cli.output.outputs[output_id].type );
@@ -997,6 +1004,12 @@ static int set_output( char *command, obecli_command_t *child )
              FAIL_IF_ERROR( !cli.output.outputs[output_id].target, "malloc failed\n" );
              strcpy( cli.output.outputs[output_id].target, target );
         }
+        if( fec_columns )
+            cli.output.outputs[output_id].fec_columns = obe_otoi( fec_columns, cli.output.outputs[output_id].fec_columns );
+        if( fec_rows )
+            cli.output.outputs[output_id].fec_rows = obe_otoi( fec_rows, cli.output.outputs[output_id].fec_rows );
+        if( fec_type )
+            parse_enum_value( fec_type, fec_types, &cli.output.outputs[output_id].fec_type );
         obe_free_string_array( opts );
     }
 
