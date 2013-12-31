@@ -69,6 +69,7 @@ static char *line_read = NULL;
 
 static int running = 0;
 static int system_type_value = OBE_SYSTEM_TYPE_GENERIC;
+static int encoder_id = 0;
 
 /* Video */
 static const char * const avc_profiles[] = { "main", "high" };
@@ -178,11 +179,6 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             /* only messages with all options are legal currently */
             Obed__InputOpts *input_opts_in = encoder_control->input_opts;
             obe_input_t *input_opts_out = &d.input;
-            Obed__VideoOpts *video_opts_in = encoder_control->video_opts;
-            obe_output_stream_t *video_stream = &d.output_streams[0];
-            Obed__AncillaryOpts *ancillary_opts_in = encoder_control->ancillary_opts;
-            Obed__MuxOpts *mux_opts_in = encoder_control->mux_opts;
-            obe_mux_opts_t *mux_opts = &d.mux_opts;
 
             d.h = obe_setup( (const char *)ident );
             if( !d.h )
@@ -197,6 +193,12 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 syslog( LOG_ERR, "Input device could not be opened" );
                 goto fail;
             }
+
+            Obed__VideoOpts *video_opts_in = encoder_control->video_opts;
+            obe_output_stream_t *video_stream = &d.output_streams[0];
+            Obed__AncillaryOpts *ancillary_opts_in = encoder_control->ancillary_opts;
+            Obed__MuxOpts *mux_opts_in = encoder_control->mux_opts;
+            obe_mux_opts_t *mux_opts = &d.mux_opts;
 
             if( !d.program.num_streams )
                 goto fail;
@@ -408,6 +410,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
         }
     }
 
+    result.encoder_id = encoder_id;
     result.encoder_response = malloc( 3 );
     strcpy( result.encoder_response, "OK" );
     closure( &result, closure_data );
@@ -416,6 +419,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
     return;
 
 fail:
+    result.encoder_id = encoder_id;
     result.encoder_response = malloc( 5 );
     strcpy( result.encoder_response, "FAIL" );
     closure( &result, closure_data );
@@ -431,9 +435,22 @@ static void obed__encoder_status(Obed__EncoderCommunicate_Service *service,
 {
     Obed__EncoderStatusResponse result = OBED__ENCODER_STATUS_RESPONSE__INIT;
 
+    result.encoder_id = encoder_id;
     result.status_version = 1;
     result.has_input_active = 1;
     result.input_active = obe_input_status( d.h );
+
+    closure( &result, closure_data );
+}
+
+static void obed__encoder_format(Obed__EncoderCommunicate_Service *service,
+                                 const Obed__EncoderControl *input,
+                                 Obed__EncoderFormatResponse_Closure closure,
+                                 void *closure_data)
+{
+    Obed__EncoderFormatResponse result = OBED__ENCODER_FORMAT_RESPONSE__INIT;
+
+    result.encoder_id = encoder_id;
 
     closure( &result, closure_data );
 }
@@ -444,7 +461,17 @@ int main( int argc, char **argv )
 {
     ProtobufC_RPC_Server *server;
     ProtobufC_RPC_AddressType address_type = 0;
-    const char *name = "/tmp/obesocket";
+    const char *name = "/tmp/obesocket%i";
+    char tmp[100];
+
+    if( argc != 2 )
+    {
+        fprintf( stderr, "Error: Needs encoder id\n" );
+        return -1;
+    }
+
+    encoder_id = atoi( argv[1] );
+    snprintf( tmp, sizeof(tmp), name, encoder_id );
 
     /* Signal handlers */
     keep_running = 1;
@@ -452,7 +479,7 @@ int main( int argc, char **argv )
     signal( SIGINT, stop_server );
     // TODO SIGPIPE
 
-    server = protobuf_c_rpc_server_new( address_type, name, (ProtobufCService *) &encoder_communicate, NULL );
+    server = protobuf_c_rpc_server_new( address_type, tmp, (ProtobufCService *) &encoder_communicate, NULL );
     fprintf( stderr, "RPC server activated\n" );
 
     while( keep_running )
