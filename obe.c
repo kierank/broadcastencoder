@@ -884,10 +884,10 @@ int obe_populate_avc_encoder_params( obe_t *h, int input_stream_id, obe_x264_opt
 
     param->width = stream->width;
 
-    if( ( stream->timebase_num == 25 || stream->timebase_num == 50 ) && stream->timebase_den == 1 )
-        param->keyint = stream->timebase_num == 50 ? 48 : 24;
-    else if( ( stream->timebase_num == 30000 || stream->timebase_num == 60000 ) && stream->timebase_den == 1001 )
-        param->keyint = stream->timebase_num / 1000;
+    if( ( stream->timebase_den == 25 || stream->timebase_num == 50 ) && stream->timebase_num == 1 )
+        param->keyint = stream->timebase_den == 50 ? 48 : 24;
+    else if( ( stream->timebase_den == 30000 || stream->timebase_den == 60000 ) && stream->timebase_num == 1001 )
+        param->keyint = stream->timebase_den / 1000;
 
     return 0;
 }
