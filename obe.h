@@ -106,6 +106,8 @@ enum input_type_e
 //    INPUT_DEVICE_ASI,
 };
 
+/* video_format should be set to -1 for auto detection */
+
 typedef struct
 {
     int input_type;
@@ -210,6 +212,7 @@ typedef struct
     char *codec_desc_text;
 
     /** Video **/
+    int video_format;
     int csp;
     int width;
     int height;

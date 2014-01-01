@@ -716,7 +716,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
 
         if( stream_in->stream_type == STREAM_TYPE_VIDEO )
         {
-            memcpy( &stream_out->csp, &stream_in->csp, offsetof( obe_input_stream_t, timebase_num ) - offsetof( obe_input_stream_t, csp ) );
+            memcpy( &stream_out->csp, &stream_in->csp, offsetof( obe_input_stream_t, timebase_num ) - offsetof( obe_input_stream_t, video_format ) );
             stream_out->timebase_num = stream_in->timebase_num;
             stream_out->timebase_den = stream_in->timebase_den;
         }

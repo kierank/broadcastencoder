@@ -1442,6 +1442,8 @@ static int set_defaults( void )
             }
         }
     }
+
+    return 0;
 }
 
 static int autoconf_device( char *command, obecli_command_t *child )
@@ -1534,6 +1536,7 @@ int main( int argc, char **argv )
     }
 
     cli.avc_profile = -1;
+    cli.input.video_format = -1;
 
     printf( "\nOpen Broadcast Encoder command line interface.\n" );
     printf( "Version 1.0 \n" );
@@ -1573,6 +1576,7 @@ int main( int argc, char **argv )
                     return -1;
                 }
                 cli.avc_profile = -1;
+                cli.input.video_format = -1;
             }
         }
     }

@@ -856,7 +856,7 @@ static int open_card( decklink_opts_t *decklink_opts )
         goto finish;
     }
 
-    if( supported )
+    if( supported && decklink_opts->video_format == -1 )
         flags = bmdVideoInputEnableFormatDetection;
 
     /* Get the list of display modes. */
@@ -1089,6 +1089,7 @@ static void *probe_stream( void *ptr )
         {
             streams[i]->stream_type = STREAM_TYPE_VIDEO;
             streams[i]->stream_format = VIDEO_UNCOMPRESSED;
+            streams[i]->video_format = decklink_opts->video_format;
             streams[i]->width  = decklink_opts->width;
             streams[i]->height = decklink_opts->height;
             streams[i]->timebase_num = decklink_opts->timebase_num;
@@ -1203,6 +1204,7 @@ static void *autoconf_input( void *ptr )
 
             streams[i]->stream_type = STREAM_TYPE_VIDEO;
             streams[i]->stream_format = VIDEO_UNCOMPRESSED;
+            streams[i]->video_format = user_opts->video_format;
             streams[i]->width  = video_format_tab[j].width;
             streams[i]->height = video_format_tab[j].height;
             streams[i]->timebase_num = video_format_tab[j].timebase_num;

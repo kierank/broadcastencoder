@@ -124,6 +124,7 @@ typedef struct
     int audio_type;
 
     /** Video **/
+    int video_format;
     int csp;
     int width;
     int height;
