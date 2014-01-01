@@ -63,7 +63,6 @@ void destroy_device( obe_device_t *device )
         free( device->probed_streams );
     if( device->location )
         free( device->location );
-    free( device );
 }
 
 /* Raw frame */
@@ -153,14 +152,6 @@ void destroy_muxed_data( obe_muxed_data_t *muxed_data )
 
     free( muxed_data->data );
     free( muxed_data );
-}
-
-/** Add/Remove misc **/
-void add_device( obe_t *h, obe_device_t *device )
-{
-    pthread_mutex_lock( &h->device_list_mutex );
-    h->devices[h->num_devices++] = device;
-    pthread_mutex_unlock( &h->device_list_mutex );
 }
 
 /** Add/Remove from queues */
@@ -410,10 +401,10 @@ static void destroy_output( obe_output_t *output )
 /* Input stream */
 obe_int_input_stream_t *get_input_stream( obe_t *h, int input_stream_id )
 {
-    for( int j = 0; j < h->devices[0]->num_input_streams; j++ )
+    for( int j = 0; j < h->device.num_input_streams; j++ )
     {
-        if( h->devices[0]->streams[j]->input_stream_id == input_stream_id )
-            return h->devices[0]->streams[j];
+        if( h->device.streams[j]->input_stream_id == input_stream_id )
+            return h->device.streams[j];
     }
     return NULL;
 }
@@ -467,8 +458,6 @@ obe_t *obe_setup( const char *ident )
         return NULL;
     }
 
-    pthread_mutex_init( &h->device_list_mutex, NULL );
-
     if( av_lockmgr_register( obe_lavc_lockmgr ) < 0 )
     {
         fprintf( stderr, "Could not register lavc lock manager\n" );
@@ -476,10 +465,12 @@ obe_t *obe_setup( const char *ident )
         return NULL;
     }
 
+    avcodec_register_all();
+
     return h;
 }
 
-int obe_set_config( obe_t *h, int system_type )
+int obe_set_config( obe_t *h, int system_type, int filter_bit_depth )
 {
     if( system_type < OBE_SYSTEM_TYPE_GENERIC && system_type > OBE_SYSTEM_TYPE_LOW_LATENCY )
     {
@@ -487,7 +478,20 @@ int obe_set_config( obe_t *h, int system_type )
         return -1;
     }
 
+    if( filter_bit_depth > OBE_BIT_DEPTH_8 && filter_bit_depth < OBE_BIT_DEPTH_10 )
+    {
+        fprintf( stderr, "Invalid OBE bit depth\n" );
+        return -1;
+    }
+
+    if( filter_bit_depth == OBE_BIT_DEPTH_8 && X264_BIT_DEPTH == 10 )
+    {
+        fprintf( stderr, "8-bit filtering is not supported in 10-bit mode\n" );
+        return -1;
+    }
+
     h->obe_system = system_type;
+    h->filter_bit_depth = filter_bit_depth;
 
     return 0;
 }
@@ -588,8 +592,6 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
 
     int probe_time = MAX_PROBE_TIME;
     int i = 0;
-    int prev_devices = h->num_devices;
-    int cur_devices;
 
     if( !input_device || !program )
     {
@@ -597,11 +599,14 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
         return -1;
     }
 
-    if( h->num_devices == MAX_DEVICES )
+    if( h->is_active )
     {
-        fprintf( stderr, "No more devices allowed \n" );
+        fprintf( stderr, "Can't probe if encoder is is_active \n" );
         return -1;
     }
+
+    destroy_device( &h->device );
+    memset( &h->device, 0, sizeof(h->device) );
 
     if( input_device->input_type == INPUT_URL )
     {
@@ -678,9 +683,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     __pthread_cancel( thread );
     __pthread_join( thread, &ret_ptr );
 
-    cur_devices = h->num_devices;
-
-    if( prev_devices == cur_devices )
+    if( h->device.num_input_streams == 0 )
     {
         fprintf( stderr, "Could not probe device \n" );
         program = NULL;
@@ -688,7 +691,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     }
 
     // TODO metadata etc
-    program->num_streams = h->devices[h->num_devices-1]->num_input_streams;
+    program->num_streams = h->device.num_input_streams;
     program->streams = calloc( program->num_streams, sizeof(*program->streams) );
     if( !program->streams )
     {
@@ -696,11 +699,118 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
         return -1;
     }
 
-    h->devices[h->num_devices-1]->probed_streams = program->streams;
+    h->device.probed_streams = program->streams;
 
     for( i = 0; i < program->num_streams; i++ )
     {
-        stream_in = h->devices[h->num_devices-1]->streams[i];
+        stream_in = h->device.streams[i];
+        stream_out = &program->streams[i];
+
+        stream_out->input_stream_id = stream_in->input_stream_id;
+        stream_out->stream_type = stream_in->stream_type;
+        stream_out->stream_format = stream_in->stream_format;
+
+        stream_out->bitrate = stream_in->bitrate;
+
+        stream_out->num_frame_data = stream_in->num_frame_data;
+        stream_out->frame_data = stream_in->frame_data;
+
+        if( stream_in->stream_type == STREAM_TYPE_VIDEO )
+        {
+            memcpy( &stream_out->csp, &stream_in->csp, offsetof( obe_input_stream_t, timebase_num ) - offsetof( obe_input_stream_t, video_format ) );
+            stream_out->timebase_num = stream_in->timebase_num;
+            stream_out->timebase_den = stream_in->timebase_den;
+        }
+        else if( stream_in->stream_type == STREAM_TYPE_AUDIO )
+        {
+            memcpy( &stream_out->channel_layout, &stream_in->channel_layout,
+            offsetof( obe_input_stream_t, bitrate ) - offsetof( obe_input_stream_t, channel_layout ) );
+            stream_out->aac_is_latm = stream_in->is_latm;
+        }
+
+        memcpy( stream_out->lang_code, stream_in->lang_code, 4 );
+    }
+
+    return 0;
+
+fail:
+    if( args )
+    {
+        if( args->user_opts.location )
+            free( args->user_opts.location );
+        free( args );
+    }
+
+    return -1;
+}
+
+int obe_autoconf_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *program )
+{
+    void *ret_ptr;
+    obe_int_input_stream_t *stream_in;
+    obe_input_stream_t *stream_out;
+    obe_input_probe_t args;
+
+    obe_input_func_t  input;
+
+    int i = 0;
+
+    if( !input_device )
+    {
+        fprintf( stderr, "Invalid input pointer \n" );
+        return -1;
+    }
+
+    if( h->is_active )
+    {
+        fprintf( stderr, "Can't probe if encoder is is_active \n" );
+        return -1;
+    }
+
+    destroy_device( &h->device );
+    memset( &h->device, 0, sizeof(h->device) );
+
+#if HAVE_DECKLINK
+    if( input_device->input_type == INPUT_DEVICE_DECKLINK )
+        input = decklink_input;
+#endif
+    else if( input_device->input_type == INPUT_DEVICE_LINSYS_SDI )
+        input = linsys_sdi_input;
+    else
+    {
+        fprintf( stderr, "Invalid input device \n" );
+        return -1;
+    }
+
+    args.h = h;
+    memcpy( &args.user_opts, input_device, sizeof(*input_device) );
+
+    if( obe_validate_input_params( input_device ) < 0 )
+        goto fail;
+
+    input.autoconf_input( &args );
+
+    if( h->device.num_input_streams == 0 )
+    {
+        fprintf( stderr, "Could not probe device \n" );
+        program = NULL;
+        return -1;
+    }
+
+    // TODO metadata etc
+    program->num_streams = h->device.num_input_streams;
+    program->streams = calloc( program->num_streams, sizeof(*program->streams) );
+    if( !program->streams )
+    {
+        fprintf( stderr, "Malloc failed \n" );
+        return -1;
+    }
+
+    h->device.probed_streams = program->streams;
+
+    for( i = 0; i < program->num_streams; i++ )
+    {
+        stream_in = h->device.streams[i];
         stream_out = &program->streams[i];
 
         stream_out->input_stream_id = stream_in->input_stream_id;
@@ -731,12 +841,8 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     return 0;
 
 fail:
-    if( args )
-    {
-        if( args->user_opts.location )
-            free( args->user_opts.location );
-        free( args );
-    }
+    if( args.user_opts.location )
+        free( args.user_opts.location );
 
     return -1;
 }
@@ -941,6 +1047,9 @@ int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts )
             }
             strcpy( h->outputs[i]->output_dest.target, output_opts->outputs[i].target );
         }
+        h->outputs[i]->output_dest.fec_type = output_opts->outputs[i].fec_type;
+        h->outputs[i]->output_dest.fec_columns = output_opts->outputs[i].fec_columns;
+        h->outputs[i]->output_dest.fec_rows = output_opts->outputs[i].fec_rows;
     }
     h->num_outputs = output_opts->num_outputs;
 
@@ -972,17 +1081,17 @@ int obe_start( obe_t *h )
     pthread_mutex_init( &h->obe_clock_mutex, NULL );
     pthread_cond_init( &h->obe_clock_cv, NULL );
 
-    if( h->devices[0]->device_type == INPUT_URL )
+    if( h->device.device_type == INPUT_URL )
     {
         //input = lavf_input;
         fprintf( stderr, "URL input is not supported currently \n" );
         goto fail;
     }
 #if HAVE_DECKLINK
-    else if( h->devices[0]->device_type == INPUT_DEVICE_DECKLINK )
+    else if( h->device.device_type == INPUT_DEVICE_DECKLINK )
         input = decklink_input;
 #endif
-    else if( h->devices[0]->device_type == INPUT_DEVICE_LINSYS_SDI )
+    else if( h->device.device_type == INPUT_DEVICE_LINSYS_SDI )
         input = linsys_sdi_input;
     else
     {
@@ -1123,7 +1232,6 @@ int obe_start( obe_t *h )
         goto fail;
     }
     mux_params->h = h;
-    mux_params->device = h->devices[0];
     mux_params->num_output_streams = h->num_output_streams;
     mux_params->output_streams = h->output_streams;
 
@@ -1134,9 +1242,9 @@ int obe_start( obe_t *h )
     }
 
     /* Open Filter Thread */
-    for( int i = 0; i < h->devices[0]->num_input_streams; i++ )
+    for( int i = 0; i < h->device.num_input_streams; i++ )
     {
-        input_stream = h->devices[0]->streams[i];
+        input_stream = h->device.streams[i];
         if( input_stream && ( input_stream->stream_type == STREAM_TYPE_VIDEO || input_stream->stream_type == STREAM_TYPE_AUDIO ) )
         {
             h->filters[h->num_filters] = calloc( 1, sizeof(obe_filter_t) );
@@ -1206,14 +1314,13 @@ int obe_start( obe_t *h )
         goto fail;
     }
     input_params->h = h;
-    input_params->device = h->devices[0];
 
     /* TODO: in the future give it only the streams which are necessary */
     input_params->num_output_streams = h->num_output_streams;
     input_params->output_streams = h->output_streams;
     input_params->audio_samples = num_samples;
 
-    if( pthread_create( &h->devices[0]->device_thread, NULL, input.open_input, (void*)input_params ) < 0 )
+    if( pthread_create( &h->device.device_thread, NULL, input.open_input, (void*)input_params ) < 0 )
     {
         fprintf( stderr, "Couldn't create input thread \n" );
         goto fail;
@@ -1233,11 +1340,11 @@ fail:
 int obe_input_status( obe_t *h )
 {
     int ret = 0;
-    if( h && h->devices[0] )
+    if( h )
     {
-        pthread_mutex_lock( &h->devices[0]->device_mutex );
-        ret = h->devices[0]->active;
-        pthread_mutex_unlock( &h->devices[0]->device_mutex );
+        pthread_mutex_lock( &h->device.device_mutex );
+        ret = h->device.active;
+        pthread_mutex_unlock( &h->device.device_mutex );
     }
 
     return ret;
@@ -1250,11 +1357,8 @@ void obe_close( obe_t *h )
     fprintf( stderr, "closing obe \n" );
 
     /* Cancel input thread */
-    for( int i = 0; i < h->num_devices; i++ )
-    {
-        __pthread_cancel( h->devices[i]->device_thread );
-        __pthread_join( h->devices[i]->device_thread, &ret_ptr );
-    }
+     __pthread_cancel( h->device.device_thread );
+     __pthread_join( h->device.device_thread, &ret_ptr );
 
     fprintf( stderr, "input cancelled \n" );
 
@@ -1331,11 +1435,10 @@ void obe_close( obe_t *h )
 
     fprintf( stderr, "output thread cancelled \n" );
 
-    /* Destroy devices */
-    for( int i = 0; i < h->num_devices; i++ )
-        destroy_device( h->devices[i] );
+    /* Destroy device */
+    destroy_device( &h->device );
 
-    fprintf( stderr, "devices destroyed \n" );
+    fprintf( stderr, "device destroyed \n" );
 
     /* Destroy filters */
     for( int i = 0; i < h->num_filters; i++ )

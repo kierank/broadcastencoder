@@ -45,7 +45,14 @@ enum obe_system_type_e
     OBE_SYSTEM_TYPE_LOW_LATENCY,
 };
 
-int obe_set_config( obe_t *h, int system_type );
+/* Internal filter bit depth */
+enum obe_internal_bit_depth
+{
+    OBE_BIT_DEPTH_10,
+    OBE_BIT_DEPTH_8,
+};
+
+int obe_set_config( obe_t *h, int system_type, int filter_bit_depth );
 
 enum input_video_connection_e
 {
@@ -88,6 +95,8 @@ enum input_video_format_e
     INPUT_VIDEO_FORMAT_1080P_50,
     INPUT_VIDEO_FORMAT_1080P_5994,
     INPUT_VIDEO_FORMAT_1080P_60, /* NB: actually 60.00Hz */
+
+    INPUT_VIDEO_FORMAT_AUTODETECT = 100,
 };
 
 enum input_type_e
@@ -98,6 +107,8 @@ enum input_type_e
 //    INPUT_DEVICE_V4L2,
 //    INPUT_DEVICE_ASI,
 };
+
+/* video_format should be set to -1 for auto detection */
 
 typedef struct
 {
@@ -203,6 +214,7 @@ typedef struct
     char *codec_desc_text;
 
     /** Video **/
+    int video_format;
     int csp;
     int width;
     int height;
@@ -247,6 +259,9 @@ typedef struct
 
 /* Only one program is returned */
 int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *program );
+
+/* Allows a guessed configuration of a device without probe */
+int obe_autoconf_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *program );
 
 enum stream_action_e
 {
@@ -504,10 +519,20 @@ enum output_e
  *
  */
 
+enum fec_type_e
+{
+    FEC_TYPE_COP3_BLOCK_ALIGNED,
+    FEC_TYPE_COP3_NON_BLOCK_ALIGNED,
+};
+
 typedef struct
 {
     int type;
     char *target;
+
+    int fec_type;
+    int fec_columns;
+    int fec_rows;
 } obe_output_dest_t;
 
 typedef struct

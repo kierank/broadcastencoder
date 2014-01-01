@@ -147,10 +147,12 @@ void *open_muxer( void *ptr )
     if( mux_opts->passthrough )
     {
         /* TODO lock when we can add multiple devices */
+        /*
         params.ts_id = h->devices[0]->ts_id;
         program.program_num = h->devices[0]->program_num;
         program.pmt_pid = h->devices[0]->pmt_pid;
         program.pcr_pid = h->devices[0]->pcr_pid;
+        */
     }
     else
     {

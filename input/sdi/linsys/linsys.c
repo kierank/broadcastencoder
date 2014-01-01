@@ -640,6 +640,7 @@ fail:
 static int handle_audio_frame( linsys_opts_t *linsys_opts, uint8_t *data )
 {
     linsys_ctx_t *linsys_ctx = &linsys_opts->linsys_ctx;
+    obe_t *h = linsys_ctx->h;
 
     obe_raw_frame_t *raw_frame = new_raw_frame();
     if( !raw_frame )
@@ -672,10 +673,10 @@ static int handle_audio_frame( linsys_opts_t *linsys_opts, uint8_t *data )
 
     raw_frame->release_data = obe_release_audio_data;
     raw_frame->release_frame = obe_release_frame;
-    for( int i = 0; i < linsys_ctx->device->num_input_streams; i++ )
+    for( int i = 0; i < h->device.num_input_streams; i++ )
     {
-        if( linsys_ctx->device->streams[i]->stream_format == AUDIO_PCM )
-            raw_frame->input_stream_id = linsys_ctx->device->streams[i]->input_stream_id;
+        if( h->device.streams[i]->stream_format == AUDIO_PCM )
+            raw_frame->input_stream_id = h->device.streams[i]->input_stream_id;
     }
 
     if( add_to_filter_queue( linsys_ctx->h, raw_frame ) < 0 )
@@ -1138,7 +1139,7 @@ static void *probe_stream( void *ptr )
     obe_input_t *user_opts = &probe_ctx->user_opts;
     obe_device_t *device;
     obe_int_input_stream_t *streams[MAX_STREAMS];
-    int num_streams = 0, vbi_stream_services = 0;
+    int num_streams = 0, vbi_stream_services = 0, cur_input_stream_id = 0;
     obe_sdi_non_display_data_t *non_display_parser;
 
     linsys_opts_t linsys_opts;
@@ -1179,10 +1180,7 @@ static void *probe_stream( void *ptr )
         if( !streams[i] )
             goto finish;
 
-        /* TODO: make it take a continuous set of stream-ids */
-        pthread_mutex_lock( &h->device_list_mutex );
-        streams[i]->input_stream_id = h->cur_input_stream_id++;
-        pthread_mutex_unlock( &h->device_list_mutex );
+        streams[i]->input_stream_id = cur_input_stream_id++;
 
         if( i == 0 )
         {
@@ -1232,7 +1230,8 @@ static void *probe_stream( void *ptr )
     memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
 
     /* add device */
-    add_device( h, device );
+    memcpy( &h->device, device, sizeof(*device) );
+    free( device );
 
 finish:
     free( probe_ctx );
@@ -1244,8 +1243,7 @@ static void *open_input( void *ptr )
 {
     obe_input_params_t *input = ptr;
     obe_t *h = input->h;
-    obe_device_t *device = input->device;
-    obe_input_t *user_opts = &device->user_opts;
+    obe_input_t *user_opts = &h->device.user_opts;
     linsys_opts_t *linsys_opts;
     linsys_ctx_t *linsys_ctx;
     obe_sdi_non_display_data_t *non_display_parser;
@@ -1268,12 +1266,11 @@ static void *open_input( void *ptr )
 
     linsys_ctx = &linsys_opts->linsys_ctx;
 
-    linsys_ctx->device = device;
     linsys_ctx->h = h;
     linsys_ctx->last_frame_time = -1;
 
     non_display_parser = &linsys_ctx->non_display_parser;
-    non_display_parser->device = device;
+    non_display_parser->device = &h->device;
 
     /* TODO: wait for encoder */
 
@@ -1291,5 +1288,5 @@ static void *open_input( void *ptr )
     return NULL;
 }
 
-const obe_input_func_t linsys_sdi_input = { probe_stream, open_input };
+const obe_input_func_t linsys_sdi_input = { probe_stream, NULL, open_input };
 
