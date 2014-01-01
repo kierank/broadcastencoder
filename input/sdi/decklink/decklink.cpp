@@ -80,6 +80,7 @@ const static struct obe_to_decklink audio_conn_tab[] =
 
 const static struct obe_to_decklink_video video_format_tab[] =
 {
+    { INPUT_VIDEO_FORMAT_AUTODETECT,      bmdModePAL,           1,    25,    720, 576,   1 }, /* Set it up as PAL arbitrarily */
     { INPUT_VIDEO_FORMAT_PAL,             bmdModePAL,           1,    25,    720, 576,   1 },
     { INPUT_VIDEO_FORMAT_NTSC,            bmdModeNTSC,          1001, 30000, 720, 480,   1 },
     { INPUT_VIDEO_FORMAT_720P_50,         bmdModeHD720p50,      1,    50,    1280, 720,  0 },
@@ -856,7 +857,7 @@ static int open_card( decklink_opts_t *decklink_opts )
         goto finish;
     }
 
-    if( supported && decklink_opts->video_format == -1 )
+    if( supported && decklink_opts->video_format == INPUT_VIDEO_FORMAT_AUTODETECT )
         flags = bmdVideoInputEnableFormatDetection;
 
     /* Get the list of display modes. */

@@ -1536,7 +1536,7 @@ int main( int argc, char **argv )
     }
 
     cli.avc_profile = -1;
-    cli.input.video_format = -1;
+    cli.input.video_format = INPUT_VIDEO_FORMAT_AUTODETECT;
 
     printf( "\nOpen Broadcast Encoder command line interface.\n" );
     printf( "Version 1.0 \n" );
@@ -1576,7 +1576,7 @@ int main( int argc, char **argv )
                     return -1;
                 }
                 cli.avc_profile = -1;
-                cli.input.video_format = -1;
+                cli.input.video_format = INPUT_VIDEO_FORMAT_AUTODETECT;
             }
         }
     }
