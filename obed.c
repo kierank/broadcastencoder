@@ -40,7 +40,8 @@
 
 #define OBE_CONTROL_VERSION 1
 
-static char *ident = "obed0";
+static char socket_name[100];
+static char ident[100];
 
 enum obe_quality_metric_e
 {
@@ -90,6 +91,7 @@ const static int video_formats[] =
     INPUT_VIDEO_FORMAT_720P_5994,
     INPUT_VIDEO_FORMAT_1080I_50,
     INPUT_VIDEO_FORMAT_1080I_5994,
+    -1,
 };
 
 /* server options */
@@ -443,14 +445,56 @@ static void obed__encoder_status(Obed__EncoderCommunicate_Service *service,
     closure( &result, closure_data );
 }
 
+static int get_return_format( int video_format )
+{
+    int i = 0;
+    for( ; video_formats[i] != -1; i++ )
+    {
+        if( video_formats[i] == video_format )
+            break;
+    }
+
+    return i;
+}
+
 static void obed__encoder_format(Obed__EncoderCommunicate_Service *service,
                                  const Obed__EncoderControl *input,
                                  Obed__EncoderFormatResponse_Closure closure,
                                  void *closure_data)
 {
     Obed__EncoderFormatResponse result = OBED__ENCODER_FORMAT_RESPONSE__INIT;
+    Obed__InputOpts *input_opts_in = input->input_opts;
+
+    result.has_video_format = 1;
+    result.video_format = -1;
+    if( running )
+    {
+        result.video_format = get_return_format( d.program.streams[0].video_format );
+    }
+    else
+    {
+        obe_input_t *input_opts_out = &d.input;
+
+        d.h = obe_setup( (const char *)ident );
+        if( d.h )
+        {
+            input_opts_out->input_type = input_opts_in->input_device;
+            input_opts_out->card_idx = input_opts_in->card_idx;
+            input_opts_out->video_format = INPUT_VIDEO_FORMAT_AUTODETECT;
+
+            int ret = obe_probe_device( d.h, &d.input, &d.program );
+
+            if( !ret && d.program.num_streams )
+            {
+                result.video_format = get_return_format( d.program.streams[0].video_format );
+            }
+
+            stop_encode();
+        }
+    }
 
     result.encoder_id = encoder_id;
+    result.format_version = 1;
 
     closure( &result, closure_data );
 }
@@ -461,8 +505,8 @@ int main( int argc, char **argv )
 {
     ProtobufC_RPC_Server *server;
     ProtobufC_RPC_AddressType address_type = 0;
-    const char *name = "/tmp/obesocket%i";
-    char tmp[100];
+    const char *socket_name_format = "/tmp/obesocket%i";
+    const char *ident_format = "obed%i";
 
     if( argc != 2 )
     {
@@ -471,7 +515,8 @@ int main( int argc, char **argv )
     }
 
     encoder_id = atoi( argv[1] );
-    snprintf( tmp, sizeof(tmp), name, encoder_id );
+    snprintf( socket_name, sizeof(socket_name), socket_name_format, encoder_id );
+    snprintf( ident, sizeof(ident), ident_format, encoder_id );
 
     /* Signal handlers */
     keep_running = 1;
@@ -479,7 +524,7 @@ int main( int argc, char **argv )
     signal( SIGINT, stop_server );
     // TODO SIGPIPE
 
-    server = protobuf_c_rpc_server_new( address_type, tmp, (ProtobufCService *) &encoder_communicate, NULL );
+    server = protobuf_c_rpc_server_new( address_type, socket_name, (ProtobufCService *) &encoder_communicate, NULL );
     fprintf( stderr, "RPC server activated\n" );
 
     while( keep_running )
