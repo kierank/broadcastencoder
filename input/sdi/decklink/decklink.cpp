@@ -874,7 +874,10 @@ static int open_card( decklink_opts_t *decklink_opts )
     }
 
     if( supported && decklink_opts->video_format == INPUT_VIDEO_FORMAT_AUTODETECT )
+    {
         flags = bmdVideoInputEnableFormatDetection;
+        decklink_opts->video_format = INPUT_VIDEO_FORMAT_PAL;
+    }
 
     /* Get the list of display modes. */
     result = decklink_ctx->p_input->GetDisplayModeIterator( &p_display_iterator );
