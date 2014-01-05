@@ -873,9 +873,10 @@ static int open_card( decklink_opts_t *decklink_opts )
         goto finish;
     }
 
-    if( supported && decklink_opts->video_format == INPUT_VIDEO_FORMAT_AUTODETECT )
+    if( decklink_opts->video_format == INPUT_VIDEO_FORMAT_AUTODETECT )
     {
-        flags = bmdVideoInputEnableFormatDetection;
+        if( supported )
+            flags = bmdVideoInputEnableFormatDetection;
         decklink_opts->video_format = INPUT_VIDEO_FORMAT_PAL;
     }
 
