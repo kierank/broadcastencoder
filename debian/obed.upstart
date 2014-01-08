@@ -1,4 +1,4 @@
-description "OBE D-100 Encoder Master"
+description "OBE C-100 Encoder Master"
 
 start on filesystem or runlevel [2345]
 stop on run level [!2345]
