@@ -6,4 +6,4 @@ stop on run level [!2345]
 console log 
 respawn
 
-exec start-stop-daemon --start --chdir /opt/obe-d100/ --exec /opt/obe-d100/bin/obed --
+exec start-stop-daemon --start --chdir /opt/obe-d100/ --exec /opt/obe-d100/bin/obed 0 --
