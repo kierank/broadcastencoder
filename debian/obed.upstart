@@ -3,10 +3,9 @@ description "OBE D-100 Encoder Master"
 start on filesystem or runlevel [2345]
 stop on run level [!2345]
 
-console log 
-respawn
+console log
 
-script
+pre-script
     for i in `seq 0 3`; do
         start obed-worker id=$i || true
     done
