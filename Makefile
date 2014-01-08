@@ -105,9 +105,7 @@ install: obed$(EXE) $(SONAME)
 	install -d $(DESTDIR)$(bindir)
 	install obed$(EXE) $(DESTDIR)$(bindir)
 	install -d $(DESTDIR)/etc/init
-	install obed1.conf $(DESTDIR)/etc/init
-	install obed2.conf $(DESTDIR)/etc/init
-	install obed3.conf $(DESTDIR)/etc/init
+	install obed-worker.conf $(DESTDIR)/etc/init
 
 uninstall:
 	rm -f $(DESTDIR)$(bindir)/obed$(EXE)
