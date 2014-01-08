@@ -193,7 +193,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
 
             if( video_opts_in->latency == 1 )
             {
-                if( obe_set_config( d.h, OBE_SYSTEM_TYPE_LOWEST_LATENCY, 10 ) < 0 )
+                if( obe_set_config( d.h, OBE_SYSTEM_TYPE_LOWEST_LATENCY, OBE_BIT_DEPTH_10 ) < 0 )
                 {
                     syslog( LOG_ERR, "Error setting latency" );
                     goto fail;
