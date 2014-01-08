@@ -181,6 +181,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             /* only messages with all options are legal currently */
             Obed__InputOpts *input_opts_in = encoder_control->input_opts;
             obe_input_t *input_opts_out = &d.input;
+            Obed__VideoOpts *video_opts_in = encoder_control->video_opts;
 
             d.h = obe_setup( (const char *)ident );
             if( !d.h )
@@ -190,13 +191,21 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             input_opts_out->card_idx = input_opts_in->card_idx;
             input_opts_out->video_format = video_formats[input_opts_in->video_format];
 
+            if( video_opts_in->latency == 1 )
+            {
+                if( obe_set_config( d.h, OBE_SYSTEM_TYPE_LOWEST_LATENCY, 10 ) < 0 )
+                {
+                    syslog( LOG_ERR, "Error setting latency" );
+                    goto fail;
+                }
+            }
+
             if( obe_probe_device( d.h, &d.input, &d.program ) < 0 )
             {
                 syslog( LOG_ERR, "Input device could not be opened" );
                 goto fail;
             }
 
-            Obed__VideoOpts *video_opts_in = encoder_control->video_opts;
             obe_output_stream_t *video_stream = &d.output_streams[0];
             Obed__AncillaryOpts *ancillary_opts_in = encoder_control->ancillary_opts;
             Obed__MuxOpts *mux_opts_in = encoder_control->mux_opts;
@@ -257,6 +266,12 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             if( video_opts_in->width )
                 video_stream->avc_param.i_width         = video_opts_in->width;
             video_stream->is_wide                       = video_opts_in->aspect_ratio;
+
+            if( video_opts_in->latency == 1 )
+            {
+                video_stream->avc_param.b_intra_refresh = 1;
+                video_stream->avc_param.i_threads = 4;
+            }
 
             if( video_opts_in->quality_metric )
             {
@@ -399,6 +414,17 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 if( !output_dst->target )
                     goto fail;
                 strcpy( output_dst->target, tmp );
+                output_dst->fec_type = output_opts_in->fec_type;
+                if( output_opts_in->fec_type > 0 )
+                {
+                    output_dst->fec_columns = output_opts_in->fec_columns;
+                    output_dst->fec_rows = output_opts_in->fec_rows;
+                }
+                else
+                {
+                    output_dst->fec_columns = 0;
+                    output_dst->fec_rows = 0;
+                }
             }
 
             obe_setup_streams( d.h, d.output_streams, d.num_output_streams );
