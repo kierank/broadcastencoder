@@ -175,7 +175,7 @@ SRCPATH="$(cd $(dirname $0); pwd)"
 [ -n "$(echo $SRCPATH | grep ' ')" ] && die "Out of tree builds are impossible with whitespace in source path."
 [ -e "$SRCPATH/config.h" -o -e "$SRCPATH/x264_config.h" ] && die "Out of tree builds are impossible with config.h/x264_config.h in source dir."
 
-prefix='/opt/obe-d100'
+prefix='/opt/obe-c100'
 exec_prefix='${prefix}'
 bindir='${exec_prefix}/bin'
 libdir='${exec_prefix}/lib'
