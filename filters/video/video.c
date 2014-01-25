@@ -31,13 +31,6 @@
 #include "x86/vfilter.h"
 #include "input/sdi/sdi.h"
 
-
-#if X264_BIT_DEPTH > 8
-typedef uint16_t pixel;
-#else
-typedef uint8_t pixel;
-#endif
-
 typedef struct
 {
     int filter_bit_depth;
