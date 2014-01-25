@@ -31,6 +31,7 @@ typedef struct obe_udp_opts_t
     int  local_port;
     int  reuse_socket;
     int  ttl;
+    int  tos;
     int  buffer_size;
     int  miface;
 } obe_udp_opts_t;
