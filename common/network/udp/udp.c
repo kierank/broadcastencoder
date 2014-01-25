@@ -280,6 +280,7 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
     s->local_port = udp_opts->local_port;
     s->reuse_socket = udp_opts->reuse_socket;
     s->ttl = udp_opts->ttl;
+    s->tos = udp_opts->tos;
     s->buffer_size = udp_opts->buffer_size;
     s->miface = udp_opts->miface;
 
