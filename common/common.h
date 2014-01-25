@@ -327,7 +327,6 @@ typedef struct
 {
     int input_stream_id;
     int64_t pts;
-    void *opaque;
 
     void (*release_data)( void* );
     void (*release_frame)( void* );
