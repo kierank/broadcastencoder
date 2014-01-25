@@ -343,8 +343,6 @@ typedef struct
     int sar_height;
     int sar_guess; /* This is set if the SAR cannot be determined from any WSS/AFD that might exist in the stream */
     int64_t arrival_time;
-    int timebase_num;
-    int timebase_den;
 
     /* Ancillary / User-data */
     int num_user_data;
