@@ -29,8 +29,8 @@
 #include <libzvbi.h>
 #include <libavutil/crc.h>
 
-/* In microseconds */
-#define SDI_MAX_DELAY 50000
+/* In 27MHz ticks */
+#define SDI_MAX_DELAY 1350000
 
 typedef struct
 {
