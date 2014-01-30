@@ -407,13 +407,18 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 }
                 if( output_opts_in->miface )
                 {
-                    snprintf( tmp2, sizeof(tmp2), "miface=%s", output_opts_in->miface );
+                    snprintf( tmp2, sizeof(tmp2), "miface=%s&", output_opts_in->miface );
                     strcat( tmp, tmp2 );
                 }
-                output_dst->target = malloc( strlen( tmp ) + 1 );
+                if( output_opts_in->tos )
+                {
+                    snprintf( tmp2, sizeof(tmp2), "tos=%i&", output_opts_in->tos );
+                    strcat( tmp, tmp2 );
+                }
+
+                output_dst->target = strdup( tmp );
                 if( !output_dst->target )
                     goto fail;
-                strcpy( output_dst->target, tmp );
                 output_dst->fec_type = output_opts_in->fec_type;
                 if( output_opts_in->fec_type > 0 )
                 {
