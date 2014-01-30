@@ -160,20 +160,6 @@ static void *start_encoder( void *ptr )
             break;
         }
 
-        /* Reset the speedcontrol buffer if the source has dropped frames. Otherwise speedcontrol
-         * stays in an underflow state and is locked to the fastest preset */
-        pthread_mutex_lock( &h->drop_mutex );
-        if( h->encoder_drop )
-        {
-            pthread_mutex_lock( &h->enc_smoothing_queue.mutex );
-            h->enc_smoothing_buffer_complete = 0;
-            pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
-            syslog( LOG_INFO, "Speedcontrol reset\n" );
-            x264_speedcontrol_sync( s, enc_params->avc_param.sc.i_buffer_size, enc_params->avc_param.sc.f_buffer_init, 0 );
-            h->encoder_drop = 0;
-        }
-        pthread_mutex_unlock( &h->drop_mutex );
-
         raw_frame = encoder->queue.queue[0];
         pthread_mutex_unlock( &encoder->queue.mutex );
 
