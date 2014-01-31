@@ -643,14 +643,12 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     memcpy( &args->user_opts, input_device, sizeof(*input_device) );
     if( input_device->location )
     {
-       args->user_opts.location = malloc( strlen( input_device->location ) + 1 );
+       args->user_opts.location = strdup( input_device->location );
        if( !args->user_opts.location)
        {
            fprintf( stderr, "Malloc failed \n" );
            goto fail;
         }
-
-        strcpy( args->user_opts.location, input_device->location );
     }
 
     if( obe_validate_input_params( input_device ) < 0 )
@@ -988,25 +986,21 @@ int obe_setup_muxer( obe_t *h, obe_mux_opts_t *mux_opts )
 
     if( mux_opts->service_name )
     {
-        h->mux_opts.service_name = malloc( strlen( mux_opts->service_name ) + 1 );
+        h->mux_opts.service_name = strdup( mux_opts->service_name );
         if( !h->mux_opts.service_name )
         {
            fprintf( stderr, "Malloc failed \n" );
            return -1;
         }
-
-        strcpy( h->mux_opts.service_name, mux_opts->service_name );
     }
     if( mux_opts->provider_name )
     {
-        h->mux_opts.provider_name = malloc( strlen( mux_opts->provider_name ) + 1 );
+        h->mux_opts.provider_name = strdup( mux_opts->provider_name );
         if( !h->mux_opts.provider_name )
         {
             fprintf( stderr, "Malloc failed \n" );
             return -1;
         }
-
-        strcpy( h->mux_opts.provider_name, mux_opts->provider_name );
     }
 
     return 0;
@@ -1039,13 +1033,12 @@ int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts )
         h->outputs[i]->output_dest.type = output_opts->outputs[i].type;
         if( output_opts->outputs[i].target )
         {
-            h->outputs[i]->output_dest.target = malloc( strlen( output_opts->outputs[i].target ) + 1 );
+            h->outputs[i]->output_dest.target = strdup( output_opts->outputs[i].target );
             if( !h->outputs[i]->output_dest.target )
             {
                 fprintf( stderr, "Malloc failed\n" );
                 return -1;
             }
-            strcpy( h->outputs[i]->output_dest.target, output_opts->outputs[i].target );
         }
         h->outputs[i]->output_dest.fec_type = output_opts->outputs[i].fec_type;
         h->outputs[i]->output_dest.fec_columns = output_opts->outputs[i].fec_columns;
@@ -1074,7 +1067,6 @@ int obe_start( obe_t *h )
     /* TODO: decide upon thread priorities */
 
     /* Setup mutexes and cond vars */
-    pthread_mutex_init( &h->drop_mutex, NULL );
     obe_init_queue( &h->enc_smoothing_queue );
     obe_init_queue( &h->mux_queue );
     obe_init_queue( &h->mux_smoothing_queue );

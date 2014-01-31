@@ -312,15 +312,6 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
     else
     {
         int64_t cur_frame_time = obe_mdate();
-        if( cur_frame_time - linsys_ctx->last_frame_time >= SDI_MAX_DELAY )
-        {
-            syslog( LOG_WARNING, "Linsys card index %i: No frame received for %"PRIi64" ms", linsys_opts->card_idx,
-                   (cur_frame_time - linsys_ctx->last_frame_time) / 1000 );
-            pthread_mutex_lock( &h->drop_mutex );
-            h->encoder_drop = h->mux_drop = 1;
-            pthread_mutex_unlock( &h->drop_mutex );
-        }
-
         linsys_ctx->last_frame_time = cur_frame_time;
     }
 
@@ -607,9 +598,6 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
 
         if( IS_SD( linsys_opts->video_format ) )
             raw_frame->img.first_line = first_active_line[j].line;
-
-        raw_frame->timebase_num = linsys_opts->timebase_num;
-        raw_frame->timebase_den = linsys_opts->timebase_den;
 
         /* If AFD is present and the stream is SD this will be changed in the video filter */
         raw_frame->sar_width = raw_frame->sar_height = 1;

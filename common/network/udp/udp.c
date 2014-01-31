@@ -32,6 +32,7 @@ typedef struct
     char hostname[1024];
     int port;
     int ttl;
+    int tos;
     int miface;
     int buffer_size;
     int reuse_socket;
@@ -87,6 +88,22 @@ static int udp_set_multicast_opts( int sockfd, obe_udp_ctx *s )
 #endif
     }
 #endif
+    return 0;
+}
+
+static int udp_set_tos_opts( int sockfd, obe_udp_ctx *s )
+{
+    struct sockaddr *addr = (struct sockaddr *)&s->dest_addr;
+
+    if( addr->sa_family == AF_INET )
+    {
+        if( setsockopt( sockfd, IPPROTO_IP, IP_TOS, &s->tos, sizeof(s->tos) ) < 0 )
+        {
+            fprintf( stderr, "[udp] Could not setup IPv4 TOS\n" );
+            return -1;
+        }
+    }
+
     return 0;
 }
 
@@ -230,6 +247,9 @@ void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri )
         if( av_find_info_tag( buf, sizeof(buf), "ttl", p ) )
             udp_opts->ttl = strtol( buf, NULL, 10 );
 
+        if( av_find_info_tag( buf, sizeof(buf), "tos", p ) )
+            udp_opts->tos = strtol( buf, NULL, 10 );
+
         if( av_find_info_tag( buf, sizeof(buf), "localport", p ) )
             udp_opts->local_port = strtol( buf, NULL, 10 );
 
@@ -260,6 +280,7 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
     s->local_port = udp_opts->local_port;
     s->reuse_socket = udp_opts->reuse_socket;
     s->ttl = udp_opts->ttl;
+    s->tos = udp_opts->tos;
     s->buffer_size = udp_opts->buffer_size;
     s->miface = udp_opts->miface;
 
@@ -288,6 +309,10 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
 
     /* set output multicast ttl */
     if( s->is_multicast && udp_set_multicast_opts( udp_fd, s ) < 0 )
+        goto fail;
+
+    /* set tos/diffserv */
+    if( s->tos && udp_set_tos_opts( udp_fd, s ) < 0 )
         goto fail;
 
     /* limit the tx buf size to limit latency */
