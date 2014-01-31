@@ -329,7 +329,6 @@ typedef struct
 {
     int input_stream_id;
     int64_t pts;
-    void *opaque;
 
     void (*release_data)( void* );
     void (*release_frame)( void* );
@@ -345,8 +344,6 @@ typedef struct
     int sar_height;
     int sar_guess; /* This is set if the SAR cannot be determined from any WSS/AFD that might exist in the stream */
     int64_t arrival_time;
-    int timebase_num;
-    int timebase_den;
 
     /* Ancillary / User-data */
     int num_user_data;
@@ -444,12 +441,6 @@ struct obe_t
 
     /* Devices */
     obe_device_t device;
-
-    /* Frame drop flags
-     * TODO: make this work for multiple inputs and outputs */
-    pthread_mutex_t drop_mutex;
-    int encoder_drop;
-    int mux_drop;
 
     /* Streams */
     int num_output_streams;

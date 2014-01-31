@@ -96,19 +96,6 @@ static void *start_smoothing( void *ptr )
 
         num_muxed_data = h->mux_smoothing_queue.size;
 
-        /* Refill the buffer after a drop */
-        pthread_mutex_lock( &h->drop_mutex );
-        if( h->mux_drop )
-        {
-            syslog( LOG_INFO, "Mux smoothing buffer reset\n" );
-            h->mux_drop = 0;
-            av_fifo_reset( fifo_data );
-            av_fifo_reset( fifo_pcr );
-            buffer_complete = 0;
-            start_clock = -1;
-        }
-        pthread_mutex_unlock( &h->drop_mutex );
-
         if( !buffer_complete )
         {
             start_data = h->mux_smoothing_queue.queue[0];

@@ -337,7 +337,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     uint8_t *vbi_buf;
     int anc_lines[DECKLINK_VANC_LINES];
     IDeckLinkVideoFrameAncillary *ancillary;
-    BMDTimeValue stream_time, frame_duration;
+    BMDTimeValue stream_time, frame_duration, hardware_time, time_in_frame, ticks_per_frame;
 
     if( decklink_opts_->probe_success )
         return S_OK;
@@ -369,26 +369,13 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
         /* use SDI ticks as clock source */
         videoframe->GetStreamTime( &stream_time, &frame_duration, OBE_CLOCK );
-        obe_clock_tick( h, (int64_t)stream_time );
+        decklink_ctx->p_input->GetHardwareReferenceClock( OBE_CLOCK, &hardware_time, &time_in_frame, &ticks_per_frame );
+        obe_clock_tick( h, (int64_t)hardware_time );
 
         if( decklink_ctx->last_frame_time == -1 )
         {
-            decklink_ctx->last_frame_time = obe_mdate();
+            decklink_ctx->last_frame_time = hardware_time;
             syslog( LOG_INFO, "inputActivate: Decklink input active" );
-        }
-        else
-        {
-            int64_t cur_frame_time = obe_mdate();
-            if( cur_frame_time - decklink_ctx->last_frame_time >= SDI_MAX_DELAY )
-            {
-                syslog( LOG_WARNING, "Decklink card index %i: No frame received for %"PRIi64" ms", decklink_opts_->card_idx,
-                       (cur_frame_time - decklink_ctx->last_frame_time) / 1000 );
-                pthread_mutex_lock( &h->drop_mutex );
-                h->encoder_drop = h->mux_drop = 1;
-                pthread_mutex_unlock( &h->drop_mutex );
-            }
-
-            decklink_ctx->last_frame_time = cur_frame_time;
         }
 
         const int width = videoframe->GetWidth();
@@ -592,8 +579,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             }
             raw_frame->alloc_img.planes = av_pix_fmt_descriptors[raw_frame->alloc_img.csp].nb_components;
             raw_frame->alloc_img.format = decklink_opts_->video_format;
-            raw_frame->timebase_num = decklink_opts_->timebase_num;
-            raw_frame->timebase_den = decklink_opts_->timebase_den;
 
             memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
             if( IS_SD( decklink_opts_->video_format ) )

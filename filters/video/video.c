@@ -31,13 +31,6 @@
 #include "x86/vfilter.h"
 #include "input/sdi/sdi.h"
 
-
-#if X264_BIT_DEPTH > 8
-typedef uint16_t pixel;
-#else
-typedef uint8_t pixel;
-#endif
-
 typedef struct
 {
     int filter_bit_depth;
@@ -49,12 +42,17 @@ typedef struct
     void (*scale_plane)( uint16_t *src, int stride, int width, int height, int lshift, int rshift );
 
     /* resize */
-    struct SwsContext *sws_ctx;
-    int sws_ctx_flags;
-    enum PixelFormat dst_pix_fmt;
+    int sws_ctx_flags; /* shared between both contexts */
+    struct SwsContext *sws_ctx_10;
+    enum PixelFormat dst_pix_fmt_10;
+
+    enum PixelFormat src_pix_fmt_8;
+    struct SwsContext *sws_ctx_8;
+    enum PixelFormat dst_pix_fmt_8;
 
     /* downsample */
-    void (*downsample_chroma_fields)( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
+    void (*downsample_chroma_fields_8)( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
+    void (*downsample_chroma_fields_10)( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
 
     /* dither */
     void (*dither_plane_10_to_8)( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height );
@@ -171,7 +169,7 @@ static void scale_plane_c( uint16_t *src, int stride, int width, int height, int
     for( int i = 0; i < height; i++ )
     {
         for( int j = 0; j < width; j++ )
-            src[j] = (src[j] << lshift) + (src[j] >> rshift);
+            src[j] = (src[j] << lshift);
 
         src += stride / 2;
     }
@@ -278,17 +276,13 @@ static void init_filter( obe_t *h, obe_vid_filter_ctx_t *vfilt )
     vfilt->dither_plane_10_to_8 = dither_plane_10_to_8_c;
 
     /* downsampling */
-    if( h->filter_bit_depth == OBE_BIT_DEPTH_8 )
-        vfilt->downsample_chroma_fields = downsample_chroma_fields_8_c;
-    else
-        vfilt->downsample_chroma_fields = downsample_chroma_fields_10_c;
+    vfilt->downsample_chroma_fields_8 = downsample_chroma_fields_8_c;
+    vfilt->downsample_chroma_fields_10 = downsample_chroma_fields_10_c;
 
     if( vfilt->avutil_cpu & AV_CPU_FLAG_SSE2 )
     {
-        if( h->filter_bit_depth == OBE_BIT_DEPTH_8 )
-            vfilt->downsample_chroma_fields = obe_downsample_chroma_fields_8_sse2;
-        else
-            vfilt->downsample_chroma_fields = obe_downsample_chroma_fields_10_sse2;
+        vfilt->downsample_chroma_fields_8 = obe_downsample_chroma_fields_8_sse2;
+        vfilt->downsample_chroma_fields_10 = obe_downsample_chroma_fields_10_sse2;
     }
 
     if( vfilt->avutil_cpu & AV_CPU_FLAG_SSE4 )
@@ -296,19 +290,16 @@ static void init_filter( obe_t *h, obe_vid_filter_ctx_t *vfilt )
 
     if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX )
     {
-        if( h->filter_bit_depth == OBE_BIT_DEPTH_8 )
-            vfilt->downsample_chroma_fields = obe_downsample_chroma_fields_8_avx;
-        else
-            vfilt->downsample_chroma_fields = obe_downsample_chroma_fields_10_avx;
+        vfilt->downsample_chroma_fields_8 = obe_downsample_chroma_fields_8_avx;
+        vfilt->downsample_chroma_fields_10 = obe_downsample_chroma_fields_10_avx;
+
         vfilt->dither_plane_10_to_8 = obe_dither_plane_10_to_8_avx;
     }
 
     if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX2 )
     {
-        if( h->filter_bit_depth == OBE_BIT_DEPTH_8 )
-            vfilt->downsample_chroma_fields = obe_downsample_chroma_fields_8_avx2;
-        else
-            vfilt->downsample_chroma_fields = obe_downsample_chroma_fields_10_avx2;
+        vfilt->downsample_chroma_fields_8 = obe_downsample_chroma_fields_8_avx2;
+        vfilt->downsample_chroma_fields_10 = obe_downsample_chroma_fields_10_avx2;
     }
 }
 
@@ -340,38 +331,58 @@ static void blank_lines( obe_raw_frame_t *raw_frame )
 static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame, int width )
 {
     obe_image_t tmp_image = {0};
+    const AVPixFmtDescriptor *pfd = av_pix_fmt_desc_get( raw_frame->img.csp );
+    int bpp = pfd->comp[0].depth_minus1+1 > 8 ? 2 : 1;
 
-    if( !vfilt->sws_ctx || raw_frame->reset_obe )
+    if( !vfilt->sws_ctx_8 ||
+        ( vfilt->filter_bit_depth == OBE_BIT_DEPTH_8 && vfilt->src_pix_fmt_8 != raw_frame->img.csp ) ||
+        raw_frame->reset_obe )
     {
+        /* Shared amongst 8-bit and 10-bit contexts */
+        vfilt->sws_ctx_flags |= SWS_FULL_CHR_H_INP | SWS_ACCURATE_RND | SWS_LANCZOS;
+
         if( IS_INTERLACED( raw_frame->img.format ) )
         {
-            if( vfilt->filter_bit_depth == OBE_BIT_DEPTH_10 )
-                vfilt->dst_pix_fmt = raw_frame->img.csp; /* 10-bit horizontal resize */
-            else
-                vfilt->dst_pix_fmt = PIX_FMT_YUV422P; /* 8-bit joint resize and unpack */
+            vfilt->dst_pix_fmt_8 = PIX_FMT_YUV422P; /* 8-bit joint resize and unpack */
+            vfilt->dst_pix_fmt_10 = PIX_FMT_YUV422P10; /* 10-bit horizontal resize */
         }
         else
         {
             /* Target for progressive is always 4:2:0 */
-            vfilt->dst_pix_fmt = raw_frame->img.csp == PIX_FMT_YUV422P10 ? PIX_FMT_YUV420P10 : PIX_FMT_YUV420P;
+            vfilt->dst_pix_fmt_8 = PIX_FMT_YUV420P;
+            vfilt->dst_pix_fmt_10 = PIX_FMT_YUV420P10;
         }
 
-        vfilt->sws_ctx_flags |= SWS_FULL_CHR_H_INP | SWS_ACCURATE_RND | SWS_LANCZOS;
-
-        vfilt->sws_ctx = sws_getContext( raw_frame->img.width, raw_frame->img.height, raw_frame->img.csp,
-                                         width, raw_frame->img.height, vfilt->dst_pix_fmt,
-                                         vfilt->sws_ctx_flags, NULL, NULL, NULL );
-        if( !vfilt->sws_ctx )
+        /* 10-bit input will always have bars which are planar */
+        vfilt->src_pix_fmt_8 = bpp == 2 ? PIX_FMT_YUV422P : raw_frame->img.csp;
+        vfilt->sws_ctx_8 = sws_getContext( raw_frame->img.width, raw_frame->img.height, vfilt->src_pix_fmt_8,
+                                           width, raw_frame->img.height, vfilt->dst_pix_fmt_8,
+                                           vfilt->sws_ctx_flags, NULL, NULL, NULL );
+        if( !vfilt->sws_ctx_8 )
         {
             fprintf( stderr, "Video scaling failed\n" );
             return -1;
         }
+
+        if( vfilt->filter_bit_depth == OBE_BIT_DEPTH_10 )
+        {
+            vfilt->sws_ctx_10 = sws_getContext( raw_frame->img.width, raw_frame->img.height, PIX_FMT_YUV422P10,
+                                                width, raw_frame->img.height, vfilt->dst_pix_fmt_10,
+                                                vfilt->sws_ctx_flags, NULL, NULL, NULL );
+            if( !vfilt->sws_ctx_10 )
+            {
+                fprintf( stderr, "Video scaling failed\n" );
+                return -1;
+            }
+        }
     }
+
+    int dst_pix_fmt = bpp == 1 ? vfilt->dst_pix_fmt_8 : vfilt->dst_pix_fmt_10;
 
     tmp_image.width = width;
     tmp_image.height = raw_frame->img.height;
-    tmp_image.planes = av_pix_fmt_descriptors[vfilt->dst_pix_fmt].nb_components;
-    tmp_image.csp = vfilt->dst_pix_fmt;
+    tmp_image.planes = av_pix_fmt_descriptors[dst_pix_fmt].nb_components;
+    tmp_image.csp = dst_pix_fmt;
     tmp_image.format = raw_frame->img.format;
 
     if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height,
@@ -381,7 +392,8 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
         return -1;
     }
 
-    sws_scale( vfilt->sws_ctx, (const uint8_t* const*)raw_frame->img.plane, raw_frame->img.stride,
+    struct SwsContext *sws_ctx = bpp == 1 ? vfilt->sws_ctx_8 : vfilt->sws_ctx_10;
+    sws_scale( sws_ctx, (const uint8_t* const*)raw_frame->img.plane, raw_frame->img.stride,
                0, tmp_image.height, tmp_image.plane, tmp_image.stride );
 
     raw_frame->release_data( raw_frame );
@@ -504,7 +516,10 @@ static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_fr
         int height = obe_cli_csps[out->csp].height[i] * img->height;
         int width = obe_cli_csps[out->csp].width[i] * img->width / num_interleaved;
 
-        vfilt->downsample_chroma_fields( img->plane[i], img->stride[i], out->plane[i], out->stride[i], width, height );
+        if( bpp == 1 )
+            vfilt->downsample_chroma_fields_8( img->plane[i], img->stride[i], out->plane[i], out->stride[i], width, height );
+        else
+            vfilt->downsample_chroma_fields_10( img->plane[i], img->stride[i], out->plane[i], out->stride[i], width, height );
     }
 
     raw_frame->release_data( raw_frame );
@@ -526,7 +541,7 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     tmp_image.planes = av_pix_fmt_descriptors[tmp_image.csp].nb_components;
     tmp_image.format = raw_frame->img.format;
 
-    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
+    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height,
                         tmp_image.csp, 32 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
@@ -695,7 +710,7 @@ static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stre
     for( int i = 0; i < raw_frame->num_user_data; i++ )
     {
         if( raw_frame->user_data[i].type == USER_DATA_CEA_608 )
-            ret = write_608_cc( &raw_frame->user_data[i], raw_frame );
+            ret = write_608_cc( &raw_frame->user_data[i], input_stream );
         else if( raw_frame->user_data[i].type == USER_DATA_CEA_708_CDP )
             ret = read_cdp( &raw_frame->user_data[i] );
         else if( raw_frame->user_data[i].type == USER_DATA_AFD )
@@ -804,8 +819,11 @@ static void *start_filter( void *ptr )
 end:
     if( vfilt )
     {
-        if( vfilt->sws_ctx )
-            sws_freeContext( vfilt->sws_ctx );
+        if( vfilt->sws_ctx_8 )
+            sws_freeContext( vfilt->sws_ctx_8 );
+
+        if( vfilt->sws_ctx_10 )
+            sws_freeContext( vfilt->sws_ctx_10 );
 
         free( vfilt );
     }
