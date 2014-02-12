@@ -518,7 +518,6 @@ static int set_input( char *command, obecli_command_t *child )
         if( !opts && params )
             return -1;
 
-        char *location     = obe_get_option( input_opts[0], opts );
         char *card_idx     = obe_get_option( input_opts[1], opts );
         char *video_format = obe_get_option( input_opts[2], opts );
         char *video_connection = obe_get_option( input_opts[3], opts );
@@ -532,16 +531,6 @@ static int set_input( char *command, obecli_command_t *child )
 
         FAIL_IF_ERROR( audio_connection && ( check_enum_value( audio_connection, input_audio_connections ) < 0 ),
                        "Invalid audio connection\n" );
-
-        if( location )
-        {
-             if( cli.input.location )
-                 free( cli.input.location );
-
-             cli.input.location = malloc( strlen( location ) + 1 );
-             FAIL_IF_ERROR( !cli.input.location, "malloc failed\n" );
-             strcpy( cli.input.location, location );
-        }
 
         cli.input.card_idx = obe_otoi( card_idx, cli.input.card_idx );
         if( video_format )
@@ -1373,12 +1362,6 @@ static int stop_encode( char *command, obecli_command_t *child )
 {
     obe_close( cli.h );
     cli.h = NULL;
-
-    if( cli.input.location )
-    {
-        free( cli.input.location );
-        cli.input.location = NULL;
-    }
 
     if( cli.mux_opts.service_name )
     {

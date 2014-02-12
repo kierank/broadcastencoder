@@ -176,7 +176,6 @@ typedef struct
 {
     int device_id;
     int device_type;
-    char *location;
 
     obe_input_t user_opts;
 

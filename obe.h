@@ -113,7 +113,6 @@ enum input_type_e
 typedef struct
 {
     int input_type;
-    char *location;
 
     int card_idx;
 

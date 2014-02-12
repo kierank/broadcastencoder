@@ -60,8 +60,6 @@ void destroy_device( obe_device_t *device )
         free( device->streams[i] );
     if( device->probed_streams )
         free( device->probed_streams );
-    if( device->location )
-        free( device->location );
 }
 
 /* Raw frame */
@@ -625,12 +623,6 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
         return -1;
     }
 
-    if( input_device->input_type == INPUT_URL && !input_device->location )
-    {
-        fprintf( stderr, "Invalid input location\n" );
-        return -1;
-    }
-
     args = malloc( sizeof(*args) );
     if( !args )
     {
@@ -640,15 +632,6 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
 
     args->h = h;
     memcpy( &args->user_opts, input_device, sizeof(*input_device) );
-    if( input_device->location )
-    {
-       args->user_opts.location = strdup( input_device->location );
-       if( !args->user_opts.location)
-       {
-           fprintf( stderr, "Malloc failed \n" );
-           goto fail;
-        }
-    }
 
     if( obe_validate_input_params( input_device ) < 0 )
         goto fail;
@@ -659,9 +642,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
         goto fail;
     }
 
-    if( input_device->location )
-        printf( "Probing device: \"%s\". ", input_device->location );
-    else if( input_device->input_type == INPUT_DEVICE_LINSYS_SDI )
+    if( input_device->input_type == INPUT_DEVICE_LINSYS_SDI )
         printf( "Probing device: Linsys card %i. ", input_device->card_idx );
     else
         printf( "Probing device: Decklink card %i. ", input_device->card_idx );
@@ -732,18 +713,13 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
 
 fail:
     if( args )
-    {
-        if( args->user_opts.location )
-            free( args->user_opts.location );
         free( args );
-    }
 
     return -1;
 }
 
 int obe_autoconf_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *program )
 {
-    void *ret_ptr;
     obe_int_input_stream_t *stream_in;
     obe_input_stream_t *stream_out;
     obe_input_probe_t args;
@@ -838,8 +814,6 @@ int obe_autoconf_device( obe_t *h, obe_input_t *input_device, obe_input_program_
     return 0;
 
 fail:
-    if( args.user_opts.location )
-        free( args.user_opts.location );
 
     return -1;
 }
