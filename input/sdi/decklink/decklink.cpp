@@ -78,7 +78,7 @@ const static struct obe_to_decklink audio_conn_tab[] =
     { -1, 0 },
 };
 
-const static struct obe_to_decklink_video video_format_tab[] =
+const static struct obe_to_decklink_video decklink_video_format_tab[] =
 {
     { INPUT_VIDEO_FORMAT_AUTODETECT,      bmdModePAL,           1,    25,    720, 576,   1 }, /* Set it up as PAL arbitrarily */
     { INPUT_VIDEO_FORMAT_PAL,             bmdModePAL,           1,    25,    720, 576,   1 },
@@ -285,21 +285,21 @@ public:
 
             if( decklink_ctx->last_frame_time == -1 )
             {
-                for( i = 0; video_format_tab[i].obe_name != -1; i++ )
+                for( i = 0; decklink_video_format_tab[i].obe_name != -1; i++ )
                 {
-                    if( video_format_tab[i].bmd_name == mode_id )
+                    if( decklink_video_format_tab[i].bmd_name == mode_id )
                         break;
                 }
 
-                if( video_format_tab[i].obe_name == -1 )
+                if( decklink_video_format_tab[i].obe_name == -1 )
                 {
                     syslog( LOG_WARNING, "Unsupported video format" );
                     return S_OK;
                 }
 
-                decklink_opts_->video_format = video_format_tab[i].obe_name;
-                decklink_opts_->timebase_num = video_format_tab[i].timebase_num;
-                decklink_opts_->timebase_den = video_format_tab[i].timebase_den;
+                decklink_opts_->video_format = decklink_video_format_tab[i].obe_name;
+                decklink_opts_->timebase_num = decklink_video_format_tab[i].timebase_num;
+                decklink_opts_->timebase_den = decklink_video_format_tab[i].timebase_den;
 
                 get_format_opts( decklink_opts_, p_display_mode );
                 setup_pixel_funcs( decklink_opts_ );
@@ -874,23 +874,23 @@ static int open_card( decklink_opts_t *decklink_opts )
         goto finish;
     }
 
-    for( i = 0; video_format_tab[i].obe_name != -1; i++ )
+    for( i = 0; decklink_video_format_tab[i].obe_name != -1; i++ )
     {
-        if( video_format_tab[i].obe_name == decklink_opts->video_format )
+        if( decklink_video_format_tab[i].obe_name == decklink_opts->video_format )
             break;
     }
 
-    if( video_format_tab[i].obe_name == -1 )
+    if( decklink_video_format_tab[i].obe_name == -1 )
     {
         fprintf( stderr, "[decklink] Unsupported video format\n" );
         ret = -1;
         goto finish;
     }
 
-    wanted_mode_id = video_format_tab[i].bmd_name;
+    wanted_mode_id = decklink_video_format_tab[i].bmd_name;
     found_mode = false;
-    decklink_opts->timebase_num = video_format_tab[i].timebase_num;
-    decklink_opts->timebase_den = video_format_tab[i].timebase_den;
+    decklink_opts->timebase_num = decklink_video_format_tab[i].timebase_num;
+    decklink_opts->timebase_den = decklink_video_format_tab[i].timebase_den;
 
     for (;;)
     {
@@ -1196,13 +1196,13 @@ static void *autoconf_input( void *ptr )
         if( i == 0 )
         {
             int j;
-            for( j = 0; video_format_tab[j].obe_name != -1; j++ )
+            for( j = 0; decklink_video_format_tab[j].obe_name != -1; j++ )
             {
-                if( video_format_tab[j].obe_name == user_opts->video_format )
+                if( decklink_video_format_tab[j].obe_name == user_opts->video_format )
                     break;
             }
 
-            if( video_format_tab[j].obe_name == -1 )
+            if( decklink_video_format_tab[j].obe_name == -1 )
             {
                 fprintf( stderr, "[decklink] Unsupported video format\n" );
                 return NULL;
@@ -1211,12 +1211,12 @@ static void *autoconf_input( void *ptr )
             streams[i]->stream_type = STREAM_TYPE_VIDEO;
             streams[i]->stream_format = VIDEO_UNCOMPRESSED;
             streams[i]->video_format = user_opts->video_format;
-            streams[i]->width  = video_format_tab[j].width;
-            streams[i]->height = video_format_tab[j].height;
-            streams[i]->timebase_num = video_format_tab[j].timebase_num;
-            streams[i]->timebase_den = video_format_tab[j].timebase_den;
+            streams[i]->width  = decklink_video_format_tab[j].width;
+            streams[i]->height = decklink_video_format_tab[j].height;
+            streams[i]->timebase_num = decklink_video_format_tab[j].timebase_num;
+            streams[i]->timebase_den = decklink_video_format_tab[j].timebase_den;
             streams[i]->csp    = PIX_FMT_YUV422P10;
-            streams[i]->interlaced = video_format_tab[j].interlaced;
+            streams[i]->interlaced = decklink_video_format_tab[j].interlaced;
             streams[i]->tff = 1; /* NTSC is bff in baseband but coded as tff */
             streams[i]->sar_num = streams[i]->sar_den = 1; /* The user can choose this when encoding */
         }

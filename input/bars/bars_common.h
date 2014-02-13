@@ -1,7 +1,7 @@
 /*****************************************************************************
- * input.h : OBE input headers
+ * bars_common.h: SMPTE bars common header
  *****************************************************************************
- * Copyright (C) 2010 Open Broadcast Systems Ltd.
+ * Copyright (C) 2014 Open Broadcast Systems Ltd.
  *
  * Authors: Kieran Kunhya <kieran@kunhya.com>
  *
@@ -21,36 +21,19 @@
  *
  *****************************************************************************/
 
-#ifndef OBE_INPUT_H
-#define OBE_INPUT_H
+#include "common/common.h"
 
 typedef struct
 {
-    void* (*probe_input)( void *ptr );
-    void* (*autoconf_input)( void *ptr );
-    void* (*open_input)( void *ptr );
-} obe_input_func_t;
+    int video_format;
+    int no_signal;
 
-typedef struct
-{
-    obe_t *h;
-    obe_input_t user_opts;
-} obe_input_probe_t;
+    char *bars_line1;
+    char *bars_line2;
+    char *bars_line3;
+    char *bars_line4;
+} obe_bars_opts_t;
 
-typedef struct
-{
-    obe_t *h;
-    obe_device_t *device;
-    int num_output_streams;
-    obe_output_stream_t *output_streams;
-    int audio_samples;
-} obe_input_params_t;
-
-//extern const obe_input_func_t lavf_input;
-#if HAVE_DECKLINK
-extern const obe_input_func_t decklink_input;
-#endif
-extern const obe_input_func_t linsys_sdi_input;
-extern const obe_input_func_t bars_input;
-
-#endif
+int open_bars( hnd_t *p_handle, obe_bars_opts_t *obe_bars_opts );
+int get_bars( hnd_t ptr, obe_raw_frame_t **raw_frames );
+void close_bars( hnd_t ptr );
