@@ -329,7 +329,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     decklink_ctx_t *decklink_ctx = &decklink_opts_->decklink_ctx;
     obe_raw_frame_t *raw_frame = NULL;
     AVPacket pkt;
-    AVFrame *frame = NULL;
     void *frame_bytes, *anc_line;
     obe_t *h = decklink_ctx->h;
     int finished = 0, ret, num_anc_lines = 0, anc_line_stride,
@@ -553,8 +552,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 raw_frame->release_data = obe_release_bufref;
                 raw_frame->release_frame = obe_release_frame;
 
-                memcpy( raw_frame->alloc_img.stride, frame->linesize, sizeof(raw_frame->alloc_img.stride) );
-                memcpy( raw_frame->alloc_img.plane, frame->data, sizeof(raw_frame->alloc_img.plane) );
+                memcpy( raw_frame->alloc_img.stride, decklink_ctx->frame->linesize, sizeof(raw_frame->alloc_img.stride) );
+                memcpy( raw_frame->alloc_img.plane, decklink_ctx->frame->data, sizeof(raw_frame->alloc_img.plane) );
                 raw_frame->alloc_img.csp = (int)decklink_ctx->codec->pix_fmt;
             }
             raw_frame->alloc_img.planes = av_pix_fmt_descriptors[raw_frame->alloc_img.csp].nb_components;
@@ -644,8 +643,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     }
 
 end:
-    if( frame )
-        avcodec_free_frame( &frame );
 
     av_free_packet( &pkt );
 
