@@ -77,7 +77,7 @@ struct obe_to_linsys_video
     int tff;
 };
 
-const static struct obe_to_linsys_video video_format_tab[] =
+const static struct obe_to_linsys_video linsys_video_format_tab[] =
 {
     { INPUT_VIDEO_FORMAT_PAL,        SDIVIDEO_CTL_BT_601_576I_50HZ,         1,    25,    720,  576,  625,  1 },
     { INPUT_VIDEO_FORMAT_NTSC,       SDIVIDEO_CTL_SMPTE_125M_486I_59_94HZ,  1001, 30000, 720,  486,  525,  0 },
@@ -850,31 +850,31 @@ static int open_card( linsys_opts_t *linsys_opts )
         goto finish;
     }
 
-    for( i = 0; video_format_tab[i].obe_name != -1; i++ )
+    for( i = 0; linsys_video_format_tab[i].obe_name != -1; i++ )
     {
-        if( video_format_tab[i].linsys_name == linsys_ctx->standard )
+        if( linsys_video_format_tab[i].linsys_name == linsys_ctx->standard )
             break;
     }
 
-    if( video_format_tab[i].obe_name == -1 )
+    if( linsys_video_format_tab[i].obe_name == -1 )
     {
         fprintf( stderr, "[linsys-sdivideo] Unsupported video format\n" );
         ret = -1;
         goto finish;
     }
 
-    linsys_opts->video_format = video_format_tab[i].obe_name;
-    linsys_opts->width = linsys_ctx->width = video_format_tab[i].width;
-    linsys_opts->height = linsys_ctx->coded_height = video_format_tab[i].height;
+    linsys_opts->video_format = linsys_video_format_tab[i].obe_name;
+    linsys_opts->width = linsys_ctx->width = linsys_video_format_tab[i].width;
+    linsys_opts->height = linsys_ctx->coded_height = linsys_video_format_tab[i].height;
     /* Ignore any 6 junk lines */
     if( linsys_opts->video_format == INPUT_VIDEO_FORMAT_NTSC )
         linsys_opts->height = 480;
 
-    linsys_opts->timebase_num = video_format_tab[i].timebase_num;
-    linsys_opts->timebase_den = video_format_tab[i].timebase_den;
+    linsys_opts->timebase_num = linsys_video_format_tab[i].timebase_num;
+    linsys_opts->timebase_den = linsys_video_format_tab[i].timebase_den;
     linsys_opts->interlaced = IS_INTERLACED( linsys_opts->video_format );
     if( linsys_opts->interlaced )
-        linsys_opts->tff = video_format_tab[i].tff;
+        linsys_opts->tff = linsys_video_format_tab[i].tff;
 
     linsys_ctx->v_timebase.num = linsys_opts->timebase_num;
     linsys_ctx->v_timebase.den = linsys_opts->timebase_den;
@@ -1051,8 +1051,8 @@ static int open_card( linsys_opts_t *linsys_opts )
     /* Increase the buffer size if VANC is being included and make the v210 decoder act on the full frame */
     if( linsys_ctx->has_vanc )
     {
-        linsys_ctx->vbuffer_size += (video_format_tab[i].total_height - video_format_tab[i].height) * linsys_ctx->stride;
-        linsys_ctx->coded_height = video_format_tab[i].total_height;
+        linsys_ctx->vbuffer_size += (linsys_video_format_tab[i].total_height - linsys_video_format_tab[i].height) * linsys_ctx->stride;
+        linsys_ctx->coded_height = linsys_video_format_tab[i].total_height;
     }
 
     linsys_ctx->num_vbuffers = NB_VBUFFERS;

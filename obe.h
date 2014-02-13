@@ -104,6 +104,7 @@ enum input_type_e
     INPUT_URL,
     INPUT_DEVICE_DECKLINK,
     INPUT_DEVICE_LINSYS_SDI,
+    INPUT_DEVICE_BARS,
 //    INPUT_DEVICE_V4L2,
 //    INPUT_DEVICE_ASI,
 };
@@ -119,6 +120,11 @@ typedef struct
     int video_format;
     int video_connection;
     int audio_connection;
+
+    char bars_line1[30];
+    char bars_line2[30];
+    char bars_line3[30];
+    char bars_line4[30];
 } obe_input_t;
 
 /**** Stream Formats ****/

@@ -64,7 +64,7 @@ static int system_type_value = OBE_SYSTEM_TYPE_GENERIC;
 static int filter_bit_depth_value = OBE_BIT_DEPTH_10;
 
 static const char * const system_types[]             = { "generic", "lowestlatency", "lowlatency", 0 };
-static const char * const input_types[]              = { "url", "decklink", "linsys-sdi", 0 };
+static const char * const input_types[]              = { "url", "decklink", "linsys-sdi", "bars" };
 static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50", "720p59.94", "720p60", "1080i50", "1080i59.94", "1080i60",
                                                          "1080p23.98", "1080p24", "1080p25", "1080p29.97", "1080p30", "1080p50", "1080p59.94",
                                                          "1080p60", 0 };
@@ -87,7 +87,8 @@ static const char * const filter_bit_depths[]        = { "10", "8" };
 static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned" };
 
 static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
-static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", NULL };
+static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection",
+                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", NULL };
 static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
@@ -522,6 +523,10 @@ static int set_input( char *command, obecli_command_t *child )
         char *video_format = obe_get_option( input_opts[2], opts );
         char *video_connection = obe_get_option( input_opts[3], opts );
         char *audio_connection = obe_get_option( input_opts[4], opts );
+        char *bars_line1 = obe_get_option( input_opts[5], opts );
+        char *bars_line2 = obe_get_option( input_opts[6], opts );
+        char *bars_line3 = obe_get_option( input_opts[7], opts );
+        char *bars_line4 = obe_get_option( input_opts[8], opts );
 
         FAIL_IF_ERROR( video_format && ( check_enum_value( video_format, input_video_formats ) < 0 ),
                        "Invalid video format\n" );
@@ -539,6 +544,14 @@ static int set_input( char *command, obecli_command_t *child )
             parse_enum_value( video_connection, input_video_connections, &cli.input.video_connection );
         if( audio_connection )
             parse_enum_value( audio_connection, input_audio_connections, &cli.input.audio_connection );
+        if( bars_line1 )
+            strncpy( cli.input.bars_line1, bars_line1, sizeof(cli.input.bars_line1) );
+        if( bars_line2 )
+            strncpy( cli.input.bars_line2, bars_line2, sizeof(cli.input.bars_line2) );
+        if( bars_line3 )
+            strncpy( cli.input.bars_line3, bars_line3, sizeof(cli.input.bars_line3) );
+        if( bars_line4 )
+            strncpy( cli.input.bars_line4, bars_line4, sizeof(cli.input.bars_line4) );
 
         obe_free_string_array( opts );
     }

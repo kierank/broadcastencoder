@@ -108,19 +108,30 @@ void obe_release_video_data( void *ptr )
      av_freep( &raw_frame->alloc_img.plane[0] );
 }
 
+void obe_release_bufref( void *ptr )
+{
+    obe_raw_frame_t *raw_frame = ptr;
+    for( int i = 0; raw_frame->buf_ref[i] != NULL; i++ )
+        av_buffer_unref( &raw_frame->buf_ref[i] );
+
+    memset( raw_frame->buf_ref, 0, sizeof(raw_frame->buf_ref) );
+    memset( &raw_frame->alloc_img, 0, sizeof(raw_frame->alloc_img) );
+    memset( &raw_frame->img, 0, sizeof(raw_frame->img) );
+}
+
 void obe_release_audio_data( void *ptr )
 {
-     obe_raw_frame_t *raw_frame = ptr;
-     av_freep( &raw_frame->audio_frame.audio_data[0] );
+    obe_raw_frame_t *raw_frame = ptr;
+    av_freep( &raw_frame->audio_frame.audio_data[0] );
 }
 
 void obe_release_frame( void *ptr )
 {
-     obe_raw_frame_t *raw_frame = ptr;
-     for( int i = 0; i < raw_frame->num_user_data; i++ )
-         free( raw_frame->user_data[i].data );
-     free( raw_frame->user_data );
-     free( raw_frame );
+    obe_raw_frame_t *raw_frame = ptr;
+    for( int i = 0; i < raw_frame->num_user_data; i++ )
+        free( raw_frame->user_data[i].data );
+    free( raw_frame->user_data );
+    free( raw_frame );
 }
 
 /* Muxed data */
@@ -462,6 +473,8 @@ obe_t *obe_setup( void )
         return NULL;
     }
 
+    av_register_all();
+    avfilter_register_all();
     avcodec_register_all();
 
     return h;
@@ -617,6 +630,8 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
 #endif
     else if( input_device->input_type == INPUT_DEVICE_LINSYS_SDI )
         input = linsys_sdi_input;
+    else if( input_device->input_type == INPUT_DEVICE_BARS )
+        input = bars_input;
     else
     {
         fprintf( stderr, "Invalid input device \n" );
@@ -644,6 +659,8 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
 
     if( input_device->input_type == INPUT_DEVICE_LINSYS_SDI )
         printf( "Probing device: Linsys card %i. ", input_device->card_idx );
+    else if( input_device->input_type == INPUT_DEVICE_BARS )
+        printf( "Configuring bar generator. " );
     else
         printf( "Probing device: Decklink card %i. ", input_device->card_idx );
 
@@ -749,6 +766,8 @@ int obe_autoconf_device( obe_t *h, obe_input_t *input_device, obe_input_program_
 #endif
     else if( input_device->input_type == INPUT_DEVICE_LINSYS_SDI )
         input = linsys_sdi_input;
+    else if( input_device->input_type == INPUT_DEVICE_BARS )
+        input = bars_input;
     else
     {
         fprintf( stderr, "Invalid input device \n" );
@@ -1058,6 +1077,8 @@ int obe_start( obe_t *h )
 #endif
     else if( h->device.device_type == INPUT_DEVICE_LINSYS_SDI )
         input = linsys_sdi_input;
+    else if( h->device.device_type == INPUT_DEVICE_BARS )
+        input = bars_input;
     else
     {
         fprintf( stderr, "Invalid input device \n" );

@@ -29,6 +29,8 @@
 #include <libavutil/pixfmt.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/common.h>
+#include <libavutil/buffer.h>
+#include <libavutil/frame.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -280,17 +282,54 @@ const static obe_non_display_data_location_t non_display_data_locations[] =
 
 typedef struct
 {
+    int obe_name;
+    int timebase_num;
+    int timebase_den;
+    int width;
+    int height;
+    int interlaced;
+} obe_video_config_t;
+
+const static obe_video_config_t video_format_tab[] =
+{
+    { INPUT_VIDEO_FORMAT_AUTODETECT,                 1,    25,    720, 576,   1 }, /* Set it up as PAL arbitrarily */
+    { INPUT_VIDEO_FORMAT_PAL,                        1,    25,    720, 576,   1 },
+    { INPUT_VIDEO_FORMAT_NTSC,                       1001, 30000, 720, 480,   1 },
+    { INPUT_VIDEO_FORMAT_720P_50,                    1,    50,    1280, 720,  0 },
+    { INPUT_VIDEO_FORMAT_720P_5994,                  1001, 60000, 1280, 720,  0 },
+    { INPUT_VIDEO_FORMAT_720P_60,                    1,    60,    1280, 720,  0 },
+    { INPUT_VIDEO_FORMAT_1080I_50,                   1,    25,    1920, 1080, 1 },
+    { INPUT_VIDEO_FORMAT_1080I_5994,                 1001, 30000, 1920, 1080, 1 },
+    { INPUT_VIDEO_FORMAT_1080I_60,                   1,    60,    1920, 1080, 1 },
+    { INPUT_VIDEO_FORMAT_1080P_2398,                 1001, 24000, 1920, 1080, 0 },
+    { INPUT_VIDEO_FORMAT_1080P_24,                   1,    24,    1920, 1080, 0 },
+    { INPUT_VIDEO_FORMAT_1080P_25,                   1,    25,    1920, 1080, 0 },
+    { INPUT_VIDEO_FORMAT_1080P_2997,                 1001, 30000, 1920, 1080, 0 },
+    { INPUT_VIDEO_FORMAT_1080P_30,                   1,    30,    1920, 1080, 0 },
+    { INPUT_VIDEO_FORMAT_1080P_50,                   1,    50,    1920, 1080, 0 },
+    { INPUT_VIDEO_FORMAT_1080P_5994,                 1001, 60000, 1920, 1080, 0 },
+    { INPUT_VIDEO_FORMAT_1080P_60,                   1,    60,    1920, 1080, 0 },
+    { -1, -1, -1, -1, -1, -1 },
+};
+
+typedef struct
+{
     int format;
     int pattern[MAX_AUDIO_SAMPLE_PATTERN];
     int max;
+    int mod;
 } obe_audio_sample_pattern_t;
 
 const static obe_audio_sample_pattern_t audio_sample_patterns[] =
 {
-    { INPUT_VIDEO_FORMAT_NTSC,       { 1602, 1601, 1602, 1601, 1602 }, 1602 },
-    { INPUT_VIDEO_FORMAT_720P_5994,  {  801,  800,  801,  801,  801 },  801 },
-    { INPUT_VIDEO_FORMAT_1080P_2997, { 1602, 1601, 1602, 1601, 1602 }, 1602 },
-    { INPUT_VIDEO_FORMAT_1080P_5994, {  801,  800,  801,  801,  801 },  801 },
+    { INPUT_VIDEO_FORMAT_PAL,        { 1920 }, 1920, 1 },
+    { INPUT_VIDEO_FORMAT_NTSC,       { 1602, 1601, 1602, 1601, 1602 }, 1602, 5 },
+    { INPUT_VIDEO_FORMAT_720P_50,    {  960 },  960, 1 },
+    { INPUT_VIDEO_FORMAT_720P_5994,  {  801,  800,  801,  801,  801 },  801, 5 },
+    { INPUT_VIDEO_FORMAT_1080I_50,   { 1920 }, 1920, 1 },
+    { INPUT_VIDEO_FORMAT_1080I_5994, { 1602, 1601, 1602, 1601, 1602 }, 1602, 5 },
+    { INPUT_VIDEO_FORMAT_1080P_2997, { 1602, 1601, 1602, 1601, 1602 }, 1602, 5 },
+    { INPUT_VIDEO_FORMAT_1080P_5994, {  801,  800,  801,  801,  801 },  801, 5 },
     { -1 },
 };
 
@@ -326,6 +365,8 @@ typedef struct
 {
     int input_stream_id;
     int64_t pts;
+
+    AVBufferRef *buf_ref[AV_NUM_DATA_POINTERS];
 
     void (*release_data)( void* );
     void (*release_frame)( void* );
@@ -504,6 +545,7 @@ void destroy_raw_frame( obe_raw_frame_t *raw_frame );
 obe_coded_frame_t *new_coded_frame( int stream_id, int len );
 void destroy_coded_frame( obe_coded_frame_t *coded_frame );
 void obe_release_video_data( void *ptr );
+void obe_release_bufref( void *ptr );
 void obe_release_audio_data( void *ptr );
 void obe_release_frame( void *ptr );
 

@@ -397,6 +397,7 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
                0, tmp_image.height, tmp_image.plane, tmp_image.stride );
 
     raw_frame->release_data( raw_frame );
+    raw_frame->release_data = obe_release_video_data;
     memcpy( &raw_frame->alloc_img, &tmp_image, sizeof(obe_image_t) );
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
 
@@ -477,6 +478,7 @@ static int dither_image( obe_raw_frame_t *raw_frame, int16_t *error_buf )
     }
 
     raw_frame->release_data( raw_frame );
+    raw_frame->release_data = obe_release_video_data;
     memcpy( &raw_frame->alloc_img, out, sizeof(obe_image_t) );
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
 
@@ -493,10 +495,10 @@ static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_fr
     const AVPixFmtDescriptor *pfd = av_pix_fmt_desc_get( raw_frame->img.csp );
     int bpp = pfd->comp[0].depth_minus1+1 > 8 ? 2 : 1;
 
-    tmp_image.csp    = vfilt->filter_bit_depth == OBE_BIT_DEPTH_10 ? PIX_FMT_YUV420P10 : PIX_FMT_YUV420P;
+    tmp_image.csp    = bpp == 2 ? PIX_FMT_YUV420P10 : PIX_FMT_YUV420P;
     tmp_image.width  = raw_frame->img.width;
     tmp_image.height = raw_frame->img.height;
-    tmp_image.planes = av_pix_fmt_descriptors[tmp_image.csp].nb_components;
+    tmp_image.planes = pfd->nb_components;
     tmp_image.format = raw_frame->img.format;
 
     if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
@@ -523,6 +525,7 @@ static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_fr
     }
 
     raw_frame->release_data( raw_frame );
+    raw_frame->release_data = obe_release_video_data;
     memcpy( &raw_frame->alloc_img, out, sizeof(obe_image_t) );
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
 
@@ -566,6 +569,7 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     }
 
     raw_frame->release_data( raw_frame );
+    raw_frame->release_data = obe_release_video_data;
     memcpy( &raw_frame->alloc_img, &tmp_image, sizeof(obe_image_t) );
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
 
@@ -770,10 +774,10 @@ static void *start_filter( void *ptr )
 
         if( 1 )
         {
-            if( raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL && h->filter_bit_depth == OBE_BIT_DEPTH_10 )
+            const AVPixFmtDescriptor *pfd = av_pix_fmt_desc_get( raw_frame->img.csp );
+            if( raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL && pfd->comp[0].depth_minus1+1 == 10 )
                 blank_lines( raw_frame );
 
-            const AVPixFmtDescriptor *pfd = av_pix_fmt_desc_get( raw_frame->img.csp );
             /* Resize if necessary. Together with colourspace conversion if progressive */
             if( ( !IS_INTERLACED( raw_frame->img.format ) && filter_params->target_csp == X264_CSP_I420 ) ||
                 raw_frame->img.width != output_stream->avc_param.i_width ||

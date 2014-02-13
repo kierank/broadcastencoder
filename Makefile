@@ -6,6 +6,7 @@ all: default
 
 SRCS = obe.c common/lavc.c common/network/udp/udp.c \
        common/linsys/util.c \
+       input/bars/bars.c input/bars/bars_common.c \
        input/sdi/sdi.c input/sdi/ancillary.c input/sdi/vbi.c input/sdi/linsys/linsys.c  \
        filters/video/video.c filters/video/cc.c filters/audio/audio.c \
        encoders/smoothing.c encoders/audio/lavc/lavc.c encoders/video/avc/x264.c \
