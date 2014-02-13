@@ -107,12 +107,6 @@ static void stop_encode( void )
     obe_close( d.h );
     d.h = NULL;
 
-    if( d.input.location )
-    {
-        free( d.input.location );
-        d.input.location = NULL;
-    }
-
     if( d.mux_opts.service_name )
     {
         free( d.mux_opts.service_name );
