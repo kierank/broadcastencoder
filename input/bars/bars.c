@@ -126,6 +126,8 @@ static void *open_input( void *ptr )
         return NULL;
     }
 
+    h->device.active = 1;
+
     int64_t start_time = 0;
 
     while( 1 )
