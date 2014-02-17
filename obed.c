@@ -199,6 +199,14 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             input_opts_out->input_type = input_opts_in->input_device;
             input_opts_out->card_idx = input_opts_in->card_idx;
             input_opts_out->video_format = video_formats[input_opts_in->video_format];
+            if( input_opts_in->bars_line1 )
+                strncpy( input_opts_out->bars_line1, input_opts_in->bars_line1, sizeof(input_opts_out->bars_line1) );
+            if( input_opts_in->bars_line2 )
+                strncpy( input_opts_out->bars_line2, input_opts_in->bars_line2, sizeof(input_opts_out->bars_line2) );
+            if( input_opts_in->bars_line3 )
+                strncpy( input_opts_out->bars_line3, input_opts_in->bars_line3, sizeof(input_opts_out->bars_line3) );
+            if( input_opts_in->bars_line4 )
+                strncpy( input_opts_out->bars_line4, input_opts_in->bars_line4, sizeof(input_opts_out->bars_line4) );
 
             if( video_opts_in->latency == 1 )
             {
