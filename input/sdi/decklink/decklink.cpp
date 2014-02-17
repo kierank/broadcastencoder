@@ -35,6 +35,7 @@ extern "C"
 #include "input/sdi/x86/sdi.h"
 #include <libavresample/avresample.h>
 #include <libavutil/opt.h>
+#include <libavutil/frame.h>
 }
 
 #include "include/DeckLinkAPI.h"
@@ -118,6 +119,7 @@ typedef struct
 #endif
 
     /* Video */
+    AVFrame         *frame;
     AVCodec         *dec;
     AVCodecContext  *codec;
 
@@ -327,7 +329,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     decklink_ctx_t *decklink_ctx = &decklink_opts_->decklink_ctx;
     obe_raw_frame_t *raw_frame = NULL;
     AVPacket pkt;
-    AVFrame *frame = NULL;
     void *frame_bytes, *anc_line;
     obe_t *h = decklink_ctx->h;
     int finished = 0, ret, num_anc_lines = 0, anc_line_stride,
@@ -550,31 +551,25 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             }
             else
             {
-                frame = avcodec_alloc_frame();
-                if( !frame )
-                {
-                    syslog( LOG_ERR, "[decklink]: Could not allocate video frame\n" );
-                    goto end;
-                }
                 decklink_ctx->codec->width = width;
                 decklink_ctx->codec->height = height;
 
                 pkt.data = (uint8_t*)frame_bytes;
                 pkt.size = stride * height;
 
-                ret = avcodec_decode_video2( decklink_ctx->codec, frame, &finished, &pkt );
+                ret = avcodec_decode_video2( decklink_ctx->codec, decklink_ctx->frame, &finished, &pkt );
                 if( ret < 0 || !finished )
                 {
                     syslog( LOG_ERR, "[decklink]: Could not decode video frame\n" );
                     goto end;
                 }
 
-                raw_frame->release_data = obe_release_video_data;
+                memcpy( raw_frame->buf_ref, decklink_ctx->frame->buf, sizeof(decklink_ctx->frame->buf) );
+                raw_frame->release_data = obe_release_bufref;
                 raw_frame->release_frame = obe_release_frame;
 
-                memcpy( raw_frame->alloc_img.stride, frame->linesize, sizeof(raw_frame->alloc_img.stride) );
-                memcpy( raw_frame->alloc_img.plane, frame->data, sizeof(raw_frame->alloc_img.plane) );
-                avcodec_free_frame( &frame );
+                memcpy( raw_frame->alloc_img.stride, decklink_ctx->frame->linesize, sizeof(raw_frame->alloc_img.stride) );
+                memcpy( raw_frame->alloc_img.plane, decklink_ctx->frame->data, sizeof(raw_frame->alloc_img.plane) );
                 raw_frame->alloc_img.csp = (int)decklink_ctx->codec->pix_fmt;
             }
             raw_frame->alloc_img.planes = av_pix_fmt_descriptors[raw_frame->alloc_img.csp].nb_components;
@@ -664,8 +659,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     }
 
 end:
-    if( frame )
-        avcodec_free_frame( &frame );
 
     av_free_packet( &pkt );
 
@@ -701,6 +694,9 @@ static void close_card( decklink_opts_t *decklink_opts )
     if( decklink_ctx->p_delegate )
         decklink_ctx->p_delegate->Release();
 
+    if( decklink_ctx->frame )
+        av_frame_free( &decklink_ctx->frame );
+
     if( decklink_ctx->codec )
     {
         avcodec_close( decklink_ctx->codec );
@@ -735,6 +731,13 @@ static int open_card( decklink_opts_t *decklink_opts )
 
     if( h->filter_bit_depth == OBE_BIT_DEPTH_10 && !decklink_opts->probe )
     {
+        decklink_ctx->frame = av_frame_alloc();
+        if( !decklink_ctx->frame )
+        {
+            fprintf( stderr, "[decklink] Could not allocate frame\n" );
+            goto finish;
+        }
+
         decklink_ctx->dec = avcodec_find_decoder( AV_CODEC_ID_V210 );
         if( !decklink_ctx->dec )
         {
@@ -749,9 +752,6 @@ static int open_card( decklink_opts_t *decklink_opts )
             goto finish;
         }
 
-        decklink_ctx->codec->get_buffer = obe_get_buffer;
-        decklink_ctx->codec->release_buffer = obe_release_buffer;
-        decklink_ctx->codec->reget_buffer = obe_reget_buffer;
         decklink_ctx->codec->flags |= CODEC_FLAG_EMU_EDGE;
 
         /* TODO: setup custom strides */
