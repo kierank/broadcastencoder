@@ -61,7 +61,7 @@ BMD_CONST REFIID IID_IDeckLinkMemoryAllocator                     = /* B36EB6E7-
 BMD_CONST REFIID IID_IDeckLinkAudioOutputCallback                 = /* 403C681B-7F46-4A12-B993-2BB127084EE6 */ {0x40,0x3C,0x68,0x1B,0x7F,0x46,0x4A,0x12,0xB9,0x93,0x2B,0xB1,0x27,0x08,0x4E,0xE6};
 BMD_CONST REFIID IID_IDeckLinkIterator                            = /* 50FB36CD-3063-4B73-BDBB-958087F2D8BA */ {0x50,0xFB,0x36,0xCD,0x30,0x63,0x4B,0x73,0xBD,0xBB,0x95,0x80,0x87,0xF2,0xD8,0xBA};
 BMD_CONST REFIID IID_IDeckLinkAPIInformation                      = /* 7BEA3C68-730D-4322-AF34-8A7152B532A4 */ {0x7B,0xEA,0x3C,0x68,0x73,0x0D,0x43,0x22,0xAF,0x34,0x8A,0x71,0x52,0xB5,0x32,0xA4};
-BMD_CONST REFIID IID_IDeckLinkOutput                              = /* A3EF0963-0862-44ED-92A9-EE89ABF431C7 */ {0xA3,0xEF,0x09,0x63,0x08,0x62,0x44,0xED,0x92,0xA9,0xEE,0x89,0xAB,0xF4,0x31,0xC7};
+BMD_CONST REFIID IID_IDeckLinkOutput                              = /* CC5C8A6E-3F2F-4B3A-87EA-FD78AF300564 */ {0xCC,0x5C,0x8A,0x6E,0x3F,0x2F,0x4B,0x3A,0x87,0xEA,0xFD,0x78,0xAF,0x30,0x05,0x64};
 BMD_CONST REFIID IID_IDeckLinkInput                               = /* AF22762B-DFAC-4846-AA79-FA8883560995 */ {0xAF,0x22,0x76,0x2B,0xDF,0xAC,0x48,0x46,0xAA,0x79,0xFA,0x88,0x83,0x56,0x09,0x95};
 BMD_CONST REFIID IID_IDeckLinkVideoFrame                          = /* 3F716FE0-F023-4111-BE5D-EF4414C05B17 */ {0x3F,0x71,0x6F,0xE0,0xF0,0x23,0x41,0x11,0xBE,0x5D,0xEF,0x44,0x14,0xC0,0x5B,0x17};
 BMD_CONST REFIID IID_IDeckLinkMutableVideoFrame                   = /* 69E2639F-40DA-4E19-B6F2-20ACE815C390 */ {0x69,0xE2,0x63,0x9F,0x40,0xDA,0x4E,0x19,0xB6,0xF2,0x20,0xAC,0xE8,0x15,0xC3,0x90};
@@ -76,6 +76,8 @@ BMD_CONST REFIID IID_IDeckLinkNotification                        = /* 0A1FB207-
 BMD_CONST REFIID IID_IDeckLinkAttributes                          = /* ABC11843-D966-44CB-96E2-A1CB5D3135C4 */ {0xAB,0xC1,0x18,0x43,0xD9,0x66,0x44,0xCB,0x96,0xE2,0xA1,0xCB,0x5D,0x31,0x35,0xC4};
 BMD_CONST REFIID IID_IDeckLinkKeyer                               = /* 89AFCAF5-65F8-421E-98F7-96FE5F5BFBA3 */ {0x89,0xAF,0xCA,0xF5,0x65,0xF8,0x42,0x1E,0x98,0xF7,0x96,0xFE,0x5F,0x5B,0xFB,0xA3};
 BMD_CONST REFIID IID_IDeckLinkVideoConversion                     = /* 3BBCB8A2-DA2C-42D9-B5D8-88083644E99A */ {0x3B,0xBC,0xB8,0xA2,0xDA,0x2C,0x42,0xD9,0xB5,0xD8,0x88,0x08,0x36,0x44,0xE9,0x9A};
+BMD_CONST REFIID IID_IDeckLinkDeviceNotificationCallback          = /* 4997053B-0ADF-4CC8-AC70-7A50C4BE728F */ {0x49,0x97,0x05,0x3B,0x0A,0xDF,0x4C,0xC8,0xAC,0x70,0x7A,0x50,0xC4,0xBE,0x72,0x8F};
+BMD_CONST REFIID IID_IDeckLinkDiscovery                           = /* CDBF631C-BC76-45FA-B44D-C55059BC6101 */ {0xCD,0xBF,0x63,0x1C,0xBC,0x76,0x45,0xFA,0xB4,0x4D,0xC5,0x50,0x59,0xBC,0x61,0x01};
 
 /* Enum BMDVideoOutputFlags - Flags to control the output of ancillary data along with video. */
 
@@ -290,12 +292,14 @@ enum _BMDDeckLinkAttributeID {
     BMDDeckLinkHasBypass                                         = /* 'byps' */ 0x62797073,
     BMDDeckLinkSupportsDesktopDisplay                            = /* 'extd' */ 0x65787464,
     BMDDeckLinkSupportsClockTimingAdjustment                     = /* 'ctad' */ 0x63746164,
+    BMDDeckLinkSupportsFullDuplex                                = /* 'fdup' */ 0x66647570,
 
     /* Integers */
 
     BMDDeckLinkMaximumAudioChannels                              = /* 'mach' */ 0x6D616368,
     BMDDeckLinkNumberOfSubDevices                                = /* 'nsbd' */ 0x6E736264,
     BMDDeckLinkSubDeviceIndex                                    = /* 'subi' */ 0x73756269,
+    BMDDeckLinkPersistentID                                      = /* 'peid' */ 0x70656964,
     BMDDeckLinkVideoOutputConnections                            = /* 'vocn' */ 0x766F636E,
     BMDDeckLinkVideoInputConnections                             = /* 'vicn' */ 0x7669636E,
     BMDDeckLinkDeviceBusyState                                   = /* 'dbst' */ 0x64627374,
@@ -380,6 +384,8 @@ class IDeckLinkNotification;
 class IDeckLinkAttributes;
 class IDeckLinkKeyer;
 class IDeckLinkVideoConversion;
+class IDeckLinkDeviceNotificationCallback;
+class IDeckLinkDiscovery;
 
 /* Interface IDeckLinkVideoOutputCallback - Frame completion callback. */
 
@@ -498,6 +504,7 @@ public:
     /* Hardware Timing */
 
     virtual HRESULT GetHardwareReferenceClock (/* in */ BMDTimeScale desiredTimeScale, /* out */ BMDTimeValue *hardwareTime, /* out */ BMDTimeValue *timeInFrame, /* out */ BMDTimeValue *ticksPerFrame) = 0;
+    virtual HRESULT GetFrameCompletionReferenceTimestamp (/* in */ IDeckLinkVideoFrame *theFrame, /* in */ BMDTimeScale desiredTimeScale, /* out */ BMDTimeValue *frameCompletionTimestamp) = 0;
 
 protected:
     virtual ~IDeckLinkOutput () {}; // call Release method to drop reference count
@@ -713,11 +720,36 @@ protected:
     virtual ~IDeckLinkVideoConversion () {}; // call Release method to drop reference count
 };
 
+/* Interface IDeckLinkDeviceNotificationCallback - DeckLink device arrival/removal notification callbacks */
+
+class IDeckLinkDeviceNotificationCallback : public IUnknown
+{
+public:
+    virtual HRESULT DeckLinkDeviceArrived (/* in */ IDeckLink* deckLinkDevice) = 0;
+    virtual HRESULT DeckLinkDeviceRemoved (/* in */ IDeckLink* deckLinkDevice) = 0;
+
+protected:
+    virtual ~IDeckLinkDeviceNotificationCallback () {}; // call Release method to drop reference count
+};
+
+/* Interface IDeckLinkDiscovery - DeckLink device discovery */
+
+class IDeckLinkDiscovery : public IUnknown
+{
+public:
+    virtual HRESULT InstallDeviceNotifications (/* in */ IDeckLinkDeviceNotificationCallback* deviceNotificationCallback) = 0;
+    virtual HRESULT UninstallDeviceNotifications (void) = 0;
+
+protected:
+    virtual ~IDeckLinkDiscovery () {}; // call Release method to drop reference count
+};
+
 /* Functions */
 
 extern "C" {
 
     IDeckLinkIterator* CreateDeckLinkIteratorInstance (void);
+    IDeckLinkDiscovery* CreateDeckLinkDiscoveryInstance (void);
     IDeckLinkAPIInformation* CreateDeckLinkAPIInformationInstance (void);
     IDeckLinkGLScreenPreviewHelper* CreateOpenGLScreenPreviewHelper (void);
     IDeckLinkVideoConversion* CreateVideoConversionInstance (void);

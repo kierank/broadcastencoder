@@ -92,6 +92,12 @@ enum _BMDDisplayMode {
     bmdMode4K2160p2997                                           = /* '4k29' */ 0x346B3239,
     bmdMode4K2160p30                                             = /* '4k30' */ 0x346B3330,
 
+    /* DCI Modes (output only) */
+
+    bmdMode4kDCI2398                                             = /* '4d23' */ 0x34643233,
+    bmdMode4kDCI24                                               = /* '4d24' */ 0x34643234,
+    bmdMode4kDCI25                                               = /* '4d25' */ 0x34643235,
+
     /* Special Modes */
 
     bmdModeUnknown                                               = /* 'iunk' */ 0x69756E6B
@@ -116,7 +122,9 @@ enum _BMDPixelFormat {
     bmdFormat10BitYUV                                            = /* 'v210' */ 0x76323130,
     bmdFormat8BitARGB                                            = 32,
     bmdFormat8BitBGRA                                            = /* 'BGRA' */ 0x42475241,
-    bmdFormat10BitRGB                                            = /* 'r210' */ 0x72323130	// Big-endian RGB 10-bit per component with SMPTE video levels (64-960). Packed as 2:10:10:10
+    bmdFormat10BitRGB                                            = /* 'r210' */ 0x72323130,	// Big-endian RGB 10-bit per component with SMPTE video levels (64-960). Packed as 2:10:10:10
+    bmdFormat10BitRGBXLE                                         = /* 'R10l' */ 0x5231306C,	// Little-endian 10-bit RGB with SMPTE video levels (64-940)
+    bmdFormat10BitRGBX                                           = /* 'R10b' */ 0x52313062	// Big-endian 10-bit RGB with SMPTE video levels (64-940)
 };
 
 /* Enum BMDDisplayModeFlags - Flags to describe the characteristics of an IDeckLinkDisplayMode. */
