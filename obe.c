@@ -1089,7 +1089,15 @@ int obe_start( obe_t *h )
     for( int i = 0; i < h->num_outputs; i++ )
     {
         obe_init_queue( &h->outputs[i]->queue );
-        output = ip_output;
+        if( h->outputs[i]->output_dest.type == OUTPUT_UDP || h->outputs[i]->output_dest.type == OUTPUT_RTP )
+            output = ip_output;
+        else if( h->outputs[i]->output_dest.type == OUTPUT_FILE )
+            output = file_output;
+        else
+        {
+            fprintf( stderr, "Invalid output device \n" );
+            goto fail;
+        }
 
         if( pthread_create( &h->outputs[i]->output_thread, NULL, output.open_output, (void*)h->outputs[i] ) < 0 )
         {

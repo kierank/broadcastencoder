@@ -11,7 +11,7 @@ SRCS = obe.c common/lavc.c common/network/udp/udp.c \
        filters/video/video.c filters/video/cc.c filters/audio/audio.c \
        encoders/smoothing.c encoders/audio/lavc/lavc.c encoders/video/avc/x264.c \
        mux/smoothing.c mux/ts/ts.c \
-       output/ip/ip.c
+       output/ip/ip.c output/file/file.c
 
 SRCCXX =
 
