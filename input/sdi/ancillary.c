@@ -26,6 +26,10 @@
 #include "sdi.h"
 #include "vbi.h"
 
+#define SDP_IDENT1 0x51
+#define SDP_IDENT2 0x15
+#define SDP_DATA_WORDS 40
+
 #define READ_8(x) ((x) & 0xff)
 
 static int get_vanc_type( uint8_t did, uint8_t sdid )
@@ -43,7 +47,7 @@ static int get_vanc_type( uint8_t did, uint8_t sdid )
  *             is it possible to check parity but follow 8-bit backwards compatibility? */
 
 static int parse_afd( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame,
-                      uint16_t *line, int line_number, int len )
+                       uint16_t *line, int line_number, int len )
 {
     obe_int_frame_data_t *tmp, *frame_data;
     obe_user_data_t *tmp2, *user_data;
@@ -142,7 +146,7 @@ fail:
 }
 
 static int parse_dvb_scte_vbi( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame,
-                               uint16_t *line, int line_number, int len )
+                                uint16_t *line, int line_number, int len )
 {
     obe_int_frame_data_t *tmp, *frame_data;
     obe_anc_vbi_t *anc_vbi;
@@ -216,7 +220,7 @@ fail:
 }
 
 static int parse_cdp( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame,
-                      uint16_t *line, int line_number, int len )
+                       uint16_t *line, int line_number, int len )
 {
     obe_int_frame_data_t *tmp, *frame_data;
     obe_user_data_t *tmp2, *user_data;
@@ -283,6 +287,123 @@ static int parse_cea_608( uint16_t *line )
 }
 #endif
 
+static void read_op47_structure_b( bs_t *s, uint16_t *line, uint8_t dw )
+{
+    /* OP-47 is guaranteed to be subtitles */
+    bs_write( s, 8, DATA_UNIT_ID_EBU_TTX_SUB ); // data_unit_id
+    bs_write( s, 8, DVB_VBI_UNIT_SIZE ); // data_unit_length
+
+    /* Line number and field number */
+    bs_write( s, 2, 0x3 ); // reserved_future_use
+    bs_write( s, 1, dw >> 7 ); // field_parity
+    bs_write( s, 5, dw & 0x1f ); // line_offset
+
+    bs_write( s, 8, REVERSE( READ_8( line[0] ) ) ); // framing_code
+    bs_write( s, 8, REVERSE( READ_8( line[1] ) ) ); // magazine_and_packet_address1
+    bs_write( s, 8, REVERSE( READ_8( line[2] ) ) ); // magazine_and_packet_address2
+
+    line += 3;
+
+    for( int j = 0; j < SDP_DATA_WORDS; j++ )
+        bs_write( s, 8, REVERSE( READ_8( line[j] ) ) ); // data_block
+    
+}
+
+static int parse_op47_sdp( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame,
+                            uint16_t *line, int line_number, int len )
+{
+    bs_t s;
+    uint8_t sdp_cs = 0, dw[5];
+    obe_int_frame_data_t *tmp, *frame_data;
+
+    /* Skip DC word */
+    line++;
+
+    if( READ_8( line[0] ) == SDP_IDENT1 && READ_8( line[1] ) == SDP_IDENT2 )
+    {
+        uint8_t sdp_len = READ_8( line[2] );
+        if( sdp_len > len )
+        {
+            syslog( LOG_ERR, "Invalid OP47 SDP length on line %i \n", line_number );
+            return -1;
+        }
+
+        /* Calculate checksum */
+        for( int i = 0; i < len; i++ )
+            sdp_cs += READ_8( line[i] );
+            
+        if( sdp_cs )
+        {
+            syslog( LOG_ERR, "Invalid OP47 SDP checksum on line %i \n", line_number );
+            return -1;
+        }
+
+        non_display_data->has_ttx_frame = 1;
+
+        /* Consider the SDP acceptable if it has a valid checksum */
+        if( non_display_data->probe )
+        {
+            if( check_probed_non_display_data( non_display_data, MISC_TELETEXT ) )
+                return 0;
+
+            tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+1) * sizeof(*non_display_data->frame_data) );
+            if( !tmp )
+                return -1;
+
+            non_display_data->frame_data = tmp;
+
+            frame_data = &non_display_data->frame_data[non_display_data->num_frame_data++];
+            frame_data->type = MISC_TELETEXT;
+            frame_data->source = VANC_OP47_SDP;
+            frame_data->num_lines = 0;
+            frame_data->lines[frame_data->num_lines++] = line_number;
+            frame_data->location = USER_DATA_LOCATION_DVB_STREAM;
+
+            return 0;
+        }
+
+        line += 3; // skip identifier and sdp length
+        if( READ_8( line[0] ) == 0x2 )
+        {
+            non_display_data->dvb_ttx_frame = new_coded_frame( 0, DVB_VBI_MAXIMUM_SIZE );
+            if( !non_display_data->dvb_ttx_frame )
+            {
+                syslog( LOG_ERR, "Malloc failed\n" );
+                return -1;
+            }
+            
+            bs_init( &s, non_display_data->dvb_ttx_frame->data, DVB_VBI_MAXIMUM_SIZE );
+
+            // PES_data_field
+            bs_write( &s, 8, DVB_VBI_DATA_IDENTIFIER ); // data_identifier (FIXME let user choose or passthrough from vanc)
+            
+            line++; // skip format code
+            
+            for( int i = 0; i < 5; i++ )
+                dw[i] = READ_8( line[i] );
+
+            line += 5;
+            
+            for( int i = 0; i < 5; i++ )
+            {
+                if( dw[i] )
+                {
+                    read_op47_structure_b( &s, line, dw[i] );
+                    line += SDP_DATA_WORDS;
+                }
+            }
+            
+            /* Stuffing bytes */
+            write_dvb_stuffing( &s );
+            bs_flush( &s );
+
+            non_display_data->dvb_ttx_frame->len = bs_pos( &s ) / 8;
+        }
+    }
+
+    return 0;
+}
+
 int parse_vanc_line( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame,
                      uint16_t *line, int width, int line_number )
 {
@@ -296,7 +417,7 @@ int parse_vanc_line( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe
      * TODO: optimise this */
     while( i < width - 7 )
     {
-        if( line[i] <= 0x03 && (line[i+1] & 0x3fc) == 0x3fc && (line[i+2] & 0x3fc) == 0x3fc )
+        if( (line[i] >> 2) == 0 && (line[i+1] >> 2) == 0xff && (line[i+2] >> 2) == 0xff )
         {
             i += 3;
             pkt_start = &line[i];
@@ -331,6 +452,9 @@ int parse_vanc_line( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe
                         break;
                     case CAPTIONS_CEA_708:
                         parse_cdp( h, non_display_data, raw_frame, &pkt_start[2], line_number, len );
+                        break;
+                    case VANC_OP47_SDP:
+                        parse_op47_sdp( h, non_display_data, raw_frame, &pkt_start[2], line_number, len );
                         break;
                     default:
                         break;

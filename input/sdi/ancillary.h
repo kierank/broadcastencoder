@@ -47,8 +47,8 @@ const static obe_anc_identifier_t vanc_identifiers[] =
     { 0x41, 0x08, VANC_DVB_SCTE_VBI },
 
     /* OP-47 / SMPTE RDD-8 */
-    { 0x43, 0x01, VANC_OP47_SDP },
-    { 0x43, 0x02, VANC_OP47_MULTI_PACKET },
+    { 0x43, 0x02, VANC_OP47_SDP },
+    { 0x43, 0x03, VANC_OP47_MULTI_PACKET },
 
     /* SMPTE 12M */
     { 0x60, 0x60, VANC_ATC },

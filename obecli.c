@@ -1267,7 +1267,6 @@ static int show_output_streams( char *command, obecli_command_t *child )
             format_name = get_format_name( cli.output_streams[i].stream_format, format_names, 0 );
             printf( "Audio: %s - SDI audio pair: %d \n", format_name, cli.output_streams[i].sdi_audio_pair );
         }
-
     }
 
     printf( "\n" );
@@ -1435,6 +1434,10 @@ static int set_defaults( void )
             {
                 cli.output_streams[i].sdi_audio_pair = 1;
                 cli.output_streams[i].channel_layout = AV_CH_LAYOUT_STEREO;
+            }
+            else if( cli.program.streams[i].stream_format == MISC_TELETEXT )
+            {
+                cli.output_streams[i].stream_format = MISC_TELETEXT;
             }
         }
     }
