@@ -295,18 +295,17 @@ static void read_op47_structure_b( bs_t *s, uint16_t *line, uint8_t dw )
 
     /* Line number and field number */
     bs_write( s, 2, 0x3 ); // reserved_future_use
-    bs_write( s, 1, dw >> 7 ); // field_parity
+    bs_write1( s, dw >> 7 ); // field_parity
     bs_write( s, 5, dw & 0x1f ); // line_offset
 
-    bs_write( s, 8, REVERSE( READ_8( line[0] ) ) ); // framing_code
-    bs_write( s, 8, REVERSE( READ_8( line[1] ) ) ); // magazine_and_packet_address1
-    bs_write( s, 8, REVERSE( READ_8( line[2] ) ) ); // magazine_and_packet_address2
+    bs_write( s, 8, REVERSE( READ_8( line[2] ) ) ); // framing_code
+    bs_write( s, 8, REVERSE( READ_8( line[3] ) ) ); // magazine_and_packet_address1
+    bs_write( s, 8, REVERSE( READ_8( line[4] ) ) ); // magazine_and_packet_address2
 
-    line += 3;
+    line += 5;
 
     for( int j = 0; j < SDP_DATA_WORDS; j++ )
         bs_write( s, 8, REVERSE( READ_8( line[j] ) ) ); // data_block
-
 }
 
 static int parse_op47_sdp( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame,
@@ -389,9 +388,12 @@ static int parse_op47_sdp( obe_t *h, obe_sdi_non_display_data_t *non_display_dat
                 if( dw[i] )
                 {
                     read_op47_structure_b( &s, line, dw[i] );
-                    line += SDP_DATA_WORDS+3;
+                    line += SDP_DATA_WORDS+5;
                 }
             }
+
+            if( READ_8( line[0] ) != 0x74 )
+                syslog( LOG_ERR, "Invalid OP47 footer on line %i \n", line_number );
 
             /* Stuffing bytes */
             write_dvb_stuffing( &s );
