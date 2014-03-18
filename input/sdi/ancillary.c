@@ -306,7 +306,7 @@ static void read_op47_structure_b( bs_t *s, uint16_t *line, uint8_t dw )
 
     for( int j = 0; j < SDP_DATA_WORDS; j++ )
         bs_write( s, 8, REVERSE( READ_8( line[j] ) ) ); // data_block
-    
+
 }
 
 static int parse_op47_sdp( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame,
@@ -331,7 +331,7 @@ static int parse_op47_sdp( obe_t *h, obe_sdi_non_display_data_t *non_display_dat
         /* Calculate checksum */
         for( int i = 0; i < len; i++ )
             sdp_cs += READ_8( line[i] );
-            
+
         if( sdp_cs )
         {
             syslog( LOG_ERR, "Invalid OP47 SDP checksum on line %i \n", line_number );
@@ -371,28 +371,28 @@ static int parse_op47_sdp( obe_t *h, obe_sdi_non_display_data_t *non_display_dat
                 syslog( LOG_ERR, "Malloc failed\n" );
                 return -1;
             }
-            
+
             bs_init( &s, non_display_data->dvb_ttx_frame->data, DVB_VBI_MAXIMUM_SIZE );
 
             // PES_data_field
             bs_write( &s, 8, DVB_VBI_DATA_IDENTIFIER ); // data_identifier (FIXME let user choose or passthrough from vanc)
-            
+
             line++; // skip format code
-            
+
             for( int i = 0; i < 5; i++ )
                 dw[i] = READ_8( line[i] );
 
             line += 5;
-            
+
             for( int i = 0; i < 5; i++ )
             {
                 if( dw[i] )
                 {
                     read_op47_structure_b( &s, line, dw[i] );
-                    line += SDP_DATA_WORDS;
+                    line += SDP_DATA_WORDS+3;
                 }
             }
-            
+
             /* Stuffing bytes */
             write_dvb_stuffing( &s );
             bs_flush( &s );
