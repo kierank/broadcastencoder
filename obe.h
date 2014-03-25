@@ -361,13 +361,13 @@ enum frame_packing_arrangement_e
  * override - Metadata will be passed through if E-distribution audio or AC-3 audio is used or the SDI stream has metadata as per SMPTE 2020-AB.
  *            This flag forces the use of the specified settings
  *
- * dialnorm - dialogue normalisation (valid range -31 to -1)
+ * ref_level - dialogue normalisation (valid range -31 to -1)
  */
 typedef struct
 {
     int override;
 
-    int dialnorm;
+    int ref_level;
     int dsur_mode;
     int original;
 
