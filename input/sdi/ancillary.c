@@ -361,6 +361,9 @@ static int parse_op47_sdp( obe_t *h, obe_sdi_non_display_data_t *non_display_dat
             return 0;
         }
 
+        if( !get_output_stream_by_format( h, MISC_TELETEXT ) )
+            return 0;
+
         line += 3; // skip identifier and sdp length
         if( READ_8( line[0] ) == 0x2 )
         {
