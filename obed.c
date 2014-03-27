@@ -28,6 +28,9 @@
 #include <assert.h>
 #include <string.h>
 #include <syslog.h>
+#include <sys/time.h>
+
+#include "crypto/amd64/crypto_sign.h"
 
 #include "config.h"
 
@@ -71,6 +74,8 @@ static char *line_read = NULL;
 static int running = 0;
 static int system_type_value = OBE_SYSTEM_TYPE_GENERIC;
 static int encoder_id = 0;
+static int64_t auth_time;
+static int auth;
 
 /* Video */
 static const char * const avc_profiles[] = { "main", "high" };
@@ -101,6 +106,12 @@ static void stop_server( int a )
 {
     keep_running = 0;
 }
+
+/* Authentication options */
+static const unsigned char pk[] = { 0x7c, 0x59, 0x1a, 0xb3, 0xb9, 0xe2, 0x9d, 0xfc,
+                                    0xdb, 0x54, 0x7f, 0xf4, 0x09, 0xc9, 0xc6, 0x46,
+                                    0xaa, 0x92, 0xcf, 0xe2, 0xde, 0x6e, 0x70, 0xc6,
+                                    0x09, 0x61, 0x8f, 0x86, 0x6d, 0x22, 0x7b, 0x74 };
 
 static void stop_encode( void )
 {
@@ -167,6 +178,10 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
 
     if( encoder_control->control_version == OBE_CONTROL_VERSION )
     {
+        /* Don't do anything if the client is not authenticated */
+        if( !auth )
+            return;
+
         if( running == 1 )
             stop_encode();
 
@@ -522,6 +537,64 @@ static void obed__encoder_format(Obed__EncoderCommunicate_Service *service,
     result.format_version = 1;
 
     closure( &result, closure_data );
+}
+
+static void obed__encoder_auth1(Obed__EncoderCommunicate_Service *service,
+                                const Obed__EncoderAuthenticate *input,
+                                Obed__EncoderResponse_Closure closure,
+                                void *closure_data)
+{
+    Obed__EncoderResponse result = OBED__ENCODER_RESPONSE__INIT;
+    struct timeval tv;
+
+    gettimeofday( &tv, NULL );
+
+    result.has_encoder_time = 1;
+    auth_time = result.encoder_time = tv.tv_sec + rand();
+
+    result.encoder_response = malloc( 3 );
+    strcpy( result.encoder_response, "OK" );
+    closure( &result, closure_data );
+    free( result.encoder_response );
+}
+
+static void obed__encoder_auth2(Obed__EncoderCommunicate_Service *service,
+                                const Obed__EncoderAuthenticate *input,
+                                Obed__EncoderResponse_Closure closure,
+                                void *closure_data)
+{
+    Obed__EncoderResponse result = OBED__ENCODER_RESPONSE__INIT;
+    char tmp[100];
+    char tmp2[100];
+    int mlen, ret;
+
+    if( !input->has_signed_message )
+    {
+        result.encoder_response = malloc( 5 );
+        strcpy( result.encoder_response, "FAIL" );
+        goto end;
+    }
+
+    /* Run cryptographic check */
+    ret = crypto_sign_open( tmp2, &mlen, input->signed_message.data, input->signed_message.len, pk );
+    snprintf( tmp, sizeof(tmp), "AUTH%"PRIi64"", auth_time );
+
+    if( ret < 0 || memcmp( tmp, tmp2, mlen ) )
+    {
+        result.encoder_response = malloc( 5 );
+        strcpy( result.encoder_response, "FAIL" );
+    }
+    else
+    {
+        auth = 1;
+        result.encoder_response = malloc( 3 );
+        strcpy( result.encoder_response, "OK" );
+    }
+
+end:
+
+    closure( &result, closure_data );
+    free( result.encoder_response );
 }
 
 static Obed__EncoderCommunicate_Service encoder_communicate = OBED__ENCODER_COMMUNICATE__INIT(obed__);
