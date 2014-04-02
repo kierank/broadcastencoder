@@ -287,31 +287,26 @@ static int parse_cea_608( uint16_t *line )
 }
 #endif
 
-static void read_op47_structure_b( bs_t *s, uint16_t *line, uint8_t dw )
+static void read_op47_structure_b( vbi_sliced *vbi_slice, uint16_t *line, uint8_t dw )
 {
-    /* OP-47 is guaranteed to be subtitles */
-    bs_write( s, 8, DATA_UNIT_ID_EBU_TTX_SUB ); // data_unit_id
-    bs_write( s, 8, DVB_VBI_UNIT_SIZE ); // data_unit_length
+    int parity = dw >> 7;
+    int line_analogue = dw & 0x1f;
+    int line_smpte = 0;
 
-    /* Line number and field number */
-    bs_write( s, 2, 0x3 ); // reserved_future_use
-    bs_write1( s, dw >> 7 ); // field_parity
-    bs_write( s, 5, dw & 0x1f ); // line_offset
+    obe_convert_analogue_to_smpte( INPUT_VIDEO_FORMAT_PAL, line_analogue, parity == 0 ? 2 : 1, &line_smpte );
+    vbi_slice->id = VBI_SLICED_TELETEXT_B;
+    vbi_slice->line = line_smpte;
 
-    bs_write( s, 8, REVERSE( READ_8( line[2] ) ) ); // framing_code
-    bs_write( s, 8, REVERSE( READ_8( line[3] ) ) ); // magazine_and_packet_address1
-    bs_write( s, 8, REVERSE( READ_8( line[4] ) ) ); // magazine_and_packet_address2
+    /* skip run in codes and framing code */
+    line += 3;
 
-    line += 5;
-
-    for( int j = 0; j < SDP_DATA_WORDS; j++ )
-        bs_write( s, 8, REVERSE( READ_8( line[j] ) ) ); // data_block
+    for( int i = 0; i < SDP_DATA_WORDS+2; i++ )
+        vbi_slice->data[i] = READ_8( line[i] ); // MRAG x2 + data_block
 }
 
 static int parse_op47_sdp( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame,
                             uint16_t *line, int line_number, int len )
 {
-    bs_t s;
     uint8_t sdp_cs = 0, dw[5];
     obe_int_frame_data_t *tmp, *frame_data;
 
@@ -367,17 +362,6 @@ static int parse_op47_sdp( obe_t *h, obe_sdi_non_display_data_t *non_display_dat
         line += 3; // skip identifier and sdp length
         if( READ_8( line[0] ) == 0x2 )
         {
-            non_display_data->dvb_ttx_frame = new_coded_frame( 0, DVB_VBI_MAXIMUM_SIZE );
-            if( !non_display_data->dvb_ttx_frame )
-            {
-                syslog( LOG_ERR, "Malloc failed\n" );
-                return -1;
-            }
-
-            bs_init( &s, non_display_data->dvb_ttx_frame->data, DVB_VBI_MAXIMUM_SIZE );
-
-            // PES_data_field
-            bs_write( &s, 8, DVB_VBI_DATA_IDENTIFIER ); // data_identifier (FIXME let user choose or passthrough from vanc)
 
             line++; // skip format code
 
@@ -390,19 +374,13 @@ static int parse_op47_sdp( obe_t *h, obe_sdi_non_display_data_t *non_display_dat
             {
                 if( dw[i] )
                 {
-                    read_op47_structure_b( &s, line, dw[i] );
+                    read_op47_structure_b( &non_display_data->vbi_slices[non_display_data->num_vbi++], line, dw[i] );
                     line += SDP_DATA_WORDS+5;
                 }
             }
 
             if( READ_8( line[0] ) != 0x74 )
                 syslog( LOG_ERR, "Invalid OP47 footer on line %i \n", line_number );
-
-            /* Stuffing bytes */
-            write_dvb_stuffing( &s );
-            bs_flush( &s );
-
-            non_display_data->dvb_ttx_frame->len = bs_pos( &s ) / 8;
         }
     }
 
