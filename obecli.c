@@ -70,6 +70,7 @@ static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50"
                                                          "1080p60", 0 };
 static const char * const input_video_connections[]  = { "sdi", "hdmi", "optical-sdi", "component", "composite", "s-video", 0 };
 static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", "analogue", 0 };
+static const char * const picture_on_losses[]        = { "", "black", "lastframe", "bars", 0 };
 static const char * const ttx_locations[]            = { "dvb-ttx", "dvb-vbi", "both", 0 };
 static const char * const stream_actions[]           = { "passthrough", "encode", 0 };
 static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", "e-ac3", "aac", 0 };
@@ -88,7 +89,7 @@ static const char * const fec_types[]                = { "cop3-block-aligned", "
 
 static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection",
-                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", NULL };
+                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", NULL };
 static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
@@ -527,6 +528,7 @@ static int set_input( char *command, obecli_command_t *child )
         char *bars_line2 = obe_get_option( input_opts[6], opts );
         char *bars_line3 = obe_get_option( input_opts[7], opts );
         char *bars_line4 = obe_get_option( input_opts[8], opts );
+        char *picture_on_loss = obe_get_option( input_opts[9], opts );
 
         FAIL_IF_ERROR( video_format && ( check_enum_value( video_format, input_video_formats ) < 0 ),
                        "Invalid video format\n" );
@@ -536,6 +538,9 @@ static int set_input( char *command, obecli_command_t *child )
 
         FAIL_IF_ERROR( audio_connection && ( check_enum_value( audio_connection, input_audio_connections ) < 0 ),
                        "Invalid audio connection\n" );
+
+        FAIL_IF_ERROR( picture_on_loss && ( check_enum_value( picture_on_loss, picture_on_losses ) < 0 ),
+                       "Invalid picture on loss\n" );
 
         cli.input.card_idx = obe_otoi( card_idx, cli.input.card_idx );
         if( video_format )
@@ -552,6 +557,8 @@ static int set_input( char *command, obecli_command_t *child )
             strncpy( cli.input.bars_line3, bars_line3, sizeof(cli.input.bars_line3) );
         if( bars_line4 )
             strncpy( cli.input.bars_line4, bars_line4, sizeof(cli.input.bars_line4) );
+        if( picture_on_loss )
+            parse_enum_value( picture_on_loss, picture_on_losses, &cli.input.picture_on_loss );
 
         obe_free_string_array( opts );
     }

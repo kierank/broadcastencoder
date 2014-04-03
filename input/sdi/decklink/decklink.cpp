@@ -33,6 +33,7 @@ extern "C"
 #include "input/sdi/ancillary.h"
 #include "input/sdi/vbi.h"
 #include "input/sdi/x86/sdi.h"
+#include "input/bars/bars_common.h"
 #include <libavresample/avresample.h>
 #include <libavutil/opt.h>
 #include <libavutil/frame.h>
@@ -125,6 +126,13 @@ typedef struct
     AVCodecContext  *codec;
     int64_t         v_counter;
     AVRational      v_timebase;
+    hnd_t           bars_hnd;
+
+    /* frame data for black or last-frame */
+    obe_raw_frame_t *stored_frame;
+
+    /* output frame pointers for bars and tone */
+    obe_raw_frame_t **raw_frames;
 
     /* Audio */
     int64_t         a_counter;
@@ -157,6 +165,8 @@ typedef struct
     int video_format;
     int num_channels;
     int probe;
+    int picture_on_loss;
+    obe_bars_opts_t obe_bars_opts;
 
     /* Output */
     int probe_success;
@@ -311,6 +321,21 @@ public:
                 get_format_opts( decklink_opts_, p_display_mode );
                 setup_pixel_funcs( decklink_opts_ );
 
+                /* Use new video format to setup bars */
+                if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BARS )
+                {
+                    decklink_opts_->obe_bars_opts.video_format = decklink_opts_->video_format;
+
+                    if( decklink_ctx->bars_hnd )
+                        close_bars( decklink_ctx->bars_hnd );
+
+                    if( open_bars( &decklink_ctx->bars_hnd, &decklink_opts_->obe_bars_opts ) < 0 )
+                    {
+                        fprintf( stderr, "[decklink] Could not open bars\n" );
+                        return S_OK;
+                    }
+                }
+
                 decklink_ctx->p_input->PauseStreams();
                 pix_fmt = h->filter_bit_depth == OBE_BIT_DEPTH_10 ? bmdFormat10BitYUV : bmdFormat8BitYUV;
                 decklink_ctx->p_input->EnableVideoInput( p_display_mode->GetDisplayMode(), pix_fmt, bmdVideoInputEnableFormatDetection );
@@ -355,6 +380,39 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         if( videoframe->GetFlags() & bmdFrameHasNoInputSource )
         {
             syslog( LOG_ERR, "Decklink card index %i: No input signal detected", decklink_opts_->card_idx );
+
+            /* Only output our picture on loss if we've had valid frames before */
+            if( !decklink_opts_->probe && decklink_opts_->picture_on_loss && decklink_ctx->last_frame_time != -1 )
+            {
+                decklink_ctx->p_input->GetHardwareReferenceClock( OBE_CLOCK, &hardware_time, &time_in_frame, &ticks_per_frame );
+                obe_clock_tick( h, (int64_t)hardware_time );
+
+                get_bars( decklink_ctx->bars_hnd, decklink_ctx->raw_frames );
+
+                decklink_ctx->raw_frames[0]->pts = av_rescale_q( decklink_ctx->v_counter++, decklink_ctx->v_timebase,
+                                                                 (AVRational){1, OBE_CLOCK} );
+
+                if( add_to_filter_queue( h, decklink_ctx->raw_frames[0] ) < 0 )
+                    goto end;
+
+                /* Deal with the tone */
+                if( decklink_opts_->picture_on_loss )
+                {
+                    for( int i = 0; i < h->device.num_input_streams; i++ )
+                    {
+                        if( h->device.streams[i]->stream_format == AUDIO_PCM )
+                            decklink_ctx->raw_frames[1]->input_stream_id = h->device.streams[i]->input_stream_id;
+                    }
+
+                    decklink_ctx->raw_frames[1]->pts = av_rescale_q( decklink_ctx->a_counter, decklink_ctx->a_timebase,
+                                                                     (AVRational){1, OBE_CLOCK} );
+                    decklink_ctx->a_counter += decklink_ctx->raw_frames[1]->audio_frame.num_samples;
+
+                    if( add_to_filter_queue( h, decklink_ctx->raw_frames[1] ) < 0 )
+                        goto end;
+                }
+            }
+
             return S_OK;
         }
         else if( decklink_opts_->probe )
@@ -695,6 +753,12 @@ static void close_card( decklink_opts_t *decklink_opts )
 
     if( decklink_ctx->avr )
         avresample_free( &decklink_ctx->avr );
+
+    if( decklink_ctx->raw_frames )
+        free( decklink_ctx->raw_frames );
+
+    if( decklink_ctx->bars_hnd )
+        close_bars( decklink_ctx->bars_hnd );
 }
 
 static int open_card( decklink_opts_t *decklink_opts )
@@ -959,6 +1023,28 @@ static int open_card( decklink_opts_t *decklink_opts )
 
     if( !decklink_opts->probe )
     {
+        /* Setup Bars */
+        if( decklink_opts->picture_on_loss == PICTURE_ON_LOSS_BARS )
+        {
+            decklink_ctx->raw_frames = (obe_raw_frame_t**)calloc( 2, sizeof(*decklink_ctx->raw_frames) );
+            if( !decklink_ctx->raw_frames )
+            {
+                fprintf( stderr, "[decklink] Malloc failed\n" );
+                ret = -1;
+                goto finish;
+            }
+
+            decklink_opts->obe_bars_opts.video_format = decklink_opts->video_format;
+            /* Setup bars later if we don't know the video format */
+            if( open_bars( &decklink_ctx->bars_hnd, &decklink_opts->obe_bars_opts ) < 0 )
+            {
+                fprintf( stderr, "[decklink] Could not open bars\n" );
+                ret = -1;
+                goto finish;
+            }
+        }
+
+        /* Setup Audio filtering */
         decklink_ctx->avr = avresample_alloc_context();
         if( !decklink_ctx->avr )
         {
@@ -1262,6 +1348,14 @@ static void *open_input( void *ptr )
     decklink_opts->video_conn = user_opts->video_connection;
     decklink_opts->audio_conn = user_opts->audio_connection;
     decklink_opts->video_format = user_opts->video_format;
+    decklink_opts->picture_on_loss = user_opts->picture_on_loss;
+
+    decklink_opts->obe_bars_opts.video_format = user_opts->video_format;
+    decklink_opts->obe_bars_opts.bars_line1 = user_opts->bars_line1;
+    decklink_opts->obe_bars_opts.bars_line2 = user_opts->bars_line2;
+    decklink_opts->obe_bars_opts.bars_line3 = user_opts->bars_line3;
+    decklink_opts->obe_bars_opts.bars_line4 = user_opts->bars_line4;
+    decklink_opts->obe_bars_opts.no_signal = 1;
 
     decklink_ctx = &decklink_opts->decklink_ctx;
 

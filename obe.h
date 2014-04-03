@@ -109,6 +109,14 @@ enum input_type_e
 //    INPUT_DEVICE_ASI,
 };
 
+enum picture_on_loss_e
+{
+    PICTURE_ON_LOSS_NONE,
+    PICTURE_ON_LOSS_BLACK,
+    PICTURE_ON_LOSS_LASTFRAME,
+    PICTURE_ON_LOSS_BARS,
+};
+
 /* video_format should be set to -1 for auto detection */
 
 typedef struct
@@ -125,6 +133,8 @@ typedef struct
     char bars_line2[30];
     char bars_line3[30];
     char bars_line4[30];
+
+    int picture_on_loss;
 } obe_input_t;
 
 /**** Stream Formats ****/
