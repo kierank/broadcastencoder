@@ -42,6 +42,7 @@ extern "C"
 #include "include/DeckLinkAPIDispatch.cpp"
 
 #define DECKLINK_VANC_LINES 100
+#define DECKLINK_SAMPLE_RATE 48000
 
 struct obe_to_decklink
 {
@@ -122,8 +123,12 @@ typedef struct
     AVFrame         *frame;
     AVCodec         *dec;
     AVCodecContext  *codec;
+    int64_t         v_counter;
+    AVRational      v_timebase;
 
     /* Audio */
+    int64_t         a_counter;
+    AVRational      a_timebase;
     AVAudioResampleContext *avr;
 
     int64_t last_frame_time;
@@ -338,7 +343,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     uint8_t *vbi_buf;
     int anc_lines[DECKLINK_VANC_LINES];
     IDeckLinkVideoFrameAncillary *ancillary;
-    BMDTimeValue stream_time, frame_duration, hardware_time, time_in_frame, ticks_per_frame;
+    BMDTimeValue hardware_time, time_in_frame, ticks_per_frame;
 
     if( decklink_opts_->probe_success )
         return S_OK;
@@ -356,7 +361,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             decklink_opts_->probe_success = 1;
 
         /* use SDI ticks as clock source */
-        videoframe->GetStreamTime( &stream_time, &frame_duration, OBE_CLOCK );
         decklink_ctx->p_input->GetHardwareReferenceClock( OBE_CLOCK, &hardware_time, &time_in_frame, &ticks_per_frame );
         obe_clock_tick( h, (int64_t)hardware_time );
 
@@ -578,7 +582,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
             /* If AFD is present and the stream is SD this will be changed in the video filter */
             raw_frame->sar_width = raw_frame->sar_height = 1;
-            raw_frame->pts = stream_time;
+            raw_frame->pts = av_rescale_q( decklink_ctx->v_counter++, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );;
 
             for( int i = 0; i < h->device.num_input_streams; i++ )
             {
@@ -701,7 +705,7 @@ static int open_card( decklink_opts_t *decklink_opts )
     int         found_mode;
     int         ret = 0;
     int         i;
-    const int   sample_rate = 48000;
+    const int   sample_rate = DECKLINK_SAMPLE_RATE;
     const char *model_name;
     BMDDisplayMode wanted_mode_id;
     BMDPixelFormat pix_fmt;
@@ -873,8 +877,8 @@ static int open_card( decklink_opts_t *decklink_opts )
 
     wanted_mode_id = decklink_video_format_tab[i].bmd_name;
     found_mode = false;
-    decklink_opts->timebase_num = decklink_video_format_tab[i].timebase_num;
-    decklink_opts->timebase_den = decklink_video_format_tab[i].timebase_den;
+    decklink_ctx->v_timebase.num = decklink_opts->timebase_num = decklink_video_format_tab[i].timebase_num;
+    decklink_ctx->v_timebase.den = decklink_opts->timebase_den = decklink_video_format_tab[i].timebase_den;
 
     for (;;)
     {
@@ -944,6 +948,8 @@ static int open_card( decklink_opts_t *decklink_opts )
     }
 
     /* Set up audio. */
+    decklink_ctx->a_timebase.num = 1;
+    decklink_ctx->a_timebase.den = DECKLINK_SAMPLE_RATE;
     result = decklink_ctx->p_input->EnableAudioInput( sample_rate, bmdAudioSampleType32bitInteger, decklink_opts->num_channels );
     if( result != S_OK )
     {
@@ -965,7 +971,7 @@ static int open_card( decklink_opts_t *decklink_opts )
         /* Give libavresample a made up channel map */
         av_opt_set_int( decklink_ctx->avr, "in_channel_layout",   (1 << decklink_opts->num_channels) - 1, 0 );
         av_opt_set_int( decklink_ctx->avr, "in_sample_fmt",       AV_SAMPLE_FMT_S32, 0 );
-        av_opt_set_int( decklink_ctx->avr, "in_sample_rate",      48000, 0 );
+        av_opt_set_int( decklink_ctx->avr, "in_sample_rate",      DECKLINK_SAMPLE_RATE, 0 );
         av_opt_set_int( decklink_ctx->avr, "out_channel_layout",  (1 << decklink_opts->num_channels) - 1, 0 );
         av_opt_set_int( decklink_ctx->avr, "out_sample_fmt",      AV_SAMPLE_FMT_S32P, 0 );
 
@@ -1099,7 +1105,7 @@ static void *probe_stream( void *ptr )
             streams[i]->num_channels  = 16;
             streams[i]->sample_format = AV_SAMPLE_FMT_S32P;
             /* TODO: support other sample rates */
-            streams[i]->sample_rate = 48000;
+            streams[i]->sample_rate = DECKLINK_SAMPLE_RATE;
         }
     }
 
@@ -1211,7 +1217,7 @@ static void *autoconf_input( void *ptr )
             streams[i]->num_channels  = 16;
             streams[i]->sample_format = AV_SAMPLE_FMT_S32P;
             /* TODO: support other sample rates */
-            streams[i]->sample_rate = 48000;
+            streams[i]->sample_rate = DECKLINK_SAMPLE_RATE;
         }
     }
 
