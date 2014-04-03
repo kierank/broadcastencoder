@@ -582,7 +582,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
             /* If AFD is present and the stream is SD this will be changed in the video filter */
             raw_frame->sar_width = raw_frame->sar_height = 1;
-            raw_frame->pts = av_rescale_q( decklink_ctx->v_counter++, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );;
+            raw_frame->pts = av_rescale_q( decklink_ctx->v_counter++, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
 
             for( int i = 0; i < h->device.num_input_streams; i++ )
             {
@@ -631,9 +631,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             return -1;
         }
 
-        BMDTimeValue packet_time;
-        audioframe->GetPacketTime( &packet_time, OBE_CLOCK );
-        raw_frame->pts = packet_time;
+        raw_frame->pts = av_rescale_q( decklink_ctx->a_counter, decklink_ctx->a_timebase, (AVRational){1, OBE_CLOCK} );
+        decklink_ctx->a_counter += raw_frame->audio_frame.num_samples;
         raw_frame->release_data = obe_release_audio_data;
         raw_frame->release_frame = obe_release_frame;
         for( int i = 0; i < h->device.num_input_streams; i++ )
