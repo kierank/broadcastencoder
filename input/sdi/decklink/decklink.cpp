@@ -396,7 +396,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                     goto end;
 
                 /* Deal with the tone */
-                if( decklink_opts_->picture_on_loss )
+                if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BARS )
                 {
                     for( int i = 0; i < h->device.num_input_streams; i++ )
                     {
