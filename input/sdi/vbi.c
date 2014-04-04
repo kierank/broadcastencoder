@@ -25,8 +25,8 @@
 #include "sdi.h"
 #include "vbi.h"
 
-#define VIDEO_INDEX_CRC_POLY 0x1d
-#define VIDEO_INDEX_CRC_POLY_BROKEN 0x1c
+#define VIDEO_INDEX_CRC_POLY 0xb8
+#define VIDEO_INDEX_CRC_POLY_BROKEN 0x38
 
 #define DVB_VBI_PES_HEADER_SIZE   45
 
@@ -110,8 +110,8 @@ int setup_vbi_parser( obe_sdi_non_display_data_t *non_display_data )
         return -1;
 
     /* Video index information has two supported polynomials, 0x1d is from the spec, 0x1c is from broken devices */
-    ret = av_crc_init( non_display_data->crc, 0, 8, VIDEO_INDEX_CRC_POLY, sizeof(non_display_data->crc) );
-    ret = av_crc_init( non_display_data->crc_broken, 0, 8, VIDEO_INDEX_CRC_POLY_BROKEN, sizeof(non_display_data->crc_broken) );
+    ret = av_crc_init( non_display_data->crc, 1, 8, VIDEO_INDEX_CRC_POLY, sizeof(non_display_data->crc) );
+    ret = av_crc_init( non_display_data->crc_broken, 1, 8, VIDEO_INDEX_CRC_POLY_BROKEN, sizeof(non_display_data->crc_broken) );
     if( ret < 0 )
     {
         fprintf( stderr, "Could not setup video index information crc \n" );
@@ -328,12 +328,12 @@ fail:
 int decode_video_index_information( obe_t *h, obe_sdi_non_display_data_t *non_display_data, uint16_t *line, obe_raw_frame_t *raw_frame, int line_number )
 {
     /* Video index information is only in the chroma samples */
-    uint8_t data[90] = {0};
+    uint8_t data[4] = {0};
     obe_int_frame_data_t *tmp, *frame_data;
     obe_user_data_t *tmp2, *user_data;
     uint8_t afd_code, scan_system, is_wide;
 
-    for( int i = 0; i < 90; i++ )
+    for( int i = 0; i < 4; i++ )
     {
         data[i] |= (line[0]  == 0x204) << 0;
         data[i] |= (line[2]  == 0x204) << 1;
@@ -350,7 +350,7 @@ int decode_video_index_information( obe_t *h, obe_sdi_non_display_data_t *non_di
         return 0;
 
     /* Check the CRC of the first three bytes (aka. octets) */
-    if( av_crc( non_display_data->crc, 0, data, 3 ) == data[3] || av_crc( non_display_data->crc_broken, 0, data, 3 ) == data[3] )
+    if( av_crc( non_display_data->crc, 0xff, data, 3 ) == data[3] || av_crc( non_display_data->crc_broken, 0xff, data, 3 ) == data[3] )
     {
         /* We only care about AFD */
         if( non_display_data->probe )

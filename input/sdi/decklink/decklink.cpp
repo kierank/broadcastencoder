@@ -531,18 +531,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 decklink_ctx->downscale_line( anc_buf, vbi_buf, num_anc_lines );
                 anc_buf_pos = anc_buf;
 
-                /* Handle Video Index information */
-                int tmp_line = first_line;
-                vii_line = decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC ? NTSC_VIDEO_INDEX_LINE : PAL_VIDEO_INDEX_LINE;
-                while( tmp_line < vii_line )
-                {
-                    anc_buf_pos += anc_line_stride / 2;
-                    tmp_line++;
-                }
-
-                if( decode_video_index_information( h, &decklink_ctx->non_display_parser, anc_buf_pos, raw_frame, vii_line ) < 0 )
-                    goto fail;
-
+                /* Setup VBI parser. Also sets up CRCs for Video Index */
                 if( !decklink_ctx->has_setup_vbi )
                 {
                     vbi_raw_decoder_init( &decklink_ctx->non_display_parser.vbi_decoder );
@@ -558,6 +547,18 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
                     decklink_ctx->has_setup_vbi = 1;
                 }
+
+                /* Handle Video Index information */
+                int tmp_line = first_line;
+                vii_line = decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC ? NTSC_VIDEO_INDEX_LINE : PAL_VIDEO_INDEX_LINE;
+                while( tmp_line != vii_line )
+                {
+                    anc_buf_pos += anc_line_stride / 2;
+                    tmp_line = sdi_next_line( decklink_opts_->video_format, tmp_line );
+                }
+
+                if( decode_video_index_information( h, &decklink_ctx->non_display_parser, anc_buf_pos, raw_frame, vii_line ) < 0 )
+                    goto fail;
 
                 if( decode_vbi( h, &decklink_ctx->non_display_parser, vbi_buf, raw_frame ) < 0 )
                     goto fail;
