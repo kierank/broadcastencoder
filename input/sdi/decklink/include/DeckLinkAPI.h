@@ -1,5 +1,5 @@
 /* -LICENSE-START-
-** Copyright (c) 2013 Blackmagic Design
+** Copyright (c) 2014 Blackmagic Design
 **
 ** Permission is hereby granted, free of charge, to any person or organization
 ** obtaining a copy of the software and accompanying documentation covered by
@@ -293,6 +293,7 @@ enum _BMDDeckLinkAttributeID {
     BMDDeckLinkSupportsDesktopDisplay                            = /* 'extd' */ 0x65787464,
     BMDDeckLinkSupportsClockTimingAdjustment                     = /* 'ctad' */ 0x63746164,
     BMDDeckLinkSupportsFullDuplex                                = /* 'fdup' */ 0x66647570,
+    BMDDeckLinkSupportsFullFrameReferenceInputTimingOffset       = /* 'frin' */ 0x6672696E,
 
     /* Integers */
 
