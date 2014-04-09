@@ -576,9 +576,10 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             if( h->filter_bit_depth == OBE_BIT_DEPTH_8 )
             {
                 raw_frame->alloc_img.csp = PIX_FMT_UYVY422;
-                if( av_image_alloc( raw_frame->alloc_img.plane, raw_frame->alloc_img.stride,
-                                    raw_frame->alloc_img.width, raw_frame->alloc_img.height,
-                                    (AVPixelFormat)raw_frame->alloc_img.csp, 16 ) < 0 )
+                int size = av_image_alloc( raw_frame->alloc_img.plane, raw_frame->alloc_img.stride,
+                                           raw_frame->alloc_img.width, raw_frame->alloc_img.height,
+                                           (AVPixelFormat)raw_frame->alloc_img.csp, 32 );
+                if( size < 0 )
                 {
                     syslog( LOG_ERR, "Malloc failed\n" );
                     return -1;
@@ -593,7 +594,17 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                     dst += raw_frame->alloc_img.stride[0];
                 }
 
-                raw_frame->release_data = obe_release_video_data;
+                raw_frame->buf_ref[0] = av_buffer_create( raw_frame->alloc_img.plane[0],
+                                                          size, av_buffer_default_free,
+                                                          NULL, 0 );
+                if( !raw_frame->buf_ref[0] )
+                {
+                    syslog( LOG_ERR, "Malloc failed\n" );
+                    return -1;
+                }
+                raw_frame->buf_ref[1] = NULL;
+
+                raw_frame->release_data = obe_release_bufref;
                 raw_frame->release_frame = obe_release_frame;
             }
             else
