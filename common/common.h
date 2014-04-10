@@ -329,6 +329,7 @@ const static obe_audio_sample_pattern_t audio_sample_patterns[] =
     { INPUT_VIDEO_FORMAT_1080I_50,   { 1920 }, 1920, 1 },
     { INPUT_VIDEO_FORMAT_1080I_5994, { 1602, 1601, 1602, 1601, 1602 }, 1602, 5 },
     { INPUT_VIDEO_FORMAT_1080P_2997, { 1602, 1601, 1602, 1601, 1602 }, 1602, 5 },
+    { INPUT_VIDEO_FORMAT_1080P_50,   {  960 },  960, 1 },
     { INPUT_VIDEO_FORMAT_1080P_5994, {  801,  800,  801,  801,  801 },  801, 5 },
     { -1 },
 };
