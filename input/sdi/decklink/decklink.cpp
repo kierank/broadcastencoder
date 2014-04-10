@@ -517,7 +517,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 decklink_ctx->p_input->GetHardwareReferenceClock( OBE_CLOCK, &hardware_time, &time_in_frame, &ticks_per_frame );
                 obe_clock_tick( h, (int64_t)hardware_time );
 
-                if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BLACK )
+                if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
+                    decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
                 {
                     video_frame = new_raw_frame();
                     if( !video_frame )
@@ -526,9 +527,13 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                         goto end;
                     }
                     memcpy( video_frame, &decklink_ctx->stored_video_frame, sizeof(*video_frame) );
-                    /* Assumes only one buffer reference */
-                    video_frame->buf_ref[0] = av_buffer_ref( decklink_ctx->stored_video_frame.buf_ref[0] );
-                    video_frame->buf_ref[1] = NULL;
+                    int i = 0;
+                    while( video_frame->buf_ref[i] != NULL )
+                    {
+                        video_frame->buf_ref[i] = av_buffer_ref( decklink_ctx->stored_video_frame.buf_ref[i] );
+                        i++;
+                    }
+                    video_frame->buf_ref[i] = NULL;
                 }
                 else if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BARS )
                 {
@@ -539,7 +544,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 }
 
                 video_frame->pts = av_rescale_q( decklink_ctx->v_counter, decklink_ctx->v_timebase,
-                                                                 (AVRational){1, OBE_CLOCK} );
+                                                 (AVRational){1, OBE_CLOCK} );
 
                 if( add_to_filter_queue( h, video_frame ) < 0 )
                     goto end;
@@ -824,6 +829,25 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             {
                 if( h->device.streams[i]->stream_format == VIDEO_UNCOMPRESSED )
                     raw_frame->input_stream_id = h->device.streams[i]->input_stream_id;
+            }
+
+            /* Make a copy of the frame for showing the last frame */
+            if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
+            {
+                int i = 0;
+                if( decklink_ctx->stored_video_frame.release_data )
+                    decklink_ctx->stored_video_frame.release_data( &decklink_ctx->stored_video_frame );
+
+                memcpy( &decklink_ctx->stored_video_frame, raw_frame, sizeof(decklink_ctx->stored_video_frame) );
+                while( raw_frame->buf_ref[i] != NULL )
+                {
+                    decklink_ctx->stored_video_frame.buf_ref[i] = av_buffer_ref( raw_frame->buf_ref[i] );
+                    i++;
+                }
+                decklink_ctx->stored_video_frame.buf_ref[i] = NULL;
+                decklink_ctx->stored_video_frame.release_data = obe_release_bufref;
+                decklink_ctx->stored_video_frame.num_user_data = 0;
+                decklink_ctx->stored_video_frame.user_data = NULL;
             }
 
             if( add_to_filter_queue( h, raw_frame ) < 0 )
