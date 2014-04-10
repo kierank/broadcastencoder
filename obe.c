@@ -449,6 +449,22 @@ obe_output_stream_t *get_output_stream_by_format( obe_t *h, int format )
     return NULL;
 }
 
+const obe_audio_sample_pattern_t *get_sample_pattern( int video_format )
+{
+    int i;
+
+    for( i = 0 ; audio_sample_patterns[i].format != -1; i++ )
+    {
+        if( video_format == audio_sample_patterns[i].format )
+            break;
+    }
+
+    if( audio_sample_patterns[i].format == -1 )
+        return NULL;
+
+    return &audio_sample_patterns[i];
+}
+
 obe_t *obe_setup( void )
 {
     openlog( "obe", LOG_NDELAY | LOG_PID, LOG_USER );

@@ -384,20 +384,12 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
         goto end;
     }
 
-    for( j = 0 ; audio_sample_patterns[j].format != -1; j++ )
+    bars_ctx->sample_pattern = get_sample_pattern( bars_opts->video_format );
+    if( !bars_ctx->sample_pattern )
     {
-        if( bars_opts->video_format == audio_sample_patterns[j].format )
-            break;
-    }
-
-    if( audio_sample_patterns[j].format == -1 )
-    {
-        fprintf( stderr, "Invalid video format \n" );
-        ret = -1;
+        fprintf( stderr, "Invalid sample format \n" );
         goto end;
     }
-
-    bars_ctx->sample_pattern = &audio_sample_patterns[j];
 
     *p_handle = bars_ctx;
 

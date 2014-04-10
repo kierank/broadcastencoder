@@ -568,6 +568,7 @@ obe_int_input_stream_t *get_input_stream( obe_t *h, int input_stream_id );
 obe_encoder_t *get_encoder( obe_t *h, int stream_id );
 obe_output_stream_t *get_output_stream( obe_t *h, int stream_id );
 obe_output_stream_t *get_output_stream_by_format( obe_t *h, int format );
+const obe_audio_sample_pattern_t *get_sample_pattern( int video_format );
 
 int64_t get_wallclock_in_mpeg_ticks( void );
 void sleep_mpeg_ticks( int64_t i_delay );
