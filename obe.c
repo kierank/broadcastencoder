@@ -115,14 +115,20 @@ void obe_release_bufref( void *ptr )
         av_buffer_unref( &raw_frame->buf_ref[i] );
 
     memset( raw_frame->buf_ref, 0, sizeof(raw_frame->buf_ref) );
+
+    /* Clear video */
     memset( &raw_frame->alloc_img, 0, sizeof(raw_frame->alloc_img) );
     memset( &raw_frame->img, 0, sizeof(raw_frame->img) );
+
+    /* Clear audio */
+    memset( raw_frame->audio_frame.audio_data, 0, sizeof(raw_frame->audio_frame.audio_data) );
 }
 
 void obe_release_audio_data( void *ptr )
 {
     obe_raw_frame_t *raw_frame = ptr;
     av_freep( &raw_frame->audio_frame.audio_data[0] );
+    memset( raw_frame->audio_frame.audio_data, 0, sizeof(raw_frame->audio_frame.audio_data) );
 }
 
 void obe_release_frame( void *ptr )
