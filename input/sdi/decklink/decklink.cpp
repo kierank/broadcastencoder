@@ -426,8 +426,10 @@ public:
                 if( decklink_opts_->picture_on_loss )
                 {
                     /* Clear old setup video and audio frames */
-                    decklink_ctx->stored_video_frame.release_data( &decklink_ctx->stored_video_frame );
-                    decklink_ctx->stored_audio_frame.release_data( &decklink_ctx->stored_audio_frame );
+                    if( decklink_ctx->stored_video_frame.release_data )
+                        decklink_ctx->stored_video_frame.release_data( &decklink_ctx->stored_video_frame );
+                    if( decklink_ctx->stored_audio_frame.release_data )
+                        decklink_ctx->stored_audio_frame.release_data( &decklink_ctx->stored_audio_frame );
 
                     decklink_ctx->sample_pattern = get_sample_pattern( decklink_opts_->video_format );
                     if( !decklink_ctx->sample_pattern )
