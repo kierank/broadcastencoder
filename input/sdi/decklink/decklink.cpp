@@ -45,6 +45,8 @@ extern "C"
 #define DECKLINK_VANC_LINES 100
 #define DECKLINK_SAMPLE_RATE 48000
 
+#define DROP_MIN 50
+
 struct obe_to_decklink
 {
     int obe_name;
@@ -121,6 +123,7 @@ typedef struct
     int64_t         v_counter;
     AVRational      v_timebase;
     hnd_t           bars_hnd;
+    int64_t         drop_count;
 
     /* frame data for black or last-frame */
     obe_raw_frame_t stored_video_frame;
@@ -510,7 +513,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             syslog( LOG_ERR, "Decklink card index %i: No input signal detected", decklink_opts_->card_idx );
 
             /* Only output our picture on loss if we've had valid frames before */
-            if( !decklink_opts_->probe && decklink_opts_->picture_on_loss && decklink_ctx->last_frame_time != -1 )
+            if( !decklink_opts_->probe && decklink_opts_->picture_on_loss && decklink_ctx->last_frame_time != -1 &&
+                decklink_ctx->drop_count++ > DROP_MIN )
             {
                 obe_raw_frame_t *video_frame = NULL, *audio_frame = NULL;
 
@@ -588,6 +592,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         }
         else if( decklink_opts_->probe )
             decklink_opts_->probe_success = 1;
+
+        decklink_ctx->drop_count = 0;
 
         /* use SDI ticks as clock source */
         decklink_ctx->p_input->GetHardwareReferenceClock( OBE_CLOCK, &hardware_time, &time_in_frame, &ticks_per_frame );
