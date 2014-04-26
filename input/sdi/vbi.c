@@ -636,8 +636,8 @@ int send_vbi_and_ttx( obe_t *h, obe_sdi_non_display_data_t *non_display_parser, 
 
         if( output_stream && output_stream->output_stream_id >= 0 )
         {
-                if( encapsulate_dvb_ttx( h, non_display_parser ) < 0 )
-                    return -1;
+            if( encapsulate_dvb_ttx( h, non_display_parser ) < 0 )
+                return -1;
 
             non_display_parser->dvb_ttx_frame->output_stream_id = output_stream->output_stream_id;
             non_display_parser->dvb_ttx_frame->pts = pts;
