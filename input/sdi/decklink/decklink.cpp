@@ -602,6 +602,20 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
         if( decklink_ctx->last_frame_time == -1 )
             decklink_ctx->last_frame_time = hardware_time;
+        else
+        {
+            int64_t cur_frame_time = hardware_time;
+            if( cur_frame_time - decklink_ctx->last_frame_time >= SDI_MAX_DELAY )
+            {
+                syslog( LOG_WARNING, "Decklink card index %i: No frame received for %"PRIi64" ms", decklink_opts_->card_idx,
+                       (cur_frame_time - decklink_ctx->last_frame_time) / (OBE_CLOCK/1000) );
+                pthread_mutex_lock( &h->drop_mutex );
+                h->encoder_drop = h->mux_drop = 1;
+                pthread_mutex_unlock( &h->drop_mutex );
+            }
+
+            decklink_ctx->last_frame_time = cur_frame_time;
+        }
 
         const int width = videoframe->GetWidth();
         const int height = videoframe->GetHeight();
