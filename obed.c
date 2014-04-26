@@ -271,7 +271,6 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             video_stream->avc_param.i_bframe            = video_opts_in->bframes;
             video_stream->avc_param.i_frame_reference   = video_opts_in->max_refs;
             video_stream->avc_param.i_frame_reference   = video_opts_in->max_refs;
-            video_stream->avc_param.i_frame_packing     = video_opts_in->frame_packing;
             if( video_opts_in->width )
                 video_stream->avc_param.i_width         = video_opts_in->width;
             video_stream->is_wide                       = video_opts_in->aspect_ratio;
@@ -302,10 +301,6 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             video_stream->video_anc.wss_to_afd          = video_opts_in->wss_to_afd;
             video_stream->video_anc.cea_608             = ancillary_opts_in->cea_608;
             video_stream->video_anc.cea_708             = ancillary_opts_in->cea_708;
-
-            /* Turn on the 3DTV mux option automatically */
-            if( video_stream->avc_param.i_frame_packing >= 0 )
-                d.mux_opts.is_3dtv = 1;
 
             /* Setup video profile */
             if( d.avc_profile >= 0 )
