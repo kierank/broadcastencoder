@@ -594,28 +594,22 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         else if( decklink_opts_->probe )
             decklink_opts_->probe_success = 1;
 
-        decklink_ctx->drop_count = 0;
-
         /* use SDI ticks as clock source */
         decklink_ctx->p_input->GetHardwareReferenceClock( OBE_CLOCK, &hardware_time, &time_in_frame, &ticks_per_frame );
         obe_clock_tick( h, (int64_t)hardware_time );
 
         if( decklink_ctx->last_frame_time == -1 )
             decklink_ctx->last_frame_time = hardware_time;
-        else
-        {
-            int64_t cur_frame_time = hardware_time;
-            if( cur_frame_time - decklink_ctx->last_frame_time >= SDI_MAX_DELAY )
-            {
-                syslog( LOG_WARNING, "Decklink card index %i: No frame received for %"PRIi64" ms", decklink_opts_->card_idx,
-                       (cur_frame_time - decklink_ctx->last_frame_time) / (OBE_CLOCK/1000) );
-                pthread_mutex_lock( &h->drop_mutex );
-                h->encoder_drop = h->mux_drop = 1;
-                pthread_mutex_unlock( &h->drop_mutex );
-            }
 
-            decklink_ctx->last_frame_time = cur_frame_time;
+        /* If there's no picture-on-loss set the encoder needs to be reset */
+        if( !decklink_opts_->probe && !decklink_opts_->picture_on_loss && decklink_ctx->drop_count )
+        {
+            pthread_mutex_lock( &h->drop_mutex );
+            h->encoder_drop = h->mux_drop = 1;
+            pthread_mutex_unlock( &h->drop_mutex );
         }
+
+        decklink_ctx->drop_count = 0;
 
         const int width = videoframe->GetWidth();
         const int height = videoframe->GetHeight();
