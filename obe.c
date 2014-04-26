@@ -116,14 +116,20 @@ void obe_release_bufref( void *ptr )
         av_buffer_unref( &raw_frame->buf_ref[i] );
 
     memset( raw_frame->buf_ref, 0, sizeof(raw_frame->buf_ref) );
+
+    /* Clear video */
     memset( &raw_frame->alloc_img, 0, sizeof(raw_frame->alloc_img) );
     memset( &raw_frame->img, 0, sizeof(raw_frame->img) );
+
+    /* Clear audio */
+    memset( raw_frame->audio_frame.audio_data, 0, sizeof(raw_frame->audio_frame.audio_data) );
 }
 
 void obe_release_audio_data( void *ptr )
 {
     obe_raw_frame_t *raw_frame = ptr;
     av_freep( &raw_frame->audio_frame.audio_data[0] );
+    memset( raw_frame->audio_frame.audio_data, 0, sizeof(raw_frame->audio_frame.audio_data) );
 }
 
 void obe_release_frame( void *ptr )
@@ -448,6 +454,22 @@ obe_output_stream_t *get_output_stream_by_format( obe_t *h, int format )
             return &h->output_streams[i];
     }
     return NULL;
+}
+
+const obe_audio_sample_pattern_t *get_sample_pattern( int video_format )
+{
+    int i;
+
+    for( i = 0 ; audio_sample_patterns[i].format != -1; i++ )
+    {
+        if( video_format == audio_sample_patterns[i].format )
+            break;
+    }
+
+    if( audio_sample_patterns[i].format == -1 )
+        return NULL;
+
+    return &audio_sample_patterns[i];
 }
 
 obe_t *obe_setup( const char *ident )
@@ -1090,7 +1112,15 @@ int obe_start( obe_t *h )
     for( int i = 0; i < h->num_outputs; i++ )
     {
         obe_init_queue( &h->outputs[i]->queue );
-        output = ip_output;
+        if( h->outputs[i]->output_dest.type == OUTPUT_UDP || h->outputs[i]->output_dest.type == OUTPUT_RTP )
+            output = ip_output;
+        else if( h->outputs[i]->output_dest.type == OUTPUT_FILE )
+            output = file_output;
+        else
+        {
+            fprintf( stderr, "Invalid output device \n" );
+            goto fail;
+        }
 
         if( pthread_create( &h->outputs[i]->output_thread, NULL, output.open_output, (void*)h->outputs[i] ) < 0 )
         {

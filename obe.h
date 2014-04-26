@@ -80,21 +80,15 @@ enum input_video_format_e
     /* 720p HD */
     INPUT_VIDEO_FORMAT_720P_50,
     INPUT_VIDEO_FORMAT_720P_5994,
-    INPUT_VIDEO_FORMAT_720P_60 , /* NB: actually 60.00Hz */
 
     /* 1080i/p HD */
     INPUT_VIDEO_FORMAT_1080I_50,
     INPUT_VIDEO_FORMAT_1080I_5994,
-    INPUT_VIDEO_FORMAT_1080I_60, /* NB: actually 60.00Hz */
 
-    INPUT_VIDEO_FORMAT_1080P_2398,
-    INPUT_VIDEO_FORMAT_1080P_24,
     INPUT_VIDEO_FORMAT_1080P_25,
     INPUT_VIDEO_FORMAT_1080P_2997,
-    INPUT_VIDEO_FORMAT_1080P_30, /* NB: actually 30.00Hz */
     INPUT_VIDEO_FORMAT_1080P_50,
     INPUT_VIDEO_FORMAT_1080P_5994,
-    INPUT_VIDEO_FORMAT_1080P_60, /* NB: actually 60.00Hz */
 
     INPUT_VIDEO_FORMAT_AUTODETECT = 100,
 };
@@ -107,6 +101,14 @@ enum input_type_e
     INPUT_DEVICE_BARS,
 //    INPUT_DEVICE_V4L2,
 //    INPUT_DEVICE_ASI,
+};
+
+enum picture_on_loss_e
+{
+    PICTURE_ON_LOSS_NONE,
+    PICTURE_ON_LOSS_BLACK,
+    PICTURE_ON_LOSS_LASTFRAME,
+    PICTURE_ON_LOSS_BARS,
 };
 
 /* video_format should be set to -1 for auto detection */
@@ -125,6 +127,8 @@ typedef struct
     char bars_line2[30];
     char bars_line3[30];
     char bars_line4[30];
+
+    int picture_on_loss;
 } obe_input_t;
 
 /**** Stream Formats ****/
@@ -361,13 +365,13 @@ enum frame_packing_arrangement_e
  * override - Metadata will be passed through if E-distribution audio or AC-3 audio is used or the SDI stream has metadata as per SMPTE 2020-AB.
  *            This flag forces the use of the specified settings
  *
- * dialnorm - dialogue normalisation (valid range -31 to -1)
+ * ref_level - dialogue normalisation (valid range -31 to -1)
  */
 typedef struct
 {
     int override;
 
-    int dialnorm;
+    int ref_level;
     int dsur_mode;
     int original;
 
@@ -514,6 +518,7 @@ enum output_e
 {
     OUTPUT_UDP, /* MPEG-TS in UDP */
     OUTPUT_RTP, /* MPEG-TS in RTP in UDP */
+    OUTPUT_FILE, /* File output */
 //    OUTPUT_LINSYS_ASI,
 //    OUTPUT_LINSYS_SMPTE_310M,
 };

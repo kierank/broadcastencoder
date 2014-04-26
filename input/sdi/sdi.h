@@ -88,18 +88,12 @@ const static obe_line_number_t first_active_line[] =
     { INPUT_VIDEO_FORMAT_NTSC,  283 },
     { INPUT_VIDEO_FORMAT_720P_50,    26 },
     { INPUT_VIDEO_FORMAT_720P_5994,  26 },
-    { INPUT_VIDEO_FORMAT_720P_60,    26 },
     { INPUT_VIDEO_FORMAT_1080I_50,   21 },
     { INPUT_VIDEO_FORMAT_1080I_5994, 21 },
-    { INPUT_VIDEO_FORMAT_1080I_60,   21 },
-    { INPUT_VIDEO_FORMAT_1080P_2398, 42 },
-    { INPUT_VIDEO_FORMAT_1080P_24,   42 },
     { INPUT_VIDEO_FORMAT_1080P_25,   42 },
     { INPUT_VIDEO_FORMAT_1080P_2997, 42 },
-    { INPUT_VIDEO_FORMAT_1080P_30,   42 },
     { INPUT_VIDEO_FORMAT_1080P_50,   42 },
     { INPUT_VIDEO_FORMAT_1080P_5994, 42 },
-    { INPUT_VIDEO_FORMAT_1080P_60,   42 },
     { -1, -1 },
 };
 
@@ -109,7 +103,6 @@ const static obe_line_number_t field_start_lines[] =
     { INPUT_VIDEO_FORMAT_NTSC, 4, 267 }, /* Skip middle line */
     { INPUT_VIDEO_FORMAT_1080I_50,   1, 564 },
     { INPUT_VIDEO_FORMAT_1080I_5994, 1, 564 },
-    { INPUT_VIDEO_FORMAT_1080I_60,   1, 564 },
     { -1, -1 },
 };
 

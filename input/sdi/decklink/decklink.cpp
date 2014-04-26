@@ -33,6 +33,7 @@ extern "C"
 #include "input/sdi/ancillary.h"
 #include "input/sdi/vbi.h"
 #include "input/sdi/x86/sdi.h"
+#include "input/bars/bars_common.h"
 #include <libavresample/avresample.h>
 #include <libavutil/opt.h>
 #include <libavutil/frame.h>
@@ -42,6 +43,9 @@ extern "C"
 #include "include/DeckLinkAPIDispatch.cpp"
 
 #define DECKLINK_VANC_LINES 100
+#define DECKLINK_SAMPLE_RATE 48000
+
+#define DROP_MIN 50
 
 struct obe_to_decklink
 {
@@ -86,18 +90,12 @@ const static struct obe_to_decklink_video decklink_video_format_tab[] =
     { INPUT_VIDEO_FORMAT_NTSC,            bmdModeNTSC,          1001, 30000, 720, 480,   1 },
     { INPUT_VIDEO_FORMAT_720P_50,         bmdModeHD720p50,      1,    50,    1280, 720,  0 },
     { INPUT_VIDEO_FORMAT_720P_5994,       bmdModeHD720p5994,    1001, 60000, 1280, 720,  0 },
-    { INPUT_VIDEO_FORMAT_720P_60,         bmdModeHD720p60,      1,    60,    1280, 720,  0 },
     { INPUT_VIDEO_FORMAT_1080I_50,        bmdModeHD1080i50,     1,    25,    1920, 1080, 1 },
     { INPUT_VIDEO_FORMAT_1080I_5994,      bmdModeHD1080i5994,   1001, 30000, 1920, 1080, 1 },
-    { INPUT_VIDEO_FORMAT_1080I_60,        bmdModeHD1080i6000,   1,    60,    1920, 1080, 1 },
-    { INPUT_VIDEO_FORMAT_1080P_2398,      bmdModeHD1080p2398,   1001, 24000, 1920, 1080, 0 },
-    { INPUT_VIDEO_FORMAT_1080P_24,        bmdModeHD1080p24,     1,    24,    1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_25,        bmdModeHD1080p25,     1,    25,    1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_2997,      bmdModeHD1080p2997,   1001, 30000, 1920, 1080, 0 },
-    { INPUT_VIDEO_FORMAT_1080P_30,        bmdModeHD1080p30,     1,    30,    1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_50,        bmdModeHD1080p50,     1,    50,    1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_5994,      bmdModeHD1080p5994,   1001, 60000, 1920, 1080, 0 },
-    { INPUT_VIDEO_FORMAT_1080P_60,        bmdModeHD1080p6000,   1,    60,    1920, 1080, 0 },
     { -1, 0, -1, -1, -1, -1, -1 },
 };
 
@@ -122,9 +120,23 @@ typedef struct
     AVFrame         *frame;
     AVCodec         *dec;
     AVCodecContext  *codec;
+    int64_t         v_counter;
+    AVRational      v_timebase;
+    hnd_t           bars_hnd;
+    int64_t         drop_count;
+
+    /* frame data for black or last-frame */
+    obe_raw_frame_t stored_video_frame;
+    obe_raw_frame_t stored_audio_frame;
+
+    /* output frame pointers for bars and tone */
+    obe_raw_frame_t **raw_frames;
 
     /* Audio */
+    int64_t         a_counter;
+    AVRational      a_timebase;
     AVAudioResampleContext *avr;
+    const obe_audio_sample_pattern_t *sample_pattern;
 
     int64_t last_frame_time;
 
@@ -152,6 +164,8 @@ typedef struct
     int video_format;
     int num_channels;
     int probe;
+    int picture_on_loss;
+    obe_bars_opts_t obe_bars_opts;
 
     /* Output */
     int probe_success;
@@ -242,6 +256,111 @@ static void get_format_opts( decklink_opts_t *decklink_opts, IDeckLinkDisplayMod
         decklink_opts->height = 480;
 }
 
+static int setup_stored_video_frame( obe_raw_frame_t *stored_video_frame,
+                                     const struct obe_to_decklink_video *decklink_format )
+{
+    stored_video_frame->alloc_img.width  = decklink_format->width;
+    stored_video_frame->alloc_img.height = decklink_format->height;
+    stored_video_frame->alloc_img.csp    = PIX_FMT_YUV422P;
+    int size = av_image_alloc( stored_video_frame->alloc_img.plane, stored_video_frame->alloc_img.stride,
+                               stored_video_frame->alloc_img.width, stored_video_frame->alloc_img.height,
+                               (AVPixelFormat)stored_video_frame->alloc_img.csp, 32 );
+
+    if( size < 0 )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+    memcpy( &stored_video_frame->img, &stored_video_frame->alloc_img, sizeof(stored_video_frame->alloc_img) );
+
+    stored_video_frame->buf_ref[0] = av_buffer_create( stored_video_frame->alloc_img.plane[0],
+                                                       size, av_buffer_default_free,
+                                                       NULL, 0 );
+    if( !stored_video_frame->buf_ref[0] )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+    stored_video_frame->buf_ref[1] = NULL;
+    stored_video_frame->release_data = obe_release_bufref;
+    stored_video_frame->release_frame = obe_release_frame;
+
+    return 0;
+}
+
+static int setup_stored_audio_frame( decklink_ctx_t *decklink_ctx, obe_raw_frame_t *stored_audio_frame )
+{
+    /* Allocate the maximum allowed of silence allowed by the sample pattern */
+    int size = 0;
+
+    stored_audio_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
+    stored_audio_frame->audio_frame.num_samples = decklink_ctx->sample_pattern->max;
+    stored_audio_frame->audio_frame.num_channels = 16;
+
+    if( av_samples_alloc( stored_audio_frame->audio_frame.audio_data, &stored_audio_frame->audio_frame.linesize, 1,
+                          stored_audio_frame->audio_frame.num_samples, (AVSampleFormat)stored_audio_frame->audio_frame.sample_fmt, 0 ) < 0 )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+
+    /* Work around annoyance in libavutil */
+    size = stored_audio_frame->audio_frame.linesize;
+
+    av_samples_set_silence( stored_audio_frame->audio_frame.audio_data, 0, stored_audio_frame->audio_frame.num_samples, 1,
+                            (AVSampleFormat)stored_audio_frame->audio_frame.sample_fmt );
+
+    /* Copy pointer to all 16 channels */
+    for( int i = 1; i < MAX_CHANNELS; i++ )
+        stored_audio_frame->audio_frame.audio_data[i] = stored_audio_frame->audio_frame.audio_data[0];
+
+    stored_audio_frame->buf_ref[0] = av_buffer_create( stored_audio_frame->audio_frame.audio_data[0],
+                                                       size, av_buffer_default_free, NULL, 0 );
+    if( !stored_audio_frame->buf_ref[0] )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+    stored_audio_frame->buf_ref[1] = NULL;
+    stored_audio_frame->release_data = obe_release_bufref;
+    stored_audio_frame->release_frame = obe_release_frame;
+
+    return 0;
+}
+
+static void blank_frame( obe_raw_frame_t *stored_video_frame )
+{
+    /* Assume YUV422P */
+    uint8_t *px;
+
+    px = stored_video_frame->img.plane[0];
+    for( int i = 0; i < stored_video_frame->img.height; i++ )
+    {
+        for( int i = 0; i < stored_video_frame->img.width; i++ )
+            px[i] = 0x10;
+
+        px += stored_video_frame->img.stride[0];
+    }
+
+    px = stored_video_frame->img.plane[1];
+    for( int i = 0; i < stored_video_frame->img.height; i++ )
+    {
+        for( int i = 0; i < stored_video_frame->img.width/2; i++ )
+            px[i] = 0x80;
+
+        px += stored_video_frame->img.stride[1];
+    }
+
+    px = stored_video_frame->img.plane[2];
+    for( int i = 0; i < stored_video_frame->img.height; i++ )
+    {
+        for( int i = 0; i < stored_video_frame->img.width/2; i++ )
+            px[i] = 0x80;
+
+        px += stored_video_frame->img.stride[2];
+    }
+}
+
 class DeckLinkCaptureDelegate : public IDeckLinkInputCallback
 {
 public:
@@ -306,6 +425,48 @@ public:
                 get_format_opts( decklink_opts_, p_display_mode );
                 setup_pixel_funcs( decklink_opts_ );
 
+                /* Need to change resolution if it's not the one that was setup originally */
+                if( decklink_opts_->picture_on_loss )
+                {
+                    /* Clear old setup video and audio frames */
+                    if( decklink_ctx->stored_video_frame.release_data )
+                        decklink_ctx->stored_video_frame.release_data( &decklink_ctx->stored_video_frame );
+                    if( decklink_ctx->stored_audio_frame.release_data )
+                        decklink_ctx->stored_audio_frame.release_data( &decklink_ctx->stored_audio_frame );
+
+                    decklink_ctx->sample_pattern = get_sample_pattern( decklink_opts_->video_format );
+                    if( !decklink_ctx->sample_pattern )
+                    {
+                        syslog( LOG_WARNING, "Invalid sample pattern" );
+                        return S_OK;
+                    }
+
+                    if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BARS )
+                    {
+                        decklink_opts_->obe_bars_opts.video_format = decklink_opts_->video_format;
+
+                        if( decklink_ctx->bars_hnd )
+                            close_bars( decklink_ctx->bars_hnd );
+
+                        if( open_bars( &decklink_ctx->bars_hnd, &decklink_opts_->obe_bars_opts ) < 0 )
+                        {
+                            fprintf( stderr, "[decklink] Could not open bars\n" );
+                            return S_OK;
+                        }
+                    }
+                    else
+                    {
+                        /* Setup new video and audio frames */
+                        if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BLACK )
+                        {
+                            setup_stored_video_frame( &decklink_ctx->stored_video_frame, &decklink_video_format_tab[i] );
+                            blank_frame( &decklink_ctx->stored_video_frame );
+                        }
+
+                        setup_stored_audio_frame( decklink_ctx, &decklink_ctx->stored_audio_frame );
+                    }
+                }
+
                 decklink_ctx->p_input->PauseStreams();
                 pix_fmt = h->filter_bit_depth == OBE_BIT_DEPTH_10 ? bmdFormat10BitYUV : bmdFormat8BitYUV;
                 decklink_ctx->p_input->EnableVideoInput( p_display_mode->GetDisplayMode(), pix_fmt, bmdVideoInputEnableFormatDetection );
@@ -338,7 +499,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     uint8_t *vbi_buf;
     int anc_lines[DECKLINK_VANC_LINES];
     IDeckLinkVideoFrameAncillary *ancillary;
-    BMDTimeValue stream_time, frame_duration, hardware_time, time_in_frame, ticks_per_frame;
+    BMDTimeValue hardware_time, time_in_frame, ticks_per_frame;
 
     if( decklink_opts_->probe_success )
         return S_OK;
@@ -356,6 +517,82 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 h->device.active = 0;
                 pthread_mutex_unlock( &h->device.device_mutex );
             }
+
+            /* Only output our picture on loss if we've had valid frames before */
+            if( !decklink_opts_->probe && decklink_opts_->picture_on_loss && decklink_ctx->last_frame_time != -1 &&
+                decklink_ctx->drop_count++ > DROP_MIN )
+            {
+                obe_raw_frame_t *video_frame = NULL, *audio_frame = NULL;
+
+                decklink_ctx->p_input->GetHardwareReferenceClock( OBE_CLOCK, &hardware_time, &time_in_frame, &ticks_per_frame );
+                obe_clock_tick( h, (int64_t)hardware_time );
+
+                if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
+                    decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
+                {
+                    video_frame = new_raw_frame();
+                    if( !video_frame )
+                    {
+                        syslog( LOG_ERR, "Malloc failed\n" );
+                        goto end;
+                    }
+                    memcpy( video_frame, &decklink_ctx->stored_video_frame, sizeof(*video_frame) );
+                    int i = 0;
+                    while( video_frame->buf_ref[i] != NULL )
+                    {
+                        video_frame->buf_ref[i] = av_buffer_ref( decklink_ctx->stored_video_frame.buf_ref[i] );
+                        i++;
+                    }
+                    video_frame->buf_ref[i] = NULL;
+                }
+                else if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BARS )
+                {
+                    get_bars( decklink_ctx->bars_hnd, decklink_ctx->raw_frames );
+
+                    video_frame = decklink_ctx->raw_frames[0];
+                    audio_frame = decklink_ctx->raw_frames[1];
+                }
+
+                video_frame->pts = av_rescale_q( decklink_ctx->v_counter, decklink_ctx->v_timebase,
+                                                 (AVRational){1, OBE_CLOCK} );
+
+                if( add_to_filter_queue( h, video_frame ) < 0 )
+                    goto end;
+
+                if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
+                    decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
+                {
+                    audio_frame = new_raw_frame();
+                    if( !audio_frame )
+                    {
+                        syslog( LOG_ERR, "Malloc failed\n" );
+                        goto end;
+                    }
+
+                    memcpy( audio_frame, &decklink_ctx->stored_audio_frame, sizeof(*audio_frame) );
+                    /* Assumes only one buffer reference */
+                    audio_frame->buf_ref[0] = av_buffer_ref( decklink_ctx->stored_audio_frame.buf_ref[0] );
+                    audio_frame->buf_ref[1] = NULL;
+
+                    audio_frame->audio_frame.num_samples = decklink_ctx->sample_pattern->pattern[decklink_ctx->v_counter % decklink_ctx->sample_pattern->mod];
+                }
+
+                /* Write audio frame */
+                for( int i = 0; i < h->device.num_input_streams; i++ )
+                {
+                    if( h->device.streams[i]->stream_format == AUDIO_PCM )
+                        audio_frame->input_stream_id = h->device.streams[i]->input_stream_id;
+                }
+
+                audio_frame->pts = av_rescale_q( decklink_ctx->a_counter, decklink_ctx->a_timebase,
+                                                 (AVRational){1, OBE_CLOCK} );
+                decklink_ctx->a_counter += audio_frame->audio_frame.num_samples;
+
+                if( add_to_filter_queue( h, audio_frame ) < 0 )
+                    goto end;
+                /* Increase video PTS at the end so it can be used in NTSC sample size generation */
+                decklink_ctx->v_counter++;
+            }
             return S_OK;
         }
         else if( decklink_opts_->probe )
@@ -367,9 +604,9 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             h->device.active = 1;
             pthread_mutex_unlock( &h->device.device_mutex );
         }
+        decklink_ctx->drop_count = 0;
 
         /* use SDI ticks as clock source */
-        videoframe->GetStreamTime( &stream_time, &frame_duration, OBE_CLOCK );
         decklink_ctx->p_input->GetHardwareReferenceClock( OBE_CLOCK, &hardware_time, &time_in_frame, &ticks_per_frame );
         obe_clock_tick( h, (int64_t)hardware_time );
 
@@ -485,18 +722,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 decklink_ctx->downscale_line( anc_buf, vbi_buf, num_anc_lines );
                 anc_buf_pos = anc_buf;
 
-                /* Handle Video Index information */
-                int tmp_line = first_line;
-                vii_line = decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC ? NTSC_VIDEO_INDEX_LINE : PAL_VIDEO_INDEX_LINE;
-                while( tmp_line < vii_line )
-                {
-                    anc_buf_pos += anc_line_stride / 2;
-                    tmp_line++;
-                }
-
-                if( decode_video_index_information( h, &decklink_ctx->non_display_parser, anc_buf_pos, raw_frame, vii_line ) < 0 )
-                    goto fail;
-
+                /* Setup VBI parser. Also sets up CRCs for Video Index */
                 if( !decklink_ctx->has_setup_vbi )
                 {
                     vbi_raw_decoder_init( &decklink_ctx->non_display_parser.vbi_decoder );
@@ -512,6 +738,18 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
                     decklink_ctx->has_setup_vbi = 1;
                 }
+
+                /* Handle Video Index information */
+                int tmp_line = first_line;
+                vii_line = decklink_opts_->video_format == INPUT_VIDEO_FORMAT_NTSC ? NTSC_VIDEO_INDEX_LINE : PAL_VIDEO_INDEX_LINE;
+                while( tmp_line != vii_line )
+                {
+                    anc_buf_pos += anc_line_stride / 2;
+                    tmp_line = sdi_next_line( decklink_opts_->video_format, tmp_line );
+                }
+
+                if( decode_video_index_information( h, &decklink_ctx->non_display_parser, anc_buf_pos, raw_frame, vii_line ) < 0 )
+                    goto fail;
 
                 if( decode_vbi( h, &decklink_ctx->non_display_parser, vbi_buf, raw_frame ) < 0 )
                     goto fail;
@@ -529,9 +767,10 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             if( h->filter_bit_depth == OBE_BIT_DEPTH_8 )
             {
                 raw_frame->alloc_img.csp = PIX_FMT_UYVY422;
-                if( av_image_alloc( raw_frame->alloc_img.plane, raw_frame->alloc_img.stride,
-                                    raw_frame->alloc_img.width, raw_frame->alloc_img.height,
-                                    (AVPixelFormat)raw_frame->alloc_img.csp, 16 ) < 0 )
+                int size = av_image_alloc( raw_frame->alloc_img.plane, raw_frame->alloc_img.stride,
+                                           raw_frame->alloc_img.width, raw_frame->alloc_img.height,
+                                           (AVPixelFormat)raw_frame->alloc_img.csp, 32 );
+                if( size < 0 )
                 {
                     syslog( LOG_ERR, "Malloc failed\n" );
                     return -1;
@@ -546,7 +785,17 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                     dst += raw_frame->alloc_img.stride[0];
                 }
 
-                raw_frame->release_data = obe_release_video_data;
+                raw_frame->buf_ref[0] = av_buffer_create( raw_frame->alloc_img.plane[0],
+                                                          size, av_buffer_default_free,
+                                                          NULL, 0 );
+                if( !raw_frame->buf_ref[0] )
+                {
+                    syslog( LOG_ERR, "Malloc failed\n" );
+                    return -1;
+                }
+                raw_frame->buf_ref[1] = NULL;
+
+                raw_frame->release_data = obe_release_bufref;
                 raw_frame->release_frame = obe_release_frame;
             }
             else
@@ -594,12 +843,31 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
             /* If AFD is present and the stream is SD this will be changed in the video filter */
             raw_frame->sar_width = raw_frame->sar_height = 1;
-            raw_frame->pts = stream_time;
+            raw_frame->pts = av_rescale_q( decklink_ctx->v_counter++, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
 
             for( int i = 0; i < h->device.num_input_streams; i++ )
             {
                 if( h->device.streams[i]->stream_format == VIDEO_UNCOMPRESSED )
                     raw_frame->input_stream_id = h->device.streams[i]->input_stream_id;
+            }
+
+            /* Make a copy of the frame for showing the last frame */
+            if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
+            {
+                int i = 0;
+                if( decklink_ctx->stored_video_frame.release_data )
+                    decklink_ctx->stored_video_frame.release_data( &decklink_ctx->stored_video_frame );
+
+                memcpy( &decklink_ctx->stored_video_frame, raw_frame, sizeof(decklink_ctx->stored_video_frame) );
+                while( raw_frame->buf_ref[i] != NULL )
+                {
+                    decklink_ctx->stored_video_frame.buf_ref[i] = av_buffer_ref( raw_frame->buf_ref[i] );
+                    i++;
+                }
+                decklink_ctx->stored_video_frame.buf_ref[i] = NULL;
+                decklink_ctx->stored_video_frame.release_data = obe_release_bufref;
+                decklink_ctx->stored_video_frame.num_user_data = 0;
+                decklink_ctx->stored_video_frame.user_data = NULL;
             }
 
             if( add_to_filter_queue( h, raw_frame ) < 0 )
@@ -643,9 +911,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             return -1;
         }
 
-        BMDTimeValue packet_time;
-        audioframe->GetPacketTime( &packet_time, OBE_CLOCK );
-        raw_frame->pts = packet_time;
+        raw_frame->pts = av_rescale_q( decklink_ctx->a_counter, decklink_ctx->a_timebase, (AVRational){1, OBE_CLOCK} );
+        decklink_ctx->a_counter += raw_frame->audio_frame.num_samples;
         raw_frame->release_data = obe_release_audio_data;
         raw_frame->release_frame = obe_release_frame;
         for( int i = 0; i < h->device.num_input_streams; i++ )
@@ -708,6 +975,12 @@ static void close_card( decklink_opts_t *decklink_opts )
 
     if( decklink_ctx->avr )
         avresample_free( &decklink_ctx->avr );
+
+    if( decklink_ctx->raw_frames )
+        free( decklink_ctx->raw_frames );
+
+    if( decklink_ctx->bars_hnd )
+        close_bars( decklink_ctx->bars_hnd );
 }
 
 static int open_card( decklink_opts_t *decklink_opts )
@@ -717,7 +990,7 @@ static int open_card( decklink_opts_t *decklink_opts )
     int         found_mode;
     int         ret = 0;
     int         i;
-    const int   sample_rate = 48000;
+    const int   sample_rate = DECKLINK_SAMPLE_RATE;
     const char *model_name;
     BMDDisplayMode wanted_mode_id;
     BMDPixelFormat pix_fmt;
@@ -889,8 +1162,8 @@ static int open_card( decklink_opts_t *decklink_opts )
 
     wanted_mode_id = decklink_video_format_tab[i].bmd_name;
     found_mode = false;
-    decklink_opts->timebase_num = decklink_video_format_tab[i].timebase_num;
-    decklink_opts->timebase_den = decklink_video_format_tab[i].timebase_den;
+    decklink_ctx->v_timebase.num = decklink_opts->timebase_num = decklink_video_format_tab[i].timebase_num;
+    decklink_ctx->v_timebase.den = decklink_opts->timebase_den = decklink_video_format_tab[i].timebase_den;
 
     for (;;)
     {
@@ -960,6 +1233,8 @@ static int open_card( decklink_opts_t *decklink_opts )
     }
 
     /* Set up audio. */
+    decklink_ctx->a_timebase.num = 1;
+    decklink_ctx->a_timebase.den = DECKLINK_SAMPLE_RATE;
     result = decklink_ctx->p_input->EnableAudioInput( sample_rate, bmdAudioSampleType32bitInteger, decklink_opts->num_channels );
     if( result != S_OK )
     {
@@ -970,6 +1245,51 @@ static int open_card( decklink_opts_t *decklink_opts )
 
     if( !decklink_opts->probe )
     {
+        if( decklink_opts->picture_on_loss )
+        {
+            decklink_ctx->sample_pattern = get_sample_pattern( decklink_opts->video_format );
+            if( !decklink_ctx->sample_pattern )
+            {
+                fprintf( stderr, "[decklink] Invalid sample pattern" );
+                ret = -1;
+                goto finish;
+            }
+
+            /* Setup Picture on Loss */
+            if( decklink_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK )
+            {
+                setup_stored_video_frame( &decklink_ctx->stored_video_frame, &decklink_video_format_tab[i] );
+                blank_frame( &decklink_ctx->stored_video_frame );
+            }
+            else if( decklink_opts->picture_on_loss == PICTURE_ON_LOSS_BARS )
+            {
+                decklink_ctx->raw_frames = (obe_raw_frame_t**)calloc( 2, sizeof(*decklink_ctx->raw_frames) );
+                if( !decklink_ctx->raw_frames )
+                {
+                    fprintf( stderr, "[decklink] Malloc failed\n" );
+                    ret = -1;
+                    goto finish;
+                }
+
+                decklink_opts->obe_bars_opts.video_format = decklink_opts->video_format;
+                /* Setup bars later if we don't know the video format */
+                if( open_bars( &decklink_ctx->bars_hnd, &decklink_opts->obe_bars_opts ) < 0 )
+                {
+                    fprintf( stderr, "[decklink] Could not open bars\n" );
+                    ret = -1;
+                    goto finish;
+                }
+            }
+
+            /* Setup stored audio frame */
+            if( decklink_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
+                decklink_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
+            {
+                setup_stored_audio_frame( decklink_ctx, &decklink_ctx->stored_audio_frame );
+            }
+        }
+
+        /* Setup Audio filtering */
         decklink_ctx->avr = avresample_alloc_context();
         if( !decklink_ctx->avr )
         {
@@ -981,7 +1301,7 @@ static int open_card( decklink_opts_t *decklink_opts )
         /* Give libavresample a made up channel map */
         av_opt_set_int( decklink_ctx->avr, "in_channel_layout",   (1 << decklink_opts->num_channels) - 1, 0 );
         av_opt_set_int( decklink_ctx->avr, "in_sample_fmt",       AV_SAMPLE_FMT_S32, 0 );
-        av_opt_set_int( decklink_ctx->avr, "in_sample_rate",      48000, 0 );
+        av_opt_set_int( decklink_ctx->avr, "in_sample_rate",      DECKLINK_SAMPLE_RATE, 0 );
         av_opt_set_int( decklink_ctx->avr, "out_channel_layout",  (1 << decklink_opts->num_channels) - 1, 0 );
         av_opt_set_int( decklink_ctx->avr, "out_sample_fmt",      AV_SAMPLE_FMT_S32P, 0 );
 
@@ -1115,7 +1435,7 @@ static void *probe_stream( void *ptr )
             streams[i]->num_channels  = 16;
             streams[i]->sample_format = AV_SAMPLE_FMT_S32P;
             /* TODO: support other sample rates */
-            streams[i]->sample_rate = 48000;
+            streams[i]->sample_rate = DECKLINK_SAMPLE_RATE;
         }
     }
 
@@ -1227,7 +1547,7 @@ static void *autoconf_input( void *ptr )
             streams[i]->num_channels  = 16;
             streams[i]->sample_format = AV_SAMPLE_FMT_S32P;
             /* TODO: support other sample rates */
-            streams[i]->sample_rate = 48000;
+            streams[i]->sample_rate = DECKLINK_SAMPLE_RATE;
         }
     }
 
@@ -1273,6 +1593,14 @@ static void *open_input( void *ptr )
     decklink_opts->video_conn = user_opts->video_connection;
     decklink_opts->audio_conn = user_opts->audio_connection;
     decklink_opts->video_format = user_opts->video_format;
+    decklink_opts->picture_on_loss = user_opts->picture_on_loss;
+
+    decklink_opts->obe_bars_opts.video_format = user_opts->video_format;
+    decklink_opts->obe_bars_opts.bars_line1 = user_opts->bars_line1;
+    decklink_opts->obe_bars_opts.bars_line2 = user_opts->bars_line2;
+    decklink_opts->obe_bars_opts.bars_line3 = user_opts->bars_line3;
+    decklink_opts->obe_bars_opts.bars_line4 = user_opts->bars_line4;
+    decklink_opts->obe_bars_opts.no_signal = 1;
 
     decklink_ctx = &decklink_opts->decklink_ctx;
 

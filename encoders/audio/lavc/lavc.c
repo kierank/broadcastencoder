@@ -58,7 +58,7 @@ static void *start_encoder( void *ptr )
     AVCodecContext *codec = NULL;
     AVFrame *frame = NULL;
     AVDictionary *opts = NULL;
-    char is_latm[2];
+    char tmp[20];
     uint8_t *audio_planes[8] = { NULL };
 
     avcodec_register_all();
@@ -106,9 +106,14 @@ static void *start_encoder( void *ptr )
                      stream->aac_opts.aac_profile == AAC_HE_V1 ? FF_PROFILE_AAC_HE :
                      FF_PROFILE_AAC_LOW;
 
-    snprintf( is_latm, sizeof(is_latm), "%i", stream->aac_opts.latm_output );
-    av_dict_set( &opts, "latm", is_latm, 0 );
+    snprintf( tmp, sizeof(tmp), "%i", stream->aac_opts.latm_output );
+    av_dict_set( &opts, "latm", tmp, 0 );
     av_dict_set( &opts, "header_period", "2", 0 );
+    if( stream->audio_metadata.ref_level < 0 )
+    {
+        snprintf( tmp, sizeof(tmp), "%i", stream->audio_metadata.ref_level );
+        av_dict_set( &opts, "dialnorm", tmp, 0 );
+    }
 
     if( avcodec_open2( codec, enc, &opts ) < 0 )
     {
