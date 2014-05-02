@@ -477,6 +477,12 @@ struct obe_t
     /* Devices */
     obe_device_t device;
 
+    /* Frame drop flags
+     * TODO: make this work for multiple inputs and outputs */
+    pthread_mutex_t drop_mutex;
+    int encoder_drop;
+    int mux_drop;
+
     /* Streams */
     int num_output_streams;
     obe_output_stream_t *output_streams;

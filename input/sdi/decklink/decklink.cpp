@@ -500,6 +500,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     int anc_lines[DECKLINK_VANC_LINES];
     IDeckLinkVideoFrameAncillary *ancillary;
     BMDTimeValue hardware_time, time_in_frame, ticks_per_frame;
+    int64_t pts;
 
     if( decklink_opts_->probe_success )
         return S_OK;
@@ -615,6 +616,16 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             decklink_ctx->last_frame_time = hardware_time;
             syslog( LOG_INFO, "inputActivate: Decklink input active" );
         }
+
+        /* If there's no picture-on-loss set the encoder needs to be reset */
+        if( !decklink_opts_->probe && !decklink_opts_->picture_on_loss && decklink_ctx->drop_count )
+        {
+            pthread_mutex_lock( &h->drop_mutex );
+            h->encoder_drop = h->mux_drop = 1;
+            pthread_mutex_unlock( &h->drop_mutex );
+        }
+
+        decklink_ctx->drop_count = 0;
 
         const int width = videoframe->GetWidth();
         const int height = videoframe->GetHeight();
@@ -843,7 +854,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
             /* If AFD is present and the stream is SD this will be changed in the video filter */
             raw_frame->sar_width = raw_frame->sar_height = 1;
-            raw_frame->pts = av_rescale_q( decklink_ctx->v_counter++, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+            pts = raw_frame->pts = av_rescale_q( decklink_ctx->v_counter++, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
 
             for( int i = 0; i < h->device.num_input_streams; i++ )
             {
@@ -873,7 +884,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             if( add_to_filter_queue( h, raw_frame ) < 0 )
                 goto fail;
 
-            if( send_vbi_and_ttx( h, &decklink_ctx->non_display_parser, raw_frame->pts ) < 0 )
+            if( send_vbi_and_ttx( h, &decklink_ctx->non_display_parser, pts ) < 0 )
                 goto fail;
 
             decklink_ctx->non_display_parser.num_vbi = 0;
