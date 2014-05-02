@@ -605,7 +605,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             h->device.active = 1;
             pthread_mutex_unlock( &h->device.device_mutex );
         }
-        decklink_ctx->drop_count = 0;
 
         /* use SDI ticks as clock source */
         decklink_ctx->p_input->GetHardwareReferenceClock( OBE_CLOCK, &hardware_time, &time_in_frame, &ticks_per_frame );
