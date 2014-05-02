@@ -518,10 +518,11 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 h->device.active = 0;
                 pthread_mutex_unlock( &h->device.device_mutex );
             }
+            decklink_ctx->drop_count++;
 
             /* Only output our picture on loss if we've had valid frames before */
             if( !decklink_opts_->probe && decklink_opts_->picture_on_loss && decklink_ctx->last_frame_time != -1 &&
-                decklink_ctx->drop_count++ > DROP_MIN )
+                decklink_ctx->drop_count > DROP_MIN )
             {
                 obe_raw_frame_t *video_frame = NULL, *audio_frame = NULL;
 
