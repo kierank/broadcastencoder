@@ -115,6 +115,12 @@ static void *start_encoder( void *ptr )
         av_dict_set( &opts, "dialnorm", tmp, 0 );
     }
 
+    if( stream->stream_format == AUDIO_OPUS )
+    {
+        snprintf( tmp, sizeof(tmp), "%s", "constrained" );
+        av_dict_set( &opts, "vbr", tmp, 0 );
+    }
+
     if( avcodec_open2( codec, enc, &opts ) < 0 )
     {
         fprintf( stderr, "[lavc] Could not open encoder\n" );

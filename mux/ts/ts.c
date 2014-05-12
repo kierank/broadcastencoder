@@ -38,6 +38,7 @@ static const int mpegts_stream_info[][3] =
     { AUDIO_E_AC_3,  LIBMPEGTS_AUDIO_EAC3,   LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { AUDIO_AAC,     LIBMPEGTS_AUDIO_ADTS,   LIBMPEGTS_STREAM_ID_MPEGAUDIO },
     { AUDIO_AAC,     LIBMPEGTS_AUDIO_LATM,   LIBMPEGTS_STREAM_ID_MPEGAUDIO },
+    { AUDIO_OPUS,    LIBMPEGTS_AUDIO_LATM,   LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { SUBTITLES_DVB, LIBMPEGTS_DVB_SUB,      LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { MISC_TELETEXT, LIBMPEGTS_DVB_TELETEXT, LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { VBI_RAW,       LIBMPEGTS_DVB_VBI,      LIBMPEGTS_STREAM_ID_PRIVATE_1 },
@@ -227,6 +228,8 @@ void *open_muxer( void *ptr )
             encoder = get_encoder( h, output_stream->output_stream_id );
             stream->audio_frame_size = (double)encoder->num_samples * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
         }
+        else if( stream_format == AUDIO_OPUS )
+            stream->audio_frame_size = (double)OPUS_NUM_SAMPLES * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
     }
 
     /* Video stream isn't guaranteed to be first so populate program parameters here */
@@ -299,6 +302,16 @@ void *open_muxer( void *ptr )
             if( ts_setup_mpeg4_aac_stream( w, stream->pid, profile_and_level, num_channels ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup AAC stream\n" );
+                goto end;
+            }
+        }
+        else if( stream_format == AUDIO_OPUS )
+        {
+            int channel_map = LIBMPEGTS_CHANNEL_CONFIG_STEREO; // FIXME
+
+            if( ts_setup_opus_stream( w, stream->pid, channel_map ) < 0 )
+            {
+                fprintf( stderr, "[ts] Could not setup Opus stream\n" );
                 goto end;
             }
         }
