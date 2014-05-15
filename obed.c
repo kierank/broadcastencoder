@@ -549,6 +549,9 @@ static void obed__encoder_auth1(Obed__EncoderCommunicate_Service *service,
 
     result.encoder_response = malloc( 3 );
     strcpy( result.encoder_response, "OK" );
+
+    result.encoder_id = encoder_id;
+
     closure( &result, closure_data );
     free( result.encoder_response );
 }
@@ -586,6 +589,7 @@ static void obed__encoder_auth2(Obed__EncoderCommunicate_Service *service,
         strcpy( result.encoder_response, "OK" );
     }
 
+    result.encoder_id = encoder_id;
 end:
 
     closure( &result, closure_data );
