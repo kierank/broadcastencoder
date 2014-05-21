@@ -682,6 +682,8 @@ if [ "$protobuf" = "yes" ] ; then
     LDFLAGS="$LDFLAGS $PROTOBUF_LIBS"
 fi
 
+LDFLAGS="$LDFLAGS -lnacl"
+
 if [ "$pic" = "yes" ] ; then
     CFLAGS="$CFLAGS -fPIC"
     ASFLAGS="$ASFLAGS -DPIC"

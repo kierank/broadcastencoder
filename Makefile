@@ -11,7 +11,7 @@ SRCS = obe.c common/lavc.c common/network/udp/udp.c \
        filters/video/video.c filters/video/cc.c filters/audio/audio.c \
        encoders/smoothing.c encoders/audio/lavc/lavc.c encoders/video/avc/x264.c \
        mux/smoothing.c mux/ts/ts.c \
-       output/ip/ip.c
+       output/ip/ip.c output/file/file.c
 
 SRCCXX =
 
@@ -55,6 +55,7 @@ OBJS = $(SRCS:%.c=%.o)
 OBJSCXX = $(SRCCXX:%.cpp=%.o)
 OBJD = $(SRCCLI:%.c=%.o)
 OBJSO = $(SRCSO:%.c=%.o)
+OBJO = crypto/cpucycles.o crypto/randombytes.o
 DEP  = depend
 
 .PHONY: all default fprofiled clean distclean install uninstall dox test testclean
@@ -65,10 +66,7 @@ libobe.a: .depend $(OBJS) $(OBJSCXX) $(OBJASM)
 	$(AR) rc libobe.a $(OBJS) $(OBJSCXX) $(OBJASM)
 	$(RANLIB) libobe.a
 
-$(SONAME): .depend $(OBJS) $(OBJSCXX) $(OBJASM) $(OBJSO)
-	$(CC) -shared -o $@ $(OBJS) $(OBJASM) $(OBJSO) $(SOFLAGS) $(LDFLAGS)
-
-obed$(EXE): $(OBJD) libobe.a
+obed$(EXE): $(OBJD) $(OBJO) libobe.a
 	$(CC) -o $@ $+ $(LDFLAGSCLI) $(LDFLAGS)
 
 %.o: %.asm

@@ -107,6 +107,10 @@ static void *open_input( void *ptr )
     hnd_t bars_handle = NULL;
     obe_bars_opts_t obe_bars_opts = {0};
     obe_bars_opts.video_format = user_opts->video_format;
+
+    if( obe_bars_opts.video_format == INPUT_VIDEO_FORMAT_AUTODETECT )
+        obe_bars_opts.video_format = INPUT_VIDEO_FORMAT_PAL;
+
     obe_bars_opts.bars_line1 = user_opts->bars_line1;
     obe_bars_opts.bars_line2 = user_opts->bars_line2;
     obe_bars_opts.bars_line3 = user_opts->bars_line3;

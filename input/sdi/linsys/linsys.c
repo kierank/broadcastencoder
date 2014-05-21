@@ -83,15 +83,10 @@ const static struct obe_to_linsys_video linsys_video_format_tab[] =
     { INPUT_VIDEO_FORMAT_NTSC,       SDIVIDEO_CTL_SMPTE_125M_486I_59_94HZ,  1001, 30000, 720,  486,  525,  0 },
     { INPUT_VIDEO_FORMAT_720P_50,    SDIVIDEO_CTL_SMPTE_296M_720P_50HZ,     1,    50,    1280, 720,  750,  0 },
     { INPUT_VIDEO_FORMAT_720P_5994,  SDIVIDEO_CTL_SMPTE_296M_720P_59_94HZ,  1001, 60000, 1280, 720,  750,  0 },
-    { INPUT_VIDEO_FORMAT_720P_60,    SDIVIDEO_CTL_SMPTE_296M_720P_60HZ,     1,    60,    1280, 720,  750,  0 },
     { INPUT_VIDEO_FORMAT_1080I_50,   SDIVIDEO_CTL_SMPTE_274M_1080I_50HZ,    1,    25,    1920, 1080, 1125, 1 },
     { INPUT_VIDEO_FORMAT_1080I_5994, SDIVIDEO_CTL_SMPTE_274M_1080I_59_94HZ, 1001, 30000, 1920, 1080, 1125, 1 },
-    { INPUT_VIDEO_FORMAT_1080I_60,   SDIVIDEO_CTL_SMPTE_274M_1080I_60HZ,    1,    60,    1920, 1080, 1125, 1 },
-    { INPUT_VIDEO_FORMAT_1080P_2398, SDIVIDEO_CTL_SMPTE_274M_1080P_23_98HZ, 1001, 24000, 1920, 1080, 1125, 0 },
-    { INPUT_VIDEO_FORMAT_1080P_24,   SDIVIDEO_CTL_SMPTE_274M_1080P_24HZ,    1,    24,    1920, 1080, 1125, 0 },
     { INPUT_VIDEO_FORMAT_1080P_25,   SDIVIDEO_CTL_SMPTE_274M_1080P_25HZ,    1,    25,    1920, 1080, 1125, 0 },
     { INPUT_VIDEO_FORMAT_1080P_2997, SDIVIDEO_CTL_SMPTE_274M_1080P_29_97HZ, 1001, 30000, 1920, 1080, 1125, 0 },
-    { INPUT_VIDEO_FORMAT_1080P_30,   SDIVIDEO_CTL_SMPTE_274M_1080P_30HZ,    1,    30,    1920, 1080, 1125, 0 },
     { -1, -1, -1, -1, -1, -1 },
 };
 
@@ -312,6 +307,15 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
     else
     {
         int64_t cur_frame_time = obe_mdate();
+        if( cur_frame_time - linsys_ctx->last_frame_time >= SDI_MAX_DELAY )
+        {
+            syslog( LOG_WARNING, "Linsys card index %i: No frame received for %"PRIi64" ms", linsys_opts->card_idx,
+                   (cur_frame_time - linsys_ctx->last_frame_time) / 1000 );
+            pthread_mutex_lock( &h->drop_mutex );
+            h->encoder_drop = h->mux_drop = 1;
+            pthread_mutex_unlock( &h->drop_mutex );
+        }
+
         linsys_ctx->last_frame_time = cur_frame_time;
     }
 

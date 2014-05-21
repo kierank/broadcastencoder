@@ -9,7 +9,6 @@
 *.lib
 *.pdb
 *.mo
-*.o
 *.patch
 *.pc
 *.pot

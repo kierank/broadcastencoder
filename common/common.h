@@ -59,8 +59,7 @@
 #define MAX(a,b) ( (a)>(b) ? (a) : (b) )
 
 #define IS_SD(x) ((x) == INPUT_VIDEO_FORMAT_PAL || (x) == INPUT_VIDEO_FORMAT_NTSC)
-#define IS_INTERLACED(x) (IS_SD(x) || (x) == INPUT_VIDEO_FORMAT_1080I_50 || \
-                          (x) == INPUT_VIDEO_FORMAT_1080I_5994 || (x) == INPUT_VIDEO_FORMAT_1080I_60)
+#define IS_INTERLACED(x) (IS_SD(x) || (x) == INPUT_VIDEO_FORMAT_1080I_50 || (x) == INPUT_VIDEO_FORMAT_1080I_5994 )
 #define IS_PROGRESSIVE(x) (!IS_INTERLACED(x))
 
 /* Audio formats */
@@ -299,18 +298,12 @@ const static obe_video_config_t video_format_tab[] =
     { INPUT_VIDEO_FORMAT_NTSC,                       1001, 30000, 720, 480,   1 },
     { INPUT_VIDEO_FORMAT_720P_50,                    1,    50,    1280, 720,  0 },
     { INPUT_VIDEO_FORMAT_720P_5994,                  1001, 60000, 1280, 720,  0 },
-    { INPUT_VIDEO_FORMAT_720P_60,                    1,    60,    1280, 720,  0 },
     { INPUT_VIDEO_FORMAT_1080I_50,                   1,    25,    1920, 1080, 1 },
     { INPUT_VIDEO_FORMAT_1080I_5994,                 1001, 30000, 1920, 1080, 1 },
-    { INPUT_VIDEO_FORMAT_1080I_60,                   1,    60,    1920, 1080, 1 },
-    { INPUT_VIDEO_FORMAT_1080P_2398,                 1001, 24000, 1920, 1080, 0 },
-    { INPUT_VIDEO_FORMAT_1080P_24,                   1,    24,    1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_25,                   1,    25,    1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_2997,                 1001, 30000, 1920, 1080, 0 },
-    { INPUT_VIDEO_FORMAT_1080P_30,                   1,    30,    1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_50,                   1,    50,    1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_5994,                 1001, 60000, 1920, 1080, 0 },
-    { INPUT_VIDEO_FORMAT_1080P_60,                   1,    60,    1920, 1080, 0 },
     { -1, -1, -1, -1, -1, -1 },
 };
 
@@ -330,7 +323,9 @@ const static obe_audio_sample_pattern_t audio_sample_patterns[] =
     { INPUT_VIDEO_FORMAT_720P_5994,  {  801,  800,  801,  801,  801 },  801, 5 },
     { INPUT_VIDEO_FORMAT_1080I_50,   { 1920 }, 1920, 1 },
     { INPUT_VIDEO_FORMAT_1080I_5994, { 1602, 1601, 1602, 1601, 1602 }, 1602, 5 },
+    { INPUT_VIDEO_FORMAT_1080P_25,   { 1920 }, 1920, 1 },
     { INPUT_VIDEO_FORMAT_1080P_2997, { 1602, 1601, 1602, 1601, 1602 }, 1602, 5 },
+    { INPUT_VIDEO_FORMAT_1080P_50,   {  960 },  960, 1 },
     { INPUT_VIDEO_FORMAT_1080P_5994, {  801,  800,  801,  801,  801 },  801, 5 },
     { -1 },
 };
@@ -482,6 +477,12 @@ struct obe_t
     /* Devices */
     obe_device_t device;
 
+    /* Frame drop flags
+     * TODO: make this work for multiple inputs and outputs */
+    pthread_mutex_t drop_mutex;
+    int encoder_drop;
+    int mux_drop;
+
     /* Streams */
     int num_output_streams;
     obe_output_stream_t *output_streams;
@@ -570,6 +571,7 @@ obe_int_input_stream_t *get_input_stream( obe_t *h, int input_stream_id );
 obe_encoder_t *get_encoder( obe_t *h, int stream_id );
 obe_output_stream_t *get_output_stream( obe_t *h, int stream_id );
 obe_output_stream_t *get_output_stream_by_format( obe_t *h, int format );
+const obe_audio_sample_pattern_t *get_sample_pattern( int video_format );
 
 int64_t get_wallclock_in_mpeg_ticks( void );
 void sleep_mpeg_ticks( int64_t i_delay );
