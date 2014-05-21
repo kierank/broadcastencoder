@@ -288,6 +288,11 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 video_stream->avc_param.b_intra_refresh = 1;
                 video_stream->avc_param.i_threads = 4;
             }
+            else
+            {
+                /* Reduce CPU usage in C-100 */
+                video_stream->avc_param.sc.max_preset = 1;
+            }
 
             if( video_opts_in->quality_metric )
             {
