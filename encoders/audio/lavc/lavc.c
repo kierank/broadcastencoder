@@ -39,6 +39,7 @@ static const lavc_encoder_t lavc_encoders[] =
     { AUDIO_AC_3,   AV_CODEC_ID_AC3 },
     { AUDIO_E_AC_3, AV_CODEC_ID_EAC3 },
     { AUDIO_AAC,    AV_CODEC_ID_AAC },
+    { AUDIO_OPUS,   AV_CODEC_ID_OPUS },
     { -1, -1 },
 };
 
