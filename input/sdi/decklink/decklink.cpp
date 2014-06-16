@@ -523,6 +523,14 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 decklink_ctx->p_input->GetHardwareReferenceClock( OBE_CLOCK, &hardware_time, &time_in_frame, &ticks_per_frame );
                 obe_clock_tick( h, (int64_t)hardware_time );
 
+                /* Reset Speedcontrol */
+                if( decklink_ctx->drop_count == DROP_MIN+1 )
+                {
+                    pthread_mutex_lock( &h->drop_mutex );
+                    h->encoder_drop = h->mux_drop = 1;
+                    pthread_mutex_unlock( &h->drop_mutex );
+                }
+
                 if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
                     decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
                 {
