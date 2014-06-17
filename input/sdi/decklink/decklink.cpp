@@ -457,7 +457,8 @@ public:
                     else
                     {
                         /* Setup new video and audio frames */
-                        if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BLACK )
+                        if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
+                            decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
                         {
                             setup_stored_video_frame( &decklink_ctx->stored_video_frame, &decklink_video_format_tab[i] );
                             blank_frame( &decklink_ctx->stored_video_frame );
@@ -1000,6 +1001,7 @@ static int open_card( decklink_opts_t *decklink_opts )
     IDeckLinkAttributes *decklink_attributes = NULL;
     uint32_t    flags = 0;
     bool        supported;
+    const struct obe_to_decklink_video *decklink_format;
 
     IDeckLinkDisplayModeIterator *p_display_iterator = NULL;
     IDeckLinkIterator *decklink_iterator = NULL;
@@ -1162,6 +1164,7 @@ static int open_card( decklink_opts_t *decklink_opts )
         ret = -1;
         goto finish;
     }
+    decklink_format = &decklink_video_format_tab[i];
 
     wanted_mode_id = decklink_video_format_tab[i].bmd_name;
     found_mode = false;
@@ -1262,7 +1265,7 @@ static int open_card( decklink_opts_t *decklink_opts )
             if( decklink_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
                 decklink_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
             {
-                setup_stored_video_frame( &decklink_ctx->stored_video_frame, &decklink_video_format_tab[i] );
+                setup_stored_video_frame( &decklink_ctx->stored_video_frame, decklink_format );
                 blank_frame( &decklink_ctx->stored_video_frame );
             }
             else if( decklink_opts->picture_on_loss == PICTURE_ON_LOSS_BARS )
