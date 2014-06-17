@@ -515,8 +515,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             decklink_ctx->drop_count++;
 
             /* Only output our picture on loss if we've had valid frames before */
-            if( !decklink_opts_->probe && decklink_opts_->picture_on_loss && decklink_ctx->last_frame_time != -1 &&
-                decklink_ctx->drop_count > DROP_MIN )
+            if( !decklink_opts_->probe && decklink_opts_->picture_on_loss && decklink_ctx->drop_count > DROP_MIN )
             {
                 obe_raw_frame_t *video_frame = NULL, *audio_frame = NULL;
 
@@ -1260,7 +1259,8 @@ static int open_card( decklink_opts_t *decklink_opts )
             }
 
             /* Setup Picture on Loss */
-            if( decklink_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK )
+            if( decklink_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
+                decklink_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
             {
                 setup_stored_video_frame( &decklink_ctx->stored_video_frame, &decklink_video_format_tab[i] );
                 blank_frame( &decklink_ctx->stored_video_frame );
