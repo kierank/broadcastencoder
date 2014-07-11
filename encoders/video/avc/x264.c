@@ -274,7 +274,7 @@ static void *start_encoder( void *ptr )
             memcpy( coded_frame->data, nal[0].p_payload, frame_size );
             coded_frame->is_video = 1;
             coded_frame->len = frame_size;
-            coded_frame->cpb_initial_arrival_time = pic_out.hrd_timing.safe_cpb_initial_arrival_time;
+            coded_frame->cpb_initial_arrival_time = pic_out.hrd_timing.cpb_initial_arrival_time;
             coded_frame->cpb_final_arrival_time = pic_out.hrd_timing.cpb_final_arrival_time;
             coded_frame->real_dts = pic_out.hrd_timing.cpb_removal_time;
             coded_frame->real_pts = pic_out.hrd_timing.dpb_output_time;

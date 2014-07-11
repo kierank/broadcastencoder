@@ -795,10 +795,6 @@ Frontends
 
 readline:   $readline
 
-Monitoring
-
-net-snmp:   no
-
 EOF
 
 echo >> config.log

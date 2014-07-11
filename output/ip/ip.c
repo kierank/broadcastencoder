@@ -55,21 +55,9 @@ typedef struct
 
 struct ip_status
 {
-    obe_output_params_t *output_params;
+    obe_output_t *output;
     hnd_t *ip_handle;
 };
-
-static int64_t obe_gettime(void)
-{
-    struct timeval tv;
-    gettimeofday(&tv,NULL);
-    return (int64_t)tv.tv_sec * 1000000 + tv.tv_usec;
-}
-
-static uint64_t obe_ntp_time(void)
-{
-  return (obe_gettime() / 1000) * 1000 + NTP_OFFSET_US;
-}
 
 static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
 {
@@ -93,6 +81,18 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
     return 0;
 }
 #if 0
+static int64_t obe_gettime(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv,NULL);
+    return (int64_t)tv.tv_sec * 1000000 + tv.tv_usec;
+}
+
+static uint64_t obe_ntp_time(void)
+{
+  return (obe_gettime() / 1000) * 1000 + NTP_OFFSET_US;
+}
+
 static int write_rtcp_pkt( hnd_t handle )
 {
     obe_rtp_ctx *p_rtp = handle;
@@ -161,7 +161,7 @@ static void close_output( void *handle )
 {
     struct ip_status *status = handle;
 
-    if( status->output_params->output_opts.output == OUTPUT_RTP )
+    if( status->output->output_dest.type == OUTPUT_RTP )
     {
         if( *status->ip_handle )
             rtp_close( *status->ip_handle );
@@ -171,15 +171,16 @@ static void close_output( void *handle )
         if( *status->ip_handle )
             udp_close( *status->ip_handle );
     }
-    if( status->output_params->output_opts.target  )
-        free( status->output_params->output_opts.target );
-    free( status->output_params );
+    if( status->output->output_dest.target  )
+        free( status->output->output_dest.target );
+
+    pthread_mutex_unlock( &status->output->queue.mutex );
 }
 
 static void *open_output( void *ptr )
 {
-    obe_output_params_t *output_params = ptr;
-    obe_t *h = output_params->h;
+    obe_output_t *output = ptr;
+    obe_output_dest_t *output_dest = &output->output_dest;
     struct ip_status status;
     hnd_t ip_handle = NULL;
     int num_muxed_data = 0;
@@ -190,13 +191,13 @@ static void *open_output( void *ptr )
     param.sched_priority = 99;
     pthread_setschedparam( pthread_self(), SCHED_FIFO, &param );
 
-    status.output_params = output_params;
+    status.output = output;
     status.ip_handle = &ip_handle;
     pthread_cleanup_push( close_output, (void*)&status );
 
-    udp_populate_opts( &udp_opts, output_params->output_opts.target );
+    udp_populate_opts( &udp_opts, output_dest->target );
 
-    if( output_params->output_opts.output == OUTPUT_RTP )
+    if( output_dest->type == OUTPUT_RTP )
     {
         if( rtp_open( &ip_handle, &udp_opts ) < 0 )
             return NULL;
@@ -212,36 +213,36 @@ static void *open_output( void *ptr )
 
     while( 1 )
     {
-        pthread_mutex_lock( &h->output_queue.mutex );
-        while( !h->output_queue.size && !h->cancel_output_thread )
+        pthread_mutex_lock( &output->queue.mutex );
+        while( !output->queue.size && !output->cancel_thread )
         {
             /* Often this cond_wait is not because of an underflow */
-            pthread_cond_wait( &h->output_queue.in_cv, &h->output_queue.mutex );
+            pthread_cond_wait( &output->queue.in_cv, &output->queue.mutex );
         }
 
-        if( h->cancel_output_thread )
+        if( output->cancel_thread )
         {
-            pthread_mutex_unlock( &h->output_queue.mutex );
+            pthread_mutex_unlock( &output->queue.mutex );
             break;
         }
 
-        num_muxed_data = h->output_queue.size;
+        num_muxed_data = output->queue.size;
 
         muxed_data = malloc( num_muxed_data * sizeof(*muxed_data) );
         if( !muxed_data )
         {
-            pthread_mutex_unlock( &h->output_queue.mutex );
+            pthread_mutex_unlock( &output->queue.mutex );
             syslog( LOG_ERR, "Malloc failed\n" );
             return NULL;
         }
-        memcpy( muxed_data, h->output_queue.queue, num_muxed_data * sizeof(*muxed_data) );
-        pthread_mutex_unlock( &h->output_queue.mutex );
+        memcpy( muxed_data, output->queue.queue, num_muxed_data * sizeof(*muxed_data) );
+        pthread_mutex_unlock( &output->queue.mutex );
 
 //        printf("\n START %i \n", num_muxed_data );
 
         for( int i = 0; i < num_muxed_data; i++ )
         {
-            if( output_params->output_opts.output == OUTPUT_RTP )
+            if( output_dest->type == OUTPUT_RTP )
             {
                 if( write_rtp_pkt( ip_handle, &muxed_data[i]->data[7*sizeof(int64_t)], TS_PACKETS_SIZE, AV_RN64( muxed_data[i]->data ) ) < 0 )
                     syslog( LOG_ERR, "[rtp] Failed to write RTP packet\n" );
@@ -252,7 +253,7 @@ static void *open_output( void *ptr )
                     syslog( LOG_ERR, "[udp] Failed to write UDP packet\n" );
             }
 
-            remove_from_queue( &h->output_queue );
+            remove_from_queue( &output->queue );
             av_buffer_unref( &muxed_data[i] );
         }
 

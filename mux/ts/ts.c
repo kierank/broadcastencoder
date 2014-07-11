@@ -349,80 +349,70 @@ void *open_muxer( void *ptr )
                 goto end;
             }
         }
-        else if( stream_format == MISC_TELETEXT )
+        else if( stream_format == VBI_RAW || stream_format == MISC_TELETEXT )
         {
-            /* TODO: make TTX passthrough work */
-            if( ts_setup_dvb_teletext( w, stream->pid, output_stream->ts_opts.num_teletexts,
-                (ts_dvb_ttx_t*)output_stream->ts_opts.teletext_opts ) < 0 )
+            if( output_stream->ts_opts.num_teletexts )
             {
-                fprintf( stderr, "[ts] Could not setup Teletext stream\n" );
-                goto end;
-            }
-        }
-        else if( stream_format == VBI_RAW )
-        {
-            vbi_services = calloc( input_stream->num_frame_data, sizeof(*vbi_services) );
-            if( !vbi_services )
-            {
-                fprintf( stderr, "malloc failed\n" );
-                goto end;
-            }
-
-            for( int j = 0; j < input_stream->num_frame_data; j++ )
-            {
-                for( int k = 0; vbi_service_ids[k][0] != 0; k++ )
+                if( ts_setup_dvb_teletext( w, stream->pid, output_stream->ts_opts.num_teletexts,
+                    (ts_dvb_ttx_t*)output_stream->ts_opts.teletext_opts ) < 0 )
                 {
-                    if( input_stream->frame_data[j].type == vbi_service_ids[k][0] )
-                        vbi_services[j].data_service_id = vbi_service_ids[k][1];
-                }
-
-                /* This check is not strictly necessary */
-                if( !vbi_services[j].data_service_id )
+                    fprintf( stderr, "[ts] Could not setup Teletext stream\n" );
                     goto end;
+                }
+            }
 
-                vbi_services[j].num_lines = input_stream->frame_data[j].num_lines;
-                vbi_services[j].lines = malloc( vbi_services[j].num_lines * sizeof(*vbi_services[j].lines) );
-                if( !vbi_services[j].lines )
+            /* FIXME: let users specify VBI lines */
+            if( stream_format == VBI_RAW && input_stream )
+            {
+                vbi_services = calloc( input_stream->num_frame_data, sizeof(*vbi_services) );
+                if( !vbi_services )
                 {
                     fprintf( stderr, "malloc failed\n" );
                     goto end;
                 }
 
-                for( int k = 0; k < input_stream->frame_data[j].num_lines; k++ )
+                for( int j = 0; j < input_stream->num_frame_data; j++ )
                 {
-                    int tmp_line, field;
-
-                    obe_convert_smpte_to_analogue( input_stream->vbi_ntsc ? INPUT_VIDEO_FORMAT_NTSC : INPUT_VIDEO_FORMAT_PAL, input_stream->frame_data[j].lines[k],
-                                                   &tmp_line, &field );
-
-                    vbi_services[j].lines[k].field_parity = field == 1 ? 1 : 0;
-                    vbi_services[j].lines[k].line_offset = tmp_line;
-                }
-            }
-
-            if( ts_setup_dvb_vbi( w, stream->pid, input_stream->num_frame_data, vbi_services ) < 0 )
-            {
-                fprintf( stderr, "[ts] Could not setup VBI stream\n" );
-                goto end;
-            }
-
-            for( int j = 0; j < input_stream->num_frame_data; j++ )
-            {
-                /* TODO: make TTX passthrough work */
-                /* Setup teletext streams if necessary */
-                if( input_stream->frame_data[j].type == MISC_TELETEXT )
-                {
-                    if( ts_setup_dvb_teletext( w, stream->pid, output_stream->ts_opts.num_teletexts,
-                        (ts_dvb_ttx_t*)output_stream->ts_opts.teletext_opts ) < 0 )
+                    for( int k = 0; vbi_service_ids[k][0] != 0; k++ )
                     {
-                        fprintf( stderr, "[ts] Could not setup Teletext stream\n" );
+                        if( input_stream->frame_data[j].type == vbi_service_ids[k][0] )
+                            vbi_services[j].data_service_id = vbi_service_ids[k][1];
+                    }
+
+                    /* This check is not strictly necessary */
+                    if( !vbi_services[j].data_service_id )
+                        goto end;
+
+                    vbi_services[j].num_lines = input_stream->frame_data[j].num_lines;
+                    vbi_services[j].lines = malloc( vbi_services[j].num_lines * sizeof(*vbi_services[j].lines) );
+                    if( !vbi_services[j].lines )
+                    {
+                        fprintf( stderr, "malloc failed\n" );
                         goto end;
                     }
-                }
-                free( vbi_services[j].lines );
-            }
 
-            free( vbi_services );
+                    for( int k = 0; k < input_stream->frame_data[j].num_lines; k++ )
+                    {
+                        int tmp_line, field;
+
+                        obe_convert_smpte_to_analogue( input_stream->vbi_ntsc ? INPUT_VIDEO_FORMAT_NTSC : INPUT_VIDEO_FORMAT_PAL, input_stream->frame_data[j].lines[k],
+                                                       &tmp_line, &field );
+
+                        vbi_services[j].lines[k].field_parity = field == 1 ? 1 : 0;
+                        vbi_services[j].lines[k].line_offset = tmp_line;
+                    }
+                }
+
+                if( ts_setup_dvb_vbi( w, stream->pid, input_stream->num_frame_data, vbi_services ) < 0 )
+                {
+                    fprintf( stderr, "[ts] Could not setup VBI stream\n" );
+                    goto end;
+                }
+
+                for( int j = 0; j < input_stream->num_frame_data; j++ )
+                    free( vbi_services[j].lines );
+                free( vbi_services );
+            }
         }
     }
 
@@ -432,7 +422,6 @@ void *open_muxer( void *ptr )
     {
         video_found = 0;
         video_dts = 0;
-        int64_t lowest_pts = -1, largest_pts = -1;
 
         pthread_mutex_lock( &h->mux_queue.mutex );
 

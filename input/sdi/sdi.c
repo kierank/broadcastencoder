@@ -50,7 +50,7 @@ void obe_v210_planar_unpack_c( const uint32_t *src, uint16_t *y, uint16_t *u, ui
 void obe_v210_line_to_nv20_c( uint32_t *src, uint16_t *dst, int width )
 {
     int w;
-    uint32_t val;
+    uint32_t val = 0;
     uint16_t *uv = dst + width;
     for( w = 0; w < width - 5; w += 6 )
     {
@@ -152,21 +152,27 @@ int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_
 
     for( int i = 0; i < non_display_data->num_frame_data; i++ )
     {
-        if( non_display_data->frame_data[i].type == MISC_TELETEXT && non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX )
+        if( non_display_data->frame_data[i].type == MISC_TELETEXT )
             continue;
         else if( non_display_data->frame_data[i].location == location )
             count++;
     }
 
     stream->num_frame_data = count;
+
+    if( !stream->num_frame_data )
+    {
+        stream->frame_data = NULL;
+        return 0;
+    }
+
     stream->frame_data = calloc( stream->num_frame_data, sizeof(*stream->frame_data) );
     if( !stream->frame_data && stream->num_frame_data )
         return -1;
 
     for( int i = 0; i < non_display_data->num_frame_data; i++ )
     {
-        /* Teletext is a special case - don't include it if the user has asked for it separately */
-        if( non_display_data->frame_data[i].type == MISC_TELETEXT && non_display_data->teletext_location == TELETEXT_LOCATION_DVB_TTX )
+        if( non_display_data->frame_data[i].type == MISC_TELETEXT )
             continue;
         else if( non_display_data->frame_data[i].location == location )
         {
@@ -203,44 +209,48 @@ int check_active_non_display_data( obe_raw_frame_t *raw_frame, int type )
     return 0;
 }
 
-int non_display_data_was_probed( obe_device_t *device, int type, int source, int line_number )
+int check_user_selected_non_display_data( obe_t *h, int type, int location )
 {
-    /* Don't add user-data which has suddenly appeared in the SDI feed.
-     * This is because the user may not have allocated enough mux bitrate and also because
-     * we can't yet reconfigure the mux to add DVB-VBI streams in OBE */
+    obe_output_stream_t *output_stream;
 
-    /* FIXME: shall we be picky about changes in line number? */
-    obe_int_input_stream_t *stream = NULL;
-
-    int location = get_non_display_location( type );
-    if( location < 0 )
-        return 0;
-
-    if( location == USER_DATA_LOCATION_FRAME )
+    if( location == USER_DATA_LOCATION_DVB_STREAM )
     {
-        /* FIXME if for whatever reason the video stream isn't the first stream */
-        stream = device->streams[0];
-    }
-    else //if( location == USER_DATA_LOCATION_DVB_STREAM )
-    {
-        for( int i = 0; i < device->num_input_streams; i++ )
-        {
-            if( device->streams[i]->stream_format == MISC_TELETEXT || device->streams[i]->stream_format == VBI_RAW )
-            {
-                stream = device->streams[i];
-                break;
-            }
-        }
-
-        if( !stream )
+        output_stream = get_output_stream( h, VBI_RAW );
+        if( !output_stream )
             return 0;
-    }
 
-    for( int i = 0; i < stream->num_frame_data; i++ )
+        switch( type )
+        {
+            case MISC_TELETEXT:
+                return output_stream->dvb_vbi_opts.ttx;
+            case MISC_TELETEXT_INVERTED:
+                return output_stream->dvb_vbi_opts.inverted_ttx;
+            case MISC_VPS:
+                return output_stream->dvb_vbi_opts.vps;
+            case MISC_WSS:
+                return output_stream->dvb_vbi_opts.wss;
+        }
+    }
+    else if( location == USER_DATA_LOCATION_FRAME )
     {
-        obe_frame_data_t *frame_data = &stream->frame_data[i];
-        if( frame_data->type == type && frame_data->source == source )
-            return 1;
+        /* Assumes video frame has stream_id=0 */
+        output_stream = get_output_stream( h, 0 );
+        /* Should never happen */
+        if( !output_stream )
+            return 0;
+
+        switch( type )
+        {
+            case CAPTIONS_CEA_608:
+                return output_stream->video_anc.cea_608;
+            case CAPTIONS_CEA_708:
+                return output_stream->video_anc.cea_708;
+            case MISC_AFD:
+                return output_stream->video_anc.afd;
+            /* Actually WSS to AFD conversion */
+            case MISC_WSS:
+                return output_stream->video_anc.wss_to_afd;
+        }
     }
 
     return 0;

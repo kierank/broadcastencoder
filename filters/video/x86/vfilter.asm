@@ -6,6 +6,10 @@ align 32
 scale: times 4 dd 511
 shift: dd 11
 
+align 32
+two: times 8 dw 2
+three: times 8 dw 3
+
 SECTION .text
 
 ;
@@ -54,3 +58,47 @@ INIT_XMM sse4
 DITHER_row
 INIT_XMM avx
 DITHER_row
+
+;
+; obe_downsample_chroma_row_field( uint16_t *src, uint16_t *dst, int width, int stride )
+;
+
+; %1 * 3
+; %2 + 2
+%macro DOWNSAMPLE_chroma_row_inner 2
+    pmullw  m2, m0, [%1+r2]
+    paddw   m3, m1, [%2+r2]
+    paddw   m2, m3
+    psrlw   m2, 2
+%endmacro
+
+%macro DOWNSAMPLE_chroma_row 1
+cglobal downsample_chroma_row_%1, 4, 5, 4
+    mova m0, [three]
+    mova m1, [two]
+    add       r0, r2
+    add       r1, r2
+    lea       r4, [r0+2*r3]
+    neg       r2
+.loop
+
+%ifidn %1, top
+    DOWNSAMPLE_chroma_row_inner r0, r4
+%else
+    DOWNSAMPLE_chroma_row_inner r4, r0
+%endif
+
+    mova      [r1+r2], m2
+
+    add       r2, mmsize
+    jl        .loop
+    REP_RET
+%endmacro
+
+INIT_XMM sse2
+DOWNSAMPLE_chroma_row top
+DOWNSAMPLE_chroma_row bottom
+
+INIT_XMM avx
+DOWNSAMPLE_chroma_row top
+DOWNSAMPLE_chroma_row bottom
