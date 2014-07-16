@@ -83,7 +83,7 @@ static const char * const mono_channels[]            = { "left", "right", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "file", 0 };
 static const char * const addable_streams[]          = { "audio", "ttx" };
 static const char * const filter_bit_depths[]        = { "10", "8" };
-static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned" };
+static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned", "ldpc-staircase" };
 
 static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection",

@@ -194,6 +194,7 @@ lavf="auto"
 readline="auto"
 decklink="auto"
 lzvbi="auto"
+lopenfec="auto"
 
 CFLAGS="$CFLAGS -Wall -I."
 CXXFLAGS="$CXXFLAGS -c -Wall -I."
@@ -689,6 +690,19 @@ if [ "$lzvbi" = "yes" ] ; then
     LDFLAGS="$LDFLAGS $LZVBI_LIBS"
 fi
 
+LOPENFEC_LIBS="-lopenfec"
+if [ "$lopenfec" = "auto" ] ; then
+    lopenfec="no"
+    if cc_check "openfec/lib_common/of_openfec_api.h" "$LOPENFEC_LIBS" ; then
+        lopenfec="yes"
+    fi
+fi
+
+if [ "$lopenfec" = "yes" ] ; then
+    define HAVE_LIBOPENFEC
+    LDFLAGS="$LDFLAGS $LOPENFEC_LIBS"
+fi
+
 if [ "$pic" = "yes" ] ; then
     CFLAGS="$CFLAGS -fPIC"
     ASFLAGS="$ASFLAGS -DPIC"
@@ -790,6 +804,10 @@ libtwolame: $ltwolame
 Mux
 
 libmpegts:  $lmpegts
+
+Output
+
+openfec:    $lopenfec
 
 Frontends
 
