@@ -71,7 +71,8 @@ static void *start_smoothing( void *ptr )
                 pthread_mutex_lock( &h->encoders[i]->queue.mutex );
                 while( !h->encoders[i]->is_ready )
                     pthread_cond_wait( &h->encoders[i]->queue.in_cv, &h->encoders[i]->queue.mutex );
-                x264_param_t *params = h->encoders[i]->encoder_params;
+                obe_output_stream_t *output_stream = get_output_stream( h, h->encoders[i]->output_stream_id );
+                x264_param_t *params = &output_stream->avc_param;
                 temporal_vbv_size = av_rescale_q_rnd(
                 (int64_t)params->rc.i_vbv_buffer_size * params->rc.f_vbv_buffer_init,
                 (AVRational){1, params->rc.i_vbv_max_bitrate }, (AVRational){ 1, OBE_CLOCK }, AV_ROUND_UP );
