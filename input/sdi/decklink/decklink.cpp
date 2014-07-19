@@ -457,7 +457,8 @@ public:
                     else
                     {
                         /* Setup new video and audio frames */
-                        if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BLACK )
+                        if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
+                            decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
                         {
                             setup_stored_video_frame( &decklink_ctx->stored_video_frame, &decklink_video_format_tab[i] );
                             blank_frame( &decklink_ctx->stored_video_frame );
@@ -520,14 +521,20 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             }
             decklink_ctx->drop_count++;
 
-            /* Only output our picture on loss if we've had valid frames before */
-            if( !decklink_opts_->probe && decklink_opts_->picture_on_loss && decklink_ctx->last_frame_time != -1 &&
-                decklink_ctx->drop_count > DROP_MIN )
+            if( !decklink_opts_->probe && decklink_opts_->picture_on_loss && decklink_ctx->drop_count > DROP_MIN )
             {
                 obe_raw_frame_t *video_frame = NULL, *audio_frame = NULL;
 
                 decklink_ctx->p_input->GetHardwareReferenceClock( OBE_CLOCK, &hardware_time, &time_in_frame, &ticks_per_frame );
                 obe_clock_tick( h, (int64_t)hardware_time );
+
+                /* Reset Speedcontrol */
+                if( decklink_ctx->drop_count == DROP_MIN+1 )
+                {
+                    pthread_mutex_lock( &h->drop_mutex );
+                    h->encoder_drop = h->mux_drop = 1;
+                    pthread_mutex_unlock( &h->drop_mutex );
+                }
 
                 if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
                     decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
@@ -1008,6 +1015,7 @@ static int open_card( decklink_opts_t *decklink_opts )
     IDeckLinkAttributes *decklink_attributes = NULL;
     uint32_t    flags = 0;
     bool        supported;
+    const struct obe_to_decklink_video *decklink_format;
 
     IDeckLinkDisplayModeIterator *p_display_iterator = NULL;
     IDeckLinkIterator *decklink_iterator = NULL;
@@ -1170,6 +1178,7 @@ static int open_card( decklink_opts_t *decklink_opts )
         ret = -1;
         goto finish;
     }
+    decklink_format = &decklink_video_format_tab[i];
 
     wanted_mode_id = decklink_video_format_tab[i].bmd_name;
     found_mode = false;
@@ -1267,9 +1276,10 @@ static int open_card( decklink_opts_t *decklink_opts )
             }
 
             /* Setup Picture on Loss */
-            if( decklink_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK )
+            if( decklink_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
+                decklink_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
             {
-                setup_stored_video_frame( &decklink_ctx->stored_video_frame, &decklink_video_format_tab[i] );
+                setup_stored_video_frame( &decklink_ctx->stored_video_frame, decklink_format );
                 blank_frame( &decklink_ctx->stored_video_frame );
             }
             else if( decklink_opts->picture_on_loss == PICTURE_ON_LOSS_BARS )
