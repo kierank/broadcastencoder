@@ -416,7 +416,7 @@ typedef struct
     obe_queue_t queue;
     int cancel_thread;
 
-    hnd_t encoder_params;
+    int params_update;
 
     /* HE-AAC and E-AC3 */
     int num_samples;
@@ -493,6 +493,7 @@ struct obe_t
     int cancel_enc_smoothing_thread;
 
     /* Mux */
+    int mux_params_update;
     pthread_t mux_thread;
     int cancel_mux_thread;
     obe_mux_opts_t mux_opts;
