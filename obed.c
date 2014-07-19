@@ -207,6 +207,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 strncpy( input_opts_out->bars_line3, input_opts_in->bars_line3, sizeof(input_opts_out->bars_line3) );
             if( input_opts_in->bars_line4 )
                 strncpy( input_opts_out->bars_line4, input_opts_in->bars_line4, sizeof(input_opts_out->bars_line4) );
+            input_opts_out->picture_on_loss = input_opts_in->picture_on_signal_loss;
 
             if( video_opts_in->latency == 1 )
             {
@@ -217,7 +218,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 }
             }
 
-            if( obe_probe_device( d.h, &d.input, &d.program ) < 0 )
+            if( obe_autoconf_device( d.h, &d.input, &d.program ) < 0 )
             {
                 syslog( LOG_ERR, "Input device could not be opened" );
                 goto fail;
