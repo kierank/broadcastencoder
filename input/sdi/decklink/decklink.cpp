@@ -985,7 +985,7 @@ static void close_card( decklink_opts_t *decklink_opts )
     if( decklink_ctx->codec )
     {
         avcodec_close( decklink_ctx->codec );
-        avcodec_free_context( decklink_ctx->codec );
+        avcodec_free_context( &decklink_ctx->codec );
     }
 
     if( IS_SD( decklink_opts->video_format ) )
