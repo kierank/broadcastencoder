@@ -267,7 +267,7 @@ void *open_muxer( void *ptr )
 
         if( stream_format == VIDEO_AVC )
         {
-            x264_param_t *p_param = encoder->encoder_params;
+            x264_param_t *p_param = &output_stream->avc_param;
             int j = 0;
             while( avc_profiles[j][0] && p_param->i_profile != avc_profiles[j][0] )
                 j++;
@@ -396,6 +396,13 @@ void *open_muxer( void *ptr )
         {
             pthread_mutex_unlock( &h->mux_queue.mutex );
             goto end;
+        }
+
+        if( h->mux_params_update )
+        {
+            params.muxrate = mux_opts->ts_muxrate;
+            ts_update_transport_stream( w, &params );
+            h->mux_params_update = 0;
         }
 
         while( !video_found )
