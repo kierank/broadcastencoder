@@ -381,7 +381,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
             {
                 int k = n+i;
                 int esi = p_rtp->ldpc_params.nb_source_symbols+i;
-                uint8_t *repair_symbol = p_rtp->repair_symbols[i*LDPC_PACKET_SIZE];
+                uint8_t *repair_symbol = &p_rtp->repair_symbols[i*LDPC_PACKET_SIZE];
 
                 *repair_symbol++ = (sbn >> 8) & 0xff;
                 *repair_symbol++ = sbn & 0xff;
