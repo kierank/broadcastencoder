@@ -488,7 +488,6 @@ void close_bars( hnd_t ptr )
 {
     bars_ctx_t *bars_ctx = ptr;
 
-    av_frame_free( &bars_ctx->frame );
     avfilter_graph_free( &bars_ctx->v_filter_graph );
     free( bars_ctx );
     ptr = NULL;
