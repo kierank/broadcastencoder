@@ -202,7 +202,7 @@ static int write_708_cc( obe_user_data_t *user_data, uint8_t *start, int cc_coun
     if( mpeg4 )
     {
         /* N.B MPEG-4 only */
-        write_itu_t_codes( &r );
+        write_itu_t_codes( &s );
     }
 
     for( int i = 0; i < 4; i++ )
