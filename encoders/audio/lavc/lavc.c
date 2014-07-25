@@ -58,7 +58,7 @@ static int write_opus_ts_header( uint8_t *data, int au_len )
 
     for( i = 0; i < au_len-255; i += 255 )
         bs_write( &s, 8, 0xff ); // ff_byte
-     bs_write( &s, 8, 255-i ); // au_size_last_byte
+     bs_write( &s, 8, au_len-i ); // au_size_last_byte
      bs_flush( &s );
 
     return (bs_pos( &s ) / 8);
