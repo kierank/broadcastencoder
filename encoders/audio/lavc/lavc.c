@@ -50,7 +50,7 @@ static int write_opus_ts_header( uint8_t *data, int au_len )
     int i;
     bs_init( &s, data, 1000 );
 
-    bs_write( &s, 10, 0x3ff ); // control_header_prefix
+    bs_write( &s, 11, 0x7ff ); // control_header_prefix
     bs_write1( &s, 0 ); // start_trim_flag
     bs_write1( &s, 0 ); // end_trim_flag
     bs_write1( &s, 0 ); // control_extension_flag
