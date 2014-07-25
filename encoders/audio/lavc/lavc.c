@@ -56,7 +56,7 @@ static int write_opus_ts_header( uint8_t *data, int au_len )
     bs_write1( &s, 0 ); // control_extension_flag
     bs_write( &s, 2, 0 ); // Reserved
 
-    for( i = 0; i < au_len-255; i += 255 )
+    for( i = 0; i <= au_len-255; i += 255 )
         bs_write( &s, 8, 0xff ); // ff_byte
      bs_write( &s, 8, au_len-i ); // au_size_last_byte
      bs_flush( &s );
