@@ -105,6 +105,7 @@ install: obed$(EXE) $(SONAME)
 	install obed$(EXE) $(DESTDIR)$(bindir)
 	install -d $(DESTDIR)/etc/init
 	install obed-worker.conf $(DESTDIR)/etc/init
+	install libopenfec.so $(DESTDIR)/usr/lib
 
 uninstall:
 	rm -f $(DESTDIR)$(bindir)/obed$(EXE)
