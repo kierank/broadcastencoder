@@ -106,9 +106,9 @@ enum input_type_e
 enum picture_on_loss_e
 {
     PICTURE_ON_LOSS_NONE,
-    PICTURE_ON_LOSS_BLACK,
-    PICTURE_ON_LOSS_LASTFRAME,
     PICTURE_ON_LOSS_BARS,
+    PICTURE_ON_LOSS_LASTFRAME,
+    PICTURE_ON_LOSS_BLACK,
 };
 
 /* video_format should be set to -1 for auto detection */
