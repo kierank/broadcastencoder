@@ -241,17 +241,20 @@ int read_cdp( obe_user_data_t *user_data )
 
     // cdp_header
     if( bs_read( &s, 16 ) != CDP_IDENTIFIER )
-        return 0;
+    {
+        syslog( LOG_ERR, "CDP identifier not found \n" );
+        return 1;
+    }
 
     /* Verify Checksum */
     for( int i = 0; i < user_data->len - 1; i++ )
         calc_cs += user_data->data[i];
 
     calc_cs = calc_cs ? 256 - calc_cs : 0;
-    if( calc_cs != user_data->data[user_data->len -1] )
+    if( calc_cs != user_data->data[user_data->len - 1] )
     {
         syslog( LOG_ERR, "Invalid checksum in Caption Distribution Packet \n" );
-        return 0;
+        return 1;
     }
 
     bs_skip( &s, 8 ); // cdp_length
@@ -338,7 +341,7 @@ int read_cdp( obe_user_data_t *user_data )
     }
 
     if( !cc_count )
-        return 0;
+        return 1;
 
     if( write_708_cc( user_data, start, cc_count ) < 0 )
         return -1;
