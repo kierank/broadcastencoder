@@ -296,7 +296,7 @@ int parse_vanc_line( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe
      * TODO: optimise this */
     while( i < width - 7 )
     {
-        if( line[i] <= 0x03 && (line[i+1] & 0x3fc) == 0x3fc && (line[i+2] & 0x3fc) == 0x3fc )
+        if( line[i] <= 0x04 && line[i+1] >= 0x3fb && line[i+2] >= 0x3fb )
         {
             i += 3;
             pkt_start = &line[i];
