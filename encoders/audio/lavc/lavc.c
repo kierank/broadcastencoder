@@ -142,6 +142,7 @@ static void *start_encoder( void *ptr )
     {
         snprintf( tmp, sizeof(tmp), "%s", "constrained" );
         av_dict_set( &opts, "vbr", tmp, 0 );
+        codec->compression_level = 10;
     }
 
     if( avcodec_open2( codec, enc, &opts ) < 0 )
