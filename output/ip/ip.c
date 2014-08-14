@@ -420,7 +420,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         uint8_t *column = &p_rtp->column_data[(column_idx*2+p_rtp->column_phase)*p_rtp->fec_pkt_len];
 
         uint8_t *row_ts = &row[RTP_HEADER_SIZE+TS_OFFSET];
-        *row_ts++ ^= ts_90 >> 24;
+        *row_ts++ ^= (ts_90 >> 24) & 0xff;
         *row_ts++ ^= (ts_90 >> 16) & 0xff;
         *row_ts++ ^= (ts_90 >>  8) & 0xff;
         *row_ts++ ^= (ts_90) & 0xff;
@@ -429,7 +429,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         if( fec_type == FEC_TYPE_COP3_BLOCK_ALIGNED )
         {
             uint8_t *column_ts = &column[RTP_HEADER_SIZE+TS_OFFSET];
-            *column_ts++ ^= ts_90 >> 24;
+            *column_ts++ ^= (ts_90 >> 24) & 0xff;
             *column_ts++ ^= (ts_90 >> 16) & 0xff;
             *column_ts++ ^= (ts_90 >>  8) & 0xff;
             *column_ts++ ^= (ts_90) & 0xff;
