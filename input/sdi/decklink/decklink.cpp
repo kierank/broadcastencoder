@@ -510,6 +510,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
     if( videoframe )
     {
+        pts = av_rescale_q( decklink_ctx->v_counter, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
         if( videoframe->GetFlags() & bmdFrameHasNoInputSource )
         {
             syslog( LOG_ERR, "Decklink card index %i: No input signal detected", decklink_opts_->card_idx );
@@ -519,9 +520,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             if( !decklink_opts_->probe && decklink_opts_->picture_on_loss && decklink_ctx->drop_count > DROP_MIN )
             {
                 obe_raw_frame_t *video_frame = NULL, *audio_frame = NULL;
-
-                decklink_ctx->p_input->GetHardwareReferenceClock( OBE_CLOCK, &hardware_time, &time_in_frame, &ticks_per_frame );
-                obe_clock_tick( h, (int64_t)hardware_time );
+                obe_clock_tick( h, pts );
 
                 /* Reset Speedcontrol */
                 if( decklink_ctx->drop_count == DROP_MIN+1 )
@@ -557,8 +556,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                     audio_frame = decklink_ctx->raw_frames[1];
                 }
 
-                video_frame->pts = av_rescale_q( decklink_ctx->v_counter, decklink_ctx->v_timebase,
-                                                 (AVRational){1, OBE_CLOCK} );
+                video_frame->pts = pts;
 
                 if( add_to_filter_queue( h, video_frame ) < 0 )
                     goto end;
@@ -604,11 +602,10 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             decklink_opts_->probe_success = 1;
 
         /* use SDI ticks as clock source */
-        decklink_ctx->p_input->GetHardwareReferenceClock( OBE_CLOCK, &hardware_time, &time_in_frame, &ticks_per_frame );
-        obe_clock_tick( h, (int64_t)hardware_time );
+        obe_clock_tick( h, pts );
 
         if( decklink_ctx->last_frame_time == -1 )
-            decklink_ctx->last_frame_time = hardware_time;
+            decklink_ctx->last_frame_time = obe_mdate();
 
         /* If there's no picture-on-loss set the encoder needs to be reset */
         if( !decklink_opts_->probe && !decklink_opts_->picture_on_loss && decklink_ctx->drop_count )
