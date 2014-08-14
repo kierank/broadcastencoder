@@ -342,18 +342,6 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     memcpy( &pkt_ptr[RTP_HEADER_SIZE], data, len );
     pkt_ptr += RTP_PACKET_SIZE;
 
-    if( fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE )
-    {
-        uint64_t sbn = p_rtp->seq / p_rtp->ldpc_params.nb_source_symbols;
-        uint64_t esi = p_rtp->seq % p_rtp->ldpc_params.nb_source_symbols;
-        *pkt_ptr++ = (sbn >> 8) & 0xff;
-        *pkt_ptr++ = sbn & 0xff;
-        *pkt_ptr++ = (esi >> 8) & 0xff;
-        *pkt_ptr++ = esi & 0xff;
-        *pkt_ptr++ = (p_rtp->ldpc_params.nb_source_symbols >> 8) & 0xff;
-        *pkt_ptr++ = p_rtp->ldpc_params.nb_source_symbols & 0xff;
-    }
-
     if( udp_write( p_rtp->udp_handle, src_pkt_ptr, RTP_PACKET_SIZE ) < 0 )
         ret = -1;
 
