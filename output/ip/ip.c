@@ -344,7 +344,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     if( fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE )
     {
         int src_pkt_idx = p_rtp->seq % p_rtp->ldpc_params.nb_source_symbols;
-        pkt_ptr = &p_rtp->source_symbols[src_pkt_idx * LDPC_ADU_SIZE];
+        pkt_ptr = &p_rtp->source_symbols[src_pkt_idx * RTP_PACKET_SIZE];
     }
 
     uint32_t ts_90 = timestamp / 300;
