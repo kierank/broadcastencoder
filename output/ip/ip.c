@@ -156,7 +156,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
 
         n = p_rtp->ldpc_params.nb_source_symbols + p_rtp->ldpc_params.nb_repair_symbols;
 
-        if( of_set_fec_parameters( p_rtp->ses, (of_parameters_t*)&p_rtp->ldpc_params ) > 0 )
+        if( of_set_fec_parameters( p_rtp->ses, (of_parameters_t*)&p_rtp->ldpc_params ) != OF_STATUS_OK )
         {
             fprintf( stderr, "[rtp] could not create fec encoder instance \n" );
             return -1;
@@ -378,9 +378,10 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
                 *repair_symbol++ = 0;
                 *repair_symbol++ = 0;
 
-                if( of_build_repair_symbol( p_rtp->ses, (void**)p_rtp->encoding_symbols_tab, esi ) > 0 )
+                if( of_build_repair_symbol( p_rtp->ses, (void**)p_rtp->encoding_symbols_tab, esi ) != OF_STATUS_OK )
                 {
                     ret = -1;
+                    fprintf( stderr, "could not build repair symbols" );
                     break;
                 }
             }
