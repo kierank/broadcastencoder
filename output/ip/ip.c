@@ -90,7 +90,7 @@ typedef struct
     uint8_t *source_symbols;
     uint8_t *repair_symbols;
 
-    uint8_t **encoding_symbols_tab;
+    void   **encoding_symbols_tab;
     int     *output_order;
 
 } obe_rtp_ctx;
@@ -378,7 +378,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
                 *repair_symbol++ = 0;
                 *repair_symbol++ = 0;
 
-                if( of_build_repair_symbol( p_rtp->ses, (void**)p_rtp->encoding_symbols_tab, esi ) != OF_STATUS_OK )
+                if( of_build_repair_symbol( p_rtp->ses, p_rtp->encoding_symbols_tab, esi ) != OF_STATUS_OK )
                 {
                     ret = -1;
                     fprintf( stderr, "could not build repair symbols" );
