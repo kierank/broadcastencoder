@@ -41,15 +41,12 @@
 
 #define RTP_HEADER_SIZE 12
 #define COP3_FEC_HEADER_SIZE 16
-#define LDPC_ADU_HEADER_SIZE 3
-#define LDPC_ADU_FOOTER_SIZE 6
-#define LDPC_FEC_HEADER_SIZE 8
+#define LDPC_FEC_HEADER_SIZE 12
 #define TS_OFFSET 8
 
 #define RTP_PACKET_SIZE (RTP_HEADER_SIZE+TS_PACKETS_SIZE)
 #define COP3_FEC_PACKET_SIZE (RTP_PACKET_SIZE+COP3_FEC_HEADER_SIZE)
-#define LDPC_ADU_SIZE (LDPC_ADU_HEADER_SIZE+RTP_PACKET_SIZE+LDPC_ADU_FOOTER_SIZE)
-#define LDPC_PACKET_SIZE (LDPC_FEC_HEADER_SIZE+LDPC_ADU_SIZE)
+#define LDPC_PACKET_SIZE (LDPC_FEC_HEADER_SIZE+RTP_PACKET_SIZE)
 
 #define RTCP_SR_PACKET_TYPE 200
 #define RTCP_PACKET_SIZE 28
@@ -94,6 +91,7 @@ typedef struct
     uint8_t *repair_symbols;
 
     uint8_t **encoding_symbols_tab;
+    int     *output_order;
 
 } obe_rtp_ctx;
 
@@ -152,7 +150,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         // FIXME make this configurable
         p_rtp->ldpc_params.nb_source_symbols = 100;
         p_rtp->ldpc_params.nb_repair_symbols = 25;
-        p_rtp->ldpc_params.encoding_symbol_length = LDPC_ADU_SIZE;
+        p_rtp->ldpc_params.encoding_symbol_length = RTP_PACKET_SIZE;
         p_rtp->ldpc_params.prng_seed = rand();
         p_rtp->ldpc_params.N1 = 3;
 
@@ -164,7 +162,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
             return -1;
         }
 
-        p_rtp->source_symbols = malloc( p_rtp->ldpc_params.nb_source_symbols * LDPC_ADU_SIZE );
+        p_rtp->source_symbols = malloc( p_rtp->ldpc_params.nb_source_symbols * RTP_PACKET_SIZE );
         if( !p_rtp->source_symbols )
         {
             fprintf( stderr, "[rtp] could not allocate source symbols \n" );
@@ -185,9 +183,16 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
             return -1;
         }
 
+        p_rtp->output_order = malloc( n * sizeof(*p_rtp->output_order) );
+        if( !p_rtp->output_order )
+        {
+            fprintf( stderr, "[rtp] could not allocate output order table \n" );
+            return -1;
+        }
+
         int i;
         for( i = 0; i < p_rtp->ldpc_params.nb_source_symbols; i++ )
-            p_rtp->encoding_symbols_tab[i] = &p_rtp->source_symbols[i*LDPC_ADU_SIZE];
+            p_rtp->encoding_symbols_tab[i] = &p_rtp->source_symbols[i*RTP_PACKET_SIZE];
 
         /* offset the encoding symbols table so FEC is applied after the header */
         for( int j = 0; j < p_rtp->ldpc_params.nb_repair_symbols; j++ )
@@ -352,23 +357,26 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
 
         if( fec_idx == (p_rtp->ldpc_params.nb_source_symbols-1) )
         {
-            uint64_t sbn = p_rtp->seq / p_rtp->ldpc_params.nb_source_symbols;
+            uint64_t snbase = (p_rtp->seq - p_rtp->ldpc_params.nb_source_symbols) & 0xffff
             int n = p_rtp->ldpc_params.nb_source_symbols + p_rtp->ldpc_params.nb_repair_symbols;
 
             for( int i = 0; i < p_rtp->ldpc_params.nb_repair_symbols; i++ )
             {
-                int k = n+i;
                 int esi = p_rtp->ldpc_params.nb_source_symbols+i;
                 uint8_t *repair_symbol = &p_rtp->repair_symbols[i*LDPC_PACKET_SIZE];
 
-                *repair_symbol++ = (sbn >> 8) & 0xff;
-                *repair_symbol++ = sbn & 0xff;
+                *repair_symbol++ = (snbase >> 8) & 0xff;
+                *repair_symbol++ = snbase & 0xff;
                 *repair_symbol++ = (esi >> 8) & 0xff;
                 *repair_symbol++ = esi & 0xff;
-                *repair_symbol++ = (k >> 8) & 0xff;
-                *repair_symbol++ = k & 0xff;
+                *repair_symbol++ = (p_rtp->ldpc_params.nb_source_symbols >> 8) & 0xff;
+                *repair_symbol++ = p_rtp->ldpc_params.nb_source_symbols & 0xff;
                 *repair_symbol++ = (n >> 8) & 0xff;
                 *repair_symbol++ = n & 0xff;
+                *repair_symbol++ = p_rtp->ldpc_params.N1 & 0xff;
+                *repair_symbol++ = 0;
+                *repair_symbol++ = 0;
+                *repair_symbol++ = 0;
 
                 if( of_build_repair_symbol( p_rtp->ses, (void**)p_rtp->encoding_symbols_tab, esi ) > 0 )
                 {
