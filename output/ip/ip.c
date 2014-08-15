@@ -141,7 +141,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
             return -1;
         }
 
-        if( of_create_codec_instance( &p_rtp->ses, OF_CODEC_LDPC_STAIRCASE_STABLE, OF_ENCODER, 2 ) > 0 )
+        if( of_create_codec_instance( &p_rtp->ses, OF_CODEC_LDPC_STAIRCASE_STABLE, OF_ENCODER, 2 ) != OF_STATUS_OK )
         {
             fprintf( stderr, "[rtp] could not create fec encoder instance \n" );
             return -1;
