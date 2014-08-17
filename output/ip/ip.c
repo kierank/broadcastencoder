@@ -141,12 +141,6 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
             return -1;
         }
 
-        if( of_create_codec_instance( &p_rtp->ses, OF_CODEC_LDPC_STAIRCASE_STABLE, OF_ENCODER, 2 ) != OF_STATUS_OK )
-        {
-            fprintf( stderr, "[rtp] could not create fec encoder instance \n" );
-            return -1;
-        }
-
         // FIXME make this configurable
         p_rtp->ldpc_params.nb_source_symbols = 100;
         p_rtp->ldpc_params.nb_repair_symbols = 25;
@@ -155,12 +149,6 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         p_rtp->ldpc_params.N1 = 3;
 
         n = p_rtp->ldpc_params.nb_source_symbols + p_rtp->ldpc_params.nb_repair_symbols;
-
-        if( of_set_fec_parameters( p_rtp->ses, (of_parameters_t*)&p_rtp->ldpc_params ) != OF_STATUS_OK )
-        {
-            fprintf( stderr, "[rtp] could not create fec encoder instance \n" );
-            return -1;
-        }
 
         p_rtp->source_symbols = malloc( p_rtp->ldpc_params.nb_source_symbols * RTP_PACKET_SIZE );
         if( !p_rtp->source_symbols )
@@ -361,32 +349,53 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
 
         if( fec_idx == (p_rtp->ldpc_params.nb_source_symbols-1) )
         {
-            uint64_t snbase = (p_rtp->seq - (p_rtp->ldpc_params.nb_source_symbols-1)) & 0xffff;
-            int n = p_rtp->ldpc_params.nb_source_symbols + p_rtp->ldpc_params.nb_repair_symbols;
-
-            for( int i = 0; i < p_rtp->ldpc_params.nb_repair_symbols; i++ )
+            if( p_rtp->ses )
             {
-                int esi = p_rtp->ldpc_params.nb_source_symbols+i;
-                uint8_t *repair_symbol = &p_rtp->repair_symbols[i*LDPC_PACKET_SIZE];
+                of_release_codec_instance( p_rtp->ses );
+                p_rtp->ses = NULL;
+            }
 
-                *repair_symbol++ = (snbase >> 8) & 0xff;
-                *repair_symbol++ = snbase & 0xff;
-                *repair_symbol++ = (esi >> 8) & 0xff;
-                *repair_symbol++ = esi & 0xff;
-                *repair_symbol++ = (p_rtp->ldpc_params.nb_source_symbols >> 8) & 0xff;
-                *repair_symbol++ = p_rtp->ldpc_params.nb_source_symbols & 0xff;
-                *repair_symbol++ = (n >> 8) & 0xff;
-                *repair_symbol++ = n & 0xff;
-                *repair_symbol++ = p_rtp->ldpc_params.N1 & 0xff;
-                *repair_symbol++ = 0;
-                *repair_symbol++ = 0;
-                *repair_symbol++ = 0;
+            if( of_create_codec_instance( &p_rtp->ses, OF_CODEC_LDPC_STAIRCASE_STABLE, OF_ENCODER, 2 ) != OF_STATUS_OK )
+            {
+                fprintf( stderr, "[rtp] could not create fec encoder instance \n" );
+                ret = -1;
+            }
 
-                if( of_build_repair_symbol( p_rtp->ses, p_rtp->encoding_symbols_tab, esi ) != OF_STATUS_OK )
+            if( of_set_fec_parameters( p_rtp->ses, (of_parameters_t*)&p_rtp->ldpc_params ) != OF_STATUS_OK )
+            {
+                fprintf( stderr, "[rtp] could not create fec encoder instance \n" );
+                ret = -1;
+            }
+
+            if( ret == 0 )
+            {
+                uint64_t snbase = (p_rtp->seq - (p_rtp->ldpc_params.nb_source_symbols-1)) & 0xffff;
+                int n = p_rtp->ldpc_params.nb_source_symbols + p_rtp->ldpc_params.nb_repair_symbols;
+
+                for( int i = 0; i < p_rtp->ldpc_params.nb_repair_symbols; i++ )
                 {
-                    ret = -1;
-                    fprintf( stderr, "could not build repair symbols" );
-                    break;
+                    int esi = p_rtp->ldpc_params.nb_source_symbols+i;
+                    uint8_t *repair_symbol = &p_rtp->repair_symbols[i*LDPC_PACKET_SIZE];
+
+                    *repair_symbol++ = (snbase >> 8) & 0xff;
+                    *repair_symbol++ = snbase & 0xff;
+                    *repair_symbol++ = (esi >> 8) & 0xff;
+                    *repair_symbol++ = esi & 0xff;
+                    *repair_symbol++ = (p_rtp->ldpc_params.nb_source_symbols >> 8) & 0xff;
+                    *repair_symbol++ = p_rtp->ldpc_params.nb_source_symbols & 0xff;
+                    *repair_symbol++ = (n >> 8) & 0xff;
+                    *repair_symbol++ = n & 0xff;
+                    *repair_symbol++ = p_rtp->ldpc_params.N1 & 0xff;
+                    *repair_symbol++ = 0;
+                    *repair_symbol++ = 0;
+                    *repair_symbol++ = 0;
+
+                    if( of_build_repair_symbol( p_rtp->ses, p_rtp->encoding_symbols_tab, esi ) != OF_STATUS_OK )
+                    {
+                        ret = -1;
+                        fprintf( stderr, "could not build repair symbols" );
+                        break;
+                    }
                 }
             }
         }
