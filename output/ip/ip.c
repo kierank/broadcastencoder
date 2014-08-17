@@ -146,7 +146,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         p_rtp->ldpc_params.nb_repair_symbols = 25;
         p_rtp->ldpc_params.encoding_symbol_length = RTP_PACKET_SIZE;
         p_rtp->ldpc_params.prng_seed = rand();
-        p_rtp->ldpc_params.N1 = 3;
+        p_rtp->ldpc_params.N1 = 7;
 
         n = p_rtp->ldpc_params.nb_source_symbols + p_rtp->ldpc_params.nb_repair_symbols;
 
