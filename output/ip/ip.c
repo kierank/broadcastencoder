@@ -354,14 +354,14 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     if( udp_write( p_rtp->udp_handle, pkt_ptr, RTP_PACKET_SIZE ) < 0 )
         ret = -1;
 
-    if( fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE && p_rtp->seq >= p_rtp->ldpc_params.nb_source_symbols )
+    if( fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE && p_rtp->seq >= (p_rtp->ldpc_params.nb_source_symbols-1) )
     {
         int fec_interval = p_rtp->ldpc_params.nb_source_symbols / p_rtp->ldpc_params.nb_repair_symbols;
         int fec_idx = p_rtp->seq % p_rtp->ldpc_params.nb_source_symbols;
 
         if( fec_idx == (p_rtp->ldpc_params.nb_source_symbols-1) )
         {
-            uint64_t snbase = (p_rtp->seq - p_rtp->ldpc_params.nb_source_symbols) & 0xffff;
+            uint64_t snbase = (p_rtp->seq - (p_rtp->ldpc_params.nb_source_symbols-1)) & 0xffff;
             int n = p_rtp->ldpc_params.nb_source_symbols + p_rtp->ldpc_params.nb_repair_symbols;
 
             for( int i = 0; i < p_rtp->ldpc_params.nb_repair_symbols; i++ )
@@ -391,7 +391,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
             }
         }
 
-        if( fec_idx % fec_interval == 0 )
+        if( (fec_idx % fec_interval) == 0 )
         {
             if( udp_write( p_rtp->ldpc_handle, &p_rtp->repair_symbols[(fec_idx / fec_interval)*LDPC_PACKET_SIZE], LDPC_PACKET_SIZE ) < 0 )
                 ret = -1;
