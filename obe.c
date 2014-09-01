@@ -1194,11 +1194,13 @@ int obe_start( obe_t *h )
                 }
             }
             else if( h->output_streams[i].stream_format == AUDIO_AC_3 || h->output_streams[i].stream_format == AUDIO_E_AC_3 ||
-                     h->output_streams[i].stream_format == AUDIO_AAC  || h->output_streams[i].stream_format == AUDIO_MP2 )
+                     h->output_streams[i].stream_format == AUDIO_AAC  || h->output_streams[i].stream_format == AUDIO_MP2 ||
+                     h->output_streams[i].stream_format == AUDIO_OPUS )
             {
                 audio_encoder = h->output_streams[i].stream_format == AUDIO_MP2 ? twolame_encoder : lavc_encoder;
                 num_samples = h->output_streams[i].stream_format == AUDIO_MP2 ? MP2_NUM_SAMPLES :
-                              h->output_streams[i].stream_format == AUDIO_AAC ? AAC_NUM_SAMPLES : AC3_NUM_SAMPLES;
+                              h->output_streams[i].stream_format == AUDIO_AAC ? AAC_NUM_SAMPLES :
+                              h->output_streams[i].stream_format == AUDIO_OPUS ? OPUS_NUM_SAMPLES : AC3_NUM_SAMPLES;
 
                 aud_enc_params = calloc( 1, sizeof(*aud_enc_params) );
                 if( !aud_enc_params )
@@ -1222,7 +1224,9 @@ int obe_start( obe_t *h )
                 if( !h->output_streams[i].ts_opts.frames_per_pes && h->obe_system == OBE_SYSTEM_TYPE_GENERIC &&
                     h->output_streams[i].stream_format != AUDIO_E_AC_3 )
                 {
-                    int buf_size = h->output_streams[i].stream_format == AUDIO_MP2 || h->output_streams[i].stream_format == AUDIO_AAC ? MISC_AUDIO_BS : AC3_BS_DVB;
+                    int buf_size = h->output_streams[i].stream_format == AUDIO_MP2 ||
+                                   h->output_streams[i].stream_format == AUDIO_AAC ||
+                                   h->output_streams[i].stream_format == AUDIO_OPUS ? MISC_AUDIO_BS : AC3_BS_DVB;
                     if( buf_size == AC3_BS_DVB && ( h->mux_opts.ts_type == OBE_TS_TYPE_CABLELABS || h->mux_opts.ts_type == OBE_TS_TYPE_ATSC ) )
                         buf_size = AC3_BS_ATSC;
                     /* AAC does not have exact frame sizes but this should be a good approximation */
