@@ -66,6 +66,7 @@
 #define AC3_NUM_SAMPLES 1536
 #define MP2_NUM_SAMPLES 1152
 #define AAC_NUM_SAMPLES 1024
+#define OPUS_NUM_SAMPLES 960
 
 /* T-STD buffer sizes */
 #define AC3_BS_ATSC     2592

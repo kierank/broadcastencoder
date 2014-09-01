@@ -23,6 +23,7 @@
 
 #include "common/common.h"
 #include "common/lavc.h"
+#include "common/bitstream.h"
 #include "encoders/audio/audio.h"
 #include <libavutil/fifo.h>
 #include <libavresample/avresample.h>
@@ -39,8 +40,29 @@ static const lavc_encoder_t lavc_encoders[] =
     { AUDIO_AC_3,   AV_CODEC_ID_AC3 },
     { AUDIO_E_AC_3, AV_CODEC_ID_EAC3 },
     { AUDIO_AAC,    AV_CODEC_ID_AAC },
+    { AUDIO_OPUS,   AV_CODEC_ID_OPUS },
     { -1, -1 },
 };
+
+static int write_opus_ts_header( uint8_t *data, int au_len )
+{
+    bs_t s;
+    int i;
+    bs_init( &s, data, 1000 );
+
+    bs_write( &s, 11, 0x3ff ); // control_header_prefix
+    bs_write1( &s, 0 ); // start_trim_flag
+    bs_write1( &s, 0 ); // end_trim_flag
+    bs_write1( &s, 0 ); // control_extension_flag
+    bs_write( &s, 2, 0 ); // Reserved
+
+    for( i = 0; i <= au_len-255; i += 255 )
+        bs_write( &s, 8, 0xff ); // ff_byte
+     bs_write( &s, 8, au_len-i ); // au_size_last_byte
+     bs_flush( &s );
+
+    return (bs_pos( &s ) / 8);
+}
 
 static void *start_encoder( void *ptr )
 {
@@ -51,7 +73,7 @@ static void *start_encoder( void *ptr )
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
     int64_t cur_pts = -1, pts_increment;
-    int i, frame_size, ret, got_pkt, num_frames = 0, total_size = 0;
+    int i, frame_size, ret, got_pkt, num_frames = 0, total_size = 0, header_size = 0;
     AVFifoBuffer *out_fifo = NULL;
     AVAudioResampleContext *avr = NULL;
     AVPacket pkt;
@@ -60,6 +82,7 @@ static void *start_encoder( void *ptr )
     AVDictionary *opts = NULL;
     char tmp[20];
     uint8_t *audio_planes[8] = { NULL };
+    uint8_t tmp2[1000];
 
     avcodec_register_all();
 
@@ -113,6 +136,13 @@ static void *start_encoder( void *ptr )
     {
         snprintf( tmp, sizeof(tmp), "%i", stream->audio_metadata.ref_level );
         av_dict_set( &opts, "dialnorm", tmp, 0 );
+    }
+
+    if( stream->stream_format == AUDIO_OPUS )
+    {
+        snprintf( tmp, sizeof(tmp), "%s", "constrained" );
+        av_dict_set( &opts, "vbr", tmp, 0 );
+        codec->compression_level = 10;
     }
 
     if( avcodec_open2( codec, enc, &opts ) < 0 )
@@ -230,18 +260,23 @@ static void *start_encoder( void *ptr )
             if( !got_pkt )
                 continue;
 
-            total_size += pkt.size;
-            num_frames++;
+            if( stream->stream_format == AUDIO_OPUS )
+                header_size = write_opus_ts_header( tmp2, pkt.size );
 
-            if( av_fifo_realloc2( out_fifo, av_fifo_size( out_fifo ) + pkt.size ) < 0 )
+            if( av_fifo_realloc2( out_fifo, av_fifo_size( out_fifo ) + pkt.size + header_size ) < 0 )
             {
                 syslog( LOG_ERR, "Malloc failed\n" );
                 break;
             }
 
+            if( stream->stream_format == AUDIO_OPUS )
+                av_fifo_generic_write( out_fifo, tmp2, header_size, NULL );
             av_fifo_generic_write( out_fifo, pkt.data, pkt.size, NULL );
-            obe_free_packet( &pkt );
 
+            total_size += pkt.size + header_size;
+            num_frames++;
+
+            obe_free_packet( &pkt );
             if( num_frames == enc_params->frames_per_pes )
             {
                 coded_frame = new_coded_frame( encoder->output_stream_id, total_size );

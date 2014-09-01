@@ -71,7 +71,7 @@ static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", 
 static const char * const picture_on_losses[]        = { "", "bars", "lastframe", "black", 0 };
 static const char * const ttx_locations[]            = { "dvb-ttx", "dvb-vbi", "both", 0 };
 static const char * const stream_actions[]           = { "passthrough", "encode", 0 };
-static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", "e-ac3", "aac", 0 };
+static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", "e-ac3", "aac", "opus", 0 };
 static const char * const frame_packing_modes[]      = { "none", "checkerboard", "column", "row", "side-by-side", "top-bottom", "temporal", 0 };
 static const char * const teletext_types[]           = { "", "initial", "subtitle", "additional-info", "program-schedule", "hearing-imp", 0 };
 static const char * const audio_types[]              = { "undefined", "clean-effects", "hearing-impaired", "visual-impaired", 0 };
@@ -802,7 +802,7 @@ static int set_stream( char *command, obecli_command_t *child )
                     default_bitrate = 192;
                 else if( cli.output_streams[output_stream_id].stream_format == AUDIO_E_AC_3 )
                     default_bitrate = 192;
-                else // AAC
+                else if( cli.output_streams[output_stream_id].stream_format == AUDIO_AAC )
                 {
                     default_bitrate = 128;
 
@@ -811,6 +811,10 @@ static int set_stream( char *command, obecli_command_t *child )
 
                     if( aac_encap )
                         parse_enum_value( aac_encap, aac_encapsulations, &cli.output_streams[output_stream_id].aac_opts.latm_output );
+                }
+                else // Opus
+                {
+                    default_bitrate = 96;
                 }
 
                 cli.output_streams[output_stream_id].bitrate = obe_otoi( bitrate, default_bitrate );
