@@ -620,7 +620,7 @@ static int set_stream( char *command, obecli_command_t *child )
             char *sdi_audio_pair = obe_get_option( stream_opts[22], opts );
             char *channel_map    = obe_get_option( stream_opts[23], opts );
             char *mono_channel   = obe_get_option( stream_opts[24], opts );
-            char *audio_offset   = obe_get_option( stream_opts[24], opts );
+            char *audio_offset   = obe_get_option( stream_opts[25], opts );
 
             /* AAC options */
             char *aac_profile = obe_get_option( stream_opts[26], opts );
