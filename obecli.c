@@ -98,7 +98,7 @@ static const char * stream_opts[] = { "action", "format",
                                       "width", "max-refs", "slices",
 
                                       /* Audio options */
-                                      "sdi-audio-pair", "channel-map", "mono-channel", "ref-level",
+                                      "sdi-audio-pair", "channel-map", "mono-channel", "ref-level", "audio-offset",
                                       /* AAC options */
                                       "aac-profile", "aac-encap",
                                       /* MP2 options */
@@ -636,18 +636,19 @@ static int set_stream( char *command, obecli_command_t *child )
             char *channel_map    = obe_get_option( stream_opts[24], opts );
             char *mono_channel   = obe_get_option( stream_opts[25], opts );
             char *reference_level = obe_get_option( stream_opts[26], opts );
+            char *audio_offset   = obe_get_option( stream_opts[27], opts );
 
             /* AAC options */
-            char *aac_profile = obe_get_option( stream_opts[27], opts );
-            char *aac_encap   = obe_get_option( stream_opts[28], opts );
+            char *aac_profile = obe_get_option( stream_opts[28], opts );
+            char *aac_encap   = obe_get_option( stream_opts[29], opts );
 
             /* MP2 options */
-            char *mp2_mode    = obe_get_option( stream_opts[29], opts );
+            char *mp2_mode    = obe_get_option( stream_opts[30], opts );
 
             /* NB: remap these and the ttx values below if more encoding options are added - TODO: split them up */
-            char *pid         = obe_get_option( stream_opts[30], opts );
-            char *lang        = obe_get_option( stream_opts[31], opts );
-            char *audio_type  = obe_get_option( stream_opts[32], opts );
+            char *pid         = obe_get_option( stream_opts[31], opts );
+            char *lang        = obe_get_option( stream_opts[32], opts );
+            char *audio_type  = obe_get_option( stream_opts[33], opts );
 
             if( input_stream->stream_type == STREAM_TYPE_VIDEO )
             {
@@ -832,15 +833,16 @@ static int set_stream( char *command, obecli_command_t *child )
                 int ref_level = obe_otoi( reference_level, -23 );
                 if( ref_level < 0 && ref_level >= -32 )
                     cli.output_streams[output_stream_id].audio_metadata.ref_level = ref_level;
+                cli.output_streams[output_stream_id].audio_offset = obe_otoi( audio_offset, cli.output_streams[output_stream_id].audio_offset );
             }
             else if( output_stream->stream_format == MISC_TELETEXT ||
                      output_stream->stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
-                char *ttx_lang = obe_get_option( stream_opts[34], opts );
-                char *ttx_type = obe_get_option( stream_opts[35], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[36], opts );
-                char *ttx_page = obe_get_option( stream_opts[37], opts );
+                char *ttx_lang = obe_get_option( stream_opts[35], opts );
+                char *ttx_type = obe_get_option( stream_opts[36], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[37], opts );
+                char *ttx_page = obe_get_option( stream_opts[38], opts );
 
                 FAIL_IF_ERROR( ttx_type && ( check_enum_value( ttx_type, teletext_types ) < 0 ),
                                "Invalid Teletext type\n" );

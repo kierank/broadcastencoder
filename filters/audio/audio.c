@@ -78,6 +78,7 @@ static void *start_filter( void *ptr )
                              split_raw_frame->audio_frame.num_samples, num_channels, split_raw_frame->audio_frame.sample_fmt );
 
             split_raw_frame->release_data = obe_release_audio_data;
+            split_raw_frame->pts += (int64_t)output_stream->audio_offset * OBE_CLOCK/1000;
 
             add_to_encode_queue( h, split_raw_frame, h->encoders[i]->output_stream_id );
         }
