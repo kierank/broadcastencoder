@@ -611,6 +611,28 @@ end:
     free( result.encoder_response );
 }
 
+static void obed__encoder_bitrate_reconfig(Obed__EncoderCommunicate_Service *service,
+                                           const Obed__EncoderBitrateControl *input,
+                                           Obed__EncoderResponse_Closure closure,
+                                           void *closure_data)
+{
+    Obed__EncoderResponse result = OBED__ENCODER_RESPONSE__INIT;
+    obe_output_stream_t *video_stream = &d.output_streams[0];
+
+    if( running )
+    {
+        video_stream->bitrate = input->bitrate;
+        obe_update_stream( d.h, video_stream );
+    }
+
+    result.encoder_response = malloc( 3 );
+    strcpy( result.encoder_response, "OK" );
+    result.encoder_id = encoder_id;
+
+    closure( &result, closure_data );
+    free( result.encoder_response );
+}
+
 static Obed__EncoderCommunicate_Service encoder_communicate = OBED__ENCODER_COMMUNICATE__INIT(obed__);
 
 int main( int argc, char **argv )
