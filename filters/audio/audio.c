@@ -77,6 +77,8 @@ static void *start_filter( void *ptr )
                              &raw_frame->audio_frame.audio_data[((output_stream->sdi_audio_pair-1)<<1)+output_stream->mono_channel], 0, 0,
                              split_raw_frame->audio_frame.num_samples, num_channels, split_raw_frame->audio_frame.sample_fmt );
 
+            split_raw_frame->pts += (int64_t)output_stream->audio_offset * OBE_CLOCK/100;
+
             add_to_encode_queue( h, split_raw_frame, h->encoders[i]->output_stream_id );
         }
 
