@@ -621,7 +621,7 @@ static void obed__encoder_bitrate_reconfig(Obed__EncoderCommunicate_Service *ser
 
     if( running )
     {
-        video_stream->bitrate = input->bitrate;
+        video_stream->avc_param.rc.i_vbv_max_bitrate = video_stream->avc_param.rc.i_bitrate = input->bitrate;
         obe_update_stream( d.h, video_stream );
     }
 
