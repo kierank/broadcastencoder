@@ -244,7 +244,10 @@ void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri )
             udp_opts->buffer_size = strtol( buf, NULL, 10 );
 
         if( av_find_info_tag( buf, sizeof(buf), "iface", p ) )
+        {
+            s->bind_iface = 1;
             strncpy( udp_opts->iface, buf, sizeof(udp_opts->iface) );
+        }
     }
 
     /* fill the dest addr */
