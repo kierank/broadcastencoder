@@ -33,7 +33,8 @@ typedef struct obe_udp_opts_t
     int  ttl;
     int  tos;
     int  buffer_size;
-    int  miface;
+    int  bind_iface;
+    char iface[10];
 } obe_udp_opts_t;
 
 void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri );
