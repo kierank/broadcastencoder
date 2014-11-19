@@ -245,7 +245,7 @@ void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri )
 
         if( av_find_info_tag( buf, sizeof(buf), "iface", p ) )
         {
-            s->bind_iface = 1;
+            udp_opts->bind_iface = 1;
             strncpy( udp_opts->iface, buf, sizeof(udp_opts->iface) );
         }
     }
