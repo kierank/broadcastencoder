@@ -69,8 +69,11 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
     int ret = 0;
     const char *fontfile = "/usr/share/fonts/truetype/droid/DroidSans.ttf";
     char tmp[50];
+    int interlaced = 0;
 
     AVFilter        *buffersink = avfilter_get_by_name( "buffersink" );
+    AVFilter        *interlace = avfilter_get_by_name( "interlace" );
+    AVFilterContext *interlace_ctx = NULL;
     AVFilter        *drawtext = avfilter_get_by_name( "drawtext" );
     AVFilterContext *drawtext_ctx1;
     AVFilterContext *drawtext_ctx2;
@@ -112,11 +115,14 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
     {
         font_size = bars_ctx->format->height == 480 ? 50 : 60;
         smptesrc = avfilter_get_by_name( "smptebars" );
+        interlaced = 1;
     }
     else
     {
         font_size = bars_ctx->format->height == 720 ? 75 : 120;
         smptesrc = avfilter_get_by_name( "smptehdbars" );
+        if( IS_INTERLACED( bars_ctx->format->obe_name ) )
+            interlaced = 1;
     }
 
     /* allocate the filtergraph */
@@ -138,6 +144,9 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
 
     snprintf( tmp, sizeof(tmp), "%ix%i", bars_ctx->format->width, bars_ctx->format->height );
     av_opt_set( smptesrc_ctx, "s", tmp, AV_OPT_SEARCH_CHILDREN );
+
+    snprintf( tmp, sizeof(tmp), "%i/%i", bars_ctx->format->timebase_den * (1+interlaced), bars_ctx->format->timebase_num );
+    av_opt_set( smptesrc_ctx, "rate", tmp, AV_OPT_SEARCH_CHILDREN );
 
     if( avfilter_init_str( smptesrc_ctx, NULL ) < 0 )
     {
@@ -291,6 +300,18 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
         goto end;
     }
 
+    if( interlaced )
+    {
+        /* Interlace filter */
+        interlace_ctx = avfilter_graph_alloc_filter( bars_ctx->v_filter_graph, interlace, "interlace" );
+        if( !interlace_ctx )
+        {
+            fprintf( stderr, "Could not allocate interlace filter \n" );
+            ret = -1;
+            goto end;
+        }
+    }
+
     bars_ctx->v_buffersink_ctx = avfilter_graph_alloc_filter( bars_ctx->v_filter_graph, buffersink, "sink" );
     if( !bars_ctx->v_buffersink_ctx )
     {
@@ -355,7 +376,22 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
         goto end;
     }
 
-    err = avfilter_link( drawtext_ctx5, 0, bars_ctx->v_buffersink_ctx, 0 );
+    AVFilterContext *final;
+    if( interlaced )
+    {
+        err = avfilter_link( drawtext_ctx5, 0, interlace_ctx, 0 );
+        if( err < 0 )
+        {
+            fprintf( stderr, "Could not link filter \n" );
+            ret = -1;
+            goto end;
+        }
+        final = interlace_ctx;
+    }
+    else
+        final = drawtext_ctx5;
+
+    err = avfilter_link( final, 0, bars_ctx->v_buffersink_ctx, 0 );
     if( err < 0 )
     {
         fprintf( stderr, "Could not link filter \n" );

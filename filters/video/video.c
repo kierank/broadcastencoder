@@ -724,8 +724,24 @@ static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stre
         else if( raw_frame->user_data[i].type == USER_DATA_WSS )
             ret = convert_wss_to_afd( &raw_frame->user_data[i], raw_frame );
 
+        /* FIXME: use standard return codes */
         if( ret < 0 )
             break;
+
+        if( ret == 1 )
+        {
+            free( raw_frame->user_data[i].data );
+            memmove( &raw_frame->user_data[i], &raw_frame->user_data[i+1],
+                     sizeof(raw_frame->user_data) * (raw_frame->num_user_data-i-1) );
+            raw_frame->num_user_data--;
+            i--;
+        }
+    }
+
+    if( !raw_frame->num_user_data )
+    {
+        free( raw_frame->user_data );
+        raw_frame->user_data = NULL;
     }
 
     return ret;

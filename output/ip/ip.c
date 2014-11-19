@@ -323,7 +323,7 @@ static int write_fec_packet( hnd_t udp_handle, uint8_t *data, int len )
 static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestamp, int fec_type )
 {
     obe_rtp_ctx *p_rtp = handle;
-    int ret = 0;
+    int ret = 0, enc_ret = 0;
     uint8_t *pkt_ptr = p_rtp->pkt;
 
     /* Throughout this function, don't exit early because the decoder is expecting a sequence number increase
@@ -358,16 +358,16 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
             if( of_create_codec_instance( &p_rtp->ses, OF_CODEC_LDPC_STAIRCASE_STABLE, OF_ENCODER, 2 ) != OF_STATUS_OK )
             {
                 fprintf( stderr, "[rtp] could not create fec encoder instance \n" );
-                ret = -1;
+                enc_ret = -1;
             }
 
             if( of_set_fec_parameters( p_rtp->ses, (of_parameters_t*)&p_rtp->ldpc_params ) != OF_STATUS_OK )
             {
                 fprintf( stderr, "[rtp] could not create fec encoder instance \n" );
-                ret = -1;
+                enc_ret = -1;
             }
 
-            if( ret == 0 )
+            if( enc_ret == 0 )
             {
                 uint64_t snbase = (p_rtp->seq - (p_rtp->ldpc_params.nb_source_symbols-1)) & 0xffff;
                 int n = p_rtp->ldpc_params.nb_source_symbols + p_rtp->ldpc_params.nb_repair_symbols;
