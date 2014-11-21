@@ -10,5 +10,5 @@ Homepage: <insert the upstream URL, if relevant>
 
 Package: obed
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, libtwolame0, libzvbi0, ttf-droid
+Depends: ${shlibs:Depends}, ${misc:Depends}, libtwolame0, libzvbi0, fonts-droid
 Description: OBE D-100 daemon
