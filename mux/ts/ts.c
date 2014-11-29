@@ -32,10 +32,10 @@ static const int mpegts_stream_info[][3] =
 {
     { VIDEO_AVC,   LIBMPEGTS_VIDEO_AVC,      LIBMPEGTS_STREAM_ID_MPEGVIDEO },
     { VIDEO_MPEG2, LIBMPEGTS_VIDEO_MPEG2,    LIBMPEGTS_STREAM_ID_MPEGVIDEO },
-    /* TODO 302M */
     { AUDIO_MP2,   LIBMPEGTS_AUDIO_MPEG1,    LIBMPEGTS_STREAM_ID_MPEGAUDIO },
     { AUDIO_AC_3,  LIBMPEGTS_AUDIO_AC3,      LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { AUDIO_E_AC_3,  LIBMPEGTS_AUDIO_EAC3,   LIBMPEGTS_STREAM_ID_PRIVATE_1 },
+    { AUDIO_302M,    LIBMPEGTS_AUDIO_302M,   LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { AUDIO_AAC,     LIBMPEGTS_AUDIO_ADTS,   LIBMPEGTS_STREAM_ID_MPEGAUDIO },
     { AUDIO_AAC,     LIBMPEGTS_AUDIO_LATM,   LIBMPEGTS_STREAM_ID_MPEGAUDIO },
     { AUDIO_OPUS,    LIBMPEGTS_AUDIO_OPUS,   LIBMPEGTS_STREAM_ID_PRIVATE_1 },
@@ -312,6 +312,14 @@ void *open_muxer( void *ptr )
             if( ts_setup_opus_stream( w, stream->pid, channel_map ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup Opus stream\n" );
+                goto end;
+            }
+        }
+        else if( stream_format == AUDIO_S302M )
+        {
+            if( ts_setup_302m_stream( w, stream->pid, output_stream->bit_depth, output_stream->num_pairs*2 ) < 0 )
+            {
+                fprintf( stderr, "[ts] Could not setup S302M stream\n" );
                 goto end;
             }
         }
