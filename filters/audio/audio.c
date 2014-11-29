@@ -125,7 +125,7 @@ static void *start_filter( void *ptr )
                 memcpy(coded_frame->data, pkt.data, pkt.size);
 
                 coded_frame->pts = raw_frame->video_pts;
-                coded_frame->duration = raw_frame->audio_frame.num_samples * OBE_CLOCK / 48000;
+                coded_frame->duration = raw_frame->video_duration;
                 coded_frame->random_access = 1; /* Every frame output is a random access point */
                 add_to_queue( &h->mux_queue, coded_frame );
             }
