@@ -501,7 +501,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     int anc_lines[DECKLINK_VANC_LINES];
     IDeckLinkVideoFrameAncillary *ancillary;
     BMDTimeValue hardware_time, time_in_frame, ticks_per_frame;
-    int64_t pts;
+    int64_t pts = -1;
 
     if( decklink_opts_->probe_success )
         return S_OK;
@@ -913,6 +913,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         }
 
         raw_frame->pts = av_rescale_q( decklink_ctx->a_counter, decklink_ctx->a_timebase, (AVRational){1, OBE_CLOCK} );
+        if( pts != -1 )
+            raw_frame->video_pts = pts;
         decklink_ctx->a_counter += raw_frame->audio_frame.num_samples;
         raw_frame->release_data = obe_release_audio_data;
         raw_frame->release_frame = obe_release_frame;

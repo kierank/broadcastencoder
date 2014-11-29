@@ -385,6 +385,7 @@ typedef struct
 
     /* Audio */
     obe_audio_frame_t audio_frame;
+    int64_t video_pts; /* PTS of the associate video frame (for SMPTE 302M!) */
     // TODO channel order
     // TODO audio metadata
 
