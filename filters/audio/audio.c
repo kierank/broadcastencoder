@@ -105,7 +105,8 @@ static void *start_filter( void *ptr )
                 pkt.data = NULL;
                 pkt.size = 0;
 
-                while( 1 )
+                got_pkt = 0;
+                while( !got_pkt )
                 {
                     int ret = avcodec_encode_audio2( codec, &pkt, frame, &got_pkt );
                     if( ret < 0 )
@@ -113,9 +114,6 @@ static void *start_filter( void *ptr )
                         syslog( LOG_ERR, "[lavc] Audio encoding failed\n" );
                         goto finish;
                     }
-
-                    if( !got_pkt )
-                        continue;
                 }
 
                 coded_frame = new_coded_frame( h->encoders[i]->output_stream_id, pkt.size );
