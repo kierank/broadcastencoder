@@ -914,7 +914,10 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
         raw_frame->pts = av_rescale_q( decklink_ctx->a_counter, decklink_ctx->a_timebase, (AVRational){1, OBE_CLOCK} );
         if( pts != -1 )
+        {
             raw_frame->video_pts = pts;
+            raw_frame->duration = av_rescale_q( 1, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+        }
         decklink_ctx->a_counter += raw_frame->audio_frame.num_samples;
         raw_frame->release_data = obe_release_audio_data;
         raw_frame->release_frame = obe_release_frame;

@@ -386,6 +386,7 @@ typedef struct
     /* Audio */
     obe_audio_frame_t audio_frame;
     int64_t video_pts; /* PTS of the associate video frame (for SMPTE 302M!) */
+    int64_t video_duration; /* workaround NTSC issues */
     // TODO channel order
     // TODO audio metadata
 
@@ -448,6 +449,9 @@ typedef struct
     int random_access;
     int priority;
     int64_t arrival_time;
+
+    /* 302M audio */
+    int64_t duration;
 
     int len;
     uint8_t *data;

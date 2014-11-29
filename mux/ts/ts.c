@@ -315,14 +315,6 @@ void *open_muxer( void *ptr )
                 goto end;
             }
         }
-        else if( stream_format == AUDIO_S302M )
-        {
-            if( ts_setup_302m_stream( w, stream->pid, output_stream->bit_depth, output_stream->num_pairs*2 ) < 0 )
-            {
-                fprintf( stderr, "[ts] Could not setup S302M stream\n" );
-                goto end;
-            }
-        }
         else if( stream_format == SUBTITLES_DVB )
         {
             memcpy( subtitles.lang_code, input_stream->lang_code, 4 );
@@ -496,6 +488,7 @@ void *open_muxer( void *ptr )
                 {
                     frames[num_frames].dts = coded_frame->pts - first_video_pts + first_video_real_pts;
                     frames[num_frames].pts = coded_frame->pts - first_video_pts + first_video_real_pts;
+                    frames[num_frames].duration = coded_frame->duration;
                 }
 
                 frames[num_frames].dts /= 300;
