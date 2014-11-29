@@ -1432,7 +1432,9 @@ static int start_encode( char *command, obecli_command_t *child )
                 fprintf( stderr, "Output-stream-id %i: Uncompressed audio cannot yet be placed in TS\n", cli.output_streams[i].output_stream_id );
                 return -1;
             }
-            else if( cli.output_streams[i].stream_action == STREAM_ENCODE && !cli.output_streams[i].bitrate )
+            else if( cli.output_streams[i].stream_action == STREAM_ENCODE &&
+                     cli.output_streams[i].stream_format != AUDIO_S302M &&
+                     !cli.output_streams[i].bitrate )
             {
                 fprintf( stderr, "Output-stream-id %i: Audio stream requires bitrate\n", cli.output_streams[i].output_stream_id );
                 return -1;
