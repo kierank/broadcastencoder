@@ -151,7 +151,7 @@ enum stream_formats_e
     AUDIO_MP2,    /* MPEG-1 Layer II */
     AUDIO_AC_3,   /* ATSC A/52B / AC-3 */
     AUDIO_E_AC_3, /* ATSC A/52B Annex E / Enhanced AC-3 */
-//    AUDIO_E_DIST, /* E Distribution Audio */
+    AUDIO_S302M,  /* SMPTE 302M audio */
     AUDIO_AAC,
     AUDIO_OPUS,
 
@@ -455,6 +455,10 @@ typedef struct
 
     /* MP2 */
     int mp2_mode;
+
+    /* 302M */
+    int num_pairs;
+    int bit_depth;
 
     /* DVB-VBI */
     obe_dvb_vbi_opts_t dvb_vbi_opts;
