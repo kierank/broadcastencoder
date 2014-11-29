@@ -98,8 +98,8 @@ static void *start_filter( void *ptr )
                 avcodec_get_frame_defaults( frame );
                 frame->nb_samples = raw_frame->audio_frame.num_samples;
                 frame->linesize[0] = frame->nb_samples * 4;
-                memcpy( frame->data, raw_frame->audio_frame.audio_data[((output_stream->sdi_audio_pair-1)<<1)],
-                        codec->channels * sizeof(frame->data[0]) );
+                for( int i = 0; i < codec->channels; i++ )
+                    frame->data[i] = raw_frame->audio_frame.audio_data[((output_stream->sdi_audio_pair-1)<<1)+i];
 
                 av_init_packet( &pkt );
                 pkt.data = NULL;
