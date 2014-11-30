@@ -828,7 +828,7 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 if( cli.output_streams[output_stream_id].stream_format == AUDIO_S302M )
                 {
-                    cli.output_streams[output_stream_id].num_pairs = obe_otoi( num_pairs, 2 );
+                    cli.output_streams[output_stream_id].num_pairs = obe_otoi( num_pairs, 1 );
                     cli.output_streams[output_stream_id].bit_depth = obe_otoi( bit_depth, 20 );
                 }
 
