@@ -24,6 +24,8 @@
 #include "common/lavc.h"
 #include "audio.h"
 
+#define MAX_SAMPLES 3000
+
 static void *start_filter( void *ptr )
 {
     obe_raw_frame_t *raw_frame, *split_raw_frame;
@@ -68,6 +70,14 @@ static void *start_filter( void *ptr )
         fprintf( stderr, "[302m] Could not allocate frame\n" );
         goto finish;
     }
+    avcodec_get_frame_defaults( frame );
+
+    /* allocate interleaved buffer */
+    if( av_samples_alloc( frame->data, frame->linesize, 8, MAX_SAMPLES, AV_SAMPLE_FMT_S32, 32 ) < 0 )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        goto finish;
+    }
 
     while( 1 )
     {
@@ -95,11 +105,27 @@ static void *start_filter( void *ptr )
             {
                 codec->bits_per_raw_sample = output_stream->bit_depth;
                 codec->channels = output_stream->num_pairs * 2;
-                avcodec_get_frame_defaults( frame );
                 frame->nb_samples = raw_frame->audio_frame.num_samples;
                 frame->linesize[0] = raw_frame->audio_frame.linesize;
-                for( int i = 0; i < codec->channels; i++ )
-                    frame->data[i] = raw_frame->audio_frame.audio_data[((output_stream->sdi_audio_pair-1)<<1)+i];
+
+                uint16_t *dst16 = (uint16_t *)frame->data[0];
+                uint32_t *dst32 = (uint32_t *)frame->data[0];
+                /* Interleave audio (and convert bit-depth if necessary) */
+                for( int j = 0; j < MIN(frame->nb_samples, MAX_SAMPLES); j++)
+                {
+                    for( int k = 0; k < codec->channels; k++ )
+                    {
+                        uint32_t *src = raw_frame->audio_frame.audio_data[((output_stream->sdi_audio_pair-1)<<1)+k];
+                        
+                        if( codec->bits_per_raw_sample == 16 )
+                            dst16[k] = (src[j] >> 16) & 0xffff;
+                        else
+                            dst32[k] = src[j];
+                    }
+
+                    dst16 += codec->channels;
+                    dst32 += codec->channels;
+                }
 
                 av_init_packet( &pkt );
                 pkt.data = NULL;
@@ -143,7 +169,7 @@ static void *start_filter( void *ptr )
                 split_raw_frame->audio_frame.channel_layout = output_stream->channel_layout;
 
                 if( av_samples_alloc( split_raw_frame->audio_frame.audio_data, &split_raw_frame->audio_frame.linesize, num_channels,
-                                      split_raw_frame->audio_frame.num_samples, split_raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
+                                      split_raw_frame->audio_frame.num_samples, split_raw_frame->audio_frame.sample_fmt, 32 ) < 0 )
                 {
                     syslog( LOG_ERR, "Malloc failed\n" );
                     return NULL;
