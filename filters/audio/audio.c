@@ -106,7 +106,6 @@ static void *start_filter( void *ptr )
                 codec->bits_per_raw_sample = output_stream->bit_depth;
                 codec->channels = output_stream->num_pairs * 2;
                 frame->nb_samples = raw_frame->audio_frame.num_samples;
-                frame->linesize[0] = raw_frame->audio_frame.linesize;
 
                 uint16_t *dst16 = (uint16_t *)frame->data[0];
                 uint32_t *dst32 = (uint32_t *)frame->data[0];
