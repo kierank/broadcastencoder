@@ -98,7 +98,7 @@ static const char * stream_opts[] = { "action", "format",
                                       "width", "max-refs", "slices",
 
                                       /* Audio options */
-                                      "sdi-audio-pair", "channel-map", "mono-channel", "ref-level", "audio-offset", "num-pairs", "bit-depth"
+                                      "sdi-audio-pair", "channel-map", "mono-channel", "ref-level", "audio-offset", "num-pairs", "bit-depth",
                                       /* AAC options */
                                       "aac-profile", "aac-encap",
                                       /* MP2 options */
