@@ -550,13 +550,13 @@ static int set_input( char *command, obecli_command_t *child )
         if( audio_connection )
             parse_enum_value( audio_connection, input_audio_connections, &cli.input.audio_connection );
         if( bars_line1 )
-            strncpy( cli.input.bars_line1, bars_line1, sizeof(cli.input.bars_line1) );
+            strncpy( cli.input.bars_line1, bars_line1, sizeof(cli.input.bars_line1) - 1 );
         if( bars_line2 )
-            strncpy( cli.input.bars_line2, bars_line2, sizeof(cli.input.bars_line2) );
+            strncpy( cli.input.bars_line2, bars_line2, sizeof(cli.input.bars_line2) - 1 );
         if( bars_line3 )
-            strncpy( cli.input.bars_line3, bars_line3, sizeof(cli.input.bars_line3) );
+            strncpy( cli.input.bars_line3, bars_line3, sizeof(cli.input.bars_line3) - 1 );
         if( bars_line4 )
-            strncpy( cli.input.bars_line4, bars_line4, sizeof(cli.input.bars_line4) );
+            strncpy( cli.input.bars_line4, bars_line4, sizeof(cli.input.bars_line4) - 1 );
         if( picture_on_loss )
             parse_enum_value( picture_on_loss, picture_on_losses, &cli.input.picture_on_loss );
 
