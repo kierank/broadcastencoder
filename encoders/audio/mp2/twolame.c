@@ -167,6 +167,10 @@ static void *start_encoder( void *ptr )
             av_fifo_generic_write( fifo, output_buf, output_size, NULL );
         }
 
+        raw_frame->release_data( raw_frame );
+        raw_frame->release_frame( raw_frame );
+        remove_from_queue( &encoder->queue );
+
         while( av_fifo_size( fifo ) >= frame_size )
         {
             coded_frame = new_coded_frame( encoder->output_stream_id, frame_size );
