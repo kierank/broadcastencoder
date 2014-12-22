@@ -150,7 +150,7 @@ static void *start_encoder( void *ptr )
         {
             avresample_read( avr, (uint8_t**)&audio_buf, MP2_NUM_SAMPLES );
 
-            output_size = twolame_encode_buffer_float32_interleaved( tl_opts, audio_buf, raw_frame->audio_frame.num_samples, output_buf, MP2_AUDIO_BUFFER_SIZE );
+            output_size = twolame_encode_buffer_float32_interleaved( tl_opts, audio_buf, MP2_NUM_SAMPLES, output_buf, MP2_AUDIO_BUFFER_SIZE );
 
             if( output_size < 0 )
             {
