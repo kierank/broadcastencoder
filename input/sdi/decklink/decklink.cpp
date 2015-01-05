@@ -621,8 +621,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             syslog( LOG_INFO, "inputActivate: Decklink input active" );
         }
 
-        /* If there's no picture-on-loss set the encoder needs to be reset */
-        if( !decklink_opts_->probe && !decklink_opts_->picture_on_loss && decklink_ctx->drop_count )
+        if( !decklink_opts_->probe && decklink_ctx->drop_count )
         {
             pthread_mutex_lock( &h->drop_mutex );
             h->encoder_drop = h->mux_drop = 1;
@@ -898,7 +897,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
     /* TODO: probe SMPTE 337M audio */
 
-    if( audioframe && !decklink_opts_->probe )
+    if( audioframe && videoframe && !decklink_opts_->probe )
     {
         audioframe->GetBytes( &frame_bytes );
         raw_frame = new_raw_frame();
