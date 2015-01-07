@@ -71,7 +71,7 @@ static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", 
 static const char * const picture_on_losses[]        = { "", "bars", "lastframe", "black", 0 };
 static const char * const ttx_locations[]            = { "dvb-ttx", "dvb-vbi", "both", 0 };
 static const char * const stream_actions[]           = { "passthrough", "encode", 0 };
-static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", "e-ac3", "s302m", "aac", "opus", 0 };
+static const char * const encode_formats[]           = { "", "avc", "mpeg2", "", "mp2", "ac3", "e-ac3", "s302m", "aac", "opus", 0 };
 static const char * const frame_packing_modes[]      = { "none", "checkerboard", "column", "row", "side-by-side", "top-bottom", "temporal", 0 };
 static const char * const teletext_types[]           = { "", "initial", "subtitle", "additional-info", "program-schedule", "hearing-imp", 0 };
 static const char * const audio_types[]              = { "undefined", "clean-effects", "hearing-impaired", "visual-impaired", 0 };
@@ -652,6 +652,12 @@ static int set_stream( char *command, obecli_command_t *child )
             char *lang        = obe_get_option( stream_opts[34], opts );
             char *audio_type  = obe_get_option( stream_opts[35], opts );
 
+            FAIL_IF_ERROR( format && ( check_enum_value( format, encode_formats ) < 0 ),
+                          "Invalid stream format\n" );
+
+            if( format )
+                parse_enum_value( format, encode_formats, &cli.output_streams[output_stream_id].stream_format );
+
             if( input_stream->stream_type == STREAM_TYPE_VIDEO )
             {
                 x264_param_t *avc_param = &cli.output_streams[output_stream_id].avc_param;
@@ -664,6 +670,11 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 FAIL_IF_ERROR( frame_packing && ( check_enum_value( frame_packing, frame_packing_modes ) < 0 ),
                                "Invalid frame packing mode\n" )
+
+                if( cli.output_streams[output_stream_id].stream_format == VIDEO_AVC )
+                    avc_param->b_mpeg2 = 0;
+                else if( cli.output_streams[output_stream_id].stream_format == VIDEO_MPEG2 )
+                    avc_param->b_mpeg2 = 1;
 
                 if( aspect_ratio )
                 {
@@ -691,11 +702,9 @@ static int set_stream( char *command, obecli_command_t *child )
                     avc_param->i_width = i_width;
                 }
 
-                /* Set it to encode by default */
-                cli.output_streams[output_stream_id].stream_action = STREAM_ENCODE;
-                cli.output_streams[output_stream_id].stream_format = VIDEO_AVC;
                 avc_param->rc.i_vbv_max_bitrate = obe_otoi( vbv_maxrate, 0 );
                 avc_param->rc.i_vbv_buffer_size = obe_otoi( vbv_bufsize, 0 );
+                // TODO check mpeg-2 vbv sanity
                 avc_param->rc.i_bitrate         = obe_otoi( bitrate, 0 );
                 avc_param->i_keyint_max        = obe_otoi( keyint, avc_param->i_keyint_max );
                 avc_param->rc.i_lookahead      = obe_otoi( lookahead, avc_param->rc.i_lookahead );
@@ -712,6 +721,7 @@ static int set_stream( char *command, obecli_command_t *child )
                 if( profile )
                     parse_enum_value( profile, x264_profile_names, &cli.avc_profile );
 
+                // FIXME MPEG-2 levels
                 if( level )
                 {
                     if( !strcasecmp( level, "1b" ) )
@@ -753,9 +763,6 @@ static int set_stream( char *command, obecli_command_t *child )
                 FAIL_IF_ERROR( action && ( check_enum_value( action, stream_actions ) < 0 ),
                               "Invalid stream action\n" );
 
-                FAIL_IF_ERROR( format && ( check_enum_value( format, encode_formats ) < 0 ),
-                              "Invalid stream format\n" );
-
                 FAIL_IF_ERROR( aac_profile && ( check_enum_value( aac_profile, aac_profiles ) < 0 ),
                               "Invalid aac encapsulation\n" );
 
@@ -780,8 +787,6 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 if( action )
                     parse_enum_value( action, stream_actions, &cli.output_streams[output_stream_id].stream_action );
-                if( format )
-                    parse_enum_value( format, encode_formats, &cli.output_streams[output_stream_id].stream_format );
                 if( audio_type )
                     parse_enum_value( audio_type, audio_types, &cli.output_streams[output_stream_id].ts_opts.audio_type );
                 if( channel_map )
@@ -1418,13 +1423,13 @@ static int start_encode( char *command, obecli_command_t *child )
             if( !cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate && cli.output_streams[i].avc_param.rc.i_bitrate )
                 cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate = cli.output_streams[i].avc_param.rc.i_bitrate;
 
-            cli.output_streams[i].stream_action = STREAM_ENCODE;
-            cli.output_streams[i].stream_format = VIDEO_AVC;
             if( cli.avc_profile >= 0 )
                 x264_param_apply_profile( &cli.output_streams[i].avc_param, x264_profile_names[cli.avc_profile] );
         }
         else if( input_stream && input_stream->stream_type == STREAM_TYPE_AUDIO )
         {
+            // sanity check audio type TODO
+
             if( cli.output_streams[i].stream_action == STREAM_PASSTHROUGH && input_stream->stream_format == AUDIO_PCM &&
                 cli.output_streams[i].stream_format != AUDIO_MP2 && cli.output_streams[i].stream_format != AUDIO_AC_3 &&
                 cli.output_streams[i].stream_format != AUDIO_AAC )
@@ -1546,6 +1551,10 @@ static int set_defaults( void )
             cli.output_streams[i].output_stream_id = cli.program.streams[i].input_stream_id;
             if( cli.program.streams[i].stream_type == STREAM_TYPE_VIDEO )
             {
+                /* Set to encode by default */
+                cli.output_streams[i].stream_action = STREAM_ENCODE;
+                cli.output_streams[i].stream_format = VIDEO_MPEG2;
+                cli.output_streams[i].avc_param.b_mpeg2 = 1;
                 obe_populate_avc_encoder_params( cli.h, cli.program.streams[i].input_stream_id, &cli.output_streams[i].avc_param );
                 cli.output_streams[i].video_anc.cea_608 = cli.output_streams[i].video_anc.cea_708 = 1;
                 cli.output_streams[i].video_anc.afd = cli.output_streams[i].video_anc.wss_to_afd = 1;

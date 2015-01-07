@@ -64,6 +64,24 @@ static const int avc_profiles[][2] =
     { 0, 0 },
 };
 
+static const int mpeg2_profiles[][2] =
+{
+    { 0,  LIBMPEGTS_MPEG2_PROFILE_422 },
+    { 4,  LIBMPEGTS_MPEG2_PROFILE_MAIN },
+    { 5,  LIBMPEGTS_MPEG2_PROFILE_SIMPLE },
+    { -1, -1 },
+};
+
+static const int mpeg2_levels[][2] =
+{
+    { 10, LIBMPEGTS_MPEG2_LEVEL_LOW },
+    { 8,  LIBMPEGTS_MPEG2_LEVEL_MAIN },
+    { 6,  LIBMPEGTS_MPEG2_LEVEL_HIGH_1440 },
+    { 4,  LIBMPEGTS_MPEG2_LEVEL_HIGH },
+    { 2,  LIBMPEGTS_MPEG2_LEVEL_HIGHP },
+    { -1, -1 },
+};
+
 static obe_output_stream_t *get_output_mux_stream( obe_mux_params_t *mux_params, int output_stream_id )
 {
     for( int i = 0; i < mux_params->num_output_streams; i++ )
@@ -210,7 +228,7 @@ void *open_muxer( void *ptr )
             stream->stream_identifier = output_stream->ts_opts.stream_identifier;
         }
 
-        if( stream_format == VIDEO_AVC )
+        if( stream_format == VIDEO_AVC || stream_format == VIDEO_MPEG2 )
         {
             encoder_wait( h, output_stream->output_stream_id );
 
@@ -268,14 +286,31 @@ void *open_muxer( void *ptr )
         else
             stream_format = input_stream->stream_format;
 
-        if( stream_format == VIDEO_AVC )
+        if( stream_format == VIDEO_AVC || stream_format == VIDEO_MPEG2 )
         {
             x264_param_t *p_param = &output_stream->avc_param;
             int j = 0;
-            while( avc_profiles[j][0] && p_param->i_profile != avc_profiles[j][0] )
-                j++;
+            int profile, level;
 
-            if( ts_setup_mpegvideo_stream( w, stream->pid, p_param->i_level_idc, avc_profiles[j][1], 0, 0, 0 ) < 0 )
+            if( stream_format == VIDEO_AVC )
+            {
+                while( avc_profiles[j][0] && p_param->i_profile != avc_profiles[j][0] )
+                    j++;
+                profile = avc_profiles[j][1];
+                level = p_param->i_level_idc;
+            }
+            else
+            {
+                while( mpeg2_profiles[j][0] != -1 && p_param->i_profile != mpeg2_profiles[j][0] )
+                    j++;
+                profile = mpeg2_profiles[j][1];
+                j = 0;
+                while( mpeg2_levels[j][0] != -1 && p_param->i_level_idc != mpeg2_levels[j][0] )
+                    j++;
+                level = mpeg2_levels[j][1];
+            }
+
+            if( ts_setup_mpegvideo_stream( w, stream->pid, level, profile, 0, 0, 0 ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup video stream\n" );
                 goto end;

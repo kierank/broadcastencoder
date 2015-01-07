@@ -97,6 +97,7 @@ int write_608_cc( obe_user_data_t *user_data, obe_int_input_stream_t *input_stre
     const int data_type_code    = 0x03;
     int cc_count                = 0;
     const int echostar_captions = 0;
+    const int mpeg4 = 0;
 
     /* TODO: when MPEG-2 is added make this do the right thing */
     /* FIXME: enable echostar captions and add more types */
@@ -116,8 +117,11 @@ int write_608_cc( obe_user_data_t *user_data, obe_int_input_stream_t *input_stre
 
     bs_init( &r, temp, 1000 );
 
-    /* N.B MPEG-4 only */
-    write_itu_t_codes( &r );
+    if( mpeg4 )
+    {
+        /* N.B MPEG-4 only */
+        write_itu_t_codes( &r );
+    }
 
     if( !echostar_captions )
     {
@@ -189,14 +193,18 @@ static int write_708_cc( obe_user_data_t *user_data, uint8_t *start, int cc_coun
     uint8_t temp[1000];
     const char *user_identifier = "GA94";
     const int data_type_code    = 0x03;
+    const int mpeg4 = 0;
 
     /* TODO: when MPEG-2 is added make this do the right thing */
     /* FIXME: enable echostar captions and add more types */
 
     bs_init( &s, temp, 1000 );
 
-    /* N.B MPEG-4 only */
-    write_itu_t_codes( &s );
+    if( mpeg4 )
+    {
+        /* N.B MPEG-4 only */
+        write_itu_t_codes( &s );
+    }
 
     for( int i = 0; i < 4; i++ )
         bs_write( &s, 8, user_identifier[i] ); // user_identifier
