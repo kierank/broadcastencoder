@@ -794,9 +794,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                     return -1;
                 }
                 raw_frame->buf_ref[1] = NULL;
-
-                raw_frame->release_data = obe_release_bufref;
-                raw_frame->release_frame = obe_release_frame;
             }
             else
             {
@@ -814,13 +811,15 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 }
 
                 memcpy( raw_frame->buf_ref, decklink_ctx->frame->buf, sizeof(decklink_ctx->frame->buf) );
-                raw_frame->release_data = obe_release_bufref;
-                raw_frame->release_frame = obe_release_frame;
 
                 memcpy( raw_frame->alloc_img.stride, decklink_ctx->frame->linesize, sizeof(raw_frame->alloc_img.stride) );
                 memcpy( raw_frame->alloc_img.plane, decklink_ctx->frame->data, sizeof(raw_frame->alloc_img.plane) );
                 raw_frame->alloc_img.csp = (int)decklink_ctx->codec->pix_fmt;
             }
+
+            raw_frame->release_data = obe_release_bufref;
+            raw_frame->release_frame = obe_release_frame;
+            
             raw_frame->alloc_img.planes = av_pix_fmt_descriptors[raw_frame->alloc_img.csp].nb_components;
             raw_frame->alloc_img.format = decklink_opts_->video_format;
 
