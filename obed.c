@@ -208,10 +208,23 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             if( input_opts_in->bars_line4 )
                 strncpy( input_opts_out->bars_line4, input_opts_in->bars_line4, sizeof(input_opts_out->bars_line4) );
             input_opts_out->picture_on_loss = input_opts_in->picture_on_signal_loss;
+            input_opts_out->downscale = input_opts_in->has_sd_downscale && input_opts_in->sd_downscale;
+
+            int bit_depth = OBE_BIT_DEPTH_10;
+            if( input_opts_in->has_sd_downscale && input_opts_in->sd_downscale )
+                bit_depth = OBE_BIT_DEPTH_8;
 
             if( video_opts_in->latency == 1 )
             {
-                if( obe_set_config( d.h, OBE_SYSTEM_TYPE_LOWEST_LATENCY, OBE_BIT_DEPTH_10 ) < 0 )
+                if( obe_set_config( d.h, OBE_SYSTEM_TYPE_LOWEST_LATENCY, bit_depth ) < 0 )
+                {
+                    syslog( LOG_ERR, "Error setting latency" );
+                    goto fail;
+                }
+            }
+            else if( video_opts_in->latency == 2 || video_opts_in->latency == 3 )
+            {
+                if( obe_set_config( d.h, OBE_SYSTEM_TYPE_LOW_LATENCY, bit_depth ) < 0 )
                 {
                     syslog( LOG_ERR, "Error setting latency" );
                     goto fail;
@@ -284,15 +297,23 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 video_stream->avc_param.i_width         = video_opts_in->width;
             video_stream->is_wide                       = video_opts_in->aspect_ratio;
 
-            if( video_opts_in->latency == 1 )
+            if( input_opts_in->has_sd_downscale && input_opts_in->sd_downscale )
             {
-                video_stream->avc_param.b_intra_refresh = 1;
-                video_stream->avc_param.i_threads = 4;
+                video_stream->avc_param.i_width = 720;
+                video_stream->avc_param.i_height = 576;
             }
-            else
+
+            if( video_opts_in->latency == 0 )
             {
                 /* Reduce CPU usage in C-100 */
                 video_stream->avc_param.sc.max_preset = 1;
+            }
+            else if( video_opts_in->latency == 1 || video_opts_in->latency == 2 ||
+                     video_opts_in->latency == 3 )
+            {
+                if( video_opts_in->latency == 1 || video_opts_in->latency == 2 )
+                    video_stream->avc_param.b_intra_refresh = 1;
+                video_stream->avc_param.i_threads = 4;
             }
 
             if( video_opts_in->quality_metric )
