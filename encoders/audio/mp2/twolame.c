@@ -194,7 +194,7 @@ end:
         free( output_buf );
 
     if( audio_buf )
-        av_freep( &audio_buf[0] );
+        av_freep( &audio_buf );
 
     if( avr )
         avresample_free( &avr );
