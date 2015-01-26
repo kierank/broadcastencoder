@@ -85,6 +85,13 @@ static void *start_encoder( void *ptr )
         goto end;
     }
 
+    /* Allocate the output buffer */
+    if( av_samples_alloc( (uint8_t**)&audio_buf, &linesize, 2, MP2_NUM_SAMPLES, AV_SAMPLE_FMT_FLT, 0 ) < 0 )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        goto end;
+    }
+
     avr = avresample_alloc_context();
     if( !avr )
     {
@@ -132,14 +139,6 @@ static void *start_encoder( void *ptr )
         if( cur_pts == -1 )
             cur_pts = raw_frame->pts;
 
-        /* Allocate the output buffer */
-        if( av_samples_alloc( (uint8_t**)&audio_buf, &linesize, av_get_channel_layout_nb_channels( raw_frame->audio_frame.channel_layout ),
-                              raw_frame->audio_frame.linesize, AV_SAMPLE_FMT_FLT, 0 ) < 0 )
-        {
-            syslog( LOG_ERR, "Malloc failed\n" );
-            goto end;
-        }
-
         if( avresample_convert( avr, NULL, 0, raw_frame->audio_frame.num_samples, raw_frame->audio_frame.audio_data,
                                 raw_frame->audio_frame.linesize, raw_frame->audio_frame.num_samples ) < 0 )
         {
@@ -147,30 +146,30 @@ static void *start_encoder( void *ptr )
             break;
         }
 
-        avresample_read( avr, (uint8_t**)&audio_buf, avresample_available( avr ) );
-
-        output_size = twolame_encode_buffer_float32_interleaved( tl_opts, audio_buf, raw_frame->audio_frame.num_samples, output_buf, MP2_AUDIO_BUFFER_SIZE );
-
-        if( output_size < 0 )
+        while( avresample_available( avr ) >= MP2_NUM_SAMPLES )
         {
-            syslog( LOG_ERR, "[twolame] Encode failed\n" );
-            break;
-        }
+            avresample_read( avr, (uint8_t**)&audio_buf, MP2_NUM_SAMPLES );
 
-        free( audio_buf );
-        audio_buf = NULL;
+            output_size = twolame_encode_buffer_float32_interleaved( tl_opts, audio_buf, MP2_NUM_SAMPLES, output_buf, MP2_AUDIO_BUFFER_SIZE );
+
+            if( output_size < 0 )
+            {
+                syslog( LOG_ERR, "[twolame] Encode failed\n" );
+                break;
+            }
+
+            if( av_fifo_realloc2( fifo, av_fifo_size( fifo ) + output_size ) < 0 )
+            {
+                syslog( LOG_ERR, "Malloc failed\n" );
+                break;
+            }
+
+            av_fifo_generic_write( fifo, output_buf, output_size, NULL );
+        }
 
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
         remove_from_queue( &encoder->queue );
-
-        if( av_fifo_realloc2( fifo, av_fifo_size( fifo ) + output_size ) < 0 )
-        {
-            syslog( LOG_ERR, "Malloc failed\n" );
-            break;
-        }
-
-        av_fifo_generic_write( fifo, output_buf, output_size, NULL );
 
         while( av_fifo_size( fifo ) >= frame_size )
         {
@@ -195,7 +194,7 @@ end:
         free( output_buf );
 
     if( audio_buf )
-        free( audio_buf );
+        av_freep( &audio_buf[0] );
 
     if( avr )
         avresample_free( &avr );
