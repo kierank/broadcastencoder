@@ -165,6 +165,7 @@ typedef struct
     int num_channels;
     int probe;
     int picture_on_loss;
+    int downscale;
     obe_bars_opts_t obe_bars_opts;
 
     /* Output */
@@ -404,20 +405,22 @@ public:
             BMDDisplayMode mode_id = p_display_mode->GetDisplayMode();
             syslog( LOG_WARNING, "Video input format changed" );
 
-            if( decklink_ctx->last_frame_time == -1 )
+            for( i = 0; decklink_video_format_tab[i].obe_name != -1; i++ )
             {
-                for( i = 0; decklink_video_format_tab[i].obe_name != -1; i++ )
-                {
-                    if( decklink_video_format_tab[i].bmd_name == mode_id )
-                        break;
-                }
+                if( decklink_video_format_tab[i].obe_name != INPUT_VIDEO_FORMAT_AUTODETECT &&
+                    decklink_video_format_tab[i].bmd_name == mode_id )
+                    break;
+            }
 
-                if( decklink_video_format_tab[i].obe_name == -1 )
-                {
-                    syslog( LOG_WARNING, "Unsupported video format" );
-                    return S_OK;
-                }
+            if( decklink_video_format_tab[i].obe_name == -1 )
+            {
+                syslog( LOG_WARNING, "Unsupported video format" );
+                return S_OK;
+            }
 
+            int pal = IS_PAL( decklink_video_format_tab[i].obe_name );
+            if( decklink_ctx->last_frame_time == -1 || (decklink_opts_->downscale && pal) )
+            {
                 decklink_opts_->video_format = decklink_video_format_tab[i].obe_name;
                 decklink_opts_->timebase_num = decklink_video_format_tab[i].timebase_num;
                 decklink_opts_->timebase_den = decklink_video_format_tab[i].timebase_den;
@@ -1143,6 +1146,9 @@ static int open_card( decklink_opts_t *decklink_opts )
         decklink_opts->video_format = INPUT_VIDEO_FORMAT_PAL;
     }
 
+    if( decklink_opts->downscale && supported )
+        flags = bmdVideoInputEnableFormatDetection;
+
     /* Get the list of display modes. */
     result = decklink_ctx->p_input->GetDisplayModeIterator( &p_display_iterator );
     if( result != S_OK )
@@ -1387,6 +1393,7 @@ static void *probe_stream( void *ptr )
     decklink_opts->video_conn = user_opts->video_connection;
     decklink_opts->audio_conn = user_opts->audio_connection;
     decklink_opts->video_format = user_opts->video_format;
+    decklink_opts->downscale = user_opts->downscale;
 
     decklink_opts->probe = non_display_parser->probe = 1;
 
@@ -1601,6 +1608,7 @@ static void *open_input( void *ptr )
     decklink_opts->audio_conn = user_opts->audio_connection;
     decklink_opts->video_format = user_opts->video_format;
     decklink_opts->picture_on_loss = user_opts->picture_on_loss;
+    decklink_opts->downscale = user_opts->downscale;
 
     decklink_opts->obe_bars_opts.video_format = user_opts->video_format;
     decklink_opts->obe_bars_opts.bars_line1 = user_opts->bars_line1;

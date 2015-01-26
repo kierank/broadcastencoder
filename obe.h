@@ -129,6 +129,7 @@ typedef struct
     char bars_line4[30];
 
     int picture_on_loss;
+    int downscale;
 } obe_input_t;
 
 /**** Stream Formats ****/
@@ -436,6 +437,7 @@ typedef struct
     /* Video */
     int is_wide;
     obe_frame_anc_opts_t video_anc;
+    int downscale;
 
     /* AVC */
     x264_param_t avc_param;

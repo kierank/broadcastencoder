@@ -61,6 +61,7 @@
 #define IS_SD(x) ((x) == INPUT_VIDEO_FORMAT_PAL || (x) == INPUT_VIDEO_FORMAT_NTSC)
 #define IS_INTERLACED(x) (IS_SD(x) || (x) == INPUT_VIDEO_FORMAT_1080I_50 || (x) == INPUT_VIDEO_FORMAT_1080I_5994 )
 #define IS_PROGRESSIVE(x) (!IS_INTERLACED(x))
+#define IS_PAL(x) ((x) == INPUT_VIDEO_FORMAT_PAL || (x) == INPUT_VIDEO_FORMAT_1080I_50)
 
 /* Audio formats */
 #define AC3_NUM_SAMPLES 1536
@@ -304,6 +305,19 @@ const static obe_video_config_t video_format_tab[] =
     { INPUT_VIDEO_FORMAT_1080P_50,                   1,    50,    1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_5994,                 1001, 60000, 1920, 1080, 0 },
     { -1, -1, -1, -1, -1, -1 },
+};
+
+typedef struct
+{
+    int format;
+    int downscale;
+} obe_downscale_t;
+
+const static obe_downscale_t downscale_tab[] =
+{
+    { INPUT_VIDEO_FORMAT_1080I_50,   INPUT_VIDEO_FORMAT_PAL  },
+    { INPUT_VIDEO_FORMAT_1080I_5994, INPUT_VIDEO_FORMAT_NTSC },
+    { -1, -1 },
 };
 
 typedef struct

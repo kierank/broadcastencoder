@@ -81,9 +81,10 @@ static const char * const mp2_modes[]                = { "auto", "stereo", "join
 static const char * const channel_maps[]             = { "", "mono", "stereo", "5.0", "5.1", 0 };
 static const char * const mono_channels[]            = { "left", "right", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "file", 0 };
-static const char * const addable_streams[]          = { "audio", "ttx" };
-static const char * const filter_bit_depths[]        = { "10", "8" };
-static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned", "ldpc-staircase" };
+static const char * const addable_streams[]          = { "audio", "ttx", 0};
+static const char * const filter_bit_depths[]        = { "10", "8", 0 };
+static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned", "ldpc-staircase", 0 };
+static const char * const downscale_types[]          = { "", "fast" };
 
 static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
 static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection",
@@ -95,7 +96,7 @@ static const char * stream_opts[] = { "action", "format",
                                       "vbv-maxrate", "vbv-bufsize", "bitrate",
                                       "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", "weightp",
                                       "interlaced", "tff", "frame-packing", "csp", "filler", "intra-refresh", "aspect-ratio",
-                                      "width", "max-refs", "slices",
+                                      "width", "max-refs", "slices", "downscale",
 
                                       /* Audio options */
                                       "sdi-audio-pair", "channel-map", "mono-channel", "ref-level", "audio-offset", "num-pairs", "bit-depth",
@@ -630,27 +631,28 @@ static int set_stream( char *command, obecli_command_t *child )
             char *width = obe_get_option( stream_opts[20], opts );
             char *max_refs = obe_get_option( stream_opts[21], opts );
             char *slices = obe_get_option( stream_opts[22], opts );
+            char *downscale = obe_get_option( stream_opts[23], opts );
 
             /* Audio Options */
-            char *sdi_audio_pair = obe_get_option( stream_opts[23], opts );
-            char *channel_map    = obe_get_option( stream_opts[24], opts );
-            char *mono_channel   = obe_get_option( stream_opts[25], opts );
-            char *reference_level = obe_get_option( stream_opts[26], opts );
-            char *audio_offset   = obe_get_option( stream_opts[27], opts );
-            char *num_pairs = obe_get_option( stream_opts[28], opts );
-            char *bit_depth = obe_get_option( stream_opts[29], opts );
+            char *sdi_audio_pair = obe_get_option( stream_opts[24], opts );
+            char *channel_map    = obe_get_option( stream_opts[25], opts );
+            char *mono_channel   = obe_get_option( stream_opts[26], opts );
+            char *reference_level = obe_get_option( stream_opts[27], opts );
+            char *audio_offset   = obe_get_option( stream_opts[28], opts );
+            char *num_pairs = obe_get_option( stream_opts[29], opts );
+            char *bit_depth = obe_get_option( stream_opts[30], opts );
 
             /* AAC options */
-            char *aac_profile = obe_get_option( stream_opts[30], opts );
-            char *aac_encap   = obe_get_option( stream_opts[31], opts );
+            char *aac_profile = obe_get_option( stream_opts[31], opts );
+            char *aac_encap   = obe_get_option( stream_opts[32], opts );
 
             /* MP2 options */
-            char *mp2_mode    = obe_get_option( stream_opts[32], opts );
+            char *mp2_mode    = obe_get_option( stream_opts[33], opts );
 
             /* NB: remap these and the ttx values below if more encoding options are added - TODO: split them up */
-            char *pid         = obe_get_option( stream_opts[33], opts );
-            char *lang        = obe_get_option( stream_opts[34], opts );
-            char *audio_type  = obe_get_option( stream_opts[35], opts );
+            char *pid         = obe_get_option( stream_opts[34], opts );
+            char *lang        = obe_get_option( stream_opts[35], opts );
+            char *audio_type  = obe_get_option( stream_opts[36], opts );
 
             if( input_stream->stream_type == STREAM_TYPE_VIDEO )
             {
@@ -664,6 +666,9 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 FAIL_IF_ERROR( frame_packing && ( check_enum_value( frame_packing, frame_packing_modes ) < 0 ),
                                "Invalid frame packing mode\n" )
+    
+                FAIL_IF_ERROR( downscale && ( check_enum_value( downscale, downscale_types ) < 0 ),
+                               "Invalid downscale type\n" )
 
                 if( aspect_ratio )
                 {
@@ -737,6 +742,9 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 if( filler )
                     avc_param->i_nal_hrd = obe_otob( filler, 0 ) ? X264_NAL_HRD_FAKE_CBR : X264_NAL_HRD_FAKE_VBR;
+
+                if( downscale )
+                    parse_enum_value( downscale, downscale_types, &cli.output_streams[output_stream_id].downscale );
 
                 /* Turn on the 3DTV mux option automatically */
                 if( avc_param->i_frame_packing >= 0 )
@@ -848,10 +856,10 @@ static int set_stream( char *command, obecli_command_t *child )
                      output_stream->stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
-                char *ttx_lang = obe_get_option( stream_opts[37], opts );
-                char *ttx_type = obe_get_option( stream_opts[38], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[39], opts );
-                char *ttx_page = obe_get_option( stream_opts[40], opts );
+                char *ttx_lang = obe_get_option( stream_opts[38], opts );
+                char *ttx_type = obe_get_option( stream_opts[39], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[40], opts );
+                char *ttx_page = obe_get_option( stream_opts[41], opts );
 
                 FAIL_IF_ERROR( ttx_type && ( check_enum_value( ttx_type, teletext_types ) < 0 ),
                                "Invalid Teletext type\n" );
@@ -880,10 +888,10 @@ static int set_stream( char *command, obecli_command_t *child )
                 if( output_stream->stream_format == VBI_RAW )
                 {
                     obe_dvb_vbi_opts_t *vbi_opts = &cli.output_streams[output_stream_id].dvb_vbi_opts;
-                    char *vbi_ttx = obe_get_option( stream_opts[39], opts );
-                    char *vbi_inv_ttx = obe_get_option( stream_opts[40], opts );
-                    char *vbi_vps  = obe_get_option( stream_opts[41], opts );
-                    char *vbi_wss = obe_get_option( stream_opts[42], opts );
+                    char *vbi_ttx = obe_get_option( stream_opts[40], opts );
+                    char *vbi_inv_ttx = obe_get_option( stream_opts[41], opts );
+                    char *vbi_vps  = obe_get_option( stream_opts[42], opts );
+                    char *vbi_wss = obe_get_option( stream_opts[43], opts );
 
                     vbi_opts->ttx = obe_otob( vbi_ttx, vbi_opts->ttx );
                     vbi_opts->inverted_ttx = obe_otob( vbi_inv_ttx, vbi_opts->inverted_ttx );
@@ -1417,6 +1425,13 @@ static int start_encode( char *command, obecli_command_t *child )
 
             if( !cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate && cli.output_streams[i].avc_param.rc.i_bitrate )
                 cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate = cli.output_streams[i].avc_param.rc.i_bitrate;
+
+            /* FIXME support NTSC */
+            if( cli.output_streams[i].downscale )
+            {
+                 cli.output_streams[i].avc_param.i_width = 720;
+                 cli.output_streams[i].avc_param.i_height = 576;
+            }
 
             cli.output_streams[i].stream_action = STREAM_ENCODE;
             cli.output_streams[i].stream_format = VIDEO_AVC;
