@@ -199,7 +199,7 @@ finish:
         av_freep( &frame->data );
 
     if( codec )
-        avcodec_free_context( codec );
+        avcodec_free_context( &codec );
 
     free( filter_params );
 
