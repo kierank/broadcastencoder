@@ -315,7 +315,7 @@ finish:
     if( codec )
     {
         avcodec_close( codec );
-        av_free( codec );
+        avcodec_free_context( codec );
     }
 
     free( enc_params );
