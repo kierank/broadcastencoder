@@ -313,7 +313,7 @@ finish:
         avresample_free( &avr );
 
     if( codec )
-        avcodec_free_context( codec );
+        avcodec_free_context( &codec );
 
     free( enc_params );
 
