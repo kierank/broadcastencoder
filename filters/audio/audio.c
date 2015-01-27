@@ -192,6 +192,17 @@ static void *start_filter( void *ptr )
     }
 
 finish:
+    if( frame )
+       avcodec_free_frame( &frame );
+
+    if( frame->data )
+        av_freep( &frame->data );
+
+    if( codec )
+    {
+        avcodec_close( codec );
+        avcodec_free_context( codec );
+    }
 
     free( filter_params );
 
