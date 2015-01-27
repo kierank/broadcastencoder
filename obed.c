@@ -432,9 +432,10 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 output_dst->target = strdup( tmp );
                 if( !output_dst->target )
                     goto fail;
-                output_dst->fec_type = output_opts_in->fec_type;
                 if( output_opts_in->fec_type > 0 )
                 {
+                    /* Offset by 1 */
+                    output_dst->fec_type = output_opts_in->fec_type-1;
                     output_dst->fec_columns = output_opts_in->fec_columns;
                     output_dst->fec_rows = output_opts_in->fec_rows;
                 }
