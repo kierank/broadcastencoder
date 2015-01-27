@@ -301,7 +301,7 @@ static void *start_encoder( void *ptr )
 
 finish:
     if( frame )
-       avcodec_free_frame( &frame );
+       av_frame_free( &frame );
 
     if( audio_planes[0] )
         av_free( audio_planes[0] );
@@ -313,10 +313,7 @@ finish:
         avresample_free( &avr );
 
     if( codec )
-    {
-        avcodec_close( codec );
         avcodec_free_context( codec );
-    }
 
     free( enc_params );
 
