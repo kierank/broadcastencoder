@@ -6,7 +6,7 @@ stop on run level [!2345]
 console log
 
 pre-start script
-    for i in `seq 0 3`; do
+    for i in `seq 0 7`; do
         start obed-worker id=$i || true
     done
 end script
