@@ -32,10 +32,10 @@ static const int mpegts_stream_info[][3] =
 {
     { VIDEO_AVC,   LIBMPEGTS_VIDEO_AVC,      LIBMPEGTS_STREAM_ID_MPEGVIDEO },
     { VIDEO_MPEG2, LIBMPEGTS_VIDEO_MPEG2,    LIBMPEGTS_STREAM_ID_MPEGVIDEO },
-    /* TODO 302M */
     { AUDIO_MP2,   LIBMPEGTS_AUDIO_MPEG1,    LIBMPEGTS_STREAM_ID_MPEGAUDIO },
     { AUDIO_AC_3,  LIBMPEGTS_AUDIO_AC3,      LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { AUDIO_E_AC_3,  LIBMPEGTS_AUDIO_EAC3,   LIBMPEGTS_STREAM_ID_PRIVATE_1 },
+    { AUDIO_S302M,   LIBMPEGTS_AUDIO_302M,   LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { AUDIO_AAC,     LIBMPEGTS_AUDIO_ADTS,   LIBMPEGTS_STREAM_ID_MPEGAUDIO },
     { AUDIO_AAC,     LIBMPEGTS_AUDIO_LATM,   LIBMPEGTS_STREAM_ID_MPEGAUDIO },
     { AUDIO_OPUS,    LIBMPEGTS_AUDIO_OPUS,   LIBMPEGTS_STREAM_ID_PRIVATE_1 },
@@ -488,6 +488,7 @@ void *open_muxer( void *ptr )
                 {
                     frames[num_frames].dts = coded_frame->pts - first_video_pts + first_video_real_pts;
                     frames[num_frames].pts = coded_frame->pts - first_video_pts + first_video_real_pts;
+                    frames[num_frames].duration = coded_frame->duration;
                 }
 
                 frames[num_frames].dts /= 300;

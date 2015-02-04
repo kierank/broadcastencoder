@@ -470,6 +470,7 @@ int get_bars( hnd_t ptr, obe_raw_frame_t **raw_frames )
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
 
     memcpy( raw_frame->buf_ref, bars_ctx->frame->buf, sizeof(bars_ctx->frame->buf) );
+    memset( &bars_ctx->frame->buf, 0, sizeof(bars_ctx->frame->buf) );
 
     raw_frame->release_data = obe_release_bufref;
     raw_frame->release_frame = obe_release_frame;
@@ -510,6 +511,8 @@ int get_bars( hnd_t ptr, obe_raw_frame_t **raw_frames )
         raw_frame->audio_frame.audio_data[i] = raw_frame->audio_frame.audio_data[0];
 
     raw_frame->pts = av_rescale_q( bars_ctx->audio_samples, (AVRational){1, 48000}, (AVRational){1, OBE_CLOCK} );
+    raw_frame->video_pts = raw_frames[0]->pts;
+    raw_frame->video_duration = av_rescale_q( 1, (AVRational){format->timebase_num, format->timebase_den}, (AVRational){1, OBE_CLOCK} );
     raw_frame->release_data = obe_release_audio_data;
     raw_frame->release_frame = obe_release_frame;
     raw_frames[1] = raw_frame;
@@ -525,6 +528,7 @@ void close_bars( hnd_t ptr )
     bars_ctx_t *bars_ctx = ptr;
 
     avfilter_graph_free( &bars_ctx->v_filter_graph );
+    av_frame_free( &bars_ctx->frame );
     free( bars_ctx );
     ptr = NULL;
 }

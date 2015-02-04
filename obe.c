@@ -1222,10 +1222,10 @@ int obe_start( obe_t *h )
                 /* Choose the optimal number of audio frames per PES
                  * TODO: This should be set after the encoder has told us the frame size */
                 if( !h->output_streams[i].ts_opts.frames_per_pes && h->obe_system == OBE_SYSTEM_TYPE_GENERIC &&
-                    h->output_streams[i].stream_format != AUDIO_E_AC_3 )
+                     h->output_streams[i].stream_format != AUDIO_E_AC_3 && h->output_streams[i].stream_format != AUDIO_S302M )
                 {
                     int buf_size = h->output_streams[i].stream_format == AUDIO_MP2 ||
-                                   h->output_streams[i].stream_format == AUDIO_AAC ||
+                                   h->output_streams[i].stream_format == AUDIO_AAC  ||
                                    h->output_streams[i].stream_format == AUDIO_OPUS ? MISC_AUDIO_BS : AC3_BS_DVB;
                     if( buf_size == AC3_BS_DVB && ( h->mux_opts.ts_type == OBE_TS_TYPE_CABLELABS || h->mux_opts.ts_type == OBE_TS_TYPE_ATSC ) )
                         buf_size = AC3_BS_ATSC;
@@ -1240,7 +1240,8 @@ int obe_start( obe_t *h )
                 else
                     h->output_streams[i].ts_opts.frames_per_pes = aud_enc_params->frames_per_pes = 1;
 
-                if( pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, audio_encoder.start_encoder, (void*)aud_enc_params ) < 0 )
+                if( h->output_streams[i].stream_format != AUDIO_S302M &&
+                    pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, audio_encoder.start_encoder, (void*)aud_enc_params ) < 0 )
                 {
                     fprintf( stderr, "Couldn't create encode thread \n" );
                     goto fail;

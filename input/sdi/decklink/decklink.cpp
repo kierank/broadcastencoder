@@ -165,6 +165,7 @@ typedef struct
     int num_channels;
     int probe;
     int picture_on_loss;
+    int downscale;
     obe_bars_opts_t obe_bars_opts;
 
     /* Output */
@@ -404,20 +405,22 @@ public:
             BMDDisplayMode mode_id = p_display_mode->GetDisplayMode();
             syslog( LOG_WARNING, "Video input format changed" );
 
-            if( decklink_ctx->last_frame_time == -1 )
+            for( i = 0; decklink_video_format_tab[i].obe_name != -1; i++ )
             {
-                for( i = 0; decklink_video_format_tab[i].obe_name != -1; i++ )
-                {
-                    if( decklink_video_format_tab[i].bmd_name == mode_id )
-                        break;
-                }
+                if( decklink_video_format_tab[i].obe_name != INPUT_VIDEO_FORMAT_AUTODETECT &&
+                    decklink_video_format_tab[i].bmd_name == mode_id )
+                    break;
+            }
 
-                if( decklink_video_format_tab[i].obe_name == -1 )
-                {
-                    syslog( LOG_WARNING, "Unsupported video format" );
-                    return S_OK;
-                }
+            if( decklink_video_format_tab[i].obe_name == -1 )
+            {
+                syslog( LOG_WARNING, "Unsupported video format" );
+                return S_OK;
+            }
 
+            int pal = IS_PAL( decklink_video_format_tab[i].obe_name );
+            if( decklink_ctx->last_frame_time == -1 || (decklink_opts_->downscale && pal) )
+            {
                 decklink_opts_->video_format = decklink_video_format_tab[i].obe_name;
                 decklink_opts_->timebase_num = decklink_video_format_tab[i].timebase_num;
                 decklink_opts_->timebase_den = decklink_video_format_tab[i].timebase_den;
@@ -501,7 +504,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     int anc_lines[DECKLINK_VANC_LINES];
     IDeckLinkVideoFrameAncillary *ancillary;
     BMDTimeValue hardware_time, time_in_frame, ticks_per_frame;
-    int64_t pts;
+    int64_t pts = -1;
 
     if( decklink_opts_->probe_success )
         return S_OK;
@@ -808,9 +811,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                     return -1;
                 }
                 raw_frame->buf_ref[1] = NULL;
-
-                raw_frame->release_data = obe_release_bufref;
-                raw_frame->release_frame = obe_release_frame;
             }
             else
             {
@@ -828,13 +828,15 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 }
 
                 memcpy( raw_frame->buf_ref, decklink_ctx->frame->buf, sizeof(decklink_ctx->frame->buf) );
-                raw_frame->release_data = obe_release_bufref;
-                raw_frame->release_frame = obe_release_frame;
 
                 memcpy( raw_frame->alloc_img.stride, decklink_ctx->frame->linesize, sizeof(raw_frame->alloc_img.stride) );
                 memcpy( raw_frame->alloc_img.plane, decklink_ctx->frame->data, sizeof(raw_frame->alloc_img.plane) );
                 raw_frame->alloc_img.csp = (int)decklink_ctx->codec->pix_fmt;
             }
+
+            raw_frame->release_data = obe_release_bufref;
+            raw_frame->release_frame = obe_release_frame;
+            
             raw_frame->alloc_img.planes = av_pix_fmt_descriptors[raw_frame->alloc_img.csp].nb_components;
             raw_frame->alloc_img.format = decklink_opts_->video_format;
 
@@ -926,6 +928,11 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         }
 
         raw_frame->pts = av_rescale_q( decklink_ctx->a_counter, decklink_ctx->a_timebase, (AVRational){1, OBE_CLOCK} );
+        if( pts != -1 )
+        {
+            raw_frame->video_pts = pts;
+            raw_frame->video_duration = av_rescale_q( 1, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+        }
         decklink_ctx->a_counter += raw_frame->audio_frame.num_samples;
         raw_frame->release_data = obe_release_audio_data;
         raw_frame->release_frame = obe_release_frame;
@@ -1152,6 +1159,9 @@ static int open_card( decklink_opts_t *decklink_opts )
             flags = bmdVideoInputEnableFormatDetection;
         decklink_opts->video_format = INPUT_VIDEO_FORMAT_PAL;
     }
+
+    if( decklink_opts->downscale && supported )
+        flags = bmdVideoInputEnableFormatDetection;
 
     /* Get the list of display modes. */
     result = decklink_ctx->p_input->GetDisplayModeIterator( &p_display_iterator );
@@ -1397,6 +1407,7 @@ static void *probe_stream( void *ptr )
     decklink_opts->video_conn = user_opts->video_connection;
     decklink_opts->audio_conn = user_opts->audio_connection;
     decklink_opts->video_format = user_opts->video_format;
+    decklink_opts->downscale = user_opts->downscale;
 
     decklink_opts->probe = non_display_parser->probe = 1;
 
@@ -1611,6 +1622,7 @@ static void *open_input( void *ptr )
     decklink_opts->audio_conn = user_opts->audio_connection;
     decklink_opts->video_format = user_opts->video_format;
     decklink_opts->picture_on_loss = user_opts->picture_on_loss;
+    decklink_opts->downscale = user_opts->downscale;
 
     decklink_opts->obe_bars_opts.video_format = user_opts->video_format;
     decklink_opts->obe_bars_opts.bars_line1 = user_opts->bars_line1;

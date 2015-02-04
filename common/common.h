@@ -61,6 +61,7 @@
 #define IS_SD(x) ((x) == INPUT_VIDEO_FORMAT_PAL || (x) == INPUT_VIDEO_FORMAT_NTSC)
 #define IS_INTERLACED(x) (IS_SD(x) || (x) == INPUT_VIDEO_FORMAT_1080I_50 || (x) == INPUT_VIDEO_FORMAT_1080I_5994 )
 #define IS_PROGRESSIVE(x) (!IS_INTERLACED(x))
+#define IS_PAL(x) ((x) == INPUT_VIDEO_FORMAT_PAL || (x) == INPUT_VIDEO_FORMAT_1080I_50)
 
 /* Audio formats */
 #define AC3_NUM_SAMPLES 1536
@@ -311,6 +312,19 @@ const static obe_video_config_t video_format_tab[] =
 typedef struct
 {
     int format;
+    int downscale;
+} obe_downscale_t;
+
+const static obe_downscale_t downscale_tab[] =
+{
+    { INPUT_VIDEO_FORMAT_1080I_50,   INPUT_VIDEO_FORMAT_PAL  },
+    { INPUT_VIDEO_FORMAT_1080I_5994, INPUT_VIDEO_FORMAT_NTSC },
+    { -1, -1 },
+};
+
+typedef struct
+{
+    int format;
     int pattern[MAX_AUDIO_SAMPLE_PATTERN];
     int max;
     int mod;
@@ -387,6 +401,8 @@ typedef struct
 
     /* Audio */
     obe_audio_frame_t audio_frame;
+    int64_t video_pts; /* PTS of the associate video frame (for SMPTE 302M!) */
+    int64_t video_duration; /* workaround NTSC issues */
     // TODO channel order
     // TODO audio metadata
 
@@ -449,6 +465,9 @@ typedef struct
     int random_access;
     int priority;
     int64_t arrival_time;
+
+    /* 302M audio */
+    int64_t duration;
 
     int len;
     uint8_t *data;

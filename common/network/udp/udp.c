@@ -246,7 +246,7 @@ void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri )
         if( av_find_info_tag( buf, sizeof(buf), "iface", p ) )
         {
             udp_opts->bind_iface = 1;
-            strncpy( udp_opts->iface, buf, sizeof(udp_opts->iface) );
+            strncpy( udp_opts->iface, buf, sizeof(udp_opts->iface) - 1 );
         }
     }
 
@@ -273,7 +273,7 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
     s->tos = udp_opts->tos;
     s->buffer_size = udp_opts->buffer_size;
     s->bind_iface = udp_opts->bind_iface;
-    strncpy( s->iface, udp_opts->iface, sizeof(s->iface) );
+    strncpy( s->iface, udp_opts->iface, sizeof(s->iface) - 1 );
 
     if( udp_set_remote_url( s ) < 0 )
         goto fail;
