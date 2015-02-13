@@ -150,7 +150,7 @@ static int udp_socket_create( obe_udp_ctx *s, struct sockaddr_storage *addr, int
         goto fail;
     for( res = res0; res; res=res->ai_next )
     {
-        udp_fd = socket( res->ai_family, SOCK_DGRAM | SOCK_NONBLOCK, 0 );
+        udp_fd = socket( res->ai_family, SOCK_DGRAM, 0 );
         if( udp_fd > 0 )
             break;
         // TODO error
