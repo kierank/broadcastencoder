@@ -140,9 +140,6 @@ static void *start_encoder( void *ptr )
     pthread_cond_broadcast( &encoder->queue.in_cv );
     pthread_mutex_unlock( &encoder->queue.mutex );
 
-    // FIXME stream_id might not be zero always
-    stream = get_input_stream( h, 0 );
-
     while( 1 )
     {
         pthread_mutex_lock( &encoder->queue.mutex );
@@ -196,21 +193,20 @@ static void *start_encoder( void *ptr )
         pts2[0] = raw_frame->pts;
         pic.opaque = pts2;
         pic.param = NULL;
-        pic.b_tff = stream->tff;
 
         /* If the AFD has changed, then change the SAR. x264 will write the SAR at the next keyframe
          * TODO: allow user to force keyframes in order to be frame accurate */
-        if( enc_params->avc_param.b_mpeg2 )
+        if( param->b_mpeg2 )
         {
             int mpeg2_dar = raw_frame->is_wide ? X264_MPEG2_DAR_169 : X264_MPEG2_DAR_43;
-            if( mpeg2_dar != enc_params->avc_param.vui.i_aspect_ratio_information )
+            if( mpeg2_dar != param->vui.i_aspect_ratio_information )
             {
-                enc_params->avc_param.vui.i_aspect_ratio_information = mpeg2_dar;
-                pic.param = &enc_params->avc_param;
+                param->vui.i_aspect_ratio_information = mpeg2_dar;
+                pic.param = param;
             }
         }
-        else if( raw_frame->sar_width  != enc_params->avc_param.vui.i_sar_width ||
-                 raw_frame->sar_height != enc_params->avc_param.vui.i_sar_height )
+        else if( raw_frame->sar_width  != param->vui.i_sar_width ||
+                 raw_frame->sar_height != param->vui.i_sar_height )
         {
             param->vui.i_sar_width  = raw_frame->sar_width;
             param->vui.i_sar_height = raw_frame->sar_height;
