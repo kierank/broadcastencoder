@@ -22,7 +22,10 @@
  */
 
 #include <libavutil/cpu.h>
-#include <libswscale/swscale.h>
+#include <libavutil/opt.h>
+#include <libavfilter/avfiltergraph.h>
+#include <libavfilter/buffersink.h>
+#include <libavfilter/buffersrc.h>
 #include "common/common.h"
 #include "common/bitstream.h"
 #include "video.h"
@@ -42,13 +45,18 @@ typedef struct
     void (*scale_plane)( uint16_t *src, int stride, int width, int height, int lshift, int rshift );
 
     /* resize */
-    int sws_ctx_flags; /* shared between both contexts */
-    struct SwsContext *sws_ctx_10;
-    enum PixelFormat dst_pix_fmt_10;
-
-    enum PixelFormat src_pix_fmt_8;
-    struct SwsContext *sws_ctx_8;
-    enum PixelFormat dst_pix_fmt_8;
+    int src_width;
+    int src_height;
+    int src_csp;
+    int dst_width;
+    int dst_height;
+    int dst_csp;
+    AVFilterGraph   *resize_filter_graph;
+    AVFilterContext *buffersrc_ctx;
+    AVFilterContext *resize_ctx;
+    AVFilterContext *format_ctx;
+    AVFilterContext *buffersink_ctx;
+    AVFrame *frame;
 
     /* downsample */
     void (*downsample_chroma_fields_8)( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
@@ -304,6 +312,175 @@ static void init_filter( obe_t *h, obe_vid_filter_ctx_t *vfilt )
     }
 }
 
+static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt,
+                             obe_output_stream_t *output_stream, obe_raw_frame_t *raw_frame )
+{
+    char tmp[1024];
+    int ret = 0;
+    int interlaced = 0;
+
+    if( vfilt->resize_filter_graph )
+    {
+        avfilter_graph_free( &vfilt->resize_filter_graph );
+        vfilt->resize_filter_graph = NULL;
+    }
+
+    if( !vfilt->frame )
+    {
+        vfilt->frame = av_frame_alloc();
+        if( !vfilt->frame )
+        {
+            fprintf( stderr, "Could not allocate input frame \n" );
+            ret = -1;
+            goto end;
+        }
+    }
+
+    /* Setup destination parameters */
+    vfilt->src_width = raw_frame->img.width;
+    vfilt->src_height = raw_frame->img.height;
+    vfilt->src_csp = raw_frame->img.csp;
+
+    /* Resize filter graph */
+    vfilt->resize_filter_graph = avfilter_graph_alloc();
+    if( !vfilt->resize_filter_graph )
+    {
+        fprintf( stderr, "Could not allocate filter graph \n" );
+        ret = -1;
+        goto end;
+    }
+
+    vfilt->buffersrc_ctx = avfilter_graph_alloc_filter( vfilt->resize_filter_graph, avfilter_get_by_name( "buffer" ), "src" );
+    if( !vfilt->buffersrc_ctx )
+    {
+        syslog( LOG_ERR, "Failed to create buffersrc\n" );
+        ret = -1;
+        goto end;
+    }
+
+    /* buffersrc flags */
+    snprintf( tmp, sizeof(tmp), "%i", raw_frame->img.width );
+    av_opt_set( vfilt->buffersrc_ctx, "width", tmp, AV_OPT_SEARCH_CHILDREN );
+
+    snprintf( tmp, sizeof(tmp), "%i", raw_frame->img.height );
+    av_opt_set( vfilt->buffersrc_ctx, "height", tmp, AV_OPT_SEARCH_CHILDREN );
+
+    snprintf( tmp, sizeof(tmp), "%s", av_get_pix_fmt_name( raw_frame->img.csp ) );
+    av_opt_set( vfilt->buffersrc_ctx, "pix_fmt", tmp, AV_OPT_SEARCH_CHILDREN );
+
+    /* We don't care too much about this */
+    snprintf( tmp, sizeof(tmp), "%i/%i", 1, 27000000 );
+    av_opt_set( vfilt->buffersrc_ctx, "time_base", tmp, AV_OPT_SEARCH_CHILDREN );
+
+    if( avfilter_init_str( vfilt->buffersrc_ctx, NULL ) < 0 )
+    {
+        fprintf( stderr, "Could not init source \n" );
+        ret = -1;
+        goto end;
+    }
+
+    vfilt->resize_ctx = avfilter_graph_alloc_filter( vfilt->resize_filter_graph, avfilter_get_by_name( "scale" ), "scale" );
+    if( !vfilt->resize_ctx )
+    {
+        syslog( LOG_ERR, "Failed to create scaler\n" );
+        ret = -1;
+        goto end;
+    }
+
+    /* swscale flags */
+    interlaced = IS_INTERLACED( raw_frame->img.format );
+
+    /* Pretend the video is progressive if it's just a horizontal resize */
+    if( raw_frame->img.height == output_stream->avc_param.i_height )
+        interlaced = 0;
+
+    /* Use decent settings if not default */
+    if( !output_stream->downscale )
+    {
+        const char *sws_flags = "sws_flags=lanczos,accurate_rnd,full_chroma_int,bitexact";
+        av_opt_set( vfilt->resize_ctx, "sws_flags", sws_flags, AV_OPT_SEARCH_CHILDREN );
+    }
+
+    snprintf( tmp, sizeof(tmp), "%i", interlaced );
+    av_opt_set( vfilt->resize_ctx, "interl", tmp, AV_OPT_SEARCH_CHILDREN );
+
+    snprintf( tmp, sizeof(tmp), "%i", output_stream->avc_param.i_width );
+    av_opt_set( vfilt->resize_ctx, "width", tmp, AV_OPT_SEARCH_CHILDREN );
+
+    snprintf( tmp, sizeof(tmp), "%i", output_stream->avc_param.i_height );
+    av_opt_set( vfilt->resize_ctx, "height", tmp, AV_OPT_SEARCH_CHILDREN );
+
+    vfilt->format_ctx = avfilter_graph_alloc_filter( vfilt->resize_filter_graph, avfilter_get_by_name( "format" ), "format" );
+    if( !vfilt->format_ctx )
+    {
+        syslog( LOG_ERR, "Failed to create format\n" );
+        ret = -1;
+        goto end;
+    }
+
+    if( IS_PROGRESSIVE( raw_frame->img.format ) )
+        vfilt->dst_csp = h->filter_bit_depth == OBE_BIT_DEPTH_8 ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_YUV420P10;
+    else
+        vfilt->dst_csp = h->filter_bit_depth == OBE_BIT_DEPTH_8 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV422P10;
+
+    av_opt_set( vfilt->format_ctx, "pix_fmts", av_get_pix_fmt_name( vfilt->dst_csp ), AV_OPT_SEARCH_CHILDREN );
+
+    if( avfilter_init_str( vfilt->format_ctx, NULL ) < 0 )
+    {
+        fprintf( stderr, "Could not init format \n" );
+        ret = -1;
+        goto end;
+    }
+
+    vfilt->buffersink_ctx = avfilter_graph_alloc_filter( vfilt->resize_filter_graph, avfilter_get_by_name( "buffersink" ), "sink" );
+    if( !vfilt->buffersink_ctx )
+    {
+        syslog( LOG_ERR, "Failed to create buffersink\n" );
+        ret = -1;
+        goto end;
+    }
+
+    if( avfilter_init_str( vfilt->buffersink_ctx, NULL ) < 0 )
+    {
+        fprintf( stderr, "Could not init buffersink \n" );
+        ret = -1;
+        goto end;
+    }
+
+    ret = avfilter_link( vfilt->buffersrc_ctx, 0, vfilt->resize_ctx, 0 );
+    if( ret < 0 )
+    {
+        syslog( LOG_ERR, "Failed to link filter chain\n" );
+        goto end;
+    }
+
+    ret = avfilter_link( vfilt->resize_ctx, 0, vfilt->format_ctx, 0 );
+    if( ret < 0 )
+    {
+        syslog( LOG_ERR, "Failed to link filter chain\n" );
+        goto end;
+    }
+
+    ret = avfilter_link( vfilt->format_ctx, 0, vfilt->buffersink_ctx, 0 );
+    if( ret < 0 )
+    {
+        syslog( LOG_ERR, "Failed to link filter chain\n" );
+        goto end;
+    }
+
+    /* Configure the graph. */
+    ret = avfilter_graph_config( vfilt->resize_filter_graph, NULL );
+    if( ret < 0 )
+    {
+        syslog( LOG_ERR, "Failed to configure filter chain\n" );
+        goto end;
+    }
+
+end:
+
+    return ret;
+}
+
 static void blank_line( uint16_t *y, uint16_t *u, uint16_t *v, int width )
 {
     for( int i = 0; i < width; i++ )
@@ -329,78 +506,57 @@ static void blank_lines( obe_raw_frame_t *raw_frame )
     blank_line( y, u, v, raw_frame->img.width / 2 );
 }
 
-static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame, int width )
+static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
-    obe_image_t tmp_image = {0};
-    const AVPixFmtDescriptor *pfd = av_pix_fmt_desc_get( raw_frame->img.csp );
-    int bpp = pfd->comp[0].depth_minus1+1 > 8 ? 2 : 1;
-
-    if( !vfilt->sws_ctx_8 ||
-        ( vfilt->filter_bit_depth == OBE_BIT_DEPTH_8 && vfilt->src_pix_fmt_8 != raw_frame->img.csp ) ||
-        raw_frame->reset_obe )
+    AVFrame *frame = vfilt->frame;
+    /* Setup AVFrame */
+    memcpy( frame->buf, raw_frame->buf_ref, sizeof(frame->buf) );
+    memcpy( frame->linesize, raw_frame->img.stride, sizeof(raw_frame->img.stride) );
+    memcpy( frame->data, raw_frame->img.plane, sizeof(raw_frame->img.plane) );
+    frame->format = raw_frame->img.csp;
+    frame->width = raw_frame->img.width;
+    frame->height = raw_frame->img.height;
+    
+    if( av_buffersrc_add_frame( vfilt->buffersrc_ctx, vfilt->frame ) < 0 )
     {
-        /* Shared amongst 8-bit and 10-bit contexts */
-        vfilt->sws_ctx_flags |= SWS_FULL_CHR_H_INP | SWS_ACCURATE_RND | SWS_LANCZOS;
-
-        if( IS_INTERLACED( raw_frame->img.format ) )
-        {
-            vfilt->dst_pix_fmt_8 = PIX_FMT_YUV422P; /* 8-bit joint resize and unpack */
-            vfilt->dst_pix_fmt_10 = PIX_FMT_YUV422P10; /* 10-bit horizontal resize */
-        }
-        else
-        {
-            /* Target for progressive is always 4:2:0 */
-            vfilt->dst_pix_fmt_8 = PIX_FMT_YUV420P;
-            vfilt->dst_pix_fmt_10 = PIX_FMT_YUV420P10;
-        }
-
-        /* 10-bit input will always have bars which are planar */
-        vfilt->src_pix_fmt_8 = bpp == 2 ? PIX_FMT_YUV422P : raw_frame->img.csp;
-        vfilt->sws_ctx_8 = sws_getContext( raw_frame->img.width, raw_frame->img.height, vfilt->src_pix_fmt_8,
-                                           width, raw_frame->img.height, vfilt->dst_pix_fmt_8,
-                                           vfilt->sws_ctx_flags, NULL, NULL, NULL );
-        if( !vfilt->sws_ctx_8 )
-        {
-            fprintf( stderr, "Video scaling failed\n" );
-            return -1;
-        }
-
-        if( vfilt->filter_bit_depth == OBE_BIT_DEPTH_10 )
-        {
-            vfilt->sws_ctx_10 = sws_getContext( raw_frame->img.width, raw_frame->img.height, PIX_FMT_YUV422P10,
-                                                width, raw_frame->img.height, vfilt->dst_pix_fmt_10,
-                                                vfilt->sws_ctx_flags, NULL, NULL, NULL );
-            if( !vfilt->sws_ctx_10 )
-            {
-                fprintf( stderr, "Video scaling failed\n" );
-                return -1;
-            }
-        }
-    }
-
-    int dst_pix_fmt = bpp == 1 ? vfilt->dst_pix_fmt_8 : vfilt->dst_pix_fmt_10;
-
-    tmp_image.width = width;
-    tmp_image.height = raw_frame->img.height;
-    tmp_image.planes = av_pix_fmt_descriptors[dst_pix_fmt].nb_components;
-    tmp_image.csp = dst_pix_fmt;
-    tmp_image.format = raw_frame->img.format;
-
-    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height,
-                        tmp_image.csp, 32 ) < 0 )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
+        fprintf( stderr, "Could not write frame to buffer source \n" );
         return -1;
     }
 
-    struct SwsContext *sws_ctx = bpp == 1 ? vfilt->sws_ctx_8 : vfilt->sws_ctx_10;
-    sws_scale( sws_ctx, (const uint8_t* const*)raw_frame->img.plane, raw_frame->img.stride,
-               0, tmp_image.height, tmp_image.plane, tmp_image.stride );
+    int ret;
 
-    raw_frame->release_data( raw_frame );
-    raw_frame->release_data = obe_release_video_data;
-    memcpy( &raw_frame->alloc_img, &tmp_image, sizeof(obe_image_t) );
-    memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
+    while( 1 )
+    {
+        ret = av_buffersink_get_frame( vfilt->buffersink_ctx, vfilt->frame );
+
+        if( ret == AVERROR(EAGAIN) || ret == AVERROR_EOF )
+            continue; // shouldn't happen
+        if( ret < 0 )
+        {
+            fprintf( stderr, "Could not get frame from buffersink \n" );
+            return -1;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    raw_frame->alloc_img.width = frame->width;
+    raw_frame->alloc_img.height = frame->height;
+
+    raw_frame->release_data = obe_release_bufref;
+
+    memcpy( raw_frame->alloc_img.stride, frame->linesize, sizeof(raw_frame->alloc_img.stride) );
+    memcpy( raw_frame->alloc_img.plane, frame->data, sizeof(raw_frame->alloc_img.plane) );
+    raw_frame->alloc_img.csp = frame->format;
+    raw_frame->alloc_img.planes = av_pix_fmt_descriptors[raw_frame->alloc_img.csp].nb_components;
+
+    memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
+
+    memcpy( raw_frame->buf_ref, frame->buf, sizeof(frame->buf) );
+
+    raw_frame->sar_width = raw_frame->sar_height = 1;
 
     return 0;
 }
@@ -767,6 +923,9 @@ static void *start_filter( void *ptr )
 
     init_filter( h, vfilt );
 
+    vfilt->dst_width = output_stream->avc_param.i_width;
+    vfilt->dst_height = output_stream->avc_param.i_height;
+
     while( 1 )
     {
         /* TODO: support resolution changes */
@@ -786,8 +945,7 @@ static void *start_filter( void *ptr )
         raw_frame = filter->queue.queue[0];
         pthread_mutex_unlock( &filter->queue.mutex );
 
-        /* TODO: scale 8-bit to 10-bit
-         * TODO: convert from 4:2:0 to 4:2:2 */
+        /* TODO: scale 8-bit to 10-bit */
 
         if( 1 )
         {
@@ -795,13 +953,18 @@ static void *start_filter( void *ptr )
             if( raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL && pfd->comp[0].depth_minus1+1 == 10 )
                 blank_lines( raw_frame );
 
-            /* Resize if necessary. Together with colourspace conversion if progressive */
-            if( ( !IS_INTERLACED( raw_frame->img.format ) && filter_params->target_csp == X264_CSP_I420 ) ||
-                raw_frame->img.width != output_stream->avc_param.i_width ||
-                !(pfd->flags&AV_PIX_FMT_FLAG_PLANAR) )
+            /* Resize if wrong pixel format or wrong resolution */
+            if( !( raw_frame->img.csp == AV_PIX_FMT_YUV422P   || raw_frame->img.csp == AV_PIX_FMT_YUV422P10 )
+                || vfilt->dst_width   != raw_frame->img.width || vfilt->dst_height != raw_frame->img.height )
             {
-                if( resize_frame( vfilt, raw_frame, output_stream->avc_param.i_width ) < 0 )
-                    goto end;
+                /* Reset the filter if it has been setup incorrectly or not setup at all */
+                if( vfilt->src_csp    != raw_frame->img.csp || vfilt->src_width != raw_frame->img.width ||
+                    vfilt->src_height != raw_frame->img.height )
+                {
+                    init_libavfilter( h, vfilt, output_stream, raw_frame );
+                }
+
+                resize_frame( vfilt, raw_frame );
             }
 
             if( av_pix_fmt_get_chroma_sub_sample( raw_frame->img.csp, &h_shift, &v_shift ) < 0 )
@@ -837,11 +1000,8 @@ static void *start_filter( void *ptr )
 end:
     if( vfilt )
     {
-        if( vfilt->sws_ctx_8 )
-            sws_freeContext( vfilt->sws_ctx_8 );
-
-        if( vfilt->sws_ctx_10 )
-            sws_freeContext( vfilt->sws_ctx_10 );
+        if( vfilt->resize_filter_graph )
+            avfilter_graph_free( &vfilt->resize_filter_graph );
 
         free( vfilt );
     }

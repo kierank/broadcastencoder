@@ -470,6 +470,7 @@ int get_bars( hnd_t ptr, obe_raw_frame_t **raw_frames )
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
 
     memcpy( raw_frame->buf_ref, bars_ctx->frame->buf, sizeof(bars_ctx->frame->buf) );
+    memset( &bars_ctx->frame->buf, 0, sizeof(bars_ctx->frame->buf) );
 
     raw_frame->release_data = obe_release_bufref;
     raw_frame->release_frame = obe_release_frame;
@@ -527,6 +528,7 @@ void close_bars( hnd_t ptr )
     bars_ctx_t *bars_ctx = ptr;
 
     avfilter_graph_free( &bars_ctx->v_filter_graph );
+    av_frame_free( &bars_ctx->frame );
     free( bars_ctx );
     ptr = NULL;
 }

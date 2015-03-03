@@ -114,7 +114,7 @@ static void *start_filter( void *ptr )
                 {
                     for( int k = 0; k < codec->channels; k++ )
                     {
-                        uint32_t *src = raw_frame->audio_frame.audio_data[((output_stream->sdi_audio_pair-1)<<1)+k];
+                        uint32_t *src = (uint32_t*)raw_frame->audio_frame.audio_data[((output_stream->sdi_audio_pair-1)<<1)+k];
                         
                         if( codec->bits_per_raw_sample == 16 )
                             dst16[k] = (src[j] >> 16) & 0xffff;
@@ -192,6 +192,14 @@ static void *start_filter( void *ptr )
     }
 
 finish:
+    if( frame )
+       av_frame_free( &frame );
+
+    if( frame->data )
+        av_freep( &frame->data );
+
+    if( codec )
+        avcodec_free_context( &codec );
 
     free( filter_params );
 
