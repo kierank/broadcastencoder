@@ -204,6 +204,7 @@ static void *start_encoder( void *ptr )
                 param->vui.i_aspect_ratio_information = mpeg2_dar;
                 pic.param = param;
             }
+            pic.b_tff = 1;
         }
         else if( raw_frame->sar_width  != param->vui.i_sar_width ||
                  raw_frame->sar_height != param->vui.i_sar_height )
