@@ -30,19 +30,13 @@
 struct bars_status
 {
     hnd_t *bars_handle;
-    obe_bars_opts_t *obe_bars_opts;
 };
 
 static void close_thread( void *handle )
 {
     struct bars_status *status = (struct bars_status *)handle;
-    obe_bars_opts_t *obe_bars_opts = status->obe_bars_opts;
 
     close_bars( *(status->bars_handle) );
-    free( obe_bars_opts->bars_line1 );
-    free( obe_bars_opts->bars_line2 );
-    free( obe_bars_opts->bars_line3 );
-    free( obe_bars_opts->bars_line4 );
 }
 
 static void *autoconf_input( void *ptr )
@@ -136,7 +130,6 @@ static void *open_input( void *ptr )
     obe_bars_opts.bars_line4 = user_opts->bars_line4;
 
     status.bars_handle = &bars_handle;
-    status.obe_bars_opts = &obe_bars_opts;
     pthread_cleanup_push( close_thread, (void*)&status );
 
     if( open_bars( &bars_handle, &obe_bars_opts ) < 0 )
