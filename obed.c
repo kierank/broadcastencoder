@@ -78,7 +78,7 @@ static int64_t auth_time;
 static int auth;
 
 /* Video */
-static const char * const avc_profiles[] = { "main", "high" };
+static const char * const avc_profiles[] = { "main", "high", "high422" };
 
 const static uint64_t channel_layouts[] =
 {
@@ -337,9 +337,17 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             video_stream->video_anc.cea_608             = ancillary_opts_in->cea_608;
             video_stream->video_anc.cea_708             = ancillary_opts_in->cea_708;
 
+            video_stream->avc_param.i_csp = X264_CSP_I420;
             /* Setup video profile */
-            if( d.avc_profile >= 0 )
+            if( d.avc_profile == 0 )
+                x264_param_apply_profile( &video_stream->avc_param, "main" );
+            else if( d.avc_profile == 1 )
                 x264_param_apply_profile( &video_stream->avc_param, "high" );
+            else if( d.avc_profile == 2 )
+            {
+                video_stream->avc_param.i_csp = X264_CSP_I422;
+                x264_param_apply_profile( &video_stream->avc_param, "high422" );
+            }
 
             /* Setup audio streams */
             for( i = 1; i <= encoder_control->n_audio_opts; i++ )
