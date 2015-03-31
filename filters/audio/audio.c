@@ -147,7 +147,8 @@ static void *start_filter( void *ptr )
                     syslog( LOG_ERR, "Malloc failed\n" );
                     goto finish;
                 }
-                memcpy(coded_frame->data, pkt.data, pkt.size);
+                memcpy( coded_frame->data, pkt.data, pkt.size );
+                av_free_packet( &pkt );
 
                 coded_frame->pts = raw_frame->video_pts;
                 coded_frame->duration = raw_frame->video_duration;
