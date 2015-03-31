@@ -107,15 +107,15 @@ static void *start_filter( void *ptr )
                 codec->channels = output_stream->num_pairs * 2;
                 frame->nb_samples = raw_frame->audio_frame.num_samples;
 
-                uint16_t *dst16 = (uint16_t *)frame->data[0];
-                uint32_t *dst32 = (uint32_t *)frame->data[0];
+                int16_t *dst16 = (int16_t *)frame->data[0];
+                int32_t *dst32 = (int32_t *)frame->data[0];
                 /* Interleave audio (and convert bit-depth if necessary) */
                 for( int j = 0; j < MIN(frame->nb_samples, MAX_SAMPLES); j++)
                 {
                     for( int k = 0; k < codec->channels; k++ )
                     {
-                        uint32_t *src = (uint32_t*)raw_frame->audio_frame.audio_data[((output_stream->sdi_audio_pair-1)<<1)+k];
-                        
+                        int32_t *src = (int32_t*)raw_frame->audio_frame.audio_data[((output_stream->sdi_audio_pair-1)<<1)+k];
+
                         if( codec->bits_per_raw_sample == 16 )
                             dst16[k] = (src[j] >> 16) & 0xffff;
                         else
