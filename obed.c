@@ -394,7 +394,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                     audio_stream->bit_depth = s302m_bit_depths[audio_opts_in->s302m_bit_depth];
 
                 if( audio_opts_in->has_s302m_pairs )
-                    audio_stream->pairs = audio_opts_in->s302m_pairs;
+                    audio_stream->num_pairs = audio_opts_in->s302m_pairs;
             }
 
             if( has_dvb_vbi )
