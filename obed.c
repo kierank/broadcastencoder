@@ -390,11 +390,11 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 /* SNMP will have sanitised this */
                 audio_stream->ts_opts.write_lang_code = 1;
                 strcpy( audio_stream->ts_opts.lang_code, audio_opts_in->lang_code );
-                if( audio_stream->has_s302m_bit_depth )
-                    audio_stream->bit_depth = s302m_bit_depths[audio_stream->bit_depth];
+                if( audio_opts_in->has_s302m_bit_depth )
+                    audio_stream->bit_depth = s302m_bit_depths[audio_opts_in->s302m_bit_depth];
 
-                if( audio_stream->has_s302m_pairs )
-                    audio_stream->pairs = audio_stream->s302m_pairs;
+                if( audio_opts_in->has_s302m_pairs )
+                    audio_stream->pairs = audio_opts_in->s302m_pairs;
             }
 
             if( has_dvb_vbi )
