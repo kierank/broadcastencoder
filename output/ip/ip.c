@@ -570,8 +570,21 @@ end:
 static void rtp_close( hnd_t handle )
 {
     obe_rtp_ctx *p_rtp = handle;
+    AVBufferRef *output_buffer;
 
     udp_close( p_rtp->udp_handle );
+
+    if( p_rtp->dup_fifo )
+    {
+        while( av_fifo_size( p_rtp->dup_fifo ) > 0 )
+        {
+            av_fifo_drain( p_rtp->dup_fifo, sizeof(int64_t) );
+            av_fifo_generic_read( p_rtp->dup_fifo, &output_buffer, sizeof(output_buffer), NULL );
+            av_buffer_unref( &output_buffer );
+        }
+
+        av_fifo_freep( &p_rtp->dup_fifo );
+    }
 
     /* COP3 FEC */
     if( p_rtp->column_data )
@@ -604,8 +617,6 @@ static void close_output( void *handle )
         if( *status->ip_handle )
             udp_close( *status->ip_handle );
     }
-
-    // FIXME
 
     if( status->output->output_dest.target  )
         free( status->output->output_dest.target );
