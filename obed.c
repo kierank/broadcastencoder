@@ -496,7 +496,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
 
                 if( output_opts_in->has_dup_delay && output_opts_in->dup_delay > 0 )
                 {
-                    output_opts->dup_delay = output_opts_in->dup_delay;
+                    output_dst->dup_delay = output_opts_in->dup_delay;
                 }
             }
 
