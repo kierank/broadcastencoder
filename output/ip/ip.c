@@ -393,7 +393,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         {
             uint8_t *peek = av_fifo_peek2( p_rtp->dup_fifo, 0 );
             ts_dup = AV_RL64( peek );
-            if( ts_dup + (p_rtp->dup_delay * 90) < timestamp )
+            if( ts_dup + (p_rtp->dup_delay * (OBE_CLOCK/1000)) < timestamp )
             {
                 av_fifo_drain( p_rtp->dup_fifo, sizeof(timestamp) );
                 av_fifo_generic_read( p_rtp->dup_fifo, &output_buffer, sizeof(output_buffer), NULL );
