@@ -99,6 +99,13 @@ const static int video_formats[] =
     -1,
 };
 
+const static int s302m_bit_depths[] =
+{
+    16,
+    20,
+    24
+};
+
 /* server options */
 static volatile int keep_running;
 
@@ -367,8 +374,10 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                     audio_stream->aac_opts.aac_profile = 0;
                     audio_stream->aac_opts.latm_output = audio_opts_in->aac_encap;
                 }
-                else
+                else if( audio_opts_in->format == 2 )
                     audio_stream->stream_format = AUDIO_OPUS;
+                else
+                    audio_stream->stream_format = AUDIO_S302M;
                 audio_stream->ts_opts.pid = audio_opts_in->pid;
 
                 audio_stream->channel_layout = channel_layouts[audio_opts_in->channel_map];
@@ -381,6 +390,11 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 /* SNMP will have sanitised this */
                 audio_stream->ts_opts.write_lang_code = 1;
                 strcpy( audio_stream->ts_opts.lang_code, audio_opts_in->lang_code );
+                if( audio_stream->has_s302m_bit_depth )
+                    audio_stream->bit_depth = s302m_bit_depths[audio_stream->bit_depth];
+
+                if( audio_stream->has_s302m_pairs )
+                    audio_stream->pairs = audio_stream->s302m_pairs;
             }
 
             if( has_dvb_vbi )
@@ -478,6 +492,11 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 {
                     output_dst->fec_columns = 0;
                     output_dst->fec_rows = 0;
+                }
+
+                if( output_opts_in->has_dup_delay && output_opts_in->dup_delay > 0 )
+                {
+                    output_opts->dup_delay = output_opts_in->dup_delay;
                 }
             }
 
