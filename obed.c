@@ -38,7 +38,7 @@
 #define _GNU_SOURCE
 
 #include "obe.h"
-#include <protobuf-c-rpc/protobuf-c-rpc.h>
+#include <google/protobuf-c/protobuf-c-rpc.h>
 #include "proto/obed.pb-c.h"
 
 #define OBE_CONTROL_VERSION 1
@@ -659,7 +659,7 @@ int main( int argc, char **argv )
     while( keep_running )
     {
         /* FIXME valgrind issues */
-        protobuf_c_rpc_dispatch_run( protobuf_c_rpc_dispatch_default() );
+        protobuf_c_dispatch_run( protobuf_c_dispatch_default() );
     }
 
     protobuf_c_rpc_server_destroy( server, 0 );
