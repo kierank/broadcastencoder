@@ -61,7 +61,6 @@ typedef struct
     hnd_t udp_handle;
 
     AVBufferRef *buf_ref;
-    uint8_t *pkt;
     uint64_t seq;
     uint32_t ssrc;
 
@@ -492,7 +491,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         *row_ts++ ^= (ts_90 >> 16) & 0xff;
         *row_ts++ ^= (ts_90 >>  8) & 0xff;
         *row_ts++ ^= (ts_90) & 0xff;
-        xor_packet_c( &row[RTP_HEADER_SIZE+COP3_FEC_HEADER_SIZE], &p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
+        xor_packet_c( &row[RTP_HEADER_SIZE+COP3_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
 
         if( fec_type == FEC_TYPE_COP3_BLOCK_ALIGNED )
         {
@@ -502,7 +501,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
             *column_ts++ ^= (ts_90 >>  8) & 0xff;
             *column_ts++ ^= (ts_90) & 0xff;
 
-            xor_packet_c( &column[RTP_HEADER_SIZE+COP3_FEC_HEADER_SIZE], &p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
+            xor_packet_c( &column[RTP_HEADER_SIZE+COP3_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
         }
 
         /* Check if we can send packets. Start with rows to match the suggestion in the ProMPEG spec */
@@ -553,7 +552,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
             *column_ts++ ^= (ts_90 >>  8) & 0xff;
             *column_ts++ ^= (ts_90) & 0xff;
 
-            xor_packet_c( &column[RTP_HEADER_SIZE+COP3_FEC_HEADER_SIZE], &p_rtp->pkt[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
+            xor_packet_c( &column[RTP_HEADER_SIZE+COP3_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
         }
     }
 
