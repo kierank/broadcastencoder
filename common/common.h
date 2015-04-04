@@ -483,6 +483,7 @@ typedef struct
 struct obe_t
 {
     int is_active;
+    int64_t start_time;
     int obe_system;
     int filter_bit_depth;
 
