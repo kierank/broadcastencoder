@@ -1389,14 +1389,14 @@ void obe_close( obe_t *h )
     void *ret_ptr;
     int64_t cur_time = obe_mdate();
 
-    if( cur_time - h->start_time < 2000000 )
+    if( cur_time - h->start_time < 1500000 )
     {
-        int64_t sleep_time = h->start_time + 2000000;
+        int64_t sleep_time = h->start_time + 1500000;
         struct timespec ts;
         ts.tv_sec = sleep_time / 1000000;
         ts.tv_nsec = sleep_time % 1000000;
 
-        fprintf( stderr, "closed too quickly - sleeping for %"PRIi64" ms \n", sleep_time - cur_time ); 
+        fprintf( stderr, "closed too quickly - sleeping for %"PRIi64" us \n", sleep_time - cur_time ); 
 
         clock_nanosleep( CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, &ts );
     }
