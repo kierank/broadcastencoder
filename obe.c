@@ -1396,7 +1396,7 @@ void obe_close( obe_t *h )
         ts.tv_sec = sleep_time / 1000000;
         ts.tv_nsec = sleep_time % 1000000;
 
-        fprintf( stderr, "closed too quickly - sleeping for %"PRIi64" ms", sleep_time - cur_time ); 
+        fprintf( stderr, "closed too quickly - sleeping for %"PRIi64" ms \n", sleep_time - cur_time ); 
 
         clock_nanosleep( CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, &ts );
     }
