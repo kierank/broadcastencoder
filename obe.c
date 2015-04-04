@@ -1389,9 +1389,9 @@ void obe_close( obe_t *h )
     void *ret_ptr;
     int64_t cur_time = obe_mdate();
 
-    if( cur_time - h->start_time < 3000000 )
+    if( cur_time - h->start_time < 2000000 )
     {
-        int64_t sleep_time = h->start_time + 3000000;
+        int64_t sleep_time = h->start_time + 2000000;
         struct timespec ts;
         ts.tv_sec = sleep_time / 1000000;
         ts.tv_nsec = sleep_time % 1000000;
