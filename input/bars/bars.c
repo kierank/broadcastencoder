@@ -27,6 +27,18 @@
 #include <libavutil/samplefmt.h>
 #include "bars_common.h"
 
+struct bars_status
+{
+    hnd_t *bars_handle;
+};
+
+static void close_thread( void *handle )
+{
+    struct bars_status *status = (struct bars_status *)handle;
+
+    close_bars( *(status->bars_handle) );
+}
+
 static void *autoconf_input( void *ptr )
 {
     obe_int_input_stream_t *streams[MAX_STREAMS];
@@ -107,6 +119,7 @@ static void *open_input( void *ptr )
     hnd_t bars_handle = NULL;
     obe_bars_opts_t obe_bars_opts = {0};
     obe_bars_opts.video_format = user_opts->video_format;
+    struct bars_status status;
 
     if( obe_bars_opts.video_format == INPUT_VIDEO_FORMAT_AUTODETECT )
         obe_bars_opts.video_format = INPUT_VIDEO_FORMAT_PAL;
@@ -115,6 +128,9 @@ static void *open_input( void *ptr )
     obe_bars_opts.bars_line2 = user_opts->bars_line2;
     obe_bars_opts.bars_line3 = user_opts->bars_line3;
     obe_bars_opts.bars_line4 = user_opts->bars_line4;
+
+    status.bars_handle = &bars_handle;
+    pthread_cleanup_push( close_thread, (void*)&status );
 
     if( open_bars( &bars_handle, &obe_bars_opts ) < 0 )
     {
@@ -157,8 +173,7 @@ static void *open_input( void *ptr )
             return NULL;
     }
 
-    close_bars( bars_handle );
-    // FIXME upon thread kill free text strings
+    pthread_cleanup_pop( 1 );
 
     return NULL;
 }

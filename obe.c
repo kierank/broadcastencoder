@@ -1052,6 +1052,7 @@ int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts )
                 return -1;
             }
         }
+        h->outputs[i]->output_dest.dup_delay = output_opts->outputs[i].dup_delay;
         h->outputs[i]->output_dest.fec_type = output_opts->outputs[i].fec_type;
         h->outputs[i]->output_dest.fec_columns = output_opts->outputs[i].fec_columns;
         h->outputs[i]->output_dest.fec_rows = output_opts->outputs[i].fec_rows;
@@ -1373,6 +1374,7 @@ int obe_start( obe_t *h )
     }
 
     h->is_active = 1;
+    h->start_time = obe_mdate();
 
     return 0;
 
@@ -1399,6 +1401,19 @@ int obe_input_status( obe_t *h )
 void obe_close( obe_t *h )
 {
     void *ret_ptr;
+    int64_t cur_time = obe_mdate();
+
+    if( cur_time - h->start_time < 1500000 )
+    {
+        int64_t sleep_time = h->start_time + 1500000;
+        struct timespec ts;
+        ts.tv_sec = sleep_time / 1000000;
+        ts.tv_nsec = sleep_time % 1000000;
+
+        fprintf( stderr, "closed too quickly - sleeping for %"PRIi64" us \n", sleep_time - cur_time ); 
+
+        clock_nanosleep( CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, &ts );
+    }
 
     fprintf( stderr, "closing obe \n" );
 
