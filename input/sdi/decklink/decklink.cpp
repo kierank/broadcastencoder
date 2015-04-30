@@ -898,7 +898,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             src_frames = audioframe->GetSampleFrameCount();
             if( IS_PAL( decklink_opts_->video_format ) && src_frames != 1920 )
             {
-                syslog( LOG_ERR, "Invalid audio packet length, attempting to correct, distortion may occur \n" );
+                syslog( LOG_ERR, "Invalid audio packet length, attempting to correct, distortion may occur. Received: %i Expected: 1920 \n", src_frames );
                 dst_frames = 1920;
                 decklink_ctx->a_errors++;
             }
