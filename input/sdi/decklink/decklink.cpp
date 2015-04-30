@@ -946,7 +946,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             return -1;
         }
 
-        if( audioframe )
+        if( audioframe && src_frames > 0 )
         {
             if( avresample_convert( decklink_ctx->avr, raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize,
                                     dst_frames, (uint8_t**)&frame_bytes, 0, src_frames) < 0 )
