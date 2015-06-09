@@ -154,11 +154,7 @@ void *open_muxer( void *ptr )
         stream = &program.streams[i];
         output_stream = &mux_params->output_streams[i];
         input_stream = get_input_stream( h, output_stream->input_stream_id );
-
-        if( output_stream->stream_action == STREAM_ENCODE )
-            stream_format = output_stream->stream_format;
-        else
-            stream_format = input_stream->stream_format;
+        stream_format = output_stream->stream_format;
 
         int j = 0;
         while( mpegts_stream_info[j][0] != -1 && stream_format != mpegts_stream_info[j][0] )
