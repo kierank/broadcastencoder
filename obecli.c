@@ -948,7 +948,6 @@ static int set_muxer( char *command, obecli_command_t *child )
         cli.mux_opts.cbr = obe_otob( ts_cbr, cli.mux_opts.cbr );
         cli.mux_opts.ts_muxrate = obe_otoi( ts_muxrate, cli.mux_opts.ts_muxrate );
 
-        cli.mux_opts.passthrough = obe_otob( passthrough, cli.mux_opts.passthrough );
         cli.mux_opts.ts_id = obe_otoi( ts_id, cli.mux_opts.ts_id );
         cli.mux_opts.program_num = obe_otoi( program_num, cli.mux_opts.program_num );
         cli.mux_opts.pmt_pid    = obe_otoi( pmt_pid, cli.mux_opts.pmt_pid );

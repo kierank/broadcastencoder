@@ -144,24 +144,10 @@ void *open_muxer( void *ptr )
     }
 
     program.num_streams = mux_params->num_output_streams;
-
-    if( mux_opts->passthrough )
-    {
-        /* TODO lock when we can add multiple devices */
-        /*
-        params.ts_id = h->devices[0]->ts_id;
-        program.program_num = h->devices[0]->program_num;
-        program.pmt_pid = h->devices[0]->pmt_pid;
-        program.pcr_pid = h->devices[0]->pcr_pid;
-        */
-    }
-    else
-    {
-        params.ts_id = mux_opts->ts_id ? mux_opts->ts_id : 1;
-        program.program_num = mux_opts->program_num ? mux_opts->program_num : 1;
-        program.pmt_pid = mux_opts->pmt_pid ? mux_opts->pmt_pid : cur_pid++;
-        /* PCR PID is done later once we know the video pid */
-    }
+    params.ts_id = mux_opts->ts_id ? mux_opts->ts_id : 1;
+    program.program_num = mux_opts->program_num ? mux_opts->program_num : 1;
+    program.pmt_pid = mux_opts->pmt_pid ? mux_opts->pmt_pid : cur_pid++;
+    /* PCR PID is done later once we know the video pid */
 
     for( int i = 0; i < program.num_streams; i++ )
     {
@@ -185,30 +171,16 @@ void *open_muxer( void *ptr )
 
         stream->stream_format = mpegts_stream_info[j][1];
         stream->stream_id = mpegts_stream_info[j][2]; /* Note this is the MPEG-TS stream_id, not the OBE stream_id */
-        if( mux_opts->passthrough )
+
+        output_stream->ts_opts.pid = stream->pid = output_stream->ts_opts.pid ? output_stream->ts_opts.pid : cur_pid++;
+        if( input_stream->stream_type == STREAM_TYPE_AUDIO )
         {
-            output_stream->ts_opts.pid = stream->pid = input_stream->pid ? input_stream->pid : cur_pid++;
-            if( input_stream->stream_type == STREAM_TYPE_AUDIO )
-            {
-                stream->write_lang_code = !!strlen( input_stream->lang_code );
-                memcpy( stream->lang_code, input_stream->lang_code, 4 );
-                stream->audio_type = input_stream->audio_type;
-            }
-            stream->has_stream_identifier = input_stream->has_stream_identifier;
-            stream->stream_identifier = input_stream->stream_identifier;
+            stream->write_lang_code = !!strlen( output_stream->ts_opts.lang_code );
+            memcpy( stream->lang_code, output_stream->ts_opts.lang_code, 4 );
+            stream->audio_type = output_stream->ts_opts.audio_type;
         }
-        else
-        {
-            output_stream->ts_opts.pid = stream->pid = output_stream->ts_opts.pid ? output_stream->ts_opts.pid : cur_pid++;
-            if( input_stream->stream_type == STREAM_TYPE_AUDIO )
-            {
-                stream->write_lang_code = !!strlen( output_stream->ts_opts.lang_code );
-                memcpy( stream->lang_code, output_stream->ts_opts.lang_code, 4 );
-                stream->audio_type = output_stream->ts_opts.audio_type;
-            }
-            stream->has_stream_identifier = output_stream->ts_opts.has_stream_identifier;
-            stream->stream_identifier = output_stream->ts_opts.stream_identifier;
-        }
+        stream->has_stream_identifier = output_stream->ts_opts.has_stream_identifier;
+        stream->stream_identifier = output_stream->ts_opts.stream_identifier;
 
         if( stream_format == VIDEO_AVC )
         {
@@ -233,8 +205,7 @@ void *open_muxer( void *ptr )
     }
 
     /* Video stream isn't guaranteed to be first so populate program parameters here */
-    if( !mux_opts->passthrough )
-        program.pcr_pid = mux_opts->pcr_pid ? mux_opts->pcr_pid : video_pid;
+    program.pcr_pid = mux_opts->pcr_pid ? mux_opts->pcr_pid : video_pid;
 
     program.sdt.service_type = height >= 720 ? DVB_SERVICE_TYPE_ADVANCED_CODEC_HD : DVB_SERVICE_TYPE_ADVANCED_CODEC_SD;
     program.sdt.service_name = mux_opts->service_name ? mux_opts->service_name : service_name;
