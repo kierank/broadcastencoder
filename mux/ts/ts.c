@@ -153,7 +153,7 @@ void *open_muxer( void *ptr )
     {
         stream = &program.streams[i];
         output_stream = &mux_params->output_streams[i];
-        input_stream = get_input_stream( h, output_stream->input_stream_id );
+        input_stream = get_input_stream( h, output_stream->input_stream_id enc);
         stream_format = output_stream->stream_format;
 
         int j = 0;
@@ -161,8 +161,7 @@ void *open_muxer( void *ptr )
             j++;
 
         /* OBE does not distinguish between ADTS and LATM but MPEG-TS does */
-        if( stream_format == AUDIO_AAC && ( ( output_stream->stream_action == STREAM_PASSTHROUGH && input_stream->is_latm ) ||
-            ( output_stream->stream_action == STREAM_ENCODE && output_stream->aac_opts.latm_output ) ) )
+        if( stream_format == AUDIO_AAC && ( output_stream->stream_action == STREAM_ENCODE && output_stream->aac_opts.latm_output ) ) )
             j++;
 
         stream->stream_format = mpegts_stream_info[j][1];
@@ -229,11 +228,7 @@ void *open_muxer( void *ptr )
         output_stream = &mux_params->output_streams[i];
         input_stream = get_input_stream( h, output_stream->input_stream_id );
         encoder = get_encoder( h, output_stream->output_stream_id );
-
-        if( output_stream->stream_action == STREAM_ENCODE )
-            stream_format = output_stream->stream_format;
-        else
-            stream_format = input_stream->stream_format;
+        stream_format = output_stream->stream_format;
 
         if( stream_format == VIDEO_AVC )
         {
