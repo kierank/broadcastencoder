@@ -327,13 +327,19 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 audio_stream->stream_action = STREAM_ENCODE;
                 if( audio_opts_in->format == 0 )
                     audio_stream->stream_format = AUDIO_MP2;
-                else
+                else if( audio_opts_in->format > 0 && audio_opts_in->format < 4 )
                 {
                     audio_stream->stream_format = AUDIO_AAC;
                     /* XXX: note the enums */
                     audio_stream->aac_opts.aac_profile = audio_opts_in->format-1;
                     audio_stream->aac_opts.latm_output = audio_opts_in->aac_encap;
                 }
+                else // AC-3 Passthrough
+                {
+                    audio_stream->stream_format = AUDIO_AC_3;
+                    audio_stream->stream_action = STREAM_PASSTHROUGH;
+                }
+    
                 audio_stream->ts_opts.pid = audio_opts_in->pid;
 
                 audio_stream->channel_layout = channel_layouts[audio_opts_in->channel_map];
