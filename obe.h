@@ -308,8 +308,6 @@ typedef struct
 
 typedef struct
 {
-    int passthrough_opts;
-
     int pid;
 
     /* Audio */
@@ -499,9 +497,6 @@ typedef struct
     int cbr;
     int ts_muxrate;
 
-    int passthrough;
-// TODO mention only passthrough next four things
-// TODO mention default pids
     int ts_id;
     int program_num;
     int pmt_pid;

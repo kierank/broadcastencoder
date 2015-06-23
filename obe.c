@@ -297,6 +297,15 @@ static void destroy_filter( obe_filter_t *filter )
     free( filter );
 }
 
+/* Passthrough */
+static void destroy_passthrough( obe_passthrough_t *passthrough )
+{
+    av_fifo_free( passthrough->in_fifo );
+    av_fifo_free( passthrough->out_fifo );
+    
+    free( passthrough );
+}
+
 /* Encode queue */
 int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame, int output_stream_id )
 {
@@ -417,6 +426,17 @@ obe_int_input_stream_t *get_input_stream( obe_t *h, int input_stream_id )
     {
         if( h->device.streams[j]->input_stream_id == input_stream_id )
             return h->device.streams[j];
+    }
+    return NULL;
+}
+
+/* Passthrough */
+obe_passthrough_t *get_passthrough( obe_t *h, int output_stream_id )
+{
+    for( int i = 0; i < h->num_passthrough; i++ )
+    {
+        if( h->passthrough[i]->output_stream_id == output_stream_id )
+            return h->passthrough[i];
     }
     return NULL;
 }
@@ -1155,9 +1175,10 @@ int obe_start( obe_t *h )
         }
     }
 
-    /* Open Encoder Threads */
+    /* Setup streams */
     for( int i = 0; i < h->num_output_streams; i++ )
     {
+        /* Open Encoder Threads */
         if( h->output_streams[i].stream_action == STREAM_ENCODE )
         {
             h->encoders[h->num_encoders] = calloc( 1, sizeof(obe_encoder_t) );
@@ -1250,6 +1271,47 @@ int obe_start( obe_t *h )
             }
 
             h->num_encoders++;
+        }
+        else if( h->output_streams[i].stream_action == STREAM_PASSTHROUGH )
+        {
+            h->passthrough[h->num_passthrough] = calloc( 1, sizeof(obe_passthrough_t) );
+            if( !h->passthrough[h->num_passthrough] )
+            {
+                fprintf( stderr, "Malloc failed \n" );
+                goto fail;
+            }
+            h->passthrough[h->num_passthrough]->output_stream_id = h->output_streams[i].output_stream_id;
+
+            input_stream = get_input_stream( h, h->output_streams[i].input_stream_id );
+             /* TODO: check the bitrate is allowed by the format */
+
+            h->output_streams[i].sdi_audio_pair = MAX( h->output_streams[i].sdi_audio_pair, 0 );
+
+            /* simplified version of T-STD calculations above */
+            int buf_size = AC3_BS_DVB;
+            if( h->mux_opts.ts_type == OBE_TS_TYPE_CABLELABS || h->mux_opts.ts_type == OBE_TS_TYPE_ATSC )
+                buf_size = AC3_BS_ATSC;
+            int single_frame_size = (double)AC3_NUM_SAMPLES * 125 * h->output_streams[i].bitrate / input_stream->sample_rate;
+            int frames_per_pes = MAX( buf_size / single_frame_size, 1 );
+            frames_per_pes = MIN( frames_per_pes, 6 );
+            h->output_streams[i].ts_opts.frames_per_pes = frames_per_pes;
+
+            /* Made up initial allocations */
+            h->passthrough[h->num_passthrough]->in_fifo = av_fifo_alloc( MAX_SAMPLES * 2 );
+            if( !h->passthrough[h->num_passthrough]->in_fifo )
+            {
+                fprintf( stderr, "Malloc failed \n" );
+                goto fail;
+            }
+
+            h->passthrough[h->num_passthrough]->out_fifo = av_fifo_alloc( single_frame_size * frames_per_pes );
+            if( !h->passthrough[h->num_passthrough]->out_fifo )
+            {
+                fprintf( stderr, "Malloc failed \n" );
+                goto fail;
+            }
+
+            h->num_passthrough++;
         }
     }
 
@@ -1506,6 +1568,12 @@ void obe_close( obe_t *h )
         destroy_filter( h->filters[i] );
 
     fprintf( stderr, "filters destroyed \n" );
+
+    /* Destroy passthrough */
+    for( int i = 0; i < h->num_passthrough; i++ )
+        destroy_passthrough( h->passthrough[i] );
+    
+    fprintf( stderr, "passthrough destroyed \n" );
 
     /* Destroy encoders */
     for( int i = 0; i < h->num_encoders; i++ )

@@ -137,6 +137,8 @@ typedef struct
     AVRational      a_timebase;
     AVAudioResampleContext *avr;
     const obe_audio_sample_pattern_t *sample_pattern;
+    int64_t         a_errors;
+
 
     int64_t last_frame_time;
 
@@ -899,9 +901,47 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
     /* TODO: probe SMPTE 337M audio */
 
-    if( audioframe && videoframe && !decklink_opts_->probe )
+    if( videoframe && !decklink_opts_->probe )
     {
-        audioframe->GetBytes( &frame_bytes );
+        int restart_input = 0;
+        int src_frames, dst_frames;
+
+        if( audioframe )
+        {
+            audioframe->GetBytes( &frame_bytes );
+            src_frames = audioframe->GetSampleFrameCount();
+            if( IS_PAL( decklink_opts_->video_format ) && src_frames != 1920 )
+            {
+                syslog( LOG_ERR, "Invalid audio packet length, attempting to correct, distortion may occur. Received: %i Expected: 1920 \n", src_frames );
+                dst_frames = 1920;
+                decklink_ctx->a_errors++;
+            }
+            else
+            {
+                dst_frames = audioframe->GetSampleFrameCount();
+                decklink_ctx->a_errors = 0;
+            }
+        }
+        else if( !audioframe && IS_PAL( decklink_opts_->video_format ) )
+        {
+            /* generate silence */
+            dst_frames = 1920;
+            restart_input = 1;
+            syslog( LOG_ERR, "No audio packet, generating silence and restarting input \n" );
+        }
+        else
+        {
+            syslog( LOG_ERR, "No audio packet, lipsync issues will occur \n" );
+            /* XXX: possibly guessing the NTSC pattern will be ok? */
+            goto end;
+        }
+
+        if( decklink_ctx->a_errors > 20 )
+        {
+            decklink_ctx->a_errors = 0;
+            restart_input = 1;
+        }
+
         raw_frame = new_raw_frame();
         if( !raw_frame )
         {
@@ -909,7 +949,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             goto end;
         }
 
-        raw_frame->audio_frame.num_samples = audioframe->GetSampleFrameCount();
+        raw_frame->audio_frame.num_samples = dst_frames;
         raw_frame->audio_frame.num_channels = decklink_opts_->num_channels;
         raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
 
@@ -920,11 +960,20 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             return -1;
         }
 
-        if( avresample_convert( decklink_ctx->avr, raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize,
-                                raw_frame->audio_frame.num_samples, (uint8_t**)&frame_bytes, 0, raw_frame->audio_frame.num_samples ) < 0 )
+        if( audioframe && src_frames > 0 )
         {
-            syslog( LOG_ERR, "[decklink] Sample format conversion failed\n" );
-            return -1;
+            if( avresample_convert( decklink_ctx->avr, raw_frame->audio_frame.audio_data, raw_frame->audio_frame.linesize,
+                                    dst_frames, (uint8_t**)&frame_bytes, 0, src_frames) < 0 )
+            {
+                syslog( LOG_ERR, "[decklink] Sample format conversion failed\n" );
+                return -1;
+            }
+        }
+        else if( IS_PAL( decklink_opts_->video_format ) )
+        {
+            /* Encode 1920 samples of silence */
+            av_samples_set_silence( raw_frame->audio_frame.audio_data, 0, raw_frame->audio_frame.num_samples,
+                                    raw_frame->audio_frame.num_channels, (AVSampleFormat)raw_frame->audio_frame.sample_fmt );
         }
 
         raw_frame->pts = av_rescale_q( decklink_ctx->a_counter, decklink_ctx->a_timebase, (AVRational){1, OBE_CLOCK} );
@@ -944,6 +993,30 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
         if( add_to_filter_queue( decklink_ctx->h, raw_frame ) < 0 )
             goto fail;
+
+        if( restart_input )
+        {
+            int i = 0;
+            for( i = 0; decklink_video_format_tab[i].obe_name != -1; i++ )
+            {
+                if( decklink_video_format_tab[i].obe_name != INPUT_VIDEO_FORMAT_AUTODETECT &&
+                    decklink_video_format_tab[i].obe_name == decklink_opts_->video_format )
+                    break;
+            }
+
+            if( decklink_video_format_tab[i].obe_name == -1 )
+            {
+                syslog( LOG_WARNING, "Unsupported video format" );
+                return S_OK;
+            }
+
+            BMDPixelFormat pix_fmt;
+            decklink_ctx->p_input->PauseStreams();
+            pix_fmt = h->filter_bit_depth == OBE_BIT_DEPTH_10 ? bmdFormat10BitYUV : bmdFormat8BitYUV;
+            decklink_ctx->p_input->EnableVideoInput( decklink_video_format_tab[i].bmd_name, pix_fmt, bmdVideoInputEnableFormatDetection );
+            decklink_ctx->p_input->FlushStreams();
+            decklink_ctx->p_input->StartStreams();
+        }
     }
 
 end:

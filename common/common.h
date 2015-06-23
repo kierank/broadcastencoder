@@ -31,6 +31,7 @@
 #include <libavutil/common.h>
 #include <libavutil/buffer.h>
 #include <libavutil/frame.h>
+#include <libavutil/fifo.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,6 +53,8 @@
 #define MAX_PROBE_TIME 20
 
 #define OBE_CLOCK 27000000LL
+
+#define MAX_SAMPLES 3000
 
 /* Macros */
 #define BOOLIFY(x) x = !!x
@@ -441,6 +444,21 @@ typedef struct
 
 typedef struct
 {
+    int output_stream_id;
+    int total_size;
+
+    int64_t pts;
+
+    AVFifoBuffer *in_fifo;
+    AVFifoBuffer *out_fifo;
+    int num_in_frames;
+    int num_out_frames;
+
+    int bit_depth;
+} obe_passthrough_t;
+
+typedef struct
+{
     /* Output */
     pthread_t output_thread;
     int cancel_thread;
@@ -527,6 +545,10 @@ struct obe_t
     int num_filters;
     obe_filter_t *filters[MAX_STREAMS];
 
+    /* Passthrough */
+    int num_passthrough;
+    obe_passthrough_t *passthrough[MAX_STREAMS];
+
     /** Multiple Threads **/
     /* Input or Postfiltered frames for encoding */
     int num_encoders;
@@ -590,6 +612,7 @@ int add_to_output_queue( obe_t *h, obe_muxed_data_t *muxed_data );
 int remove_from_output_queue( obe_t *h );
 
 obe_int_input_stream_t *get_input_stream( obe_t *h, int input_stream_id );
+obe_passthrough_t *get_passthrough( obe_t *h, int stream_id );
 obe_encoder_t *get_encoder( obe_t *h, int stream_id );
 obe_output_stream_t *get_output_stream( obe_t *h, int stream_id );
 obe_output_stream_t *get_output_stream_by_format( obe_t *h, int format );
