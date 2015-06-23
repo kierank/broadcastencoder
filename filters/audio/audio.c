@@ -24,7 +24,38 @@
 #include "common/lavc.h"
 #include "audio.h"
 
-#define MAX_SAMPLES 3000
+#define SMPTE_337M_SYNCWORD_1_16_BIT_BYTE1 0xf8
+#define SMPTE_337M_SYNCWORD_1_16_BIT_BYTE2 0x72
+
+#define SMPTE_337M_SYNCWORD_2_16_BIT_BYTE1 0x4e
+#define SMPTE_337M_SYNCWORD_2_16_BIT_BYTE2 0x1f
+
+static int check_send_packet( obe_t *h, obe_output_stream_t *output_stream, obe_passthrough_t *passthrough )
+{
+    int offset;
+    
+    if( passthrough->num_out_frames == output_stream->ts_opts.frames_per_pes )
+    {
+        int data_size = av_fifo_size( passthrough->out_fifo );
+        
+        obe_coded_frame_t *coded_frame = new_coded_frame( passthrough->output_stream_id, data_size );
+        if( !coded_frame )
+        {
+            syslog( LOG_ERR, "Malloc failed\n" );
+            return -1;
+        }
+
+        av_fifo_generic_read( passthrough->out_fifo, coded_frame->data, data_size, NULL );
+
+        coded_frame->pts = passthrough->pts;
+        coded_frame->random_access = 1; /* Every frame output is a random access point */
+        add_to_queue( &h->mux_queue, coded_frame );
+
+        passthrough->num_out_frames = 0;
+    }
+
+    return 0;
+}
 
 static void *start_filter( void *ptr )
 {
@@ -34,7 +65,7 @@ static void *start_filter( void *ptr )
     obe_t *h = filter_params->h;
     obe_filter_t *filter = filter_params->filter;
     obe_output_stream_t *output_stream;
-    int num_channels, got_pkt;
+    int num_channels, got_pkt, num_samples;
     AVCodecContext *codec = NULL;
     AVPacket pkt;
     AVFrame *frame = NULL;
@@ -94,6 +125,121 @@ static void *start_filter( void *ptr )
 
         raw_frame = filter->queue.queue[0];
         pthread_mutex_unlock( &filter->queue.mutex );
+
+        /* handle passthrough streams */
+        for( int i = 0; i < h->num_output_streams; i++ )
+        {
+            output_stream = &h->output_streams[i];
+            if( output_stream->stream_action == STREAM_PASSTHROUGH )
+            {
+                obe_passthrough_t *passthrough = get_passthrough( h, output_stream->output_stream_id );
+                if( !passthrough )
+                {
+                    /* shouldn't happen */
+                    goto finish;
+                }
+
+                if( passthrough->num_in_frames < 2 )
+                    passthrough->num_in_frames++;
+           
+                /* reuse the AVFrame data space */
+                /* Interleave audio (and convert bit-depth if necessary) */
+                num_samples = MIN(raw_frame->audio_frame.num_samples, MAX_SAMPLES);
+                if( av_fifo_realloc2( passthrough->in_fifo, av_fifo_size( passthrough->in_fifo ) + num_samples*4 ) < 0 )
+                {
+                    syslog( LOG_ERR, "Malloc failed\n" );
+                    break;
+                }
+
+                for( int j = 0; j < num_samples; j++)
+                {
+                    for( int k = 0; k < 2; k++ )
+                    {
+                        uint32_t *src = (uint32_t*)raw_frame->audio_frame.audio_data[((output_stream->sdi_audio_pair-1)<<1)+k];
+                        uint8_t word1 = (src[j] >> 24) & 0xff;
+                        uint8_t word2 = (src[j] >> 16) & 0xff;
+                        av_fifo_generic_write( passthrough->in_fifo, &word1, sizeof(word1), NULL );
+                        av_fifo_generic_write( passthrough->in_fifo, &word2, sizeof(word2), NULL );
+                    }
+                }
+
+                if( passthrough->num_in_frames == 2 )
+                {
+                    uint8_t *dst8 = frame->data[0];
+                    int last_end_pos = 0;
+                    int fifo_size = av_fifo_size( passthrough->in_fifo );
+                    num_samples = fifo_size / 4;
+                    av_fifo_generic_read( passthrough->in_fifo, dst8, fifo_size, NULL );
+
+                    passthrough->bit_depth = 0;
+                    for( int j = 0; j < num_samples-2; j++ )
+                    {
+                        int found = 0;
+                        if( dst8[j*4 + 0] == SMPTE_337M_SYNCWORD_1_16_BIT_BYTE1 && dst8[j*4 + 1] == SMPTE_337M_SYNCWORD_1_16_BIT_BYTE2 &&
+                            dst8[j*4 + 2] == SMPTE_337M_SYNCWORD_2_16_BIT_BYTE1 && dst8[j*4 + 3] == SMPTE_337M_SYNCWORD_2_16_BIT_BYTE2 )
+                        {
+                           passthrough->bit_depth = 16;
+                           found = 1;
+                        }
+
+                        /* FIXME make these use libavutil macros?
+                         * FIXME support 20 and 24-bit? */
+                        if( found )
+                        {
+                            int datatype = dst8[j*4 + 5] & 0x1f;
+                            /* Only support 16-bit AC3 for now */
+                            if( datatype == 1 && passthrough->bit_depth == 16 )
+                            {
+                                int len = ((dst8[j*4 + 6] << 8) | dst8[j*4 + 7]) / 8;
+                                uint8_t *start = &dst8[j*4 + 8];
+                                int remaining_bytes = fifo_size - (j*4 + 8);
+
+                                if( remaining_bytes >= len )
+                                {
+                                    if( av_fifo_realloc2( passthrough->out_fifo, av_fifo_size( passthrough->out_fifo ) + len ) < 0 )
+                                    {
+                                        syslog( LOG_ERR, "Malloc failed\n" );
+                                        break;
+                                    }
+
+                                    av_fifo_generic_write( passthrough->out_fifo, start, len, NULL );
+                                    passthrough->num_out_frames++;
+
+                                    if( passthrough->num_out_frames == 1 )
+                                    {
+                                        int64_t pts = raw_frame->pts + av_rescale_q( raw_frame->audio_frame.num_samples, (AVRational){1, 48000}, (AVRational){1, OBE_CLOCK} );
+                                        pts -= av_rescale_q( num_samples - (j+2), (AVRational){1, 48000}, (AVRational){1, OBE_CLOCK} );
+
+                                        passthrough->pts = pts;
+                                    }
+
+                                    if( check_send_packet( h, output_stream, passthrough ) < 0 )
+                                        goto finish;
+
+                                    /* Could be an undershoot if non mod-4 frame size */
+                                    j = (start + len - dst8) / 4;
+                                    last_end_pos = j;
+                                }
+                                else
+                                {
+                                    /* set the end position to the beginning of the burst */
+                                    last_end_pos = j; 
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if( passthrough->bit_depth == 0 )
+                    {
+                        last_end_pos = num_samples;
+                    }
+
+                    /* Refill buffer */
+                    av_fifo_generic_write( passthrough->in_fifo, &dst8[last_end_pos*4], fifo_size - (last_end_pos*4), NULL );
+                }
+            }
+        }
 
         /* ignore the video track */
         for( int i = 1; i < h->num_encoders; i++ )
