@@ -580,7 +580,8 @@ static void obed__encoder_auth2(Obed__EncoderCommunicate_Service *service,
     Obed__EncoderResponse result = OBED__ENCODER_RESPONSE__INIT;
     char tmp[100];
     char tmp2[100];
-    int mlen, ret;
+    int ret;
+    unsigned long long mlen;
 
     if( !input->has_signed_message )
     {
