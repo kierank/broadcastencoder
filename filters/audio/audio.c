@@ -123,7 +123,7 @@ static void *start_filter( void *ptr )
             break;
         }
 
-        raw_frame = ulist_pop( &filter->queue.ulist );
+        raw_frame = obe_raw_frame_t_from_uchain( ulist_pop( &filter->queue.ulist ) );
         pthread_mutex_unlock( &filter->queue.mutex );
 
         /* handle passthrough streams */
