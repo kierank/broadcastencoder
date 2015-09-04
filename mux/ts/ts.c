@@ -426,7 +426,7 @@ void *open_muxer( void *ptr )
         num_frames = 0;
         ulist_delete_foreach( &h->mux_queue.ulist, uchain, uchain_tmp )
         {
-            coded_frame = uchain;
+            coded_frame = obe_coded_frame_t_from_uchain( uchain );
             output_stream = get_output_mux_stream( mux_params, coded_frame->output_stream_id );
             // FIXME name
             int64_t rescaled_dts = coded_frame->pts - first_video_pts + first_video_real_pts;
@@ -437,7 +437,7 @@ void *open_muxer( void *ptr )
 
             if( rescaled_dts <= video_dts )
             {
-                frames[num_frames].opaque = uchain;
+                frames[num_frames].opaque = coded_frame;
                 frames[num_frames].size = coded_frame->len;
                 frames[num_frames].data = coded_frame->data;
                 frames[num_frames].pid = output_stream->ts_opts.pid;
