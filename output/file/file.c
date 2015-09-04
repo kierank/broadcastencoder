@@ -48,7 +48,7 @@ static void *open_output( void *ptr )
     struct file_status status;
     FILE *fp = NULL;
     int num_buf_refs = 0;
-    AVBufferRef **buf_refs;
+    obe_buf_ref_t **buf_refs;
 
     status.output = output;
     status.fp = &fp;
