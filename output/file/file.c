@@ -96,7 +96,7 @@ static void *open_output( void *ptr )
             AVBufferRef *inner_buf_ref = buf_ref->buf_ref;
             fwrite( &inner_buf_ref->data[7*sizeof(int64_t)], 1, TS_PACKETS_SIZE, fp );
 
-            av_buffer_unref( inner_buf_ref );
+            av_buffer_unref( &inner_buf_ref );
             av_buffer_unref( &buf_refs[i] );
         }
 
