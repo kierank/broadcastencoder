@@ -35,6 +35,7 @@ static void *start_smoothing( void *ptr )
     obe_muxed_data_t **muxed_data = NULL, *start_data, *end_data;
     AVFifoBuffer *fifo_data = NULL, *fifo_pcr = NULL;
     AVBufferRef **output_buffers = NULL;
+    AVBufferPool *buffer_pool = NULL;
 
     struct sched_param param = {0};
     param.sched_priority = 99;
@@ -59,6 +60,13 @@ static void *start_smoothing( void *ptr )
     if( !output_buffers )
     {
         fprintf( stderr, "[mux-smoothing] Could not allocate output buffers" );
+        return NULL;
+    }
+
+    buffer_pool = av_buffer_pool_init( sizeof(obe_buf_ref_t) * 100, NULL );
+    if( !buffer_pool )
+    {
+        fprintf( stderr, "[mux-smoothing] Could not allocate buffer pool" );
         return NULL;
     }
 
@@ -210,6 +218,7 @@ static void *start_smoothing( void *ptr )
 
     av_fifo_free( fifo_data );
     av_fifo_free( fifo_pcr );
+    av_buffer_pool_uninit( &buffer_pool );
     free( output_buffers );
 
     return NULL;

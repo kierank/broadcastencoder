@@ -543,6 +543,15 @@ typedef struct
 
 UBASE_FROM_TO_TYPEDEF(obe_muxed_data_t, struct uchain, uchain, uchain)
 
+typedef struct
+{
+    struct uchain uchain;
+
+    AVBufferRef *buf_ref;
+} obe_buf_ref_t;
+
+UBASE_FROM_TO_TYPEDEF(obe_buf_ref_t, struct uchain, uchain, uchain)
+
 struct obe_t
 {
     int is_active;
