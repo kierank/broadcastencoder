@@ -116,8 +116,8 @@ static void *start_smoothing( void *ptr )
             start_data = ulist_peek( first_uchain );
             end_data = ulist_peek( first_uchain->prev );
 
-            start_pcr = start_data->pcr_list[0];
-            end_pcr = end_data->pcr_list[(end_data->len / 188)-1];
+            start_pcr = obe_muxed_data_t_from_uchain( start_data->pcr_list[0] );
+            end_pcr = obe_muxed_data_t_from_uchain( end_data->pcr_list[(end_data->len / 188)-1] );
             if( end_pcr - start_pcr >= temporal_vbv_size )
             {
                 buffer_complete = 1;

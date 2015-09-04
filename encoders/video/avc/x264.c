@@ -173,7 +173,7 @@ static void *start_encoder( void *ptr )
         }
         pthread_mutex_unlock( &h->drop_mutex );
 
-        raw_frame = ulist_pop( &encoder->queue.ulist );
+        raw_frame = obe_raw_frame_t_from_uchain( ulist_pop( &encoder->queue.ulist ) );
         pthread_mutex_unlock( &encoder->queue.mutex );
 
         if( convert_obe_to_x264_pic( &pic, raw_frame ) < 0 )
@@ -241,7 +241,6 @@ static void *start_encoder( void *ptr )
         arrival_time = raw_frame->arrival_time;
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
-        remove_from_queue( &encoder->queue );
 
         if( frame_size < 0 )
         {

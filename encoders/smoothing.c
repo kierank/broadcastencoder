@@ -86,7 +86,7 @@ static void *start_smoothing( void *ptr )
 
 //        printf("\n smoothed frames %i \n", num_enc_smoothing_frames );
 
-        coded_frame = ulist_pop( &h->enc_smoothing_queue.ulist );
+        coded_frame = obe_coded_frame_t_from_uchain( ulist_pop( &h->enc_smoothing_queue.ulist ) );
         pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
 
         /* The terminology can be a cause for confusion:
@@ -123,7 +123,6 @@ static void *start_smoothing( void *ptr )
         //printf("\n send_delta %"PRIi64" \n", get_input_clock_in_mpeg_ticks( h ) - send_delta );
         //send_delta = get_input_clock_in_mpeg_ticks( h );
 
-        remove_from_queue( &h->enc_smoothing_queue );
         pthread_mutex_lock( &h->enc_smoothing_queue.mutex );
         h->enc_smoothing_last_exit_time = get_input_clock_in_mpeg_ticks( h );
         pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );

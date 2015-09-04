@@ -528,6 +528,8 @@ typedef struct
     uint8_t *data;
 } obe_coded_frame_t;
 
+UBASE_FROM_TO_TYPEDEF(obe_coded_frame_t, struct uchain, uchain, uchain)
+
 typedef struct
 {
     struct uchain uchain;
@@ -538,6 +540,8 @@ typedef struct
     /* MPEG-TS */
     int64_t *pcr_list;
 } obe_muxed_data_t;
+
+UBASE_FROM_TO_TYPEDEF(obe_muxed_data_t, struct uchain, uchain, uchain)
 
 struct obe_t
 {

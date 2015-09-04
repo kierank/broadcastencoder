@@ -385,7 +385,7 @@ void *open_muxer( void *ptr )
         {
             ulist_foreach( &h->mux_queue.ulist, uchain )
             {
-                coded_frame = uchain;
+                coded_frame = obe_coded_frame_t_from_uchain( uchain );
                 if( coded_frame->is_video )
                 {
                     video_found = 1;

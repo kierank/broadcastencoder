@@ -133,7 +133,7 @@ static void *start_encoder( void *ptr )
             goto end;
         }
 
-        raw_frame = ulist_pop( &encoder->queue.ulist );
+        raw_frame = obe_raw_frame_t_from_uchain( ulist_pop( &encoder->queue.ulist ) );
         pthread_mutex_unlock( &encoder->queue.mutex );
 
         if( cur_pts == -1 )
