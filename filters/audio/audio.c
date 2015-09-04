@@ -141,7 +141,7 @@ static void *start_filter( void *ptr )
 
                 if( passthrough->num_in_frames < 2 )
                     passthrough->num_in_frames++;
-           
+
                 /* reuse the AVFrame data space */
                 /* Interleave audio (and convert bit-depth if necessary) */
                 num_samples = MIN(raw_frame->audio_frame.num_samples, MAX_SAMPLES);
@@ -332,7 +332,6 @@ static void *start_filter( void *ptr )
             }
         }
 
-        remove_from_queue( &filter->queue );
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
         raw_frame = NULL;
