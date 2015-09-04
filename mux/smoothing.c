@@ -162,7 +162,6 @@ static void *start_smoothing( void *ptr )
 
             av_fifo_generic_write( fifo_pcr, muxed_data[i]->pcr_list, (muxed_data[i]->len * sizeof(int64_t)) / 188, NULL );
 
-            remove_from_queue( &h->mux_smoothing_queue );
             destroy_muxed_data( muxed_data[i] );
         }
 
