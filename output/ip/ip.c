@@ -629,7 +629,7 @@ static void *open_output( void *ptr )
     struct ip_status status;
     hnd_t ip_handle = NULL;
     int num_buf_refs = 0;
-    AVBufferRef **buf_refs;
+    obe_buf_ref_t **buf_refs;
     obe_udp_opts_t udp_opts;
 
     struct sched_param param = {0};
@@ -693,12 +693,12 @@ static void *open_output( void *ptr )
             AVBufferRef *data_buf_ref = buf_ref->data_buf_ref;
             if( output_dest->type == OUTPUT_RTP )
             {
-                if( write_rtp_pkt( ip_handle, &data_buf_ref[i]->data[7*sizeof(int64_t)], TS_PACKETS_SIZE, AV_RN64( buf_refs[i]->data ), output_dest->fec_type ) < 0 )
+                if( write_rtp_pkt( ip_handle, &data_buf_ref->data[7*sizeof(int64_t)], TS_PACKETS_SIZE, AV_RN64( data_buf_ref->data ), output_dest->fec_type ) < 0 )
                     syslog( LOG_ERR, "[rtp] Failed to write RTP packet\n" );
             }
             else
             {
-                if( udp_write( ip_handle, &data_buf_ref[i]->data[7*sizeof(int64_t)], TS_PACKETS_SIZE ) < 0 )
+                if( udp_write( ip_handle, &data_buf_ref->data[7*sizeof(int64_t)], TS_PACKETS_SIZE ) < 0 )
                     syslog( LOG_ERR, "[udp] Failed to write UDP packet\n" );
             }
 
