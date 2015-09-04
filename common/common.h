@@ -547,7 +547,8 @@ typedef struct
 {
     struct uchain uchain;
 
-    AVBufferRef *buf_ref;
+    AVBufferRef *self_buf_ref;
+    AVBufferRef *data_buf_ref;
 } obe_buf_ref_t;
 
 UBASE_FROM_TO_TYPEDEF(obe_buf_ref_t, struct uchain, uchain, uchain)

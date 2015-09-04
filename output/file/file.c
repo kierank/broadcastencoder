@@ -93,11 +93,11 @@ static void *open_output( void *ptr )
         for( int i = 0; i < num_buf_refs; i++ )
         {
             obe_buf_ref_t *buf_ref = buf_refs[i];
-            AVBufferRef *inner_buf_ref = buf_ref->buf_ref;
-            fwrite( &inner_buf_ref->data[7*sizeof(int64_t)], 1, TS_PACKETS_SIZE, fp );
+            AVBufferRef *data_buf_ref = buf_ref->data_buf_ref;
+            fwrite( &data_buf_ref->data[7*sizeof(int64_t)], 1, TS_PACKETS_SIZE, fp );
 
-            av_buffer_unref( &inner_buf_ref );
-            av_buffer_unref( &buf_refs[i] );
+            av_buffer_unref( &data_buf_ref );
+            av_buffer_unref( &buf_ref->self_buf_ref );
         }
 
         free( buf_refs );

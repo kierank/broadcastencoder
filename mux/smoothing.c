@@ -34,7 +34,7 @@ static void *start_smoothing( void *ptr )
     int64_t start_clock = -1, start_pcr, end_pcr, temporal_vbv_size = 0, cur_pcr;
     obe_muxed_data_t **muxed_data = NULL, *start_data, *end_data;
     AVFifoBuffer *fifo_data = NULL, *fifo_pcr = NULL;
-    AVBufferRef **output_buffers = NULL;
+    obe_buf_ref_t **output_buffers = NULL;
     AVBufferPool *buffer_pool = NULL;
 
     struct sched_param param = {0};
@@ -179,13 +179,21 @@ static void *start_smoothing( void *ptr )
 
         while( av_fifo_size( fifo_data ) >= TS_PACKETS_SIZE )
         {
-            output_buffers[0] = av_buffer_alloc( TS_PACKETS_SIZE + 7 * sizeof(int64_t) );
-            av_fifo_generic_read( fifo_pcr, output_buffers[0]->data, 7 * sizeof(int64_t), NULL );
-            av_fifo_generic_read( fifo_data, &output_buffers[0]->data[7 * sizeof(int64_t)], TS_PACKETS_SIZE, NULL );
+            /* Wrap data buffer reference inside obe_buf_ref_t which is also buffer reffed.. */
+            AVBufferRef *data_buf_ref = av_buffer_alloc( TS_PACKETS_SIZE + 7 * sizeof(int64_t) );
+            av_fifo_generic_read( fifo_pcr, data_buf_ref->data, 7 * sizeof(int64_t), NULL );
+            av_fifo_generic_read( fifo_data, &data_buf_ref->data[7 * sizeof(int64_t)], TS_PACKETS_SIZE, NULL );
 
-            for( int i = 1; i < h->num_outputs; i++ )
+            for( int i = 0; i < h->num_outputs; i++ )
             {
-                output_buffers[i] = av_buffer_ref( output_buffers[0] );
+                AVBufferRef *self_buf_ref = av_buffer_pool_get( buffer_pool );
+                obe_buf_ref_t *obe_buf_ref = (obe_buf_ref_t *)self_buf_ref->data;
+                obe_buf_ref->self_buf_ref = self_buf_ref;
+                uchain_init( &obe_buf_ref->uchain );
+                obe_buf_ref->data_buf_ref = i == 0 ? data_buf_ref : av_buffer_ref( data_buf_ref );
+
+                output_buffers[i] = obe_buf_ref;
+              
                 if( !output_buffers[i] )
                 {
                     syslog( LOG_ERR, "Malloc failed\n" );
@@ -193,7 +201,7 @@ static void *start_smoothing( void *ptr )
                 }
             }
 
-            cur_pcr = AV_RN64( output_buffers[0]->data );
+            cur_pcr = AV_RN64( output_buffers[0]->data_buf_ref->data );
 
             if( start_clock != -1 )
             {
@@ -208,7 +216,6 @@ static void *start_smoothing( void *ptr )
 
             for( int i = 0; i < h->num_outputs; i++ )
             {
-                // FIXME
                 if( add_to_queue( &h->outputs[i]->queue, output_buffers[i] ) < 0 )
                     return NULL;
                 output_buffers[i] = NULL;
