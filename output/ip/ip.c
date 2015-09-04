@@ -24,7 +24,6 @@
 
 #include <libavutil/random_seed.h>
 #include <libavutil/intreadwrite.h>
-#include <libavutil/buffer.h>
 #include <libavutil/fifo.h>
 #include <sys/time.h>
 
@@ -629,8 +628,8 @@ static void *open_output( void *ptr )
     obe_output_dest_t *output_dest = &output->output_dest;
     struct ip_status status;
     hnd_t ip_handle = NULL;
-    int num_muxed_data = 0;
-    AVBufferRef **muxed_data;
+    int num_buf_refs = 0;
+    AVBufferRef **buf_refs;
     obe_udp_opts_t udp_opts;
 
     struct sched_param param = {0};
@@ -672,40 +671,43 @@ static void *open_output( void *ptr )
             break;
         }
 
-        num_muxed_data = ulist_depth( &output->queue.ulist );
+        num_buf_refs = ulist_depth( &output->queue.ulist );
 
-        muxed_data = malloc( num_muxed_data * sizeof(*muxed_data) );
-        if( !muxed_data )
+        buf_refs = malloc( num_buf_refs * sizeof(*buf_refs) );
+        if( !buf_refs )
         {
             pthread_mutex_unlock( &output->queue.mutex );
             syslog( LOG_ERR, "Malloc failed\n" );
             return NULL;
         }
 
-        // FIXME extract pointers
+        for( int i = 0; i < num_buf_refs; i++ )
+            buf_refs[i] = obe_buf_ref_t_from_uchain( ulist_pop( &output->queue.ulist ) );
         pthread_mutex_unlock( &output->queue.mutex );
 
-//        printf("\n START %i \n", num_muxed_data );
+//        printf("\n START %i \n", num_buf_refs );
 
-        for( int i = 0; i < num_muxed_data; i++ )
+        for( int i = 0; i < num_buf_refs; i++ )
         {
+            obe_buf_ref_t *buf_ref = buf_refs[i];
+            AVBufferRef *data_buf_ref = buf_ref->data_buf_ref;
             if( output_dest->type == OUTPUT_RTP )
             {
-                if( write_rtp_pkt( ip_handle, &muxed_data[i]->data[7*sizeof(int64_t)], TS_PACKETS_SIZE, AV_RN64( muxed_data[i]->data ), output_dest->fec_type ) < 0 )
+                if( write_rtp_pkt( ip_handle, &data_buf_ref[i]->data[7*sizeof(int64_t)], TS_PACKETS_SIZE, AV_RN64( buf_refs[i]->data ), output_dest->fec_type ) < 0 )
                     syslog( LOG_ERR, "[rtp] Failed to write RTP packet\n" );
             }
             else
             {
-                if( udp_write( ip_handle, &muxed_data[i]->data[7*sizeof(int64_t)], TS_PACKETS_SIZE ) < 0 )
+                if( udp_write( ip_handle, &data_buf_ref[i]->data[7*sizeof(int64_t)], TS_PACKETS_SIZE ) < 0 )
                     syslog( LOG_ERR, "[udp] Failed to write UDP packet\n" );
             }
 
-            remove_from_queue( &output->queue );
-            av_buffer_unref( &muxed_data[i] );
+            av_buffer_unref( &data_buf_ref );
+            av_buffer_unref( &buf_ref->self_buf_ref );
         }
 
-        free( muxed_data );
-        muxed_data = NULL;
+        free( buf_refs );
+        buf_refs = NULL;
     }
 
     pthread_cleanup_pop( 1 );
