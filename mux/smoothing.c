@@ -141,7 +141,7 @@ static void *start_smoothing( void *ptr )
         }
 
         for( int i = 0; i < num_muxed_data; i++ )
-            muxed_data[i] = ulist_pop( &h->mux_smoothing_queue.ulist );
+            muxed_data[i] = obe_muxed_data_t_from_uchain( ulist_pop( &h->mux_smoothing_queue.ulist ) );
         pthread_mutex_unlock( &h->mux_smoothing_queue.mutex );
 
         for( int i = 0; i < num_muxed_data; i++ )
