@@ -26,6 +26,8 @@
 
 #include "config.h"
 
+#include <upipe/ubase.h>
+#include <upipe/ulist.h>
 #include <libavutil/pixfmt.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/common.h>
@@ -85,6 +87,38 @@
 
 /* NTSC */
 #define NTSC_FIRST_CODED_LINE 23
+
+
+/** @This declares two functions dealing with substructures included into a
+ * larger structure.
+ *
+ * @param STRUCTURE name of the larger structure
+ * @param SUBSTRUCT name of the smaller substructure
+ * @param SUBNAME name to use for the functions
+ * (STRUCTURE##_{to,from}_##SUBNAME)
+ * @param SUB name of the @tt{struct SUBSTRUCT} field of @tt{struct STRUCTURE}
+ */
+#define UBASE_FROM_TO_TYPEDEF(STRUCTURE, SUBSTRUCT, SUBNAME, SUB)           \
+/** @internal @This returns a pointer to SUBNAME.                           \
+ *                                                                          \
+ * @param STRUCTURE pointer to struct STRUCTURE                             \
+ * @return pointer to struct SUBSTRUCT                                      \
+ */                                                                         \
+static UBASE_UNUSED inline SUBSTRUCT *                                      \
+    STRUCTURE##_to_##SUBNAME(STRUCTURE *s)                                  \
+{                                                                           \
+    return &s->SUB;                                                         \
+}                                                                           \
+/** @internal @This returns a pointer to SUBNAME.                           \
+ *                                                                          \
+ * @param sub pointer to struct SUBSTRUCT                                   \
+ * @return pointer to struct STRUCTURE                                      \
+ */                                                                         \
+static UBASE_UNUSED inline  STRUCTURE *                                     \
+    STRUCTURE##_from_##SUBNAME(SUBSTRUCT *sub)                              \
+{                                                                           \
+    return container_of(sub, STRUCTURE, SUB);                               \
+}
 
 static inline int obe_clip3( int v, int i_min, int i_max )
 {
@@ -366,8 +400,7 @@ typedef struct
 
 typedef struct
 {
-    void **queue;
-    int  size;
+    struct uchain ulist;
 
     pthread_mutex_t mutex;
     pthread_cond_t  in_cv;
@@ -376,6 +409,8 @@ typedef struct
 
 typedef struct
 {
+    struct uchain uchain;
+    
     int input_stream_id;
     int64_t pts;
 
@@ -412,6 +447,8 @@ typedef struct
 
     int reset_obe;
 } obe_raw_frame_t;
+
+UBASE_FROM_TO_TYPEDEF(obe_raw_frame_t, struct uchain, uchain, uchain)
 
 typedef struct
 {
@@ -468,6 +505,8 @@ typedef struct
 
 typedef struct
 {
+    struct uchain uchain;
+    
     int output_stream_id;
     int is_video;
 
@@ -491,6 +530,8 @@ typedef struct
 
 typedef struct
 {
+    struct uchain uchain;
+
     int len;
     uint8_t *data;
 

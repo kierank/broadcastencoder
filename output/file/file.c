@@ -64,7 +64,7 @@ static void *open_output( void *ptr )
     while( 1 )
     {
         pthread_mutex_lock( &output->queue.mutex );
-        while( !output->queue.size && !output->cancel_thread )
+        while( ulist_empty( &output->queue.ulist ) && !output->cancel_thread )
         {
             /* Often this cond_wait is not because of an underflow */
             pthread_cond_wait( &output->queue.in_cv, &output->queue.mutex );
@@ -76,7 +76,7 @@ static void *open_output( void *ptr )
             break;
         }
 
-        num_muxed_data = output->queue.size;
+        num_muxed_data = ulist_depth( &output->queue.ulist );
 
         muxed_data = malloc( num_muxed_data * sizeof(*muxed_data) );
         if( !muxed_data )
@@ -85,14 +85,14 @@ static void *open_output( void *ptr )
             syslog( LOG_ERR, "Malloc failed\n" );
             return NULL;
         }
-        memcpy( muxed_data, output->queue.queue, num_muxed_data * sizeof(*muxed_data) );
+
+        //FIXME
         pthread_mutex_unlock( &output->queue.mutex );
 
         for( int i = 0; i < num_muxed_data; i++ )
         {
             fwrite( &muxed_data[i]->data[7*sizeof(int64_t)], 1, TS_PACKETS_SIZE, fp );
 
-            remove_from_queue( &output->queue );
             av_buffer_unref( &muxed_data[i] );
         }
 

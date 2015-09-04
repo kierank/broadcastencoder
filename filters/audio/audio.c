@@ -114,7 +114,7 @@ static void *start_filter( void *ptr )
     {
         pthread_mutex_lock( &filter->queue.mutex );
 
-        while( !filter->queue.size && !filter->cancel_thread )
+        while( ulist_empty( &filter->queue.ulist ) && !filter->cancel_thread )
             pthread_cond_wait( &filter->queue.in_cv, &filter->queue.mutex );
 
         if( filter->cancel_thread )
@@ -123,7 +123,7 @@ static void *start_filter( void *ptr )
             break;
         }
 
-        raw_frame = filter->queue.queue[0];
+        raw_frame = ulist_pop( &filter->queue.ulist );
         pthread_mutex_unlock( &filter->queue.mutex );
 
         /* handle passthrough streams */

@@ -150,7 +150,7 @@ static void *start_encoder( void *ptr )
             encoder->params_update = 0;
         }
 
-        while( !encoder->queue.size && !encoder->cancel_thread )
+        while( ulist_empty( &encoder->queue.ulist ) && !encoder->cancel_thread )
             pthread_cond_wait( &encoder->queue.in_cv, &encoder->queue.mutex );
 
         if( encoder->cancel_thread )
@@ -173,7 +173,7 @@ static void *start_encoder( void *ptr )
         }
         pthread_mutex_unlock( &h->drop_mutex );
 
-        raw_frame = encoder->queue.queue[0];
+        raw_frame = ulist_pop( &encoder->queue.ulist );
         pthread_mutex_unlock( &encoder->queue.mutex );
 
         if( convert_obe_to_x264_pic( &pic, raw_frame ) < 0 )
@@ -218,11 +218,12 @@ static void *start_encoder( void *ptr )
                 /* time elapsed since last frame was removed */
                 int64_t last_frame_delta = get_input_clock_in_mpeg_ticks( h ) - h->enc_smoothing_last_exit_time;
 
-                if( h->enc_smoothing_queue.size )
+                if( !ulist_empty( &encoder->queue.ulist ) )
                 {
                     obe_coded_frame_t *first_frame, *last_frame;
-                    first_frame = h->enc_smoothing_queue.queue[0];
-                    last_frame = h->enc_smoothing_queue.queue[h->enc_smoothing_queue.size-1];
+                    struct uchain *first_uchain = &encoder->queue.ulist;
+                    first_frame = ulist_peek( first_uchain );
+                    last_frame = ulist_peek( first_uchain->prev );
                     int64_t frame_durations = last_frame->real_dts - first_frame->real_dts + frame_duration;
                     buffer_fill = (float)(frame_durations - last_frame_delta)/buffer_duration;
                 }

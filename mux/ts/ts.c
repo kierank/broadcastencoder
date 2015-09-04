@@ -364,6 +364,7 @@ void *open_muxer( void *ptr )
     {
         video_found = 0;
         video_dts = 0;
+        struct uchain *uchain, *uchain_tmp;
 
         pthread_mutex_lock( &h->mux_queue.mutex );
 
@@ -382,9 +383,9 @@ void *open_muxer( void *ptr )
 
         while( !video_found )
         {
-            for( int i = 0; i < h->mux_queue.size; i++ )
+            ulist_foreach( &h->mux_queue.ulist, uchain )
             {
-                coded_frame = h->mux_queue.queue[i];
+                coded_frame = uchain;
                 if( coded_frame->is_video )
                 {
                     video_found = 1;
@@ -411,7 +412,8 @@ void *open_muxer( void *ptr )
             }
         }
 
-        frames = calloc( h->mux_queue.size, sizeof(*frames) );
+        int mux_queue_size = ulist_depth( &h->mux_queue.ulist );
+        frames = calloc( mux_queue_size, sizeof(*frames) );
         if( !frames )
         {
             syslog( LOG_ERR, "Malloc failed\n" );
@@ -422,9 +424,9 @@ void *open_muxer( void *ptr )
         //printf("\n START - queuelen %i \n", h->mux_queue.size);
 
         num_frames = 0;
-        for( int i = 0; i < h->mux_queue.size; i++ )
+        ulist_delete_foreach( &h->mux_queue.ulist, uchain, uchain_tmp )
         {
-            coded_frame = h->mux_queue.queue[i];
+            coded_frame = uchain;
             output_stream = get_output_mux_stream( mux_params, coded_frame->output_stream_id );
             // FIXME name
             int64_t rescaled_dts = coded_frame->pts - first_video_pts + first_video_real_pts;
@@ -435,7 +437,7 @@ void *open_muxer( void *ptr )
 
             if( rescaled_dts <= video_dts )
             {
-                frames[num_frames].opaque = h->mux_queue.queue[i];
+                frames[num_frames].opaque = uchain;
                 frames[num_frames].size = coded_frame->len;
                 frames[num_frames].data = coded_frame->data;
                 frames[num_frames].pid = output_stream->ts_opts.pid;
@@ -460,6 +462,7 @@ void *open_muxer( void *ptr )
                 frames[num_frames].random_access = coded_frame->random_access;
                 frames[num_frames].priority = coded_frame->priority;
                 num_frames++;
+                ulist_delete(uchain);
             }
         }
 
@@ -490,10 +493,7 @@ void *open_muxer( void *ptr )
         }
 
         for( int i = 0; i < num_frames; i++ )
-        {
-            remove_item_from_queue( &h->mux_queue, frames[i].opaque );
             destroy_coded_frame( frames[i].opaque );
-        }
 
         free( frames );
     }

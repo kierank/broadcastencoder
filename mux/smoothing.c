@@ -86,7 +86,7 @@ static void *start_smoothing( void *ptr )
     {
         pthread_mutex_lock( &h->mux_smoothing_queue.mutex );
 
-        while( h->mux_smoothing_queue.size == num_muxed_data && !h->cancel_mux_smoothing_thread )
+        while( ulist_depth( &h->mux_smoothing_queue.ulist ) == num_muxed_data && !h->cancel_mux_smoothing_thread )
             pthread_cond_wait( &h->mux_smoothing_queue.in_cv, &h->mux_smoothing_queue.mutex );
 
         if( h->cancel_mux_smoothing_thread )
@@ -95,7 +95,7 @@ static void *start_smoothing( void *ptr )
             break;
         }
 
-        num_muxed_data = h->mux_smoothing_queue.size;
+        num_muxed_data = ulist_depth( &h->mux_smoothing_queue.ulist );
 
         /* Refill the buffer after a drop */
         pthread_mutex_lock( &h->drop_mutex );
@@ -112,8 +112,9 @@ static void *start_smoothing( void *ptr )
 
         if( !buffer_complete )
         {
-            start_data = h->mux_smoothing_queue.queue[0];
-            end_data = h->mux_smoothing_queue.queue[num_muxed_data-1];
+            struct uchain *first_uchain = &h->mux_smoothing_queue.ulist;
+            start_data = ulist_peek( first_uchain );
+            end_data = ulist_peek( first_uchain->prev );
 
             start_pcr = start_data->pcr_list[0];
             end_pcr = end_data->pcr_list[(end_data->len / 188)-1];
@@ -138,7 +139,9 @@ static void *start_smoothing( void *ptr )
             syslog( LOG_ERR, "Malloc failed\n" );
             return NULL;
         }
-        memcpy( muxed_data, h->mux_smoothing_queue.queue, num_muxed_data * sizeof(*muxed_data) );
+
+        for( int i = 0; i < num_muxed_data; i++ )
+            muxed_data[i] = ulist_pop( &h->mux_smoothing_queue.ulist );
         pthread_mutex_unlock( &h->mux_smoothing_queue.mutex );
 
         for( int i = 0; i < num_muxed_data; i++ )
@@ -198,6 +201,7 @@ static void *start_smoothing( void *ptr )
 
             for( int i = 0; i < h->num_outputs; i++ )
             {
+                // FIXME
                 if( add_to_queue( &h->outputs[i]->queue, output_buffers[i] ) < 0 )
                     return NULL;
                 output_buffers[i] = NULL;

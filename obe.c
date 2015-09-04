@@ -174,12 +174,11 @@ void obe_init_queue( obe_queue_t *queue )
     pthread_mutex_init( &queue->mutex, NULL );
     pthread_cond_init( &queue->in_cv, NULL );
     pthread_cond_init( &queue->out_cv, NULL );
+    ulist_init( &queue->ulist );
 }
 
 void obe_destroy_queue( obe_queue_t *queue )
 {
-    free( queue->queue );
-
     pthread_mutex_unlock( &queue->mutex );
     pthread_mutex_destroy( &queue->mutex );
     pthread_cond_destroy( &queue->in_cv );
@@ -188,17 +187,8 @@ void obe_destroy_queue( obe_queue_t *queue )
 
 int add_to_queue( obe_queue_t *queue, void *item )
 {
-    void **tmp;
-
     pthread_mutex_lock( &queue->mutex );
-    tmp = realloc( queue->queue, sizeof(*queue->queue) * (queue->size+1) );
-    if( !tmp )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
-    queue->queue = tmp;
-    queue->queue[queue->size++] = item;
+    ulist_add(&queue->ulist, item);
 
     pthread_cond_signal( &queue->in_cv );
     pthread_mutex_unlock( &queue->mutex );
@@ -208,19 +198,8 @@ int add_to_queue( obe_queue_t *queue, void *item )
 
 int remove_from_queue( obe_queue_t *queue )
 {
-    void **tmp;
-
     pthread_mutex_lock( &queue->mutex );
-    if( queue->size > 1 )
-        memmove( &queue->queue[0], &queue->queue[1], sizeof(*queue->queue) * (queue->size-1) );
-    tmp = realloc( queue->queue, sizeof(*queue->queue) * (queue->size-1) );
-    queue->size--;
-    if( !tmp && queue->size )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
-    queue->queue = tmp;
+    ulist_pop(&queue->ulist);
 
     pthread_cond_signal( &queue->out_cv );
     pthread_mutex_unlock( &queue->mutex );
@@ -230,25 +209,8 @@ int remove_from_queue( obe_queue_t *queue )
 
 int remove_item_from_queue( obe_queue_t *queue, void *item )
 {
-    void **tmp;
-
     pthread_mutex_lock( &queue->mutex );
-    for( int i = 0; i < queue->size; i++ )
-    {
-        if( queue->queue[i] == item )
-        {
-            memmove( &queue->queue[i], &queue->queue[i+1], sizeof(*queue->queue) * (queue->size-1-i) );
-            tmp = realloc( queue->queue, sizeof(*queue->queue) * (queue->size-1) );
-            queue->size--;
-            if( !tmp && queue->size )
-            {
-                syslog( LOG_ERR, "Malloc failed\n" );
-                return -1;
-            }
-            queue->queue = tmp;
-            break;
-        }
-    }
+    ulist_delete(item);
 
     pthread_cond_signal( &queue->out_cv );
     pthread_mutex_unlock( &queue->mutex );
@@ -283,10 +245,13 @@ static void destroy_filter( obe_filter_t *filter )
 {
     obe_raw_frame_t *raw_frame;
     pthread_mutex_lock( &filter->queue.mutex );
-    for( int i = 0; i < filter->queue.size; i++ )
+    struct uchain *uchain, *uchain_tmp;
+
+    ulist_delete_foreach( &filter->queue.ulist, uchain_tmp, uchain)
     {
-        raw_frame = filter->queue.queue[i];
+        raw_frame = (obe_raw_frame_t *)uchain;
         raw_frame->release_data( raw_frame );
+        ulist_delete(uchain);
         raw_frame->release_frame( raw_frame );
     }
 
@@ -329,13 +294,15 @@ static void destroy_encoder( obe_encoder_t *encoder )
 {
     obe_raw_frame_t *raw_frame;
     pthread_mutex_lock( &encoder->queue.mutex );
-    for( int i = 0; i < encoder->queue.size; i++ )
+    struct uchain *uchain, *uchain_tmp;
+
+    ulist_delete_foreach( &encoder->queue.ulist, uchain_tmp, uchain)
     {
-        raw_frame = encoder->queue.queue[i];
+        raw_frame = (obe_raw_frame_t *)uchain;
         raw_frame->release_data( raw_frame );
+        ulist_delete(uchain);
         raw_frame->release_frame( raw_frame );
     }
-
     obe_destroy_queue( &encoder->queue );
 
     free( encoder );
@@ -343,23 +310,29 @@ static void destroy_encoder( obe_encoder_t *encoder )
 
 static void destroy_enc_smoothing( obe_queue_t *queue )
 {
-    obe_coded_frame_t *coded_frame;
     pthread_mutex_lock( &queue->mutex );
-    for( int i = 0; i < queue->size; i++ )
-    {
-        coded_frame = queue->queue[i];
-        destroy_coded_frame( coded_frame );
-    }
+    struct uchain *uchain, *uchain_tmp;
 
+    ulist_delete_foreach( &queue->ulist, uchain_tmp, uchain)
+    {
+        ulist_delete(uchain);
+        destroy_coded_frame( (obe_coded_frame_t *)uchain );
+    }
+    
     obe_destroy_queue( queue );
 }
 
 static void destroy_mux( obe_t *h )
 {
     pthread_mutex_lock( &h->mux_queue.mutex );
-    for( int i = 0; i < h->mux_queue.size; i++ )
-        destroy_coded_frame( h->mux_queue.queue[i] );
+    struct uchain *uchain, *uchain_tmp;
 
+    ulist_delete_foreach( &h->mux_queue.ulist, uchain_tmp, uchain)
+    {
+        ulist_delete(uchain);
+        destroy_coded_frame( (obe_coded_frame_t *)uchain );
+    }
+    
     obe_destroy_queue( &h->mux_queue );
 
     if( h->mux_opts.service_name )
@@ -372,34 +345,29 @@ static void destroy_mux_smoothing( obe_queue_t *queue )
 {
     obe_muxed_data_t *muxed_data;
     pthread_mutex_lock( &queue->mutex );
-    for( int i = 0; i < queue->size; i++ )
-    {
-        muxed_data = queue->queue[i];
-        destroy_muxed_data( muxed_data );
-    }
+    struct uchain *uchain, *uchain_tmp;
 
+    ulist_delete_foreach( &queue->ulist, uchain_tmp, uchain)
+    {
+        destroy_muxed_data( (obe_muxed_data_t *)uchain );
+    }
+    
     obe_destroy_queue( queue );
 }
 
 int remove_early_frames( obe_t *h, int64_t pts )
 {
     void **tmp;
-    for( int i = 0; i < h->mux_queue.size; i++ )
+
+    struct uchain *uchain, *uchain_tmp;
+
+    ulist_delete_foreach( &h->mux_queue.ulist, uchain_tmp, uchain)
     {
-        obe_coded_frame_t *frame = h->mux_queue.queue[i];
+        obe_coded_frame_t *frame = (obe_coded_frame_t *)uchain;
         if( !frame->is_video && frame->pts < pts )
         {
-            destroy_coded_frame( frame );
-            memmove( &h->mux_queue.queue[i], &h->mux_queue.queue[i+1], sizeof(*h->mux_queue.queue) * (h->mux_queue.size-1-i) );
-            tmp = realloc( h->mux_queue.queue, sizeof(*h->mux_queue.queue) * (h->mux_queue.size-1) );
-            h->mux_queue.size--;
-            i--;
-            if( !tmp && h->mux_queue.size )
-            {
-                syslog( LOG_ERR, "Malloc failed\n" );
-                return -1;
-            }
-            h->mux_queue.queue = tmp;
+            ulist_delete( uchain );
+            destroy_coded_frame( (obe_coded_frame_t *)uchain );
         }
     }
 
@@ -410,9 +378,14 @@ int remove_early_frames( obe_t *h, int64_t pts )
 static void destroy_output( obe_output_t *output )
 {
     pthread_mutex_lock( &output->queue.mutex );
-    for( int i = 0; i < output->queue.size; i++ )
-        av_buffer_unref( output->queue.queue[i] );
+    struct uchain *uchain, *uchain_tmp;
 
+    ulist_delete_foreach( &output->queue.ulist, uchain_tmp, uchain)
+    {
+        ulist_delete( uchain );
+        av_buffer_unref( uchain );
+    }
+    
     obe_destroy_queue( &output->queue );
     free( output );
 }
@@ -803,7 +776,7 @@ int obe_autoconf_device( obe_t *h, obe_input_t *input_device, obe_input_program_
     if( input_device->input_type == INPUT_DEVICE_DECKLINK )
         input = decklink_input;
 #endif
-    else if( input_device->input_type == INPUT_DEVICE_LINSYS_SDI )
+    if( input_device->input_type == INPUT_DEVICE_LINSYS_SDI )
         input = linsys_sdi_input;
     else if( input_device->input_type == INPUT_DEVICE_BARS )
         input = bars_input;

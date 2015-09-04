@@ -212,7 +212,7 @@ static void *start_encoder( void *ptr )
         /* TODO: detect bitrate or channel reconfig */
         pthread_mutex_lock( &encoder->queue.mutex );
 
-        while( !encoder->queue.size && !encoder->cancel_thread )
+        while( ulist_empty( &encoder->queue.ulist ) && !encoder->cancel_thread )
             pthread_cond_wait( &encoder->queue.in_cv, &encoder->queue.mutex );
 
         if( encoder->cancel_thread )
@@ -221,7 +221,7 @@ static void *start_encoder( void *ptr )
             goto finish;
         }
 
-        raw_frame = encoder->queue.queue[0];
+        raw_frame = ulist_pop( &encoder->queue.ulist );
         pthread_mutex_unlock( &encoder->queue.mutex );
 
         if( cur_pts == -1 )
@@ -236,7 +236,6 @@ static void *start_encoder( void *ptr )
 
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
-        remove_from_queue( &encoder->queue );
 
         while( avresample_available( avr ) >= codec->frame_size )
         {

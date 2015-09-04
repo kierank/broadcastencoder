@@ -59,7 +59,7 @@ static void *start_smoothing( void *ptr )
     {
         pthread_mutex_lock( &h->enc_smoothing_queue.mutex );
 
-        while( h->enc_smoothing_queue.size == num_enc_smoothing_frames && !h->cancel_enc_smoothing_thread )
+        while( ulist_depth( &h->enc_smoothing_queue.ulist ) == num_enc_smoothing_frames && !h->cancel_enc_smoothing_thread )
             pthread_cond_wait( &h->enc_smoothing_queue.in_cv, &h->enc_smoothing_queue.mutex );
 
         if( h->cancel_enc_smoothing_thread )
@@ -68,7 +68,7 @@ static void *start_smoothing( void *ptr )
             break;
         }
 
-        num_enc_smoothing_frames = h->enc_smoothing_queue.size;
+        num_enc_smoothing_frames = ulist_depth( &h->enc_smoothing_queue.ulist );
 
         if( !h->enc_smoothing_buffer_complete )
         {
@@ -86,7 +86,7 @@ static void *start_smoothing( void *ptr )
 
 //        printf("\n smoothed frames %i \n", num_enc_smoothing_frames );
 
-        coded_frame = h->enc_smoothing_queue.queue[0];
+        coded_frame = ulist_pop( &h->enc_smoothing_queue.ulist );
         pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
 
         /* The terminology can be a cause for confusion:
