@@ -222,8 +222,8 @@ static void *start_encoder( void *ptr )
                 {
                     obe_coded_frame_t *first_frame, *last_frame;
                     struct uchain *first_uchain = &encoder->queue.ulist;
-                    first_frame = ulist_peek( first_uchain );
-                    last_frame = ulist_peek( first_uchain->prev );
+                    first_frame = obe_coded_frame_t_from_uchain( ulist_peek( first_uchain ) );
+                    last_frame = obe_coded_frame_t_from_uchain( ulist_peek( first_uchain->prev ) );
                     int64_t frame_durations = last_frame->real_dts - first_frame->real_dts + frame_duration;
                     buffer_fill = (float)(frame_durations - last_frame_delta)/buffer_duration;
                 }
