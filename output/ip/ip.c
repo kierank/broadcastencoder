@@ -104,6 +104,7 @@ struct ip_status
 {
     obe_output_t *output;
     hnd_t *ip_handle;
+    struct uchain *queue;
 };
 
 static void xor_packet_c( uint8_t *dst, uint8_t *src, int len )
@@ -628,9 +629,10 @@ static void *open_output( void *ptr )
     obe_output_dest_t *output_dest = &output->output_dest;
     struct ip_status status;
     hnd_t ip_handle = NULL;
-    int num_buf_refs = 0;
-    obe_buf_ref_t **buf_refs;
     obe_udp_opts_t udp_opts;
+    struct uchain queue;
+    uchain_init( &queue );
+    struct uchain *uchain, *uchain_tmp;
 
     struct sched_param param = {0};
     param.sched_priority = 99;
@@ -638,6 +640,7 @@ static void *open_output( void *ptr )
 
     status.output = output;
     status.ip_handle = &ip_handle;
+    status.queue = &queue;
     pthread_cleanup_push( close_output, (void*)&status );
 
     udp_populate_opts( &udp_opts, output_dest->target );
@@ -671,25 +674,18 @@ static void *open_output( void *ptr )
             break;
         }
 
-        num_buf_refs = ulist_depth( &output->queue.ulist );
-
-        buf_refs = malloc( num_buf_refs * sizeof(*buf_refs) );
-        if( !buf_refs )
+        while( !ulist_empty( &output->queue.ulist ) )
         {
-            pthread_mutex_unlock( &output->queue.mutex );
-            syslog( LOG_ERR, "Malloc failed\n" );
-            return NULL;
+            struct uchain *out = ulist_pop( &output->queue.ulist );
+            ulist_add( &queue, out );
         }
-
-        for( int i = 0; i < num_buf_refs; i++ )
-            buf_refs[i] = obe_buf_ref_t_from_uchain( ulist_pop( &output->queue.ulist ) );
         pthread_mutex_unlock( &output->queue.mutex );
 
 //        printf("\n START %i \n", num_buf_refs );
 
-        for( int i = 0; i < num_buf_refs; i++ )
+        ulist_delete_foreach( &queue, uchain, uchain_tmp )
         {
-            obe_buf_ref_t *buf_ref = buf_refs[i];
+            obe_buf_ref_t *buf_ref = obe_buf_ref_t_from_uchain( uchain );
             AVBufferRef *data_buf_ref = buf_ref->data_buf_ref;
             if( output_dest->type == OUTPUT_RTP )
             {
@@ -702,12 +698,10 @@ static void *open_output( void *ptr )
                     syslog( LOG_ERR, "[udp] Failed to write UDP packet\n" );
             }
 
+            ulist_delete( uchain );
             av_buffer_unref( &data_buf_ref );
             av_buffer_unref( &buf_ref->self_buf_ref );
         }
-
-        free( buf_refs );
-        buf_refs = NULL;
     }
 
     pthread_cleanup_pop( 1 );

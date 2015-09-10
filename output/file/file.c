@@ -29,6 +29,7 @@ struct file_status
 {
     obe_output_t *output;
     FILE **fp;
+    struct uchain *queue;
 };
 
 static void close_output( void *handle )

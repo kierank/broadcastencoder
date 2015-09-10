@@ -382,8 +382,7 @@ static void destroy_output( obe_output_t *output )
 
     ulist_delete_foreach( &output->queue.ulist, uchain_tmp, uchain)
     {
-        ulist_delete( uchain );
-        av_buffer_unref( uchain );
+        // FIXME
     }
     
     obe_destroy_queue( &output->queue );
