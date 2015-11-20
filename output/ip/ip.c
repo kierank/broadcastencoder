@@ -631,7 +631,7 @@ static void *open_output( void *ptr )
     hnd_t ip_handle = NULL;
     obe_udp_opts_t udp_opts;
     struct uchain queue;
-    uchain_init( &queue );
+    ulist_init( &queue );
     struct uchain *uchain, *uchain_tmp;
 
     struct sched_param param = {0};
