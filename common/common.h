@@ -305,7 +305,7 @@ const static obe_video_config_t video_format_tab[] =
     { INPUT_VIDEO_FORMAT_720P_5994,                  1001, 60000, 1280, 720,  0 },
     { INPUT_VIDEO_FORMAT_1080I_50,                   1,    25,    1920, 1080, 1 },
     { INPUT_VIDEO_FORMAT_1080I_5994,                 1001, 30000, 1920, 1080, 1 },
-    { INPUT_VIDEO_FORMAT_1080P_2398,                 1001, 24,    1920, 1080, 0 },
+    { INPUT_VIDEO_FORMAT_1080P_2398,                 1001, 24000, 1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_24,                   1,    24,    1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_25,                   1,    25,    1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_25,                   1,    25,    1920, 1080, 0 },
