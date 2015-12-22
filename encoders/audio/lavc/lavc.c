@@ -28,6 +28,7 @@
 #include <libavutil/fifo.h>
 #include <libavresample/avresample.h>
 #include <libavutil/opt.h>
+#include <libavformat/avformat.h>
 
 typedef struct
 {
@@ -80,10 +81,15 @@ static void *start_encoder( void *ptr )
     AVCodecContext *codec = NULL;
     AVFrame *frame = NULL;
     AVDictionary *opts = NULL;
+    AVFormatContext *fmt = NULL;
+    AVIOContext *avio = NULL;
+    AVStream *st = NULL;
     char tmp[20];
     uint8_t *audio_planes[8] = { NULL };
+    uint8_t *avio_buf = NULL;
     uint8_t tmp2[1000];
 
+    av_register_all();
     avcodec_register_all();
 
     codec = avcodec_alloc_context3( NULL );
@@ -149,6 +155,33 @@ static void *start_encoder( void *ptr )
     {
         fprintf( stderr, "[lavc] Could not open encoder\n" );
         goto finish;
+    }
+
+    if( stream->stream_format == AUDIO_AAC )
+    {
+        int is_latm = stream->aac_opts.latm_output;
+
+        fmt = avformat_alloc_context();
+        if( !fmt )
+        {
+            fprintf( stderr, "Malloc failed\n" );
+            goto finish;
+        }
+
+        fmt->oformat = av_guess_format( is_latm ? "latm" : "adts", NULL, NULL );
+        if( !fmt->oformat )
+        {
+            fprintf( stderr, "ADTS muxer not found\n" );
+            goto finish;
+        }
+
+        st = avformat_new_stream( fmt, NULL );
+        if( !st )
+        {
+            fprintf( stderr, "Malloc failed\n" );
+            goto finish;
+        }
+        st->codec = codec;
     }
 
     avr = avresample_alloc_context();
@@ -259,23 +292,47 @@ static void *start_encoder( void *ptr )
             if( !got_pkt )
                 continue;
 
-            if( stream->stream_format == AUDIO_OPUS )
-                header_size = write_opus_ts_header( tmp2, pkt.size );
-
-            if( av_fifo_realloc2( out_fifo, av_fifo_size( out_fifo ) + pkt.size + header_size ) < 0 )
+            /* Encapsulate AAC frames in ADTS or LATM */
+            if( stream->stream_format == AUDIO_AAC )
             {
-                syslog( LOG_ERR, "Malloc failed\n" );
-                break;
+                /* Allocate a dynamic memory buffer with avio */
+                if( avio_open_dyn_buf( &avio ) )
+                {
+                    syslog( LOG_ERR, "Malloc failed\n" );
+                    goto finish;
+                }
+                fmt->pb = avio;
+                /* TODO: handle fails */
+                avformat_write_header( fmt, NULL );
+                av_write_frame( fmt, &pkt );
+                obe_free_packet( &pkt );
+                /* Reuse frame_size variable */
+                frame_size = avio_close_dyn_buf( avio, &avio_buf );
+                av_fifo_generic_write( out_fifo, avio_buf, frame_size, NULL );
+
+                total_size += frame_size;
+            }
+            else
+            {
+                if( stream->stream_format == AUDIO_OPUS )
+                    header_size = write_opus_ts_header( tmp2, pkt.size );
+
+                if( av_fifo_realloc2( out_fifo, av_fifo_size( out_fifo ) + pkt.size + header_size ) < 0 )
+                {
+                    syslog( LOG_ERR, "Malloc failed\n" );
+                    break;
+                }
+
+                if( stream->stream_format == AUDIO_OPUS )
+                    av_fifo_generic_write( out_fifo, tmp2, header_size, NULL );
+                av_fifo_generic_write( out_fifo, pkt.data, pkt.size, NULL );
+
+                total_size += pkt.size + header_size;
+                obe_free_packet( &pkt );
             }
 
-            if( stream->stream_format == AUDIO_OPUS )
-                av_fifo_generic_write( out_fifo, tmp2, header_size, NULL );
-            av_fifo_generic_write( out_fifo, pkt.data, pkt.size, NULL );
-
-            total_size += pkt.size + header_size;
             num_frames++;
 
-            obe_free_packet( &pkt );
             if( num_frames == enc_params->frames_per_pes )
             {
                 coded_frame = new_coded_frame( encoder->output_stream_id, total_size );
@@ -308,11 +365,17 @@ finish:
     if( out_fifo )
         av_fifo_free( out_fifo );
 
+    if( avio_buf )
+        av_free( avio_buf );
+
     if( avr )
         avresample_free( &avr );
 
     if( codec )
         avcodec_free_context( &codec );
+
+    if( fmt )
+        avformat_free_context( fmt );
 
     free( enc_params );
 
