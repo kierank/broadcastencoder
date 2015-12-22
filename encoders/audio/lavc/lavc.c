@@ -315,7 +315,7 @@ static void *start_encoder( void *ptr )
                     break;
                 }
                 av_fifo_generic_write( out_fifo, avio_buf, frame_size, NULL );
-                av_free( avio_buf );
+                av_freep( &avio_buf );
 
                 total_size += frame_size;
             }
