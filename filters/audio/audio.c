@@ -95,13 +95,12 @@ static void *start_filter( void *ptr )
         goto finish;
     }
 
-    frame = avcodec_alloc_frame();
+    frame = av_frame_alloc();
     if( !frame )
     {
         fprintf( stderr, "[302m] Could not allocate frame\n" );
         goto finish;
     }
-    avcodec_get_frame_defaults( frame );
 
     /* allocate interleaved buffer */
     if( av_samples_alloc( frame->data, frame->linesize, 8, MAX_SAMPLES, AV_SAMPLE_FMT_S32, 32 ) < 0 )

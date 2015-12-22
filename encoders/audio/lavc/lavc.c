@@ -194,7 +194,7 @@ static void *start_encoder( void *ptr )
         goto finish;
     }
 
-    frame = avcodec_alloc_frame();
+    frame = av_frame_alloc();
     if( !frame )
     {
         fprintf( stderr, "Could not allocate frame\n" );
@@ -240,7 +240,7 @@ static void *start_encoder( void *ptr )
         while( avresample_available( avr ) >= codec->frame_size )
         {
             got_pkt = 0;
-            avcodec_get_frame_defaults( frame );
+            av_frame_unref( frame );
             frame->nb_samples = codec->frame_size;
             memcpy( frame->data, audio_planes, sizeof(frame->data) );
             avresample_read( avr, frame->data, codec->frame_size );

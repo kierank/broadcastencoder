@@ -25,7 +25,7 @@
 #define OBE_H
 
 #include <inttypes.h>
-#include <libavutil/audioconvert.h>
+#include <libavutil/channel_layout.h>
 #include <x264.h>
 
 #define OBE_VERSION_MAJOR 0

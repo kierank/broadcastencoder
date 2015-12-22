@@ -93,11 +93,11 @@ typedef struct
 
 const static obe_cli_csp_t obe_cli_csps[] =
 {
-    [PIX_FMT_YUV420P] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 8 },
-    [PIX_FMT_YUV422P] = { 3, { 1, .5, .5 }, { 1, 1, 1 }, 2, 2, 8 },
-    [PIX_FMT_YUV420P10] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 10 },
-    [PIX_FMT_YUV422P10] = { 3, { 1, .5, .5 }, { 1, 1, 1 }, 2, 2, 10 },
-    [PIX_FMT_NV12] =    { 2, { 1,  1 },     { 1, .5 },     2, 2, 8 },
+    [AV_PIX_FMT_YUV420P] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 8 },
+    [AV_PIX_FMT_YUV422P] = { 3, { 1, .5, .5 }, { 1, 1, 1 }, 2, 2, 8 },
+    [AV_PIX_FMT_YUV420P10] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 10 },
+    [AV_PIX_FMT_YUV422P10] = { 3, { 1, .5, .5 }, { 1, 1, 1 }, 2, 2, 10 },
+    [AV_PIX_FMT_NV12] =    { 2, { 1,  1 },     { 1, .5 },     2, 2, 8 },
 };
 
 /* These SARs are often based on historical convention so often cannot be calculated */
@@ -549,7 +549,7 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     memcpy( raw_frame->alloc_img.stride, frame->linesize, sizeof(raw_frame->alloc_img.stride) );
     memcpy( raw_frame->alloc_img.plane, frame->data, sizeof(raw_frame->alloc_img.plane) );
     raw_frame->alloc_img.csp = frame->format;
-    raw_frame->alloc_img.planes = av_pix_fmt_descriptors[raw_frame->alloc_img.csp].nb_components;
+    raw_frame->alloc_img.planes = av_pix_fmt_count_planes( raw_frame->alloc_img.csp );
 
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
 
@@ -562,7 +562,7 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
 
 static int csp_num_interleaved( int csp, int plane )
 {
-    return ( csp == PIX_FMT_NV12 && plane == 1 ) ? 2 : 1;
+    return ( csp == AV_PIX_FMT_NV12 && plane == 1 ) ? 2 : 1;
 }
 
 #if 0
@@ -601,7 +601,7 @@ static int dither_image( obe_raw_frame_t *raw_frame, int16_t *error_buf )
     obe_image_t tmp_image = {0};
     obe_image_t *out = &tmp_image;
 
-    tmp_image.csp = X264_BIT_DEPTH == 10 ? PIX_FMT_YUV420P10 : PIX_FMT_YUV420P;
+    tmp_image.csp = X264_BIT_DEPTH == 10 ? AV_PIX_FMT_YUV420P10 : AV_PIX_FMT_YUV420P;
     tmp_image.width = raw_frame->img.width;
     tmp_image.height = raw_frame->img.height;
 
@@ -649,12 +649,13 @@ static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_fr
     obe_image_t tmp_image = {0};
     obe_image_t *out = &tmp_image;
     const AVPixFmtDescriptor *pfd = av_pix_fmt_desc_get( raw_frame->img.csp );
-    int bpp = pfd->comp[0].depth_minus1+1 > 8 ? 2 : 1;
+    const AVComponentDescriptor *c = &pfd->comp[0];
+    int bpp = c->depth > 8 ? 2 : 1;
 
-    tmp_image.csp    = bpp == 2 ? PIX_FMT_YUV420P10 : PIX_FMT_YUV420P;
+    tmp_image.csp    = bpp == 2 ? AV_PIX_FMT_YUV420P10 : AV_PIX_FMT_YUV420P;
     tmp_image.width  = raw_frame->img.width;
     tmp_image.height = raw_frame->img.height;
-    tmp_image.planes = pfd->nb_components;
+    tmp_image.planes = av_pix_fmt_count_planes( raw_frame->img.csp );
     tmp_image.format = raw_frame->img.format;
 
     if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
@@ -694,10 +695,10 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     obe_image_t tmp_image = {0};
     obe_image_t *out = &tmp_image;
 
-    tmp_image.csp = img->csp == PIX_FMT_YUV422P10 ? PIX_FMT_YUV422P : PIX_FMT_YUV420P;
+    tmp_image.csp = img->csp == AV_PIX_FMT_YUV422P10 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV420P;
     tmp_image.width = raw_frame->img.width;
     tmp_image.height = raw_frame->img.height;
-    tmp_image.planes = av_pix_fmt_descriptors[tmp_image.csp].nb_components;
+    tmp_image.planes = av_pix_fmt_count_planes( tmp_image.csp );
     tmp_image.format = raw_frame->img.format;
 
     if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height,
@@ -709,12 +710,6 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
 
     for( int i = 0; i < img->planes; i++ )
     {
-        //const int src_depth = av_pix_fmt_descriptors[img->csp].comp[i].depth_minus1+1;
-        //const int dst_depth = av_pix_fmt_descriptors[out->csp].comp[i].depth_minus1+1;
-
-        //uint16_t scale = obe_dither_scale[dst_depth-1][src_depth-1];
-        //int shift = src_depth-dst_depth + obe_dither_scale[src_depth-2][dst_depth-1];
-
         int num_interleaved = csp_num_interleaved( img->csp, i );
         int height = obe_cli_csps[img->csp].height[i] * img->height;
         int width = obe_cli_csps[img->csp].width[i] * img->width / num_interleaved;
@@ -949,7 +944,8 @@ static void *start_filter( void *ptr )
         if( 1 )
         {
             const AVPixFmtDescriptor *pfd = av_pix_fmt_desc_get( raw_frame->img.csp );
-            if( raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL && pfd->comp[0].depth_minus1+1 == 10 )
+            const AVComponentDescriptor *c = &pfd->comp[0];
+            if( raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL && c->depth == 10 )
                 blank_lines( raw_frame );
 
             /* Resize if wrong pixel format or wrong resolution */
@@ -977,7 +973,8 @@ static void *start_filter( void *ptr )
             }
 
             pfd = av_pix_fmt_desc_get( raw_frame->img.csp );
-            if( pfd->comp[0].depth_minus1+1 == 10 && X264_BIT_DEPTH == 8 )
+            c = &pfd->comp[0];
+            if( c->depth == 10 && X264_BIT_DEPTH == 8 )
             {
                 if( dither_image( vfilt, raw_frame ) < 0 )
                     goto end;

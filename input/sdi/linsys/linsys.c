@@ -339,15 +339,15 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
     raw_frame->release_frame = obe_release_frame;
     raw_frame->arrival_time = linsys_ctx->last_frame_time;
 
-    output->csp = PIX_FMT_YUV422P10;
-    output->planes = av_pix_fmt_descriptors[output->csp].nb_components;
+    output->csp = AV_PIX_FMT_YUV422P10;
+    output->planes = av_pix_fmt_count_planes(output->csp);
     output->width = linsys_ctx->width;
     output->height = linsys_opts->height;
 
     if( av_image_fill_linesizes( output->stride, output->csp, output->width ) < 0 )
         goto fail;
 
-    if( av_image_alloc( output->plane, output->stride, linsys_ctx->width, linsys_ctx->coded_height + 1, PIX_FMT_YUV422P10, 16 ) < 0 )
+    if( av_image_alloc( output->plane, output->stride, linsys_ctx->width, linsys_ctx->coded_height + 1, AV_PIX_FMT_YUV422P10, 16 ) < 0 )
         goto fail;
 
     uint16_t *y_dst = (uint16_t*)output->plane[0];
@@ -580,8 +580,8 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
                 cur_line = sdi_next_line( linsys_opts->video_format, cur_line );
             }
 
-            raw_frame->img.csp = PIX_FMT_YUV422P10;
-            raw_frame->img.planes = av_pix_fmt_descriptors[raw_frame->img.csp].nb_components;
+            raw_frame->img.csp = AV_PIX_FMT_YUV422P10;
+            raw_frame->img.planes = av_pix_fmt_count_planes(raw_frame->img.csp);
             raw_frame->img.plane[0] = (uint8_t*)y_src;
             raw_frame->img.plane[1] = (uint8_t*)u_src;
             raw_frame->img.plane[2] = (uint8_t*)v_src;
@@ -1182,7 +1182,7 @@ static void *probe_stream( void *ptr )
             streams[i]->height = linsys_opts.height;
             streams[i]->timebase_num = linsys_opts.timebase_num;
             streams[i]->timebase_den = linsys_opts.timebase_den;
-            streams[i]->csp    = PIX_FMT_YUV422P10;
+            streams[i]->csp    = AV_PIX_FMT_YUV422P10;
             streams[i]->interlaced = linsys_opts.interlaced;
             streams[i]->tff = linsys_opts.tff;
             streams[i]->sar_num = streams[i]->sar_den = 1; /* The user can choose this when encoding */

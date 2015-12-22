@@ -41,7 +41,7 @@ static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_fr
     memcpy( pic->img.i_stride, img->stride, sizeof(img->stride) );
     memcpy( pic->img.plane, img->plane, sizeof(img->plane) );
     pic->img.i_plane = img->planes;
-    pic->img.i_csp = img->csp == PIX_FMT_YUV422P || img->csp == PIX_FMT_YUV422P10 ? X264_CSP_I422 : X264_CSP_I420;
+    pic->img.i_csp = img->csp == AV_PIX_FMT_YUV422P || img->csp == AV_PIX_FMT_YUV422P10 ? X264_CSP_I422 : X264_CSP_I420;
 
     if( X264_BIT_DEPTH == 10 )
         pic->img.i_csp |= X264_CSP_HIGH_DEPTH;
