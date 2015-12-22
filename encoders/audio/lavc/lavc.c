@@ -308,7 +308,14 @@ static void *start_encoder( void *ptr )
                 obe_free_packet( &pkt );
                 /* Reuse frame_size variable */
                 frame_size = avio_close_dyn_buf( avio, &avio_buf );
+
+                if( av_fifo_realloc2( out_fifo, av_fifo_size( out_fifo ) + frame_size ) < 0 )
+                {
+                    syslog( LOG_ERR, "Malloc failed\n" );
+                    break;
+                }
                 av_fifo_generic_write( out_fifo, avio_buf, frame_size, NULL );
+                av_free( avio_buf );
 
                 total_size += frame_size;
             }
