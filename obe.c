@@ -1243,7 +1243,7 @@ int obe_start( obe_t *h )
 
             h->num_encoders++;
         }
-        else if( h->output_streams[i].stream_action == STREAM_PASSTHROUGH )
+        else if( h->output_streams[i].stream_action == STREAM_PASSTHROUGH && (h->output_streams[i].stream_format == AUDIO_AC_3 || h->output_streams[i].stream_format == AUDIO_E_AC_3 ) )
         {
             h->passthrough[h->num_passthrough] = calloc( 1, sizeof(obe_passthrough_t) );
             if( !h->passthrough[h->num_passthrough] )
