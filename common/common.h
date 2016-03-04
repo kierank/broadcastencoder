@@ -64,7 +64,7 @@
 #define IS_SD(x) ((x) == INPUT_VIDEO_FORMAT_PAL || (x) == INPUT_VIDEO_FORMAT_NTSC)
 #define IS_INTERLACED(x) (IS_SD(x) || (x) == INPUT_VIDEO_FORMAT_1080I_50 || (x) == INPUT_VIDEO_FORMAT_1080I_5994 )
 #define IS_PROGRESSIVE(x) (!IS_INTERLACED(x))
-#define IS_PAL(x) ((x) == INPUT_VIDEO_FORMAT_PAL || (x) == INPUT_VIDEO_FORMAT_1080I_50)
+#define IS_PAL(x) ((x) == INPUT_VIDEO_FORMAT_PAL || (x) == INPUT_VIDEO_FORMAT_1080I_50 || (x) == INPUT_VIDEO_FORMAT_1080P_25)
 
 /* Audio formats */
 #define AC3_NUM_SAMPLES 1536
@@ -307,7 +307,6 @@ const static obe_video_config_t video_format_tab[] =
     { INPUT_VIDEO_FORMAT_1080I_5994,                 1001, 30000, 1920, 1080, 1 },
     { INPUT_VIDEO_FORMAT_1080P_2398,                 1001, 24000, 1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_24,                   1,    24,    1920, 1080, 0 },
-    { INPUT_VIDEO_FORMAT_1080P_25,                   1,    25,    1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_25,                   1,    25,    1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_2997,                 1001, 30000, 1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_50,                   1,    50,    1920, 1080, 0 },
