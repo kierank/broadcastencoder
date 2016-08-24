@@ -380,6 +380,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             if( encoder_control->ancillary_opts->dvb_ttx_enabled )
             {
                 obe_output_stream_t *dvb_ttx_stream = &d.output_streams[i];
+                dvb_ttx_stream->stream_format = MISC_TELETEXT;
                 dvb_ttx_stream->input_stream_id = 2+has_dvb_vbi;
                 dvb_ttx_stream->output_stream_id = i;
                 /* Only one teletext supported */
