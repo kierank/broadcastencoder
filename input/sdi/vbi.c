@@ -585,7 +585,7 @@ static int encapsulate_dvb_ttx( obe_t *h, obe_sdi_non_display_data_t *non_displa
         if( non_display_data->vbi_slices[i].id & VBI_SLICED_TELETEXT_B )
         {
             /* TODO: allow user to choose SUB or NON-SUB teletext */
-            bs_write( &s, 8, DATA_UNIT_ID_EBU_TTX_NON_SUB ); // data_unit_id
+            bs_write( &s, 8, DATA_UNIT_ID_EBU_TTX_SUB ); // data_unit_id
             bs_write( &s, 8, DVB_VBI_UNIT_SIZE ); // data_unit_length
             write_header_byte( &s, non_display_data->vbi_slices[i].line, non_display_data->vbi_decoder.scanning == 525 );
             write_ttx_field( &s, non_display_data->vbi_slices[i].data, MISC_TELETEXT );
