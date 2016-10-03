@@ -1423,9 +1423,6 @@ finish:
     if( decklink_attributes )
         decklink_attributes->Release();
 
-    if( ret )
-        close_card( decklink_opts );
-
     return ret;
 }
 
