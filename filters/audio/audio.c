@@ -339,11 +339,11 @@ static void *start_filter( void *ptr )
     }
 
 finish:
-    if( frame )
-       av_frame_free( &frame );
-
     if( frame->data )
         av_freep( &frame->data );
+
+    if( frame )
+       av_frame_free( &frame );
 
     if( codec )
         avcodec_free_context( &codec );
