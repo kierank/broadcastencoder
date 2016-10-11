@@ -48,7 +48,7 @@ static void *autoconf_input( void *ptr )
     obe_device_t *device;
     int cur_input_stream_id = 0;
 
-    for( int i = 0; i < 2; i++ )
+    for( int i = 0; i < 3; i++ )
     {
         streams[i] = (obe_int_input_stream_t*)calloc( 1, sizeof(*streams[i]) );
         if( !streams[i] )
@@ -92,6 +92,11 @@ static void *autoconf_input( void *ptr )
             /* TODO: support other sample rates */
             streams[i]->sample_rate = 48000;
         }
+        else if( i == 2 )
+        {
+            streams[i]->stream_type = STREAM_TYPE_MISC;
+            streams[i]->stream_format = MISC_TELETEXT;
+        }
     }
 
     device = new_device();
@@ -99,7 +104,7 @@ static void *autoconf_input( void *ptr )
     if( !device )
         return NULL;
 
-    device->num_input_streams = 2;
+    device->num_input_streams = 3;
     memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
     device->device_type = INPUT_DEVICE_BARS;
     memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
