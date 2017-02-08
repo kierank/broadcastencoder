@@ -161,9 +161,7 @@ obe_muxed_data_t *new_muxed_data( int len )
 
 void destroy_muxed_data( obe_muxed_data_t *muxed_data )
 {
-    if( muxed_data->pcr_list )
-        free( muxed_data->pcr_list );
-
+    free( muxed_data->pcr_list );
     free( muxed_data->data );
     free( muxed_data );
 }
