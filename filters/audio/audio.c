@@ -49,7 +49,7 @@ static int check_send_packet( obe_t *h, obe_output_stream_t *output_stream, obe_
 
         coded_frame->pts = passthrough->pts;
         coded_frame->random_access = 1; /* Every frame output is a random access point */
-        add_to_queue( &h->mux_queue, coded_frame );
+        add_to_queue( &h->mux_queue, &coded_frame->uchain );
 
         passthrough->num_out_frames = 0;
     }
@@ -298,7 +298,7 @@ static void *start_filter( void *ptr )
                 coded_frame->pts = raw_frame->video_pts;
                 coded_frame->duration = raw_frame->video_duration;
                 coded_frame->random_access = 1; /* Every frame output is a random access point */
-                add_to_queue( &h->mux_queue, coded_frame );
+                add_to_queue( &h->mux_queue, &coded_frame->uchain );
             }
             else /* compressed format */
             {

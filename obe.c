@@ -183,7 +183,7 @@ void obe_destroy_queue( obe_queue_t *queue )
     pthread_cond_destroy( &queue->out_cv );
 }
 
-int add_to_queue( obe_queue_t *queue, void *item )
+int add_to_queue( obe_queue_t *queue, struct uchain *item )
 {
     pthread_mutex_lock( &queue->mutex );
     ulist_add(&queue->ulist, item);
@@ -205,7 +205,7 @@ int remove_from_queue( obe_queue_t *queue )
     return 0;
 }
 
-int remove_item_from_queue( obe_queue_t *queue, void *item )
+int remove_item_from_queue( obe_queue_t *queue, struct uchain *item )
 {
     pthread_mutex_lock( &queue->mutex );
     ulist_delete(item);
@@ -236,7 +236,7 @@ int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame )
     if( !filter )
         return -1;
 
-    return add_to_queue( &filter->queue, raw_frame );
+    return add_to_queue( &filter->queue, &raw_frame->uchain );
 }
 
 static void destroy_filter( obe_filter_t *filter )
@@ -285,7 +285,7 @@ int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame, int output_stream
     if( !encoder )
         return -1;
 
-    return add_to_queue( &encoder->queue, raw_frame );
+    return add_to_queue( &encoder->queue, &raw_frame->uchain );
 }
 
 static void destroy_encoder( obe_encoder_t *encoder )

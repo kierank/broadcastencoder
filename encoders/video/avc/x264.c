@@ -223,7 +223,7 @@ static void *start_encoder( void *ptr )
                     obe_coded_frame_t *first_frame, *last_frame;
                     struct uchain *first_uchain = &encoder->queue.ulist;
                     first_frame = obe_coded_frame_t_from_uchain( ulist_peek( first_uchain ) );
-                    last_frame = obe_coded_frame_t_from_uchain( ulist_peek( first_uchain->prev ) );
+                    last_frame = obe_coded_frame_t_from_uchain( first_uchain->prev );
                     int64_t frame_durations = last_frame->real_dts - first_frame->real_dts + frame_duration;
                     buffer_fill = (float)(frame_durations - last_frame_delta)/buffer_duration;
                 }
@@ -272,11 +272,11 @@ static void *start_encoder( void *ptr )
             if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY || h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
             {
                 coded_frame->arrival_time = arrival_time;
-                add_to_queue( &h->mux_queue, coded_frame );
+                add_to_queue( &h->mux_queue, &coded_frame->uchain );
                 //printf("\n Encode Latency %"PRIi64" \n", obe_mdate() - coded_frame->arrival_time );
             }
             else
-                add_to_queue( &h->enc_smoothing_queue, coded_frame );
+                add_to_queue( &h->enc_smoothing_queue, &coded_frame->uchain );
         }
      }
 

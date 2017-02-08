@@ -353,7 +353,7 @@ static void *start_encoder( void *ptr )
 
                 coded_frame->pts = cur_pts;
                 coded_frame->random_access = 1; /* Every frame output is a random access point */
-                add_to_queue( &h->mux_queue, coded_frame );
+                add_to_queue( &h->mux_queue, &coded_frame->uchain );
 
                 /* We need to generate PTS because frame sizes have changed */
                 cur_pts += pts_increment;
