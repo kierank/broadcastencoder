@@ -1190,7 +1190,11 @@ int obe_start( obe_t *h )
                      h->output_streams[i].stream_format == AUDIO_AAC  || h->output_streams[i].stream_format == AUDIO_MP2 ||
                      h->output_streams[i].stream_format == AUDIO_OPUS )
             {
-                audio_encoder = h->output_streams[i].stream_format == AUDIO_MP2 ? twolame_encoder : lavc_encoder;
+                audio_encoder =
+#ifdef HAVE_LIBTWOLAME
+                    (h->output_streams[i].stream_format == AUDIO_MP2) ? twolame_encoder :
+#endif
+                    lavc_encoder;
                 num_samples = h->output_streams[i].stream_format == AUDIO_MP2 ? MP2_NUM_SAMPLES :
                               h->output_streams[i].stream_format == AUDIO_AAC ? AAC_NUM_SAMPLES :
                               h->output_streams[i].stream_format == AUDIO_OPUS ? OPUS_NUM_SAMPLES : AC3_NUM_SAMPLES;
