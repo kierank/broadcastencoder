@@ -27,7 +27,9 @@
 #include <libavutil/fifo.h>
 #include <sys/time.h>
 
-#include <openfec/lib_common/of_openfec_api.h>
+#ifdef HAVE_LIBOPENFEC
+# include <openfec/lib_common/of_openfec_api.h>
+#endif
 
 #include "common/common.h"
 #include "common/network/network.h"
@@ -85,13 +87,13 @@ typedef struct
 
     uint64_t column_seq;
     uint64_t row_seq;
-
+#ifdef HAVE_LIBOPENFEC
     /* LDPC FECFRAME */
     hnd_t ldpc_handle;
 
     of_session_t *ses;
     of_ldpc_parameters_t ldpc_params;
-
+#endif
     uint8_t *source_symbols;
     uint8_t *repair_symbols;
 
@@ -137,6 +139,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
     p_rtp->fec_columns = output_dest->fec_columns;
     p_rtp->fec_rows = output_dest->fec_rows;
 
+#ifdef HAVE_LIBOPENFEC
     /* FIXME support stream duplication for LDPC staircase */
     if( output_dest->fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE )
     {
@@ -221,7 +224,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
             return -1;
         }
     }
-
+#endif
     if( output_dest->dup_delay )
     {
         p_rtp->dup_fifo = av_fifo_alloc( sizeof(AVBufferRef) * 100 );
@@ -347,13 +350,14 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
 
     /* Throughout this function, don't exit early because the decoder is expecting a sequence number increase
      * and consistent FEC packets. Return -1 at the end so the user knows there was a failure to submit a packet. */
-
+#ifdef HAVE_LIBOPENFEC
     if( fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE )
     {
         int src_pkt_idx = p_rtp->seq % p_rtp->ldpc_params.nb_source_symbols;
         pkt_ptr = &p_rtp->source_symbols[src_pkt_idx * RTP_PACKET_SIZE];
     }
     else
+#endif
     {
         p_rtp->buf_ref = av_buffer_alloc( RTP_PACKET_SIZE );
         pkt_ptr = p_rtp->buf_ref->data;
@@ -408,7 +412,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
             }
         }
     }
-
+#ifdef HAVE_LIBOPENFEC
     if( fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE && p_rtp->seq >= (p_rtp->ldpc_params.nb_source_symbols-1) )
     {
         int fec_interval = p_rtp->ldpc_params.nb_source_symbols / p_rtp->ldpc_params.nb_repair_symbols;
@@ -555,6 +559,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
             xor_packet_c( &column[RTP_HEADER_SIZE+COP3_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
         }
     }
+#endif
 
 end:
     av_buffer_unref( &p_rtp->buf_ref );
@@ -585,6 +590,7 @@ static void rtp_close( hnd_t handle )
         av_fifo_freep( &p_rtp->dup_fifo );
     }
 
+#ifdef HAVE_LIBOPENFEC
     /* COP3 FEC */
     if( p_rtp->column_data )
         free( p_rtp->column_data );
@@ -598,7 +604,7 @@ static void rtp_close( hnd_t handle )
     /* LDPC FEC */
     if( p_rtp->ses )
         of_release_codec_instance( p_rtp->ses );
-
+#endif
     free( p_rtp );
 }
 
