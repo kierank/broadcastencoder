@@ -27,15 +27,15 @@
 #include <libavutil/fifo.h>
 #include <sys/time.h>
 
-#ifdef HAVE_LIBOPENFEC
-# include <openfec/lib_common/of_openfec_api.h>
-#endif
-
 #include "common/common.h"
 #include "common/network/network.h"
 #include "common/network/udp/udp.h"
 #include "output/output.h"
 #include "common/bitstream.h"
+
+#ifdef HAVE_LIBOPENFEC
+# include <openfec/lib_common/of_openfec_api.h>
+#endif
 
 #define RTP_VERSION 2
 
