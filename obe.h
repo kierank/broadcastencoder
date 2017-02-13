@@ -521,7 +521,7 @@ typedef struct
 int obe_setup_muxer( obe_t *h, obe_mux_opts_t *mux_opts );
 
 /* Only ts-muxrate can be updated currently */
-int obe_update_muxer( obe_t *h, obe_mux_opts_t *mux_opts );
+void obe_update_mux( obe_t *h, obe_mux_opts_t *mux_opts );
 
 /**** Output *****/
 enum output_e
