@@ -99,6 +99,7 @@ const static int video_formats[] =
     INPUT_VIDEO_FORMAT_1080P_2398,
     INPUT_VIDEO_FORMAT_1080P_24,
     INPUT_VIDEO_FORMAT_1080P_25,
+    INPUT_VIDEO_FORMAT_720P_60,
     -1,
 };
 
