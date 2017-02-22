@@ -88,6 +88,7 @@ const static obe_line_number_t first_active_line[] =
     { INPUT_VIDEO_FORMAT_NTSC,  283 },
     { INPUT_VIDEO_FORMAT_720P_50,    26 },
     { INPUT_VIDEO_FORMAT_720P_5994,  26 },
+    { INPUT_VIDEO_FORMAT_720P_60,    26 },
     { INPUT_VIDEO_FORMAT_1080I_50,   21 },
     { INPUT_VIDEO_FORMAT_1080I_5994, 21 },
     { INPUT_VIDEO_FORMAT_1080P_2398, 42 },

@@ -80,6 +80,7 @@ enum input_video_format_e
     /* 720p HD */
     INPUT_VIDEO_FORMAT_720P_50,
     INPUT_VIDEO_FORMAT_720P_5994,
+    INPUT_VIDEO_FORMAT_720P_60,
 
     /* 1080i/p HD */
     INPUT_VIDEO_FORMAT_1080I_50,
