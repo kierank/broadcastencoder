@@ -532,6 +532,7 @@ void close_bars( hnd_t ptr )
 
     avfilter_graph_free( &bars_ctx->v_filter_graph );
     av_frame_free( &bars_ctx->frame );
+    av_freep(&raw_frame->audio_frame.audio_data[0])
     free( bars_ctx );
     ptr = NULL;
 }
