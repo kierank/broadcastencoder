@@ -29,7 +29,9 @@
 
 struct bars_status
 {
+    obe_input_params_t *input;
     hnd_t *bars_handle;
+    obe_raw_frame_t **raw_frames;
 };
 
 static void close_thread( void *handle )
@@ -37,6 +39,20 @@ static void close_thread( void *handle )
     struct bars_status *status = (struct bars_status *)handle;
 
     close_bars( *(status->bars_handle) );
+    free( status->input );
+
+    if( status->raw_frames[0] )
+    {
+        status->raw_frames[0]->release_data(status->raw_frames[0]);
+        status->raw_frames[0]->release_frame(status->raw_frames[0]);
+    }
+
+    if( status->raw_frames[1] )
+    {
+        status->raw_frames[1]->release_data(status->raw_frames[1]);
+        status->raw_frames[1]->release_frame(status->raw_frames[1]);
+    }
+    
 }
 
 static void *autoconf_input( void *ptr )
@@ -125,6 +141,7 @@ static void *open_input( void *ptr )
     obe_bars_opts_t obe_bars_opts = {0};
     obe_bars_opts.video_format = user_opts->video_format;
     struct bars_status status;
+    obe_raw_frame_t *raw_frames[2];
 
     if( obe_bars_opts.video_format == INPUT_VIDEO_FORMAT_AUTODETECT )
         obe_bars_opts.video_format = INPUT_VIDEO_FORMAT_PAL;
@@ -134,28 +151,22 @@ static void *open_input( void *ptr )
     obe_bars_opts.bars_line3 = user_opts->bars_line3;
     obe_bars_opts.bars_line4 = user_opts->bars_line4;
 
+    status.input = input;
     status.bars_handle = &bars_handle;
+    status.raw_frames = raw_frames;
     pthread_cleanup_push( close_thread, (void*)&status );
 
     if( open_bars( &bars_handle, &obe_bars_opts ) < 0 )
     {
         fprintf( stderr, "Could not open bars \n" );
         return NULL;
-    }
-
-    obe_raw_frame_t **raw_frames;
-    raw_frames = malloc( 2 * sizeof(*raw_frames ) );
-    if( !raw_frames )
-    {
-        fprintf( stderr, "malloc failed \n" );
-        return NULL;
-    }
+    } 
 
     int64_t start_time = 0;
 
     while( 1 )
     {
-        get_bars( bars_handle, raw_frames );
+        get_bars( bars_handle, (obe_raw_frame_t**)raw_frames );
         if( start_time == 0 )
             start_time = get_wallclock_in_mpeg_ticks();
         else
@@ -165,6 +176,7 @@ static void *open_input( void *ptr )
 
         if( add_to_filter_queue( h, raw_frames[0] ) < 0 )
             return NULL;
+        raw_frames[0] = NULL;
 
         for( int i = 0; i < h->device.num_input_streams; i++ )
         {
@@ -174,6 +186,7 @@ static void *open_input( void *ptr )
 
         if( add_to_filter_queue( h, raw_frames[1] ) < 0 )
             return NULL;
+        raw_frames[1] = NULL;
     }
 
     pthread_cleanup_pop( 1 );
