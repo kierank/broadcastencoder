@@ -1078,6 +1078,13 @@ static void close_card( decklink_opts_t *decklink_opts )
 
     if( decklink_ctx->bars_hnd )
         close_bars( decklink_ctx->bars_hnd );
+
+    /* Stored frames are not malloced */
+    if( decklink_ctx->stored_video_frame.release_data )
+        decklink_ctx->stored_video_frame.release_data( &decklink_ctx->stored_video_frame );
+
+    if( decklink_ctx->stored_audio_frame.release_data )
+        decklink_ctx->stored_audio_frame.release_data( &decklink_ctx->stored_audio_frame );
 }
 
 static int open_card( decklink_opts_t *decklink_opts )
