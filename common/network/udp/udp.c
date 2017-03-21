@@ -259,6 +259,9 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
     int udp_fd = -1, tmp, bind_ret = -1;
     struct sockaddr_storage my_addr;
     int len;
+    struct timeval timeout;      
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
 
     obe_udp_ctx *s = calloc( 1, sizeof(*s) );
     *p_handle = NULL;
@@ -298,6 +301,9 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
         if( bind_ret < 0 && bind( udp_fd, (struct sockaddr *)&my_addr, len ) < 0 )
             goto fail;
     }
+
+    if( setsockopt( udp_fd, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout, sizeof(timeout) ) != 0 )
+        goto fail;
 
     len = sizeof(my_addr);
     getsockname( udp_fd, (struct sockaddr *)&my_addr, (socklen_t *) &len );
@@ -340,6 +346,18 @@ int udp_write( hnd_t handle, uint8_t *buf, int size )
         ret = sendto( s->udp_fd, buf, size, 0, (struct sockaddr *)&s->dest_addr, s->dest_addr_len );
     else
         ret = send( s->udp_fd, buf, size, 0 );
+
+    if( ret == -2 )
+    {
+        syslog( LOG_WARNING, "Packet send timeout. Network unavailable. \n" );
+        return ret;
+    }
+
+    if( errno == EWOULDBLOCK || errno == EAGAIN )
+    {
+        syslog( LOG_WARNING, "outputCantWrite: UDP packet failed to send \n" );
+        return -2;
+    }
 
     if( ret < 0 )
     {
