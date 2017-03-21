@@ -347,6 +347,12 @@ int udp_write( hnd_t handle, uint8_t *buf, int size )
     else
         ret = send( s->udp_fd, buf, size, 0 );
 
+    if( ret == -2 )
+    {
+        syslog( LOG_WARNING, "Packet send timeout. Network unavailable. \n" );
+        return ret;
+    }
+
     if( errno == EWOULDBLOCK || errno == EAGAIN )
     {
         syslog( LOG_WARNING, "outputCantWrite: UDP packet failed to send \n" );
