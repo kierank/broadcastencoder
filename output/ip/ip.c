@@ -330,7 +330,8 @@ static int write_fec_packet( hnd_t udp_handle, uint8_t *data, int len )
 {
     int ret = 0;
 
-    ret = udp_write( udp_handle, data, len );
+    if( udp_write( udp_handle, data, len ) < 0 )
+        ret = -1;
 
     memset( data, 0, len );
 
@@ -362,10 +363,11 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     write_rtp_header( pkt_ptr, MPEG_TS_PAYLOAD_TYPE, p_rtp->seq & 0xffff, ts_90, p_rtp->ssrc );
     memcpy( &pkt_ptr[RTP_HEADER_SIZE], data, len );
 
-    ret = udp_write( p_rtp->udp_handle, pkt_ptr, RTP_PACKET_SIZE );
+    if( udp_write( p_rtp->udp_handle, pkt_ptr, RTP_PACKET_SIZE ) < 0 )
+        ret = -1;
 
     /* Check and send duplicate packets */
-    if( p_rtp->dup_fifo && ret >= 0 )
+    if( p_rtp->dup_fifo )
     {
         output_buffer = av_buffer_ref( p_rtp->buf_ref );
         if( !output_buffer )
@@ -395,7 +397,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
                 av_fifo_drain( p_rtp->dup_fifo, sizeof(timestamp) );
                 av_fifo_generic_read( p_rtp->dup_fifo, &output_buffer, sizeof(output_buffer), NULL );
 
-                ret = udp_write( p_rtp->udp_handle, output_buffer->data, RTP_PACKET_SIZE );
+                if( udp_write( p_rtp->udp_handle, output_buffer->data, RTP_PACKET_SIZE ) < 0 )
+                    ret = -1;
 
                 av_buffer_unref( &output_buffer );
             }
@@ -406,8 +409,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         }
     }
 
-    if( fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE && p_rtp->seq >= (p_rtp->ldpc_params.nb_source_symbols-1) &&
-        ret >= 0 )
+    if( fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE && p_rtp->seq >= (p_rtp->ldpc_params.nb_source_symbols-1) )
     {
         int fec_interval = p_rtp->ldpc_params.nb_source_symbols / p_rtp->ldpc_params.nb_repair_symbols;
         int fec_idx = p_rtp->seq % p_rtp->ldpc_params.nb_source_symbols;
@@ -467,10 +469,11 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
 
         if( (fec_idx % fec_interval) == 0 )
         {
-            ret = udp_write( p_rtp->ldpc_handle, &p_rtp->repair_symbols[(fec_idx / fec_interval)*LDPC_PACKET_SIZE], LDPC_PACKET_SIZE );
+            if( udp_write( p_rtp->ldpc_handle, &p_rtp->repair_symbols[(fec_idx / fec_interval)*LDPC_PACKET_SIZE], LDPC_PACKET_SIZE ) < 0 )
+                ret = -1;
         }
     }
-    else if( p_rtp->fec_columns && p_rtp->fec_rows && ret >= 0 )
+    else if( p_rtp->fec_columns && p_rtp->fec_rows )
     {
         int row_idx = (p_rtp->seq / p_rtp->fec_columns) % p_rtp->fec_rows;
         int column_idx = p_rtp->seq % p_rtp->fec_columns;
@@ -507,7 +510,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
             write_rtp_header( row, FEC_PAYLOAD_TYPE, p_rtp->row_seq++ & 0xffff, 0, 0 );
             write_fec_header( p_rtp, &row[RTP_HEADER_SIZE], 1, (p_rtp->seq - column_idx) & 0xffff );
 
-            ret = write_fec_packet( p_rtp->row_handle, row, COP3_FEC_PACKET_SIZE );
+            if( write_fec_packet( p_rtp->row_handle, row, COP3_FEC_PACKET_SIZE ) < 0 )
+                ret = -1;
         }
 
         /* Pre-write the RTP and FEC header */
@@ -523,7 +527,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
             uint64_t send_column_idx = (p_rtp->seq % (p_rtp->fec_columns*p_rtp->fec_rows)) / p_rtp->fec_rows;
             uint8_t *column_tx = &p_rtp->column_data[(send_column_idx*2+!p_rtp->column_phase)*p_rtp->fec_pkt_len];
 
-            ret = write_fec_packet( p_rtp->column_handle, column_tx, COP3_FEC_PACKET_SIZE );
+            if( write_fec_packet( p_rtp->column_handle, column_tx, COP3_FEC_PACKET_SIZE ) < 0 )
+                ret = -1;
         }
 
         if( fec_type == FEC_TYPE_COP3_NON_BLOCK_ALIGNED && p_rtp->seq >= (p_rtp->fec_columns * p_rtp->fec_rows + column_idx*(p_rtp->fec_columns+1)) )
@@ -534,7 +539,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
                 write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++ & 0xffff, 0, 0 );
                 write_fec_header( p_rtp, &column[RTP_HEADER_SIZE], 0, (p_rtp->seq - (p_rtp->fec_columns*p_rtp->fec_rows)) & 0xffff );
 
-                ret = write_fec_packet( p_rtp->column_handle, column, COP3_FEC_PACKET_SIZE );
+                if( write_fec_packet( p_rtp->column_handle, column, COP3_FEC_PACKET_SIZE ) < 0 )
+                    ret = -1;
             }
         }
 
@@ -623,7 +629,6 @@ static void *open_output( void *ptr )
     obe_output_dest_t *output_dest = &output->output_dest;
     struct ip_status status;
     hnd_t ip_handle = NULL;
-    int clear = 0, ret = 0;
     obe_udp_opts_t udp_opts;
     struct uchain queue;
     ulist_init( &queue );
@@ -682,29 +687,21 @@ static void *open_output( void *ptr )
         {
             obe_buf_ref_t *buf_ref = obe_buf_ref_t_from_uchain( uchain );
             AVBufferRef *data_buf_ref = buf_ref->data_buf_ref;
-
-            if( clear )
+            if( output_dest->type == OUTPUT_RTP )
             {
-                // do nothing
-            }
-            else if( output_dest->type == OUTPUT_RTP )
-            {
-                ret = write_rtp_pkt( ip_handle, &data_buf_ref->data[7*sizeof(int64_t)], TS_PACKETS_SIZE, AV_RN64( data_buf_ref->data ), output_dest->fec_type );
-                if( ret == -2 )
-                    clear = 1;
+                if( write_rtp_pkt( ip_handle, &data_buf_ref->data[7*sizeof(int64_t)], TS_PACKETS_SIZE, AV_RN64( data_buf_ref->data ), output_dest->fec_type ) < 0 )
+                    syslog( LOG_ERR, "[rtp] Failed to write RTP packet\n" );
             }
             else
             {
-                ret = udp_write( ip_handle, &data_buf_ref->data[7*sizeof(int64_t)], TS_PACKETS_SIZE );
-                if( ret == -2 )
-                    clear = 1;
+                if( udp_write( ip_handle, &data_buf_ref->data[7*sizeof(int64_t)], TS_PACKETS_SIZE ) < 0 )
+                    syslog( LOG_ERR, "[udp] Failed to write UDP packet\n" );
             }
 
             ulist_delete( uchain );
             av_buffer_unref( &data_buf_ref );
             av_buffer_unref( &buf_ref->self_buf_ref );
         }
-        clear = 0;
     }
 
     pthread_cleanup_pop( 1 );
