@@ -311,11 +311,6 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
     if( s->tos && udp_set_tos_opts( udp_fd, s ) < 0 )
         goto fail;
 
-    /* limit the tx buf size to limit latency */
-    tmp = s->buffer_size;
-    if( setsockopt( udp_fd, SOL_SOCKET, SO_SNDBUF, &tmp, sizeof(tmp) ) < 0 )
-        goto fail;
-
     if( s->is_connected && connect( udp_fd, (struct sockaddr *)&s->dest_addr, s->dest_addr_len ) )
         goto fail;
 
