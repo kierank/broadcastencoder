@@ -477,7 +477,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                     strcat( tmp, tmp2 );
                 }
 
-                output_dst->target = tmp;
+                output_dst->target = strdup( tmp );
                 if( !output_dst->target )
                     goto fail;
                 if( output_opts_in->fec_type > 0 )
