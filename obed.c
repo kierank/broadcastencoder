@@ -147,6 +147,14 @@ static void stop_encode( void )
         d.output_streams = NULL;
     }
 
+    for( int i = 0; i < d.output.num_outputs; i++ )
+    {
+        if( d.output.outputs[i].target )
+        {
+            free( d.output.outputs[i].target );
+            d.output.outputs[i].target = NULL;
+        }
+    }
     free( d.output.outputs );
 
     memset( &d, 0, sizeof(d) );
