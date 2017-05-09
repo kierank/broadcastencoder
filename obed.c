@@ -368,6 +368,9 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 x264_param_apply_profile( &video_stream->avc_param, "high422" );
             }
 
+            if( video_opts_in->has_filler )
+                video_stream->avc_param.i_nal_hrd = video_opts_in->filler ? X264_NAL_HRD_FAKE_CBR : X264_NAL_HRD_FAKE_VBR;
+
             /* Setup audio streams */
             for( i = 1; i <= encoder_control->n_audio_opts; i++ )
             {
