@@ -660,9 +660,9 @@ void destroy_muxed_data( obe_muxed_data_t *muxed_data );
 
 void add_device( obe_t *h, obe_device_t *device );
 
-int add_to_queue( obe_queue_t *queue, void *item );
+int add_to_queue( obe_queue_t *queue, struct uchain *item );
 int remove_from_queue( obe_queue_t *queue );
-int remove_item_from_queue( obe_queue_t *queue, void *item );
+int remove_item_from_queue( obe_queue_t *queue, struct uchain *item );
 
 int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame );
 int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame, int output_stream_id );

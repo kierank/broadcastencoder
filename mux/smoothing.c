@@ -125,7 +125,7 @@ static void *start_smoothing( void *ptr )
             if( num_muxed_data == 1 )
                 end_data = start_data;
             else
-                end_data = obe_muxed_data_t_from_uchain( ulist_peek( first_uchain->prev ) );
+                end_data = obe_muxed_data_t_from_uchain( first_uchain->prev );
 
             start_pcr = start_data->pcr_list[0];
             end_pcr = end_data->pcr_list[(end_data->len / 188)-1];
@@ -219,7 +219,7 @@ static void *start_smoothing( void *ptr )
 
             for( int i = 0; i < h->num_outputs; i++ )
             {
-                if( add_to_queue( &h->outputs[i]->queue, output_buffers[i] ) < 0 )
+                if( add_to_queue( &h->outputs[i]->queue, &output_buffers[i]->uchain ) < 0 )
                     return NULL;
                 output_buffers[i] = NULL;
             }

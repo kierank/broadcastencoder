@@ -118,7 +118,7 @@ static void *start_smoothing( void *ptr )
 
         pthread_mutex_unlock( &h->obe_clock_mutex );
 
-        add_to_queue( &h->mux_queue, coded_frame );
+        add_to_queue( &h->mux_queue, &coded_frame->uchain );
 
         //printf("\n send_delta %"PRIi64" \n", get_input_clock_in_mpeg_ticks( h ) - send_delta );
         //send_delta = get_input_clock_in_mpeg_ticks( h );

@@ -161,9 +161,7 @@ obe_muxed_data_t *new_muxed_data( int len )
 
 void destroy_muxed_data( obe_muxed_data_t *muxed_data )
 {
-    if( muxed_data->pcr_list )
-        free( muxed_data->pcr_list );
-
+    free( muxed_data->pcr_list );
     free( muxed_data->data );
     free( muxed_data );
 }
@@ -185,7 +183,7 @@ void obe_destroy_queue( obe_queue_t *queue )
     pthread_cond_destroy( &queue->out_cv );
 }
 
-int add_to_queue( obe_queue_t *queue, void *item )
+int add_to_queue( obe_queue_t *queue, struct uchain *item )
 {
     pthread_mutex_lock( &queue->mutex );
     ulist_add(&queue->ulist, item);
@@ -207,7 +205,7 @@ int remove_from_queue( obe_queue_t *queue )
     return 0;
 }
 
-int remove_item_from_queue( obe_queue_t *queue, void *item )
+int remove_item_from_queue( obe_queue_t *queue, struct uchain *item )
 {
     pthread_mutex_lock( &queue->mutex );
     ulist_delete(item);
@@ -238,7 +236,7 @@ int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame )
     if( !filter )
         return -1;
 
-    return add_to_queue( &filter->queue, raw_frame );
+    return add_to_queue( &filter->queue, &raw_frame->uchain );
 }
 
 static void destroy_filter( obe_filter_t *filter )
@@ -287,7 +285,7 @@ int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame, int output_stream
     if( !encoder )
         return -1;
 
-    return add_to_queue( &encoder->queue, raw_frame );
+    return add_to_queue( &encoder->queue, &raw_frame->uchain );
 }
 
 static void destroy_encoder( obe_encoder_t *encoder )
@@ -1190,7 +1188,11 @@ int obe_start( obe_t *h )
                      h->output_streams[i].stream_format == AUDIO_AAC  || h->output_streams[i].stream_format == AUDIO_MP2 ||
                      h->output_streams[i].stream_format == AUDIO_OPUS )
             {
-                audio_encoder = h->output_streams[i].stream_format == AUDIO_MP2 ? twolame_encoder : lavc_encoder;
+                audio_encoder =
+#ifdef HAVE_LIBTWOLAME
+                    (h->output_streams[i].stream_format == AUDIO_MP2) ? twolame_encoder :
+#endif
+                    lavc_encoder;
                 num_samples = h->output_streams[i].stream_format == AUDIO_MP2 ? MP2_NUM_SAMPLES :
                               h->output_streams[i].stream_format == AUDIO_AAC ? AAC_NUM_SAMPLES :
                               h->output_streams[i].stream_format == AUDIO_OPUS ? OPUS_NUM_SAMPLES : AC3_NUM_SAMPLES;
