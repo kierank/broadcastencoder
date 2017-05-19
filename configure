@@ -195,6 +195,7 @@ readline="auto"
 decklink="auto"
 lzvbi="auto"
 lopenfec="auto"
+upipe="auto"
 
 CFLAGS="$CFLAGS -Wall -I."
 CXXFLAGS="$CXXFLAGS -c -Wall -I."
@@ -703,6 +704,21 @@ if [ "$lopenfec" = "yes" ] ; then
     LDFLAGS="$LDFLAGS $LOPENFEC_LIBS"
 fi
 
+if [ "$upipe" = "auto" ] ; then
+    upipe="no"
+    if ${cross_prefix}pkg-config --libs libupump_ev libupipe_netmap libupipe_hbrmt libupipe_pthread libupipe_modules libupipe 2>/dev/null; then
+        UPIPE_LIBS="$UPIPE_LIBS $(${cross_prefix}pkg-config --libs libupump_ev libupipe_netmap libupipe_hbrmt libupipe_pthread libupipe_modules libupipe)"
+        UPIPE_CFLAGS="$UPIPE_CFLAGS $(${cross_prefix}pkg-config --libs libupump_ev libupipe_netmap libupipe_hbrmt libupipe_pthread libupipe_modules libupipe)"
+        upipe="yes"
+    fi
+fi
+
+if [ "$upipe" = "yes" ]; then
+    LDFLAGS="$UPIPE_LIBS $LDFLAGS"
+    CFLAGS="$CFLAGS $UPIPE_CFLAGS"
+fi
+
+
 if [ "$pic" = "yes" ] ; then
     CFLAGS="$CFLAGS -fPIC"
     ASFLAGS="$ASFLAGS -DPIC"
@@ -787,6 +803,7 @@ Input
 
 decklink:   $decklink
 libzvbi:    $lzvbi
+upipe:      $upipe
 
 Audio/Video Decoding
 
