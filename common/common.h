@@ -28,6 +28,8 @@
 
 #include <upipe/ubase.h>
 #include <upipe/ulist.h>
+#include <upipe/uref.h>
+#include <upipe/uref_pic.h>
 #include <libavutil/pixfmt.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/common.h>
@@ -421,6 +423,7 @@ typedef struct
     int64_t pts;
 
     AVBufferRef *buf_ref[AV_NUM_DATA_POINTERS];
+    struct uref *uref;
 
     void (*release_data)( void* );
     void (*release_frame)( void* );
@@ -652,6 +655,7 @@ obe_coded_frame_t *new_coded_frame( int stream_id, int len );
 void destroy_coded_frame( obe_coded_frame_t *coded_frame );
 void obe_release_video_data( void *ptr );
 void obe_release_bufref( void *ptr );
+void obe_release_video_uref( void *ptr );
 void obe_release_audio_data( void *ptr );
 void obe_release_frame( void *ptr );
 

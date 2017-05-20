@@ -60,6 +60,7 @@ void destroy_device( obe_device_t *device )
         free( device->streams[i] );
     if( device->probed_streams )
         free( device->probed_streams );
+    // FIXME destroy mutex 
 }
 
 /* Raw frame */
@@ -122,6 +123,27 @@ void obe_release_bufref( void *ptr )
 
     /* Clear audio */
     memset( raw_frame->audio_frame.audio_data, 0, sizeof(raw_frame->audio_frame.audio_data) );
+}
+
+/* FIXME handle uref */
+void obe_release_video_uref( void *ptr )
+{
+    obe_raw_frame_t *raw_frame = ptr;
+
+    /* Unmap planes */
+    if( raw_frame->alloc_img.csp == AV_PIX_FMT_YUV422P10 )
+    {
+        uref_pic_plane_unmap(raw_frame->uref, "y10l", 0, 0, -1, -1);
+        uref_pic_plane_unmap(raw_frame->uref, "u10l", 0, 0, -1, -1);
+        uref_pic_plane_unmap(raw_frame->uref, "v10l", 0, 0, -1, -1);
+    } 
+
+    /* Clear video */
+    memset( &raw_frame->alloc_img, 0, sizeof(raw_frame->alloc_img) );
+    memset( &raw_frame->img, 0, sizeof(raw_frame->img) );
+
+    uref_free(raw_frame->uref);
+    raw_frame->uref = NULL;
 }
 
 void obe_release_audio_data( void *ptr )
@@ -648,6 +670,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
 
     destroy_device( &h->device );
     memset( &h->device, 0, sizeof(h->device) );
+    pthread_mutex_init( &h->device.device_mutex, NULL );
 
     if( input_device->input_type == INPUT_URL )
     {
@@ -663,6 +686,8 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
         input = linsys_sdi_input;
     else if( input_device->input_type == INPUT_DEVICE_BARS )
         input = bars_input;
+    else if( input_device->input_type == INPUT_DEVICE_NETMAP )
+        input = netmap_input;
     else
     {
         fprintf( stderr, "Invalid input device \n" );
@@ -706,7 +731,9 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
             break;
     }
 
-    __pthread_cancel( thread );
+    
+    
+    //__pthread_cancel( thread );
     __pthread_join( thread, &ret_ptr );
 
     if( h->device.num_input_streams == 0 )
@@ -795,10 +822,12 @@ int obe_autoconf_device( obe_t *h, obe_input_t *input_device, obe_input_program_
     if( input_device->input_type == INPUT_DEVICE_DECKLINK )
         input = decklink_input;
 #endif
-    if( input_device->input_type == INPUT_DEVICE_LINSYS_SDI )
+    else if( input_device->input_type == INPUT_DEVICE_LINSYS_SDI )
         input = linsys_sdi_input;
     else if( input_device->input_type == INPUT_DEVICE_BARS )
         input = bars_input;
+    else if( input_device->input_type == INPUT_DEVICE_NETMAP )
+        input = netmap_input;
     else
     {
         fprintf( stderr, "Invalid input device \n" );
@@ -1138,7 +1167,11 @@ int obe_start( obe_t *h )
     else if( h->device.device_type == INPUT_DEVICE_LINSYS_SDI )
         input = linsys_sdi_input;
     else if( h->device.device_type == INPUT_DEVICE_BARS )
-        input = bars_input;
+        input = bars_input;   
+    else if( h->device.device_type == INPUT_DEVICE_NETMAP )
+    {
+        input = netmap_input;
+    }
     else
     {
         fprintf( stderr, "Invalid input device \n" );
@@ -1429,7 +1462,7 @@ int obe_start( obe_t *h )
         fprintf( stderr, "Couldn't create input thread \n" );
         goto fail;
     }
-
+    
     h->is_active = 1;
     h->start_time = obe_mdate();
 
@@ -1462,7 +1495,7 @@ void obe_close( obe_t *h )
     fprintf( stderr, "closing obe \n" );
 
     /* Cancel input thread */
-     __pthread_cancel( h->device.device_thread );
+    //__pthread_cancel( h->device.device_thread );
      __pthread_join( h->device.device_thread, &ret_ptr );
 
     fprintf( stderr, "input cancelled \n" );

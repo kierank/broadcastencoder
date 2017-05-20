@@ -1576,6 +1576,7 @@ static void *probe_stream( void *ptr )
     memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
     device->device_type = INPUT_DEVICE_DECKLINK;
     memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
+    // FIXME destroy mutex
 
     /* add device */
     memcpy( &h->device, device, sizeof(*device) );
