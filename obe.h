@@ -104,6 +104,7 @@ enum input_type_e
     INPUT_DEVICE_BARS,
 //    INPUT_DEVICE_V4L2,
 //    INPUT_DEVICE_ASI,
+    INPUT_DEVICE_NETMAP,
 };
 
 enum picture_on_loss_e

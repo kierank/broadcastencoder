@@ -64,7 +64,7 @@ static int system_type_value = OBE_SYSTEM_TYPE_GENERIC;
 static int filter_bit_depth_value = OBE_BIT_DEPTH_10;
 
 static const char * const system_types[]             = { "generic", "lowestlatency", "lowlatency", 0 };
-static const char * const input_types[]              = { "url", "decklink", "linsys-sdi", "bars", 0 };
+static const char * const input_types[]              = { "url", "decklink", "linsys-sdi", "bars", "netmap", 0 };
 static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50", "720p59.94", "720p60", "1080i50", "1080i59.94", "1080p23.98", "1080p24", "1080p25", "1080p29.97", "1080p50", "1080p59.94", 0 };
 static const char * const input_video_connections[]  = { "sdi", "hdmi", "optical-sdi", "component", "composite", "s-video", 0 };
 static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", "analogue", 0 };
