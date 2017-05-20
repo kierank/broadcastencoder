@@ -245,11 +245,11 @@ static void destroy_filter( obe_filter_t *filter )
     pthread_mutex_lock( &filter->queue.mutex );
     struct uchain *uchain, *uchain_tmp;
 
-    ulist_delete_foreach( &filter->queue.ulist, uchain_tmp, uchain)
+    ulist_delete_foreach( &filter->queue.ulist, uchain, uchain_tmp)
     {
-        raw_frame = (obe_raw_frame_t *)uchain;
-        raw_frame->release_data( raw_frame );
+        raw_frame = obe_raw_frame_t_from_uchain( uchain );
         ulist_delete(uchain);
+        raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
     }
 
@@ -294,11 +294,11 @@ static void destroy_encoder( obe_encoder_t *encoder )
     pthread_mutex_lock( &encoder->queue.mutex );
     struct uchain *uchain, *uchain_tmp;
 
-    ulist_delete_foreach( &encoder->queue.ulist, uchain_tmp, uchain)
+    ulist_delete_foreach( &encoder->queue.ulist, uchain, uchain_tmp)
     {
-        raw_frame = (obe_raw_frame_t *)uchain;
+        raw_frame = obe_raw_frame_t_from_uchain( uchain );
+        ulist_delete( uchain );
         raw_frame->release_data( raw_frame );
-        ulist_delete(uchain);
         raw_frame->release_frame( raw_frame );
     }
     obe_destroy_queue( &encoder->queue );
@@ -311,10 +311,15 @@ static void destroy_enc_smoothing( obe_queue_t *queue )
     pthread_mutex_lock( &queue->mutex );
     struct uchain *uchain, *uchain_tmp;
 
-    ulist_delete_foreach( &queue->ulist, uchain_tmp, uchain)
+    if( queue->ulist.prev || queue->ulist.next )
     {
-        ulist_delete(uchain);
-        destroy_coded_frame( (obe_coded_frame_t *)uchain );
+        ulist_delete_foreach( &queue->ulist, uchain, uchain_tmp)
+        {
+            obe_coded_frame_t *coded_frame = obe_coded_frame_t_from_uchain( uchain );
+            
+            ulist_delete(uchain);
+            destroy_coded_frame( coded_frame );
+        }
     }
     
     obe_destroy_queue( queue );
@@ -325,10 +330,15 @@ static void destroy_mux( obe_t *h )
     pthread_mutex_lock( &h->mux_queue.mutex );
     struct uchain *uchain, *uchain_tmp;
 
-    ulist_delete_foreach( &h->mux_queue.ulist, uchain_tmp, uchain)
+    if( h->mux_queue.ulist.prev || h->mux_queue.ulist.next )
     {
-        ulist_delete(uchain);
-        destroy_coded_frame( (obe_coded_frame_t *)uchain );
+        ulist_delete_foreach( &h->mux_queue.ulist, uchain, uchain_tmp)
+        {
+            obe_coded_frame_t *coded_frame = obe_coded_frame_t_from_uchain( uchain );
+            
+            ulist_delete( uchain );
+            destroy_coded_frame( coded_frame );
+        }
     }
     
     obe_destroy_queue( &h->mux_queue );
@@ -341,13 +351,18 @@ static void destroy_mux( obe_t *h )
 
 static void destroy_mux_smoothing( obe_queue_t *queue )
 {
-    obe_muxed_data_t *muxed_data;
+
     pthread_mutex_lock( &queue->mutex );
     struct uchain *uchain, *uchain_tmp;
 
-    ulist_delete_foreach( &queue->ulist, uchain_tmp, uchain)
+    if( queue->ulist.prev || queue->ulist.next )
     {
-        destroy_muxed_data( (obe_muxed_data_t *)uchain );
+        ulist_delete_foreach( &queue->ulist, uchain, uchain_tmp)
+        {
+            obe_muxed_data_t *muxed_data = obe_muxed_data_t_from_uchain( uchain );
+            ulist_delete( uchain );
+            destroy_muxed_data( muxed_data );
+        }
     }
     
     obe_destroy_queue( queue );
@@ -359,13 +374,13 @@ int remove_early_frames( obe_t *h, int64_t pts )
 
     struct uchain *uchain, *uchain_tmp;
 
-    ulist_delete_foreach( &h->mux_queue.ulist, uchain_tmp, uchain)
+    ulist_delete_foreach( &h->mux_queue.ulist, uchain, uchain_tmp)
     {
-        obe_coded_frame_t *frame = (obe_coded_frame_t *)uchain;
-        if( !frame->is_video && frame->pts < pts )
+        obe_coded_frame_t *coded_frame = obe_coded_frame_t_from_uchain( uchain );
+        if( !coded_frame->is_video && coded_frame->pts < pts )
         {
             ulist_delete( uchain );
-            destroy_coded_frame( (obe_coded_frame_t *)uchain );
+            destroy_coded_frame( coded_frame );
         }
     }
 
@@ -378,9 +393,16 @@ static void destroy_output( obe_output_t *output )
     pthread_mutex_lock( &output->queue.mutex );
     struct uchain *uchain, *uchain_tmp;
 
-    ulist_delete_foreach( &output->queue.ulist, uchain_tmp, uchain)
+    if( output->queue.ulist.prev || output->queue.ulist.next )
     {
-        // FIXME
+        ulist_delete_foreach( &output->queue.ulist, uchain, uchain_tmp)
+        {
+            obe_buf_ref_t *buf_ref = obe_buf_ref_t_from_uchain( uchain );
+            AVBufferRef *data_buf_ref = buf_ref->data_buf_ref;
+            ulist_delete( uchain );
+            av_buffer_unref( &data_buf_ref );
+            av_buffer_unref( &buf_ref->self_buf_ref );
+        }
     }
     
     obe_destroy_queue( &output->queue );
