@@ -323,8 +323,12 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
             uref_sound_read_int32_t(uref, 0, -1, &src, 1);
 
             for( int i = 0; i < size; i++)
-                for( int j = 0; j < 16; j++ )
-                    raw_frame->audio_frame.audio_data[j][i] = src[16*i + j];
+                for( int j = 0; j < 16; j++ ) 
+                {
+                    int32_t *audio = (int32_t*)raw_frame->audio_frame.audio_data[j];
+                    audio[i] = src[16*i + j];
+                }
+
 
             uref_sound_unmap(uref, 0, -1, 1);
 
