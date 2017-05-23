@@ -61,6 +61,7 @@ void destroy_device( obe_device_t *device )
         free( device->streams[i] );
     if( device->probed_streams )
         free( device->probed_streams );
+    // FIXME destroy mutex 
 }
 
 /* Raw frame */
@@ -125,6 +126,27 @@ void obe_release_bufref( void *ptr )
     memset( raw_frame->audio_frame.audio_data, 0, sizeof(raw_frame->audio_frame.audio_data) );
 }
 
+/* FIXME handle uref */
+void obe_release_video_uref( void *ptr )
+{
+    obe_raw_frame_t *raw_frame = ptr;
+
+    /* Unmap planes */
+    if( raw_frame->alloc_img.csp == AV_PIX_FMT_YUV422P10 )
+    {
+        uref_pic_plane_unmap(raw_frame->uref, "y10l", 0, 0, -1, -1);
+        uref_pic_plane_unmap(raw_frame->uref, "u10l", 0, 0, -1, -1);
+        uref_pic_plane_unmap(raw_frame->uref, "v10l", 0, 0, -1, -1);
+    } 
+
+    /* Clear video */
+    memset( &raw_frame->alloc_img, 0, sizeof(raw_frame->alloc_img) );
+    memset( &raw_frame->img, 0, sizeof(raw_frame->img) );
+
+    uref_free(raw_frame->uref);
+    raw_frame->uref = NULL;
+}
+
 void obe_release_audio_data( void *ptr )
 {
     obe_raw_frame_t *raw_frame = ptr;
@@ -162,9 +184,7 @@ obe_muxed_data_t *new_muxed_data( int len )
 
 void destroy_muxed_data( obe_muxed_data_t *muxed_data )
 {
-    if( muxed_data->pcr_list )
-        free( muxed_data->pcr_list );
-
+    free( muxed_data->pcr_list );
     free( muxed_data->data );
     free( muxed_data );
 }
@@ -175,31 +195,21 @@ void obe_init_queue( obe_queue_t *queue )
     pthread_mutex_init( &queue->mutex, NULL );
     pthread_cond_init( &queue->in_cv, NULL );
     pthread_cond_init( &queue->out_cv, NULL );
+    ulist_init( &queue->ulist );
 }
 
 void obe_destroy_queue( obe_queue_t *queue )
 {
-    free( queue->queue );
-
     pthread_mutex_unlock( &queue->mutex );
     pthread_mutex_destroy( &queue->mutex );
     pthread_cond_destroy( &queue->in_cv );
     pthread_cond_destroy( &queue->out_cv );
 }
 
-int add_to_queue( obe_queue_t *queue, void *item )
+int add_to_queue( obe_queue_t *queue, struct uchain *item )
 {
-    void **tmp;
-
     pthread_mutex_lock( &queue->mutex );
-    tmp = realloc( queue->queue, sizeof(*queue->queue) * (queue->size+1) );
-    if( !tmp )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
-    queue->queue = tmp;
-    queue->queue[queue->size++] = item;
+    ulist_add(&queue->ulist, item);
 
     pthread_cond_signal( &queue->in_cv );
     pthread_mutex_unlock( &queue->mutex );
@@ -209,19 +219,8 @@ int add_to_queue( obe_queue_t *queue, void *item )
 
 int remove_from_queue( obe_queue_t *queue )
 {
-    void **tmp;
-
     pthread_mutex_lock( &queue->mutex );
-    if( queue->size > 1 )
-        memmove( &queue->queue[0], &queue->queue[1], sizeof(*queue->queue) * (queue->size-1) );
-    tmp = realloc( queue->queue, sizeof(*queue->queue) * (queue->size-1) );
-    queue->size--;
-    if( !tmp && queue->size )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
-    queue->queue = tmp;
+    ulist_pop(&queue->ulist);
 
     pthread_cond_signal( &queue->out_cv );
     pthread_mutex_unlock( &queue->mutex );
@@ -229,27 +228,10 @@ int remove_from_queue( obe_queue_t *queue )
     return 0;
 }
 
-int remove_item_from_queue( obe_queue_t *queue, void *item )
+int remove_item_from_queue( obe_queue_t *queue, struct uchain *item )
 {
-    void **tmp;
-
     pthread_mutex_lock( &queue->mutex );
-    for( int i = 0; i < queue->size; i++ )
-    {
-        if( queue->queue[i] == item )
-        {
-            memmove( &queue->queue[i], &queue->queue[i+1], sizeof(*queue->queue) * (queue->size-1-i) );
-            tmp = realloc( queue->queue, sizeof(*queue->queue) * (queue->size-1) );
-            queue->size--;
-            if( !tmp && queue->size )
-            {
-                syslog( LOG_ERR, "Malloc failed\n" );
-                return -1;
-            }
-            queue->queue = tmp;
-            break;
-        }
-    }
+    ulist_delete(item);
 
     pthread_cond_signal( &queue->out_cv );
     pthread_mutex_unlock( &queue->mutex );
@@ -277,16 +259,19 @@ int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame )
     if( !filter )
         return -1;
 
-    return add_to_queue( &filter->queue, raw_frame );
+    return add_to_queue( &filter->queue, &raw_frame->uchain );
 }
 
 static void destroy_filter( obe_filter_t *filter )
 {
     obe_raw_frame_t *raw_frame;
     pthread_mutex_lock( &filter->queue.mutex );
-    for( int i = 0; i < filter->queue.size; i++ )
+    struct uchain *uchain, *uchain_tmp;
+
+    ulist_delete_foreach( &filter->queue.ulist, uchain, uchain_tmp)
     {
-        raw_frame = filter->queue.queue[i];
+        raw_frame = obe_raw_frame_t_from_uchain( uchain );
+        ulist_delete(uchain);
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
     }
@@ -323,20 +308,22 @@ int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame, int output_stream
     if( !encoder )
         return -1;
 
-    return add_to_queue( &encoder->queue, raw_frame );
+    return add_to_queue( &encoder->queue, &raw_frame->uchain );
 }
 
 static void destroy_encoder( obe_encoder_t *encoder )
 {
     obe_raw_frame_t *raw_frame;
     pthread_mutex_lock( &encoder->queue.mutex );
-    for( int i = 0; i < encoder->queue.size; i++ )
+    struct uchain *uchain, *uchain_tmp;
+
+    ulist_delete_foreach( &encoder->queue.ulist, uchain, uchain_tmp)
     {
-        raw_frame = encoder->queue.queue[i];
+        raw_frame = obe_raw_frame_t_from_uchain( uchain );
+        ulist_delete( uchain );
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
     }
-
     obe_destroy_queue( &encoder->queue );
 
     free( encoder );
@@ -344,23 +331,39 @@ static void destroy_encoder( obe_encoder_t *encoder )
 
 static void destroy_enc_smoothing( obe_queue_t *queue )
 {
-    obe_coded_frame_t *coded_frame;
     pthread_mutex_lock( &queue->mutex );
-    for( int i = 0; i < queue->size; i++ )
-    {
-        coded_frame = queue->queue[i];
-        destroy_coded_frame( coded_frame );
-    }
+    struct uchain *uchain, *uchain_tmp;
 
+    if( queue->ulist.prev || queue->ulist.next )
+    {
+        ulist_delete_foreach( &queue->ulist, uchain, uchain_tmp)
+        {
+            obe_coded_frame_t *coded_frame = obe_coded_frame_t_from_uchain( uchain );
+            
+            ulist_delete(uchain);
+            destroy_coded_frame( coded_frame );
+        }
+    }
+    
     obe_destroy_queue( queue );
 }
 
 static void destroy_mux( obe_t *h )
 {
     pthread_mutex_lock( &h->mux_queue.mutex );
-    for( int i = 0; i < h->mux_queue.size; i++ )
-        destroy_coded_frame( h->mux_queue.queue[i] );
+    struct uchain *uchain, *uchain_tmp;
 
+    if( h->mux_queue.ulist.prev || h->mux_queue.ulist.next )
+    {
+        ulist_delete_foreach( &h->mux_queue.ulist, uchain, uchain_tmp)
+        {
+            obe_coded_frame_t *coded_frame = obe_coded_frame_t_from_uchain( uchain );
+            
+            ulist_delete( uchain );
+            destroy_coded_frame( coded_frame );
+        }
+    }
+    
     obe_destroy_queue( &h->mux_queue );
 
     if( h->mux_opts.service_name )
@@ -371,36 +374,36 @@ static void destroy_mux( obe_t *h )
 
 static void destroy_mux_smoothing( obe_queue_t *queue )
 {
-    obe_muxed_data_t *muxed_data;
-    pthread_mutex_lock( &queue->mutex );
-    for( int i = 0; i < queue->size; i++ )
-    {
-        muxed_data = queue->queue[i];
-        destroy_muxed_data( muxed_data );
-    }
 
+    pthread_mutex_lock( &queue->mutex );
+    struct uchain *uchain, *uchain_tmp;
+
+    if( queue->ulist.prev || queue->ulist.next )
+    {
+        ulist_delete_foreach( &queue->ulist, uchain, uchain_tmp)
+        {
+            obe_muxed_data_t *muxed_data = obe_muxed_data_t_from_uchain( uchain );
+            ulist_delete( uchain );
+            destroy_muxed_data( muxed_data );
+        }
+    }
+    
     obe_destroy_queue( queue );
 }
 
 int remove_early_frames( obe_t *h, int64_t pts )
 {
     void **tmp;
-    for( int i = 0; i < h->mux_queue.size; i++ )
+
+    struct uchain *uchain, *uchain_tmp;
+
+    ulist_delete_foreach( &h->mux_queue.ulist, uchain, uchain_tmp)
     {
-        obe_coded_frame_t *frame = h->mux_queue.queue[i];
-        if( !frame->is_video && frame->pts < pts )
+        obe_coded_frame_t *coded_frame = obe_coded_frame_t_from_uchain( uchain );
+        if( !coded_frame->is_video && coded_frame->pts < pts )
         {
-            destroy_coded_frame( frame );
-            memmove( &h->mux_queue.queue[i], &h->mux_queue.queue[i+1], sizeof(*h->mux_queue.queue) * (h->mux_queue.size-1-i) );
-            tmp = realloc( h->mux_queue.queue, sizeof(*h->mux_queue.queue) * (h->mux_queue.size-1) );
-            h->mux_queue.size--;
-            i--;
-            if( !tmp && h->mux_queue.size )
-            {
-                syslog( LOG_ERR, "Malloc failed\n" );
-                return -1;
-            }
-            h->mux_queue.queue = tmp;
+            ulist_delete( uchain );
+            destroy_coded_frame( coded_frame );
         }
     }
 
@@ -411,9 +414,20 @@ int remove_early_frames( obe_t *h, int64_t pts )
 static void destroy_output( obe_output_t *output )
 {
     pthread_mutex_lock( &output->queue.mutex );
-    for( int i = 0; i < output->queue.size; i++ )
-        av_buffer_unref( output->queue.queue[i] );
+    struct uchain *uchain, *uchain_tmp;
 
+    if( output->queue.ulist.prev || output->queue.ulist.next )
+    {
+        ulist_delete_foreach( &output->queue.ulist, uchain, uchain_tmp)
+        {
+            obe_buf_ref_t *buf_ref = obe_buf_ref_t_from_uchain( uchain );
+            AVBufferRef *data_buf_ref = buf_ref->data_buf_ref;
+            ulist_delete( uchain );
+            av_buffer_unref( &data_buf_ref );
+            av_buffer_unref( &buf_ref->self_buf_ref );
+        }
+    }
+    
     obe_destroy_queue( &output->queue );
     free( output );
 }
@@ -657,6 +671,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
 
     destroy_device( &h->device );
     memset( &h->device, 0, sizeof(h->device) );
+    pthread_mutex_init( &h->device.device_mutex, NULL );
 
     if( input_device->input_type == INPUT_URL )
     {
@@ -672,6 +687,8 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
         input = linsys_sdi_input;
     else if( input_device->input_type == INPUT_DEVICE_BARS )
         input = bars_input;
+    else if( input_device->input_type == INPUT_DEVICE_NETMAP )
+        input = netmap_input;
     else
     {
         fprintf( stderr, "Invalid input device \n" );
@@ -715,7 +732,9 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
             break;
     }
 
-    __pthread_cancel( thread );
+    
+    
+    //__pthread_cancel( thread );
     __pthread_join( thread, &ret_ptr );
 
     if( h->device.num_input_streams == 0 )
@@ -808,6 +827,8 @@ int obe_autoconf_device( obe_t *h, obe_input_t *input_device, obe_input_program_
         input = linsys_sdi_input;
     else if( input_device->input_type == INPUT_DEVICE_BARS )
         input = bars_input;
+    else if( input_device->input_type == INPUT_DEVICE_NETMAP )
+        input = netmap_input;
     else
     {
         fprintf( stderr, "Invalid input device \n" );
@@ -1147,7 +1168,11 @@ int obe_start( obe_t *h )
     else if( h->device.device_type == INPUT_DEVICE_LINSYS_SDI )
         input = linsys_sdi_input;
     else if( h->device.device_type == INPUT_DEVICE_BARS )
-        input = bars_input;
+        input = bars_input;   
+    else if( h->device.device_type == INPUT_DEVICE_NETMAP )
+    {
+        input = netmap_input;
+    }
     else
     {
         fprintf( stderr, "Invalid input device \n" );
@@ -1219,7 +1244,11 @@ int obe_start( obe_t *h )
                      h->output_streams[i].stream_format == AUDIO_AAC  || h->output_streams[i].stream_format == AUDIO_MP2 ||
                      h->output_streams[i].stream_format == AUDIO_OPUS )
             {
-                audio_encoder = h->output_streams[i].stream_format == AUDIO_MP2 ? twolame_encoder : lavc_encoder;
+                audio_encoder =
+#ifdef HAVE_LIBTWOLAME
+                    (h->output_streams[i].stream_format == AUDIO_MP2) ? twolame_encoder :
+#endif
+                    lavc_encoder;
                 num_samples = h->output_streams[i].stream_format == AUDIO_MP2 ? MP2_NUM_SAMPLES :
                               h->output_streams[i].stream_format == AUDIO_AAC ? AAC_NUM_SAMPLES :
                               h->output_streams[i].stream_format == AUDIO_OPUS ? OPUS_NUM_SAMPLES : AC3_NUM_SAMPLES;
@@ -1434,7 +1463,7 @@ int obe_start( obe_t *h )
         fprintf( stderr, "Couldn't create input thread \n" );
         goto fail;
     }
-
+    
     h->is_active = 1;
     h->start_time = obe_mdate();
 
@@ -1480,7 +1509,7 @@ void obe_close( obe_t *h )
     fprintf( stderr, "closing obe \n" );
 
     /* Cancel input thread */
-     __pthread_cancel( h->device.device_thread );
+    //__pthread_cancel( h->device.device_thread );
      __pthread_join( h->device.device_thread, &ret_ptr );
 
     fprintf( stderr, "input cancelled \n" );

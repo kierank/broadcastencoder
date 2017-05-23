@@ -94,7 +94,7 @@ static void *autoconf_input( void *ptr )
             streams[i]->height = video_format_tab[j].height;
             streams[i]->timebase_num = video_format_tab[j].timebase_num;
             streams[i]->timebase_den = video_format_tab[j].timebase_den;
-            streams[i]->csp    = PIX_FMT_YUV422P10;
+            streams[i]->csp    = AV_PIX_FMT_YUV422P10;
             streams[i]->interlaced = video_format_tab[j].interlaced;
             streams[i]->tff = 1; /* NTSC is bff in baseband but coded as tff */
             streams[i]->sar_num = streams[i]->sar_den = 1; /* The user can choose this when encoding */

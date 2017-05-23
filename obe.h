@@ -25,7 +25,7 @@
 #define OBE_H
 
 #include <inttypes.h>
-#include <libavutil/audioconvert.h>
+#include <libavutil/channel_layout.h>
 #include <x264.h>
 
 #define OBE_VERSION_MAJOR 0
@@ -104,6 +104,7 @@ enum input_type_e
     INPUT_DEVICE_BARS,
 //    INPUT_DEVICE_V4L2,
 //    INPUT_DEVICE_ASI,
+    INPUT_DEVICE_NETMAP,
 };
 
 enum picture_on_loss_e
@@ -522,7 +523,7 @@ typedef struct
 int obe_setup_muxer( obe_t *h, obe_mux_opts_t *mux_opts );
 
 /* Only ts-muxrate can be updated currently */
-int obe_update_muxer( obe_t *h, obe_mux_opts_t *mux_opts );
+void obe_update_mux( obe_t *h, obe_mux_opts_t *mux_opts );
 
 /**** Output *****/
 enum output_e

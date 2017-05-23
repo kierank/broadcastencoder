@@ -466,8 +466,8 @@ int get_bars( hnd_t ptr, obe_raw_frame_t **raw_frames )
 
     memcpy( raw_frame->alloc_img.stride, bars_ctx->frame->linesize, sizeof(raw_frame->alloc_img.stride) );
     memcpy( raw_frame->alloc_img.plane, bars_ctx->frame->data, sizeof(raw_frame->alloc_img.plane) );
-    raw_frame->alloc_img.csp = PIX_FMT_YUV422P;
-    raw_frame->alloc_img.planes = av_pix_fmt_descriptors[raw_frame->alloc_img.csp].nb_components;
+    raw_frame->alloc_img.csp = AV_PIX_FMT_YUV422P;
+    raw_frame->alloc_img.planes = av_pix_fmt_count_planes(raw_frame->alloc_img.csp);
     raw_frame->alloc_img.format = format->obe_name;
 
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );

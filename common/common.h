@@ -26,6 +26,10 @@
 
 #include "config.h"
 
+#include <upipe/ubase.h>
+#include <upipe/ulist.h>
+#include <upipe/uref.h>
+#include <upipe/uref_pic.h>
 #include <libavutil/pixfmt.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/common.h>
@@ -85,6 +89,38 @@
 
 /* NTSC */
 #define NTSC_FIRST_CODED_LINE 23
+
+
+/** @This declares two functions dealing with substructures included into a
+ * larger structure.
+ *
+ * @param STRUCTURE name of the larger structure
+ * @param SUBSTRUCT name of the smaller substructure
+ * @param SUBNAME name to use for the functions
+ * (STRUCTURE##_{to,from}_##SUBNAME)
+ * @param SUB name of the @tt{struct SUBSTRUCT} field of @tt{struct STRUCTURE}
+ */
+#define UBASE_FROM_TO_TYPEDEF(STRUCTURE, SUBSTRUCT, SUBNAME, SUB)           \
+/** @internal @This returns a pointer to SUBNAME.                           \
+ *                                                                          \
+ * @param STRUCTURE pointer to struct STRUCTURE                             \
+ * @return pointer to struct SUBSTRUCT                                      \
+ */                                                                         \
+static UBASE_UNUSED inline SUBSTRUCT *                                      \
+    STRUCTURE##_to_##SUBNAME(STRUCTURE *s)                                  \
+{                                                                           \
+    return &s->SUB;                                                         \
+}                                                                           \
+/** @internal @This returns a pointer to SUBNAME.                           \
+ *                                                                          \
+ * @param sub pointer to struct SUBSTRUCT                                   \
+ * @return pointer to struct STRUCTURE                                      \
+ */                                                                         \
+static UBASE_UNUSED inline  STRUCTURE *                                     \
+    STRUCTURE##_from_##SUBNAME(SUBSTRUCT *sub)                              \
+{                                                                           \
+    return container_of(sub, STRUCTURE, SUB);                               \
+}
 
 static inline int obe_clip3( int v, int i_min, int i_max )
 {
@@ -374,8 +410,7 @@ typedef struct
 
 typedef struct
 {
-    void **queue;
-    int  size;
+    struct uchain ulist;
 
     pthread_mutex_t mutex;
     pthread_cond_t  in_cv;
@@ -384,10 +419,13 @@ typedef struct
 
 typedef struct
 {
+    struct uchain uchain;
+    
     int input_stream_id;
     int64_t pts;
 
     AVBufferRef *buf_ref[AV_NUM_DATA_POINTERS];
+    struct uref *uref;
 
     void (*release_data)( void* );
     void (*release_frame)( void* );
@@ -420,6 +458,8 @@ typedef struct
 
     int reset_obe;
 } obe_raw_frame_t;
+
+UBASE_FROM_TO_TYPEDEF(obe_raw_frame_t, struct uchain, uchain, uchain)
 
 typedef struct
 {
@@ -476,6 +516,8 @@ typedef struct
 
 typedef struct
 {
+    struct uchain uchain;
+    
     int output_stream_id;
     int is_video;
 
@@ -497,14 +539,30 @@ typedef struct
     uint8_t *data;
 } obe_coded_frame_t;
 
+UBASE_FROM_TO_TYPEDEF(obe_coded_frame_t, struct uchain, uchain, uchain)
+
 typedef struct
 {
+    struct uchain uchain;
+
     int len;
     uint8_t *data;
 
     /* MPEG-TS */
     int64_t *pcr_list;
 } obe_muxed_data_t;
+
+UBASE_FROM_TO_TYPEDEF(obe_muxed_data_t, struct uchain, uchain, uchain)
+
+typedef struct
+{
+    struct uchain uchain;
+
+    AVBufferRef *self_buf_ref;
+    AVBufferRef *data_buf_ref;
+} obe_buf_ref_t;
+
+UBASE_FROM_TO_TYPEDEF(obe_buf_ref_t, struct uchain, uchain, uchain)
 
 struct obe_t
 {
@@ -599,6 +657,7 @@ obe_coded_frame_t *new_coded_frame( int stream_id, int len );
 void destroy_coded_frame( obe_coded_frame_t *coded_frame );
 void obe_release_video_data( void *ptr );
 void obe_release_bufref( void *ptr );
+void obe_release_video_uref( void *ptr );
 void obe_release_audio_data( void *ptr );
 void obe_release_frame( void *ptr );
 
@@ -607,9 +666,9 @@ void destroy_muxed_data( obe_muxed_data_t *muxed_data );
 
 void add_device( obe_t *h, obe_device_t *device );
 
-int add_to_queue( obe_queue_t *queue, void *item );
+int add_to_queue( obe_queue_t *queue, struct uchain *item );
 int remove_from_queue( obe_queue_t *queue );
-int remove_item_from_queue( obe_queue_t *queue, void *item );
+int remove_item_from_queue( obe_queue_t *queue, struct uchain *item );
 
 int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame );
 int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame, int output_stream_id );

@@ -49,7 +49,7 @@ static int check_send_packet( obe_t *h, obe_output_stream_t *output_stream, obe_
 
         coded_frame->pts = passthrough->pts;
         coded_frame->random_access = 1; /* Every frame output is a random access point */
-        add_to_queue( &h->mux_queue, coded_frame );
+        add_to_queue( &h->mux_queue, &coded_frame->uchain );
 
         passthrough->num_out_frames = 0;
     }
@@ -95,13 +95,12 @@ static void *start_filter( void *ptr )
         goto finish;
     }
 
-    frame = avcodec_alloc_frame();
+    frame = av_frame_alloc();
     if( !frame )
     {
         fprintf( stderr, "[302m] Could not allocate frame\n" );
         goto finish;
     }
-    avcodec_get_frame_defaults( frame );
 
     /* allocate interleaved buffer */
     if( av_samples_alloc( frame->data, frame->linesize, 8, MAX_SAMPLES, AV_SAMPLE_FMT_S32, 32 ) < 0 )
@@ -114,7 +113,7 @@ static void *start_filter( void *ptr )
     {
         pthread_mutex_lock( &filter->queue.mutex );
 
-        while( !filter->queue.size && !filter->cancel_thread )
+        while( ulist_empty( &filter->queue.ulist ) && !filter->cancel_thread )
             pthread_cond_wait( &filter->queue.in_cv, &filter->queue.mutex );
 
         if( filter->cancel_thread )
@@ -123,7 +122,7 @@ static void *start_filter( void *ptr )
             break;
         }
 
-        raw_frame = filter->queue.queue[0];
+        raw_frame = obe_raw_frame_t_from_uchain( ulist_pop( &filter->queue.ulist ) );
         pthread_mutex_unlock( &filter->queue.mutex );
 
         /* handle passthrough streams */
@@ -141,7 +140,7 @@ static void *start_filter( void *ptr )
 
                 if( passthrough->num_in_frames < 2 )
                     passthrough->num_in_frames++;
-           
+
                 /* reuse the AVFrame data space */
                 /* Interleave audio (and convert bit-depth if necessary) */
                 num_samples = MIN(raw_frame->audio_frame.num_samples, MAX_SAMPLES);
@@ -299,7 +298,7 @@ static void *start_filter( void *ptr )
                 coded_frame->pts = raw_frame->video_pts;
                 coded_frame->duration = raw_frame->video_duration;
                 coded_frame->random_access = 1; /* Every frame output is a random access point */
-                add_to_queue( &h->mux_queue, coded_frame );
+                add_to_queue( &h->mux_queue, &coded_frame->uchain );
             }
             else /* compressed format */
             {
@@ -332,7 +331,6 @@ static void *start_filter( void *ptr )
             }
         }
 
-        remove_from_queue( &filter->queue );
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
         raw_frame = NULL;

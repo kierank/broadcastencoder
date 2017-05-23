@@ -41,7 +41,7 @@ static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_fr
     memcpy( pic->img.i_stride, img->stride, sizeof(img->stride) );
     memcpy( pic->img.plane, img->plane, sizeof(img->plane) );
     pic->img.i_plane = img->planes;
-    pic->img.i_csp = img->csp == PIX_FMT_YUV422P || img->csp == PIX_FMT_YUV422P10 ? X264_CSP_I422 : X264_CSP_I420;
+    pic->img.i_csp = img->csp == AV_PIX_FMT_YUV422P || img->csp == AV_PIX_FMT_YUV422P10 ? X264_CSP_I422 : X264_CSP_I420;
 
     if( X264_BIT_DEPTH == 10 )
         pic->img.i_csp |= X264_CSP_HIGH_DEPTH;
@@ -150,7 +150,7 @@ static void *start_encoder( void *ptr )
             encoder->params_update = 0;
         }
 
-        while( !encoder->queue.size && !encoder->cancel_thread )
+        while( ulist_empty( &encoder->queue.ulist ) && !encoder->cancel_thread )
             pthread_cond_wait( &encoder->queue.in_cv, &encoder->queue.mutex );
 
         if( encoder->cancel_thread )
@@ -173,7 +173,7 @@ static void *start_encoder( void *ptr )
         }
         pthread_mutex_unlock( &h->drop_mutex );
 
-        raw_frame = encoder->queue.queue[0];
+        raw_frame = obe_raw_frame_t_from_uchain( ulist_pop( &encoder->queue.ulist ) );
         pthread_mutex_unlock( &encoder->queue.mutex );
 
         if( convert_obe_to_x264_pic( &pic, raw_frame ) < 0 )
@@ -218,11 +218,12 @@ static void *start_encoder( void *ptr )
                 /* time elapsed since last frame was removed */
                 int64_t last_frame_delta = get_input_clock_in_mpeg_ticks( h ) - h->enc_smoothing_last_exit_time;
 
-                if( h->enc_smoothing_queue.size )
+                if( !ulist_empty( &encoder->queue.ulist ) )
                 {
                     obe_coded_frame_t *first_frame, *last_frame;
-                    first_frame = h->enc_smoothing_queue.queue[0];
-                    last_frame = h->enc_smoothing_queue.queue[h->enc_smoothing_queue.size-1];
+                    struct uchain *first_uchain = &encoder->queue.ulist;
+                    first_frame = obe_coded_frame_t_from_uchain( ulist_peek( first_uchain ) );
+                    last_frame = obe_coded_frame_t_from_uchain( first_uchain->prev );
                     int64_t frame_durations = last_frame->real_dts - first_frame->real_dts + frame_duration;
                     buffer_fill = (float)(frame_durations - last_frame_delta)/buffer_duration;
                 }
@@ -240,7 +241,6 @@ static void *start_encoder( void *ptr )
         arrival_time = raw_frame->arrival_time;
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
-        remove_from_queue( &encoder->queue );
 
         if( frame_size < 0 )
         {
@@ -272,11 +272,11 @@ static void *start_encoder( void *ptr )
             if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY || h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
             {
                 coded_frame->arrival_time = arrival_time;
-                add_to_queue( &h->mux_queue, coded_frame );
+                add_to_queue( &h->mux_queue, &coded_frame->uchain );
                 //printf("\n Encode Latency %"PRIi64" \n", obe_mdate() - coded_frame->arrival_time );
             }
             else
-                add_to_queue( &h->enc_smoothing_queue, coded_frame );
+                add_to_queue( &h->enc_smoothing_queue, &coded_frame->uchain );
         }
      }
 

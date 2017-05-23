@@ -267,7 +267,7 @@ static int setup_stored_video_frame( obe_raw_frame_t *stored_video_frame,
 {
     stored_video_frame->alloc_img.width  = decklink_format->width;
     stored_video_frame->alloc_img.height = decklink_format->height;
-    stored_video_frame->alloc_img.csp    = PIX_FMT_YUV422P;
+    stored_video_frame->alloc_img.csp    = AV_PIX_FMT_YUV422P;
     int size = av_image_alloc( stored_video_frame->alloc_img.plane, stored_video_frame->alloc_img.stride,
                                stored_video_frame->alloc_img.width, stored_video_frame->alloc_img.height,
                                (AVPixelFormat)stored_video_frame->alloc_img.csp, 32 );
@@ -788,7 +788,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             raw_frame->alloc_img.height = height;
             if( h->filter_bit_depth == OBE_BIT_DEPTH_8 )
             {
-                raw_frame->alloc_img.csp = PIX_FMT_UYVY422;
+                raw_frame->alloc_img.csp = AV_PIX_FMT_UYVY422;
                 int size = av_image_alloc( raw_frame->alloc_img.plane, raw_frame->alloc_img.stride,
                                            raw_frame->alloc_img.width, raw_frame->alloc_img.height,
                                            (AVPixelFormat)raw_frame->alloc_img.csp, 32 );
@@ -842,7 +842,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             raw_frame->release_data = obe_release_bufref;
             raw_frame->release_frame = obe_release_frame;
             
-            raw_frame->alloc_img.planes = av_pix_fmt_descriptors[raw_frame->alloc_img.csp].nb_components;
+            raw_frame->alloc_img.planes = av_pix_fmt_count_planes( (AVPixelFormat)raw_frame->alloc_img.csp );
             raw_frame->alloc_img.format = decklink_opts_->video_format;
 
             memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
@@ -1528,7 +1528,7 @@ static void *probe_stream( void *ptr )
             streams[i]->height = decklink_opts->height;
             streams[i]->timebase_num = decklink_opts->timebase_num;
             streams[i]->timebase_den = decklink_opts->timebase_den;
-            streams[i]->csp    = PIX_FMT_YUV422P10;
+            streams[i]->csp    = AV_PIX_FMT_YUV422P10;
             streams[i]->interlaced = decklink_opts->interlaced;
             streams[i]->tff = 1; /* NTSC is bff in baseband but coded as tff */
             streams[i]->sar_num = streams[i]->sar_den = 1; /* The user can choose this when encoding */
@@ -1590,6 +1590,7 @@ static void *probe_stream( void *ptr )
     memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
     device->device_type = INPUT_DEVICE_DECKLINK;
     memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
+    // FIXME destroy mutex
 
     /* add device */
     memcpy( &h->device, device, sizeof(*device) );
@@ -1643,7 +1644,7 @@ static void *autoconf_input( void *ptr )
             streams[i]->height = decklink_video_format_tab[j].height;
             streams[i]->timebase_num = decklink_video_format_tab[j].timebase_num;
             streams[i]->timebase_den = decklink_video_format_tab[j].timebase_den;
-            streams[i]->csp    = PIX_FMT_YUV422P10;
+            streams[i]->csp    = AV_PIX_FMT_YUV422P10;
             streams[i]->interlaced = decklink_video_format_tab[j].interlaced;
             streams[i]->tff = 1; /* NTSC is bff in baseband but coded as tff */
             streams[i]->sar_num = streams[i]->sar_den = 1; /* The user can choose this when encoding */

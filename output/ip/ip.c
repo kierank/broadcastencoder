@@ -24,17 +24,18 @@
 
 #include <libavutil/random_seed.h>
 #include <libavutil/intreadwrite.h>
-#include <libavutil/buffer.h>
 #include <libavutil/fifo.h>
 #include <sys/time.h>
-
-#include <openfec/lib_common/of_openfec_api.h>
 
 #include "common/common.h"
 #include "common/network/network.h"
 #include "common/network/udp/udp.h"
 #include "output/output.h"
 #include "common/bitstream.h"
+
+#ifdef HAVE_LIBOPENFEC
+# include <openfec/lib_common/of_openfec_api.h>
+#endif
 
 #define RTP_VERSION 2
 
@@ -86,13 +87,13 @@ typedef struct
 
     uint64_t column_seq;
     uint64_t row_seq;
-
+#ifdef HAVE_LIBOPENFEC
     /* LDPC FECFRAME */
     hnd_t ldpc_handle;
 
     of_session_t *ses;
     of_ldpc_parameters_t ldpc_params;
-
+#endif
     uint8_t *source_symbols;
     uint8_t *repair_symbols;
 
@@ -105,6 +106,7 @@ struct ip_status
 {
     obe_output_t *output;
     hnd_t *ip_handle;
+    struct uchain *queue;
 };
 
 static void xor_packet_c( uint8_t *dst, uint8_t *src, int len )
@@ -137,6 +139,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
     p_rtp->fec_columns = output_dest->fec_columns;
     p_rtp->fec_rows = output_dest->fec_rows;
 
+#ifdef HAVE_LIBOPENFEC
     /* FIXME support stream duplication for LDPC staircase */
     if( output_dest->fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE )
     {
@@ -221,7 +224,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
             return -1;
         }
     }
-
+#endif
     if( output_dest->dup_delay )
     {
         p_rtp->dup_fifo = av_fifo_alloc( sizeof(AVBufferRef) * 100 );
@@ -347,13 +350,14 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
 
     /* Throughout this function, don't exit early because the decoder is expecting a sequence number increase
      * and consistent FEC packets. Return -1 at the end so the user knows there was a failure to submit a packet. */
-
+#ifdef HAVE_LIBOPENFEC
     if( fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE )
     {
         int src_pkt_idx = p_rtp->seq % p_rtp->ldpc_params.nb_source_symbols;
         pkt_ptr = &p_rtp->source_symbols[src_pkt_idx * RTP_PACKET_SIZE];
     }
     else
+#endif
     {
         p_rtp->buf_ref = av_buffer_alloc( RTP_PACKET_SIZE );
         pkt_ptr = p_rtp->buf_ref->data;
@@ -408,7 +412,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
             }
         }
     }
-
+#ifdef HAVE_LIBOPENFEC
     if( fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE && p_rtp->seq >= (p_rtp->ldpc_params.nb_source_symbols-1) )
     {
         int fec_interval = p_rtp->ldpc_params.nb_source_symbols / p_rtp->ldpc_params.nb_repair_symbols;
@@ -555,6 +559,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
             xor_packet_c( &column[RTP_HEADER_SIZE+COP3_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
         }
     }
+#endif
 
 end:
     av_buffer_unref( &p_rtp->buf_ref );
@@ -585,6 +590,7 @@ static void rtp_close( hnd_t handle )
         av_fifo_freep( &p_rtp->dup_fifo );
     }
 
+#ifdef HAVE_LIBOPENFEC
     /* COP3 FEC */
     if( p_rtp->column_data )
         free( p_rtp->column_data );
@@ -598,7 +604,7 @@ static void rtp_close( hnd_t handle )
     /* LDPC FEC */
     if( p_rtp->ses )
         of_release_codec_instance( p_rtp->ses );
-
+#endif
     free( p_rtp );
 }
 
@@ -629,9 +635,10 @@ static void *open_output( void *ptr )
     obe_output_dest_t *output_dest = &output->output_dest;
     struct ip_status status;
     hnd_t ip_handle = NULL;
-    int num_muxed_data = 0;
-    AVBufferRef **muxed_data;
     obe_udp_opts_t udp_opts;
+    struct uchain queue;
+    ulist_init( &queue );
+    struct uchain *uchain, *uchain_tmp;
 
     struct sched_param param = {0};
     param.sched_priority = 99;
@@ -639,6 +646,7 @@ static void *open_output( void *ptr )
 
     status.output = output;
     status.ip_handle = &ip_handle;
+    status.queue = &queue;
     pthread_cleanup_push( close_output, (void*)&status );
 
     udp_populate_opts( &udp_opts, output_dest->target );
@@ -660,7 +668,7 @@ static void *open_output( void *ptr )
     while( 1 )
     {
         pthread_mutex_lock( &output->queue.mutex );
-        while( !output->queue.size && !output->cancel_thread )
+        while( ulist_empty( &output->queue.ulist ) && !output->cancel_thread )
         {
             /* Often this cond_wait is not because of an underflow */
             pthread_cond_wait( &output->queue.in_cv, &output->queue.mutex );
@@ -672,39 +680,34 @@ static void *open_output( void *ptr )
             break;
         }
 
-        num_muxed_data = output->queue.size;
-
-        muxed_data = malloc( num_muxed_data * sizeof(*muxed_data) );
-        if( !muxed_data )
+        while( !ulist_empty( &output->queue.ulist ) )
         {
-            pthread_mutex_unlock( &output->queue.mutex );
-            syslog( LOG_ERR, "Malloc failed\n" );
-            return NULL;
+            struct uchain *out = ulist_pop( &output->queue.ulist );
+            ulist_add( &queue, out );
         }
-        memcpy( muxed_data, output->queue.queue, num_muxed_data * sizeof(*muxed_data) );
         pthread_mutex_unlock( &output->queue.mutex );
 
-//        printf("\n START %i \n", num_muxed_data );
+//        printf("\n START %i \n", num_buf_refs );
 
-        for( int i = 0; i < num_muxed_data; i++ )
+        ulist_delete_foreach( &queue, uchain, uchain_tmp )
         {
+            obe_buf_ref_t *buf_ref = obe_buf_ref_t_from_uchain( uchain );
+            AVBufferRef *data_buf_ref = buf_ref->data_buf_ref;
             if( output_dest->type == OUTPUT_RTP )
             {
-                if( write_rtp_pkt( ip_handle, &muxed_data[i]->data[7*sizeof(int64_t)], TS_PACKETS_SIZE, AV_RN64( muxed_data[i]->data ), output_dest->fec_type ) < 0 )
+                if( write_rtp_pkt( ip_handle, &data_buf_ref->data[7*sizeof(int64_t)], TS_PACKETS_SIZE, AV_RN64( data_buf_ref->data ), output_dest->fec_type ) < 0 )
                     syslog( LOG_ERR, "[rtp] Failed to write RTP packet\n" );
             }
             else
             {
-                if( udp_write( ip_handle, &muxed_data[i]->data[7*sizeof(int64_t)], TS_PACKETS_SIZE ) < 0 )
+                if( udp_write( ip_handle, &data_buf_ref->data[7*sizeof(int64_t)], TS_PACKETS_SIZE ) < 0 )
                     syslog( LOG_ERR, "[udp] Failed to write UDP packet\n" );
             }
 
-            remove_from_queue( &output->queue );
-            av_buffer_unref( &muxed_data[i] );
+            ulist_delete( uchain );
+            av_buffer_unref( &data_buf_ref );
+            av_buffer_unref( &buf_ref->self_buf_ref );
         }
-
-        free( muxed_data );
-        muxed_data = NULL;
     }
 
     pthread_cleanup_pop( 1 );
