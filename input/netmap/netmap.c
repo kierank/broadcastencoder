@@ -111,6 +111,12 @@ typedef struct
     char *uri;
     struct upipe *upipe_main_src;
 
+    /* Probe */
+    int             probe_cb_cnt;
+
+    /* Normal run */
+    int             video_good;
+
     /* Video */
     int64_t         v_counter;
     AVRational      v_timebase;
@@ -190,7 +196,36 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         netmap_opts->timebase_den = fps.num;
         netmap_opts->interlaced = !ubase_check(uref_pic_get_progressive(flow_def));
         netmap_opts->tff = ubase_check(uref_pic_get_tff(flow_def));
-        /* FIXME: video_format!! */
+        /* FIXME: probe video_format!! */
+
+        if( netmap_opts->probe )
+        {
+
+        }
+        else {
+            /* check this matches the configured format */
+            int j = 0;
+            for( ; video_format_tab[j].obe_name != -1; j++ )
+            {
+                if( netmap_opts->video_format == video_format_tab[j].obe_name )
+                    break;
+            }
+
+            if( video_format_tab[j].width == netmap_opts->width &&
+                video_format_tab[j].height == netmap_opts->height &&
+                video_format_tab[j].timebase_num == netmap_opts->timebase_num &&
+                video_format_tab[j].timebase_den == netmap_opts->timebase_den &&
+                video_format_tab[j].interlaced == netmap_opts->interlaced )
+            {
+                netmap_ctx->video_good = 1;
+            }
+            else
+            {
+                netmap_ctx->video_good = 0;
+            }
+        }
+
+
     }
     else if (event == UPROBE_PROBE_UREF) {
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
@@ -203,7 +238,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         if(netmap_opts->probe) {
             netmap_opts->probe_success = 1;
         }
-        else {
+        else if(netmap_ctx->video_good) {
             obe_raw_frame_t *raw_frame = NULL;
             int64_t pts = -1;
             obe_t *h = netmap_ctx->h;
@@ -244,7 +279,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
             raw_frame->alloc_img.height = netmap_opts->height;
             raw_frame->alloc_img.csp = AV_PIX_FMT_YUV422P10;
             raw_frame->alloc_img.planes = av_pix_fmt_count_planes(raw_frame->alloc_img.csp);
-            raw_frame->alloc_img.format = INPUT_VIDEO_FORMAT_1080I_5994; // FIXME
+            raw_frame->alloc_img.format = netmap_opts->video_format;
 
             memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
             raw_frame->sar_width = raw_frame->sar_height = 1;
@@ -293,7 +328,7 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
         if(netmap_opts->probe) {
 
         }
-        else {
+        else if(netmap_ctx->video_good) {
             obe_raw_frame_t *raw_frame = NULL;
             obe_t *h = netmap_ctx->h;
             const int32_t *src;
@@ -392,11 +427,25 @@ static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
 static void upipe_event_timer(struct upump *upump)
 {
     netmap_ctx_t *netmap_ctx = upump_get_opaque(upump, netmap_ctx_t *);
+    netmap_opts_t *netmap_opts = &netmap_ctx->netmap_opts;
 
-    upump_stop(upump);
-    upump_free(upump);
+    if( netmap_opts->probe )
+    {
+        netmap_ctx->probe_cb_cnt++;
 
-    upipe_release(netmap_ctx->upipe_main_src);
+        if( netmap_opts->probe_success || netmap_ctx->probe_cb_cnt > 10 )
+        {
+            upump_stop(upump);
+            upump_free(upump);
+
+            upipe_release(netmap_ctx->upipe_main_src);
+        }
+    }
+    else
+    {
+        // check for stop
+
+    }
 }
 
 static int open_netmap( netmap_ctx_t *netmap_ctx )
@@ -457,9 +506,6 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 
     uprobe_throw(uprobe_main, NULL, UPROBE_THAW_UPUMP_MGR);
 
-    assert(netmap_ctx->upipe_main_src);
-    upipe_attach_uclock(netmap_ctx->upipe_main_src);
-
     struct upipe_mgr *xfer_mgr =  upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
             XFER_POOL, uprobe_use(uprobe_main_pthread), upump_ev_mgr_alloc_loop,
             UPUMP_POOL, UPUMP_BLOCKER_POOL, NULL, NULL, NULL);
@@ -499,22 +545,23 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     uref_free(uref);
     //upipe_set_option(sdi_dec, "debug", "1");
     upipe_mgr_release(upipe_sdi_dec_mgr);
-    upipe_release(sdi_dec);
 
     /* video callback */
     struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
-    struct upipe *probe_uref_video = upipe_void_alloc_output(sdi_dec,
+    struct upipe *probe_uref_video = upipe_void_chain_output(sdi_dec,
             upipe_probe_uref_mgr,
             uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_video, netmap_ctx),
             loglevel, "probe_uref_video"));
     upipe_release(probe_uref_video);
-
 
     /* audio */
     struct upipe *audio = NULL;
     if (!ubase_check(upipe_sdi_dec_get_audio_sub(sdi_dec, &audio))) {
         printf("NO AUDIO\n");
         return 1;
+    }
+    else {
+        upipe_release(audio);
     }
 
     /* audio callback */
@@ -530,6 +577,9 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         printf("NO vanc\n");
         return 1;
     }
+    else {
+        upipe_release(vanc);
+    }
 
     /* vanc callback */
     struct upipe *probe_uref_vanc = upipe_void_alloc_output(vanc,
@@ -540,20 +590,30 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 
     upipe_mgr_release(upipe_probe_uref_mgr);
 
-    // FIXME
-#if 0
+    /* vbi */
+    struct upipe *vbi = NULL;
+    if (!ubase_check(upipe_sdi_dec_get_vbi_sub(sdi_dec, &vbi))) {
+        printf("NO vbi\n");
+        return 1;
+    }
+    else {
+        upipe_release(vbi);
+    }
+
     static struct upump *event_upump;
     /* stop timer */
     event_upump = upump_alloc_timer(main_upump_mgr, upipe_event_timer, netmap_ctx, NULL,
                                     UCLOCK_FREQ*10, UCLOCK_FREQ);
     assert(event_upump != NULL);
     upump_start(event_upump);
-#endif
 
     /* main loop */
     upump_mgr_run(main_upump_mgr, NULL);
 
     /* Wait on all upumps */
+    upump_mgr_release(main_upump_mgr);
+    uprobe_release(uprobe_main);	
+    uprobe_release(uprobe_dejitter);
 
     return 0;
 
@@ -636,17 +696,19 @@ static void *probe_input( void *ptr )
     obe_input_probe_t *probe_ctx = (obe_input_probe_t*)ptr;
     obe_t *h = probe_ctx->h;
 
-    char *uri = "netmap:p514p1-1/R";
+    char *uri = "netmap:foo}0";
     netmap_ctx_t netmap_ctx = {0};
     netmap_ctx.uri = uri;
     netmap_ctx.h = h;
+    netmap_opts_t *netmap_opts = &netmap_ctx.netmap_opts;
+    netmap_opts->probe = 1;
+
     open_netmap( &netmap_ctx );
 
     obe_input_t *user_opts = &probe_ctx->user_opts;
     obe_device_t *device;
     obe_int_input_stream_t *streams[MAX_STREAMS];
     int cur_stream = 2, cur_input_stream_id = 0;
-    netmap_opts_t *netmap_opts = &netmap_ctx.netmap_opts;
 
     if( !netmap_opts->probe_success )
     {
@@ -717,14 +779,23 @@ static void *open_input( void *ptr )
     obe_input_t *user_opts = &h->device.user_opts;
     hnd_t netmap = NULL;
 
-
-    char *uri = "netmap:p514p1-1/R+netmap:p514p2-1/R";
     netmap_ctx_t netmap_ctx = {0};
+    netmap_opts_t *netmap_opts = &netmap_ctx.netmap_opts;
+    netmap_opts->video_format = user_opts->video_format;
+
+    char *uri = "netmap:foo}0+netmap:bar}0";
     netmap_ctx.uri = uri;
     netmap_ctx.h = h;
 
-    netmap_ctx.v_timebase.num = 1001;
-    netmap_ctx.v_timebase.den = 30000;    
+    int j = 0;
+    for( ; video_format_tab[j].obe_name != -1; j++ )
+    {
+        if( netmap_opts->video_format == video_format_tab[j].obe_name )
+            break;
+    }
+
+    netmap_ctx.v_timebase.num = video_format_tab[j].timebase_num;
+    netmap_ctx.v_timebase.den = video_format_tab[j].timebase_den;    
 
     netmap_ctx.a_timebase.num = 1;
     netmap_ctx.a_timebase.den = 48000;
