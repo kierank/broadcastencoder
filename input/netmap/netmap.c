@@ -428,6 +428,7 @@ static void upipe_event_timer(struct upump *upump)
 {
     netmap_ctx_t *netmap_ctx = upump_get_opaque(upump, netmap_ctx_t *);
     netmap_opts_t *netmap_opts = &netmap_ctx->netmap_opts;
+    obe_t *h = netmap_ctx->h;
 
     if( netmap_opts->probe )
     {
@@ -443,8 +444,19 @@ static void upipe_event_timer(struct upump *upump)
     }
     else
     {
-        // check for stop
+        int stop;
 
+        pthread_mutex_lock( &h->device.device_mutex );
+        stop = h->device.stop;
+        pthread_mutex_unlock( &h->device.device_mutex);
+
+        if( stop )
+        {
+            upump_stop(upump);
+            upump_free(upump);
+
+            upipe_release(netmap_ctx->upipe_main_src);
+        }
     }
 }
 
@@ -683,6 +695,7 @@ static void *autoconf_input( void *ptr )
     memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
     device->device_type = INPUT_DEVICE_NETMAP;
     memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
+    pthread_mutex_destroy( &h->device.device_mutex );
 
     /* add device */
     memcpy( &h->device, device, sizeof(*device) );
@@ -760,7 +773,7 @@ static void *probe_input( void *ptr )
     memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
     device->device_type = INPUT_DEVICE_NETMAP;
     memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
-    // FIXME destroy mutex
+    pthread_mutex_destroy( &h->device.device_mutex );
 
     /* add device */
     memcpy( &h->device, device, sizeof(*device) );
