@@ -716,6 +716,7 @@ fi
 if [ "$upipe" = "yes" ]; then
     LDFLAGS="$UPIPE_LIBS $LDFLAGS"
     CFLAGS="$CFLAGS $UPIPE_CFLAGS"
+    CXXFLAGS="$CXXFLAGS $UPIPE_CFLAGS"
 fi
 
 
