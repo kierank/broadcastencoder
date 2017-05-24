@@ -207,7 +207,14 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             if( !d.h )
                 goto fail;
 
-            input_opts_out->input_type = input_opts_in->input_device;
+            if( input_opts_in->input_device == INPUT_DEVICE_NETMAP || input_opts_in->input_device == INPUT_DEVICE_NETMAP_DASH_7 )
+            {
+                input_opts_out->input_type = INPUT_DEVICE_NETMAP;
+                snprintf( input_opts_out->netmap_uri, "netmap:obe" "%u" "_path1}0+netmap:obe" "%u" "_path2}0", encoder_id, encoder_id, sizeof(input_opts_out->netmap_uri) );
+            }
+            else
+                input_opts_out->input_type = input_opts_in->input_device;
+
             input_opts_out->card_idx = input_opts_in->card_idx;
             input_opts_out->video_format = video_formats[input_opts_in->video_format];
             if( input_opts_in->bars_line1 )
