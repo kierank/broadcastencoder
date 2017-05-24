@@ -210,7 +210,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             if( input_opts_in->input_device == INPUT_DEVICE_NETMAP || input_opts_in->input_device == INPUT_DEVICE_NETMAP_DASH_7 )
             {
                 input_opts_out->input_type = INPUT_DEVICE_NETMAP;
-                snprintf( input_opts_out->netmap_uri, "netmap:obe" "%u" "_path1}0+netmap:obe" "%u" "_path2}0", encoder_id, encoder_id, sizeof(input_opts_out->netmap_uri) );
+                snprintf( input_opts_out->netmap_uri, sizeof(input_opts_out->netmap_uri), "netmap:obe" "%u" "_path1}0+netmap:obe" "%u" "_path2}0", encoder_id, encoder_id );
             }
             else
                 input_opts_out->input_type = input_opts_in->input_device;
