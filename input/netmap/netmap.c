@@ -454,7 +454,8 @@ static void upipe_event_timer(struct upump *upump)
         active = h->device.active;
         pthread_mutex_unlock( &h->device.device_mutex);
 
-        if ( netmap_ctx->last_frame_time > 0 && (obe_mdate() - netmap_ctx->last_frame_time) >= 27000000 &&
+        /* Note obe_mdate() is in microseconds */
+        if ( netmap_ctx->last_frame_time > 0 && (obe_mdate() - netmap_ctx->last_frame_time) >= 1500000 &&
              active ) 
         {
             pthread_mutex_lock( &h->device.device_mutex );
