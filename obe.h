@@ -127,6 +127,8 @@ typedef struct
     int video_connection;
     int audio_connection;
 
+    char netmap_uri[150];
+
     char bars_line1[30];
     char bars_line2[30];
     char bars_line3[30];
