@@ -248,6 +248,10 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
             /* use SDI ticks as clock source */
             obe_clock_tick( h, pts );
 
+            pthread_mutex_lock( &h->device.device_mutex );
+            h->device.active = 1;
+            pthread_mutex_unlock( &h->device.device_mutex );
+
             if( netmap_ctx->last_frame_time == -1 )
                 netmap_ctx->last_frame_time = obe_mdate();
 
@@ -444,11 +448,20 @@ static void upipe_event_timer(struct upump *upump)
     }
     else
     {
-        int stop;
+        int stop, active;
 
         pthread_mutex_lock( &h->device.device_mutex );
         stop = h->device.stop;
+        active = h->device.active;
         pthread_mutex_unlock( &h->device.device_mutex);
+
+        if ( netmap_ctx->last_frame_time > 0 && obe_mdate() - netmap_ctx->last_frame_time >= 27000000 &&
+             active ) 
+        {
+            pthread_mutex_lock( &h->device.device_mutex );
+            h->device.active = 0;
+            pthread_mutex_unlock( &h->device.device_mutex);
+        }
 
         if( stop )
         {
