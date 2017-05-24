@@ -703,7 +703,7 @@ if [ "$upipe" = "auto" ] ; then
     upipe="no"
     if ${cross_prefix}pkg-config --libs libupump_ev libupipe_netmap libupipe_hbrmt libupipe_pthread libupipe_modules libupipe 2>/dev/null; then
         UPIPE_LIBS="$UPIPE_LIBS $(${cross_prefix}pkg-config --libs libupump_ev libupipe_netmap libupipe_hbrmt libupipe_pthread libupipe_modules libupipe)"
-        UPIPE_CFLAGS="$UPIPE_CFLAGS $(${cross_prefix}pkg-config --libs libupump_ev libupipe_netmap libupipe_hbrmt libupipe_pthread libupipe_modules libupipe)"
+        UPIPE_CFLAGS="$UPIPE_CFLAGS $(${cross_prefix}pkg-config --cflags libupump_ev libupipe_netmap libupipe_hbrmt libupipe_pthread libupipe_modules libupipe)"
         upipe="yes"
     fi
 fi
@@ -711,6 +711,7 @@ fi
 if [ "$upipe" = "yes" ]; then
     LDFLAGS="$UPIPE_LIBS $LDFLAGS"
     CFLAGS="$CFLAGS $UPIPE_CFLAGS"
+    CXXFLAGS="$CXXFLAGS $UPIPE_CFLAGS"
 fi
 
 if [ "$pic" = "yes" ] ; then

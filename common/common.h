@@ -227,6 +227,7 @@ typedef struct
     int pmt_pid;
     int pcr_pid;
 
+    int stop;
     pthread_mutex_t device_mutex;
     pthread_t device_thread;
 

@@ -61,7 +61,7 @@ void destroy_device( obe_device_t *device )
         free( device->streams[i] );
     if( device->probed_streams )
         free( device->probed_streams );
-    // FIXME destroy mutex 
+    pthread_mutex_destroy( &device->device_mutex );
 }
 
 /* Raw frame */
@@ -126,7 +126,7 @@ void obe_release_bufref( void *ptr )
     memset( raw_frame->audio_frame.audio_data, 0, sizeof(raw_frame->audio_frame.audio_data) );
 }
 
-/* FIXME handle uref */
+/* upipe urefs */
 void obe_release_video_uref( void *ptr )
 {
     obe_raw_frame_t *raw_frame = ptr;
@@ -530,6 +530,8 @@ obe_t *obe_setup( const char *ident )
     av_register_all();
     avfilter_register_all();
     avcodec_register_all();
+
+    pthread_mutex_init( &h->device.device_mutex, NULL );
 
     return h;
 }
@@ -1507,7 +1509,9 @@ void obe_close( obe_t *h )
     }
 
     fprintf( stderr, "closing obe \n" );
-
+    pthread_mutex_lock( &h->device.device_mutex );
+    h->device.stop = 1;
+    pthread_mutex_unlock( &h->device.device_mutex);
     /* Cancel input thread */
     //__pthread_cancel( h->device.device_thread );
      __pthread_join( h->device.device_thread, &ret_ptr );
