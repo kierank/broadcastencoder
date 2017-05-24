@@ -87,7 +87,7 @@ static const char * const fec_types[]                = { "cop3-block-aligned", "
 static const char * const downscale_types[]          = { "", "fast" };
 
 static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
-static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection",
+static const char * input_opts[]  = { "netmap-uri", "card-idx", "video-format", "video-connection", "audio-connection",
                                       "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", NULL };
 static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
@@ -521,6 +521,7 @@ static int set_input( char *command, obecli_command_t *child )
         if( !opts && params )
             return -1;
 
+        char *netmap_uri   = obe_get_option( input_opts[0], opts );
         char *card_idx     = obe_get_option( input_opts[1], opts );
         char *video_format = obe_get_option( input_opts[2], opts );
         char *video_connection = obe_get_option( input_opts[3], opts );
@@ -543,6 +544,8 @@ static int set_input( char *command, obecli_command_t *child )
         FAIL_IF_ERROR( picture_on_loss && ( check_enum_value( picture_on_loss, picture_on_losses ) < 0 ),
                        "Invalid picture on loss\n" );
 
+        if( cli.input.netmap_uri )
+            strncpy(cli.input.netmap_uri, netmap_uri, sizeof(cli.input.netmap_uri));
         cli.input.card_idx = obe_otoi( card_idx, cli.input.card_idx );
         if( video_format )
             parse_enum_value( video_format, input_video_formats, &cli.input.video_format );

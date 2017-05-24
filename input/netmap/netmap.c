@@ -708,17 +708,16 @@ static void *probe_input( void *ptr )
 {
     obe_input_probe_t *probe_ctx = (obe_input_probe_t*)ptr;
     obe_t *h = probe_ctx->h;
+    obe_input_t *user_opts = &probe_ctx->user_opts;
 
-    char *uri = "netmap:foo}0";
     netmap_ctx_t netmap_ctx = {0};
-    netmap_ctx.uri = uri;
+    netmap_ctx.uri = user_opts->netmap_uri;
     netmap_ctx.h = h;
     netmap_opts_t *netmap_opts = &netmap_ctx.netmap_opts;
     netmap_opts->probe = 1;
 
     open_netmap( &netmap_ctx );
 
-    obe_input_t *user_opts = &probe_ctx->user_opts;
     obe_device_t *device;
     obe_int_input_stream_t *streams[MAX_STREAMS];
     int cur_stream = 2, cur_input_stream_id = 0;
@@ -796,8 +795,7 @@ static void *open_input( void *ptr )
     netmap_opts_t *netmap_opts = &netmap_ctx.netmap_opts;
     netmap_opts->video_format = user_opts->video_format;
 
-    char *uri = "netmap:foo}0+netmap:bar}0";
-    netmap_ctx.uri = uri;
+    netmap_ctx.uri = user_opts->netmap_uri;
     netmap_ctx.h = h;
 
     int j = 0;
