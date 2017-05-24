@@ -252,8 +252,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
             h->device.active = 1;
             pthread_mutex_unlock( &h->device.device_mutex );
 
-            if( netmap_ctx->last_frame_time == -1 )
-                netmap_ctx->last_frame_time = obe_mdate();
+            netmap_ctx->last_frame_time = obe_mdate();
 
             raw_frame = new_raw_frame();
             if( !raw_frame )
