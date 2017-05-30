@@ -65,6 +65,7 @@ static const char *format_strings[] =
     [INPUT_VIDEO_FORMAT_1080P_2997] = "1080p29.97",
     [INPUT_VIDEO_FORMAT_1080P_50]   = "1080p50",
     [INPUT_VIDEO_FORMAT_1080P_5994] = "1080p59.94",
+    [INPUT_VIDEO_FORMAT_1080P_60]   = "1080p60",
 };
 
 int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
