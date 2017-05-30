@@ -97,6 +97,7 @@ const static obe_line_number_t first_active_line[] =
     { INPUT_VIDEO_FORMAT_1080P_2997, 42 },
     { INPUT_VIDEO_FORMAT_1080P_50,   42 },
     { INPUT_VIDEO_FORMAT_1080P_5994, 42 },
+    { INPUT_VIDEO_FORMAT_1080P_60,   42 },
     { -1, -1 },
 };
 
