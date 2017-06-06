@@ -141,6 +141,11 @@ typedef struct
 
     netmap_opts_t netmap_opts;
 
+    /* Upipe events */
+    struct upump_mgr *upump_mgr;
+
+    struct upump *no_video_upump;
+
     obe_t *h;
 } netmap_ctx_t;
 
@@ -159,6 +164,12 @@ static struct uprobe *uprobe_obe_init(struct uprobe_obe *probe_obe,
     uprobe_init(probe, catch, next);
     probe_obe->data = data;
     return probe;
+}
+
+static void no_video_timer(struct upump *upump)
+{
+    upump_stop(upump);
+    printf("NO VIDEO\n");
 }
 
 static void uprobe_obe_clean(struct uprobe_obe *probe_obe)
@@ -293,6 +304,15 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
             raw_frame->uref = uref;
             raw_frame->release_data = obe_release_video_uref;
             raw_frame->release_frame = obe_release_frame;
+
+            if (netmap_ctx->no_video_upump) {
+                upump_stop(netmap_ctx->no_video_upump);
+                upump_free(netmap_ctx->no_video_upump);
+            }
+            netmap_ctx->no_video_upump = upump_alloc_timer(netmap_ctx->upump_mgr,
+                    no_video_timer, netmap_ctx, NULL, UCLOCK_FREQ/5, 0);
+            assert(netmap_ctx->no_video_upump != NULL);
+            upump_start(netmap_ctx->no_video_upump);
 
             if( add_to_filter_queue( h, raw_frame ) < 0 )
                 goto end;
@@ -472,6 +492,8 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     /* upump manager for the main thread */
     struct upump_mgr *main_upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(main_upump_mgr);
+    netmap_ctx->upump_mgr = main_upump_mgr;
+    netmap_ctx->no_video_upump = NULL;
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
@@ -621,6 +643,11 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 
     /* main loop */
     upump_mgr_run(main_upump_mgr, NULL);
+
+    if (netmap_ctx->no_video_upump) {
+        upump_stop(netmap_ctx->no_video_upump);
+        upump_free(netmap_ctx->no_video_upump);
+    }
 
     /* Wait on all upumps */
     upump_mgr_release(main_upump_mgr);
