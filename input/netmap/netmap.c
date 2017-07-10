@@ -246,6 +246,8 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
         *drop = true;
 
+        bool discontinuity = ubase_check(uref_flow_get_discontinuity(uref));
+
         if(netmap_opts->probe) {
             netmap_opts->probe_success = 1;
         }
