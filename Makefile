@@ -70,7 +70,7 @@ $(SONAME): .depend $(OBJS) $(OBJSCXX) $(OBJASM) $(OBJSO)
 	$(CC) -shared -o $@ $(OBJS) $(OBJASM) $(OBJSO) $(SOFLAGS) $(LDFLAGS)
 
 obecli$(EXE): $(OBJCLI) libobe.a
-	$(CC) -o $@ $+ $(LDFLAGSCLI) $(LDFLAGS)
+	$(CC) -o $@ $+ $(LDFLAGSCLI) $(LDFLAGS) -no-pie
 
 %.o: %.asm
 	$(AS) $(ASFLAGS) -o $@ $<
