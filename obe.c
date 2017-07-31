@@ -31,6 +31,9 @@
 #include "mux/mux.h"
 #include "output/output.h"
 
+#include <libavformat/avformat.h>
+#include <libavfilter/avfilter.h>
+
 /** Utilities **/
 int64_t obe_mdate( void )
 {
