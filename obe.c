@@ -395,8 +395,6 @@ static void destroy_mux_smoothing( obe_queue_t *queue )
 
 int remove_early_frames( obe_t *h, int64_t pts )
 {
-    void **tmp;
-
     struct uchain *uchain, *uchain_tmp;
 
     ulist_delete_foreach( &h->mux_queue.ulist, uchain, uchain_tmp)
