@@ -108,7 +108,7 @@ static const char * stream_opts[] = { "action", "format",
                                       /* VBI options */
                                       "vbi-ttx", "vbi-inv-ttx", "vbi-vps", "vbi-wss",
                                       NULL };
-static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrough", "ts-id", "program-num", "pmt-pid", "pcr-pid",
+static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", "service-name", "provider-name", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
 static const char * output_opts[] = { "type", "target", "fec-columns", "fec-rows", "fec-type", "dup-delay", NULL };
@@ -931,15 +931,14 @@ static int set_muxer( char *command, obecli_command_t *child )
         char *ts_type     = obe_get_option( muxer_opts[0], opts );
         char *ts_cbr      = obe_get_option( muxer_opts[1], opts );
         char *ts_muxrate  = obe_get_option( muxer_opts[2], opts );
-        char *passthrough = obe_get_option( muxer_opts[3], opts );
-        char *ts_id       = obe_get_option( muxer_opts[4], opts );
-        char *program_num = obe_get_option( muxer_opts[5], opts );
-        char *pmt_pid     = obe_get_option( muxer_opts[6], opts );
-        char *pcr_pid     = obe_get_option( muxer_opts[7], opts );
-        char *pcr_period  = obe_get_option( muxer_opts[8], opts );
-        char *pat_period  = obe_get_option( muxer_opts[9], opts );
-        char *service_name  = obe_get_option( muxer_opts[10], opts );
-        char *provider_name = obe_get_option( muxer_opts[11], opts );
+        char *ts_id       = obe_get_option( muxer_opts[3], opts );
+        char *program_num = obe_get_option( muxer_opts[4], opts );
+        char *pmt_pid     = obe_get_option( muxer_opts[5], opts );
+        char *pcr_pid     = obe_get_option( muxer_opts[6], opts );
+        char *pcr_period  = obe_get_option( muxer_opts[7], opts );
+        char *pat_period  = obe_get_option( muxer_opts[8], opts );
+        char *service_name  = obe_get_option( muxer_opts[9], opts );
+        char *provider_name = obe_get_option( muxer_opts[10], opts );
 
         FAIL_IF_ERROR( ts_type && ( check_enum_value( ts_type, ts_types ) < 0 ),
                       "Invalid AVC profile\n" );
