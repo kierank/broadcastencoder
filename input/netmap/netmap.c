@@ -241,7 +241,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     else if (event == UPROBE_PROBE_UREF) {
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
         struct uref *uref = va_arg(args, struct uref *);
-        struct upump **upump = va_arg(args, struct upump **);
+        va_arg(args, struct upump **);
         bool *drop = va_arg(args, bool *);
 
         *drop = true;
@@ -339,7 +339,7 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     if (event == UPROBE_PROBE_UREF) {
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
         struct uref *uref = va_arg(args, struct uref *);
-        struct upump **upump = va_arg(args, struct upump **);
+        va_arg(args, struct upump **);
         bool *drop = va_arg(args, bool *);
         *drop = true;
 
@@ -429,8 +429,8 @@ static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
 
     if (event == UPROBE_PROBE_UREF) {
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
-        struct uref *uref = va_arg(args, struct uref *);
-        struct upump **upump = va_arg(args, struct upump **);
+        va_arg(args, struct uref *);
+        va_arg(args, struct upump **);
         bool *drop = va_arg(args, bool *);
 
         /* FIXME handle VANC */
@@ -818,7 +818,6 @@ static void *open_input( void *ptr )
     obe_input_params_t *input = (obe_input_params_t*)ptr;
     obe_t *h = input->h;
     obe_input_t *user_opts = &h->device.user_opts;
-    hnd_t netmap = NULL;
 
     netmap_ctx_t netmap_ctx = {0};
     netmap_opts_t *netmap_opts = &netmap_ctx.netmap_opts;
