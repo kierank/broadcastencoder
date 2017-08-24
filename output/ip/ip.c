@@ -109,13 +109,11 @@ struct ip_status
     struct uchain *queue;
 };
 
-#ifdef HAVE_LIBOPENFEC
 static void xor_packet_c( uint8_t *dst, uint8_t *src, int len )
 {
     for( int i = 0; i < len; i++ )
         dst[i] = src[i] ^ dst[i];
 }
-#endif
 
 static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_t *output_dest )
 {
@@ -200,6 +198,9 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
             p_rtp->encoding_symbols_tab[i+j] = &p_rtp->repair_symbols[j*LDPC_PACKET_SIZE + LDPC_FEC_HEADER_SIZE];
     }
     else if( p_rtp->fec_columns && p_rtp->fec_rows )
+%else
+    if( p_rtp->fec_columns && p_rtp->fec_rows )
+#endif
     {
         /* Set SSRC for both streams to zero as per specification */
         p_rtp->ssrc = 0;
@@ -226,7 +227,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
             return -1;
         }
     }
-#endif
+
     if( output_dest->dup_delay )
     {
         p_rtp->dup_fifo = av_fifo_alloc( sizeof(AVBufferRef) * 100 );
@@ -297,7 +298,6 @@ static void write_rtp_header( uint8_t *data, uint8_t payload_type, uint16_t seq,
     *data++ = ssrc & 0xff;
 }
 
-#ifdef HAVE_LIBOPENFEC
 static void write_fec_header( hnd_t handle, uint8_t *data, int row, uint16_t snbase )
 {
     obe_rtp_ctx *p_rtp = handle;
@@ -343,7 +343,6 @@ static int write_fec_packet( hnd_t udp_handle, uint8_t *data, int len )
 
     return ret;
 }
-#endif
 
 static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestamp, int fec_type )
 {
