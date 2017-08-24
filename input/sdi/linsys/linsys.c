@@ -96,26 +96,6 @@ struct linsys_audio_channels
     int num_channels;
 };
 
-const static struct linsys_audio_channels active_audio_tab[] =
-{
-    { SDIAUDIO_CTL_ACT_CHAN_0, 0 },
-    { SDIAUDIO_CTL_ACT_CHAN_2, 2 },
-    { SDIAUDIO_CTL_ACT_CHAN_4, 4 },
-    { SDIAUDIO_CTL_ACT_CHAN_6, 6 },
-    { SDIAUDIO_CTL_ACT_CHAN_8, 8 },
-    { -1, -1 },
-};
-
-const static struct linsys_audio_channels audio_channels_tab[] =
-{
-    { SDIAUDIO_CTL_AUDCH_EN_0, 0 },
-    { SDIAUDIO_CTL_AUDCH_EN_2, 2 },
-    { SDIAUDIO_CTL_AUDCH_EN_4, 4 },
-    { SDIAUDIO_CTL_AUDCH_EN_6, 6 },
-    { SDIAUDIO_CTL_AUDCH_EN_8, 8 },
-    { -1, -1 },
-};
-
 typedef struct
 {
     /* video device reader */

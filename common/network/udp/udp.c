@@ -256,7 +256,7 @@ void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri )
 
 int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
 {
-    int udp_fd = -1, tmp, bind_ret = -1;
+    int udp_fd = -1, bind_ret = -1;
     struct sockaddr_storage my_addr;
     int len;
 

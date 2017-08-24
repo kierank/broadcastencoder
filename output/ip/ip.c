@@ -109,11 +109,13 @@ struct ip_status
     struct uchain *queue;
 };
 
+#ifdef HAVE_LIBOPENFEC
 static void xor_packet_c( uint8_t *dst, uint8_t *src, int len )
 {
     for( int i = 0; i < len; i++ )
         dst[i] = src[i] ^ dst[i];
 }
+#endif
 
 static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_t *output_dest )
 {
@@ -295,6 +297,7 @@ static void write_rtp_header( uint8_t *data, uint8_t payload_type, uint16_t seq,
     *data++ = ssrc & 0xff;
 }
 
+#ifdef HAVE_LIBOPENFEC
 static void write_fec_header( hnd_t handle, uint8_t *data, int row, uint16_t snbase )
 {
     obe_rtp_ctx *p_rtp = handle;
@@ -340,11 +343,12 @@ static int write_fec_packet( hnd_t udp_handle, uint8_t *data, int len )
 
     return ret;
 }
+#endif
 
 static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestamp, int fec_type )
 {
     obe_rtp_ctx *p_rtp = handle;
-    int ret = 0, enc_ret = 0;
+    int ret = 0;
     uint8_t *pkt_ptr;
     AVBufferRef *output_buffer;
 
@@ -420,6 +424,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
 
         if( fec_idx == (p_rtp->ldpc_params.nb_source_symbols-1) )
         {
+            int enc_ret = 0;
             if( p_rtp->ses )
             {
                 of_release_codec_instance( p_rtp->ses );

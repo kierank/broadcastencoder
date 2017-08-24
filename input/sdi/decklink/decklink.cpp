@@ -508,7 +508,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     uint8_t *vbi_buf;
     int anc_lines[DECKLINK_VANC_LINES];
     IDeckLinkVideoFrameAncillary *ancillary;
-    BMDTimeValue hardware_time, time_in_frame, ticks_per_frame;
     int64_t pts = -1;
 
     if( decklink_opts_->probe_success )
