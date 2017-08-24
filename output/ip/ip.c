@@ -482,6 +482,9 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         }
     }
     else if( p_rtp->fec_columns && p_rtp->fec_rows )
+%else
+    if( p_rtp->fec_columns && p_rtp->fec_rows )
+%endif
     {
         int row_idx = (p_rtp->seq / p_rtp->fec_columns) % p_rtp->fec_rows;
         int column_idx = p_rtp->seq % p_rtp->fec_columns;
