@@ -262,111 +262,6 @@ static void get_format_opts( decklink_opts_t *decklink_opts, IDeckLinkDisplayMod
         decklink_opts->height = 480;
 }
 
-static int setup_stored_video_frame( obe_raw_frame_t *stored_video_frame,
-                                     const struct obe_to_decklink_video *decklink_format )
-{
-    stored_video_frame->alloc_img.width  = decklink_format->width;
-    stored_video_frame->alloc_img.height = decklink_format->height;
-    stored_video_frame->alloc_img.csp    = AV_PIX_FMT_YUV422P;
-    int size = av_image_alloc( stored_video_frame->alloc_img.plane, stored_video_frame->alloc_img.stride,
-                               stored_video_frame->alloc_img.width, stored_video_frame->alloc_img.height,
-                               (AVPixelFormat)stored_video_frame->alloc_img.csp, 32 );
-
-    if( size < 0 )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
-    memcpy( &stored_video_frame->img, &stored_video_frame->alloc_img, sizeof(stored_video_frame->alloc_img) );
-
-    stored_video_frame->buf_ref[0] = av_buffer_create( stored_video_frame->alloc_img.plane[0],
-                                                       size, av_buffer_default_free,
-                                                       NULL, 0 );
-    if( !stored_video_frame->buf_ref[0] )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
-    stored_video_frame->buf_ref[1] = NULL;
-    stored_video_frame->release_data = obe_release_bufref;
-    stored_video_frame->release_frame = obe_release_frame;
-
-    return 0;
-}
-
-static int setup_stored_audio_frame( decklink_ctx_t *decklink_ctx, obe_raw_frame_t *stored_audio_frame )
-{
-    /* Allocate the maximum allowed of silence allowed by the sample pattern */
-    int size = 0;
-
-    stored_audio_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
-    stored_audio_frame->audio_frame.num_samples = decklink_ctx->sample_pattern->max;
-    stored_audio_frame->audio_frame.num_channels = 16;
-
-    if( av_samples_alloc( stored_audio_frame->audio_frame.audio_data, &stored_audio_frame->audio_frame.linesize, 1,
-                          stored_audio_frame->audio_frame.num_samples, (AVSampleFormat)stored_audio_frame->audio_frame.sample_fmt, 0 ) < 0 )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
-
-    /* Work around annoyance in libavutil */
-    size = stored_audio_frame->audio_frame.linesize;
-
-    av_samples_set_silence( stored_audio_frame->audio_frame.audio_data, 0, stored_audio_frame->audio_frame.num_samples, 1,
-                            (AVSampleFormat)stored_audio_frame->audio_frame.sample_fmt );
-
-    /* Copy pointer to all 16 channels */
-    for( int i = 1; i < MAX_CHANNELS; i++ )
-        stored_audio_frame->audio_frame.audio_data[i] = stored_audio_frame->audio_frame.audio_data[0];
-
-    stored_audio_frame->buf_ref[0] = av_buffer_create( stored_audio_frame->audio_frame.audio_data[0],
-                                                       size, av_buffer_default_free, NULL, 0 );
-    if( !stored_audio_frame->buf_ref[0] )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
-    }
-    stored_audio_frame->buf_ref[1] = NULL;
-    stored_audio_frame->release_data = obe_release_bufref;
-    stored_audio_frame->release_frame = obe_release_frame;
-
-    return 0;
-}
-
-static void blank_frame( obe_raw_frame_t *stored_video_frame )
-{
-    /* Assume YUV422P */
-    uint8_t *px;
-
-    px = stored_video_frame->img.plane[0];
-    for( int i = 0; i < stored_video_frame->img.height; i++ )
-    {
-        for( int i = 0; i < stored_video_frame->img.width; i++ )
-            px[i] = 0x10;
-
-        px += stored_video_frame->img.stride[0];
-    }
-
-    px = stored_video_frame->img.plane[1];
-    for( int i = 0; i < stored_video_frame->img.height; i++ )
-    {
-        for( int i = 0; i < stored_video_frame->img.width/2; i++ )
-            px[i] = 0x80;
-
-        px += stored_video_frame->img.stride[1];
-    }
-
-    px = stored_video_frame->img.plane[2];
-    for( int i = 0; i < stored_video_frame->img.height; i++ )
-    {
-        for( int i = 0; i < stored_video_frame->img.width/2; i++ )
-            px[i] = 0x80;
-
-        px += stored_video_frame->img.stride[2];
-    }
-}
-
 class DeckLinkCaptureDelegate : public IDeckLinkInputCallback
 {
 public:
@@ -468,11 +363,12 @@ public:
                         if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
                             decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
                         {
-                            setup_stored_video_frame( &decklink_ctx->stored_video_frame, &decklink_video_format_tab[i] );
-                            blank_frame( &decklink_ctx->stored_video_frame );
+                            setup_stored_video_frame( &decklink_ctx->stored_video_frame, decklink_video_format_tab[i].width,
+                                                      decklink_video_format_tab[i].height );
+                            blank_yuv422p_frame( &decklink_ctx->stored_video_frame );
                         }
 
-                        setup_stored_audio_frame( decklink_ctx, &decklink_ctx->stored_audio_frame );
+                        setup_stored_audio_frame( &decklink_ctx->stored_audio_frame, decklink_ctx->sample_pattern->max );
                     }
                 }
 
@@ -1353,8 +1249,8 @@ static int open_card( decklink_opts_t *decklink_opts )
             if( decklink_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
                 decklink_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
             {
-                setup_stored_video_frame( &decklink_ctx->stored_video_frame, decklink_format );
-                blank_frame( &decklink_ctx->stored_video_frame );
+                setup_stored_video_frame( &decklink_ctx->stored_video_frame, decklink_format->width, decklink_format->height );
+                blank_yuv422p_frame( &decklink_ctx->stored_video_frame );
             }
             else if( decklink_opts->picture_on_loss == PICTURE_ON_LOSS_BARS )
             {
@@ -1380,7 +1276,7 @@ static int open_card( decklink_opts_t *decklink_opts )
             if( decklink_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
                 decklink_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
             {
-                setup_stored_audio_frame( decklink_ctx, &decklink_ctx->stored_audio_frame );
+                setup_stored_audio_frame( &decklink_ctx->stored_audio_frame, decklink_ctx->sample_pattern->max );
             }
         }
 
