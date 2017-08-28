@@ -543,7 +543,7 @@ static int set_input( char *command, obecli_command_t *child )
         FAIL_IF_ERROR( picture_on_loss && ( check_enum_value( picture_on_loss, picture_on_losses ) < 0 ),
                        "Invalid picture on loss\n" );
 
-        if( cli.input.netmap_uri )
+        if( netmap_uri )
             strncpy(cli.input.netmap_uri, netmap_uri, sizeof(cli.input.netmap_uri));
         cli.input.card_idx = obe_otoi( card_idx, cli.input.card_idx );
         if( video_format )
