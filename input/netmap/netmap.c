@@ -24,6 +24,8 @@
 
 #include "common/common.h"
 #include "input/input.h"
+#include "input/sdi/sdi.h"
+#include "input/bars/bars_common.h"
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -91,6 +93,8 @@ typedef struct
 {
     int probe;
     int video_format;
+    int picture_on_loss;
+    obe_bars_opts_t obe_bars_opts;
 
     /* Output */
     int probe_success;
@@ -120,8 +124,8 @@ typedef struct
     /* Video */
     int64_t         v_counter;
     AVRational      v_timebase;
+    int64_t         video_freq;
     hnd_t           bars_hnd;
-    int64_t         drop_count;
     const char *input_chroma_map[3+1];
 
     /* frame data for black or last-frame */
@@ -166,12 +170,6 @@ static struct uprobe *uprobe_obe_init(struct uprobe_obe *probe_obe,
     return probe;
 }
 
-static void no_video_timer(struct upump *upump)
-{
-    upump_stop(upump);
-    printf("NO VIDEO\n");
-}
-
 static void uprobe_obe_clean(struct uprobe_obe *probe_obe)
 {
     uprobe_clean(uprobe_obe_to_uprobe(probe_obe));
@@ -182,6 +180,99 @@ static void uprobe_obe_clean(struct uprobe_obe *probe_obe)
 UPROBE_HELPER_ALLOC(uprobe_obe)
 #undef ARGS
 #undef ARGS_DECL
+
+static void no_video_timer(struct upump *upump)
+{
+    netmap_ctx_t *netmap_ctx = upump_get_opaque(upump, netmap_ctx_t *);
+    netmap_opts_t *netmap_opts = &netmap_ctx->netmap_opts;
+    obe_t *h = netmap_ctx->h;
+    obe_int_input_stream_t *video_stream = get_input_stream(h, 0);
+    int64_t pts = -1;
+
+    if (!video_stream)
+        return;
+
+    if( netmap_opts->picture_on_loss )
+    {
+        obe_raw_frame_t *video_frame = NULL, *audio_frame = NULL;
+        pts = av_rescale_q( netmap_ctx->v_counter, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+        obe_clock_tick( h, pts );
+
+        if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
+            netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
+        {
+            video_frame = new_raw_frame();
+            if( !video_frame )
+            {
+                syslog( LOG_ERR, "Malloc failed\n" );
+                return;
+            }
+            memcpy( video_frame, &netmap_ctx->stored_video_frame, sizeof(*video_frame) );
+            int i = 0;
+            while( video_frame->buf_ref[i] != NULL )
+            {
+                video_frame->buf_ref[i] = av_buffer_ref( netmap_ctx->stored_video_frame.buf_ref[i] );
+                i++;
+            }
+            video_frame->buf_ref[i] = NULL;
+        }
+        else if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BARS )
+        {
+            get_bars( netmap_ctx->bars_hnd, netmap_ctx->raw_frames );
+
+            video_frame = netmap_ctx->raw_frames[0];
+            audio_frame = netmap_ctx->raw_frames[1];
+        }
+
+        video_frame->pts = pts;
+
+        if( add_to_filter_queue( h, video_frame ) < 0 )
+            return;
+
+
+        if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
+            netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
+        {
+            audio_frame = new_raw_frame();
+            if( !audio_frame )
+            {
+                syslog( LOG_ERR, "Malloc failed\n" );
+                return;
+            }
+
+            memcpy( audio_frame, &netmap_ctx->stored_audio_frame, sizeof(*audio_frame) );
+            /* Assumes only one buffer reference */
+            audio_frame->buf_ref[0] = av_buffer_ref( netmap_ctx->stored_audio_frame.buf_ref[0] );
+            audio_frame->buf_ref[1] = NULL;
+
+            audio_frame->audio_frame.num_samples = netmap_ctx->sample_pattern->pattern[netmap_ctx->v_counter % netmap_ctx->sample_pattern->mod];
+        }
+
+        /* Write audio frame */
+        for( int i = 0; i < h->device.num_input_streams; i++ )
+        {
+            if( h->device.streams[i]->stream_format == AUDIO_PCM )
+                audio_frame->input_stream_id = h->device.streams[i]->input_stream_id;
+        }
+
+        audio_frame->pts = av_rescale_q( netmap_ctx->a_counter, netmap_ctx->a_timebase,
+                                            (AVRational){1, OBE_CLOCK} );
+        netmap_ctx->a_counter += audio_frame->audio_frame.num_samples;
+
+        if( add_to_filter_queue( h, audio_frame ) < 0 )
+            return;
+        /* Increase video PTS at the end so it can be used in NTSC sample size generation */
+        netmap_ctx->v_counter++;
+    }
+}
+
+static void setup_picture_on_signal_loss_timer(netmap_ctx_t *netmap_ctx)
+{
+    netmap_ctx->no_video_upump = upump_alloc_timer(netmap_ctx->upump_mgr,
+            no_video_timer, netmap_ctx, NULL, UCLOCK_FREQ/4, netmap_ctx->video_freq);
+    assert(netmap_ctx->no_video_upump != NULL);
+    upump_start(netmap_ctx->no_video_upump);
+}
 
 static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                        int event, va_list args)
@@ -207,10 +298,9 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         netmap_opts->timebase_den = fps.num;
         netmap_opts->interlaced = !ubase_check(uref_pic_get_progressive(flow_def));
         netmap_opts->tff = ubase_check(uref_pic_get_tff(flow_def));
-        /* FIXME: probe video_format!! */
 
-        if( netmap_opts->probe )
-        {
+        /* FIXME: probe video_format!! */
+        if( netmap_opts->probe ) {
 
         }
         else {
@@ -311,10 +401,9 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                 upump_stop(netmap_ctx->no_video_upump);
                 upump_free(netmap_ctx->no_video_upump);
             }
-            netmap_ctx->no_video_upump = upump_alloc_timer(netmap_ctx->upump_mgr,
-                    no_video_timer, netmap_ctx, NULL, UCLOCK_FREQ/5, 0);
-            assert(netmap_ctx->no_video_upump != NULL);
-            upump_start(netmap_ctx->no_video_upump);
+            setup_picture_on_signal_loss_timer(netmap_ctx);
+
+            // FIXME, backup copy of last shown frame
 
             if( add_to_filter_queue( h, raw_frame ) < 0 )
                 goto end;
@@ -413,7 +502,6 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
 end:
         return UBASE_ERR_NONE;
     }
-
 
     if (!uprobe_plumber(event, args, &flow_def, &def))
         return uprobe_throw_next(uprobe, upipe, event, args);
@@ -655,6 +743,8 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     assert(event_upump != NULL);
     upump_start(event_upump);
 
+    setup_picture_on_signal_loss_timer(netmap_ctx);
+
     /* main loop */
     upump_mgr_run(main_upump_mgr, NULL);
 
@@ -834,6 +924,15 @@ static void *open_input( void *ptr )
     netmap_ctx_t netmap_ctx = {0};
     netmap_opts_t *netmap_opts = &netmap_ctx.netmap_opts;
     netmap_opts->video_format = user_opts->video_format;
+    netmap_opts->picture_on_loss = user_opts->picture_on_loss;
+    //netmap_opts->downscale = user_opts->downscale; 
+
+    netmap_opts->obe_bars_opts.video_format = user_opts->video_format;
+    netmap_opts->obe_bars_opts.bars_line1 = user_opts->bars_line1;
+    netmap_opts->obe_bars_opts.bars_line2 = user_opts->bars_line2;
+    netmap_opts->obe_bars_opts.bars_line3 = user_opts->bars_line3;
+    netmap_opts->obe_bars_opts.bars_line4 = user_opts->bars_line4;
+    netmap_opts->obe_bars_opts.no_signal = 1;
 
     netmap_ctx.uri = user_opts->netmap_uri;
     netmap_ctx.h = h;
@@ -847,9 +946,53 @@ static void *open_input( void *ptr )
 
     netmap_ctx.v_timebase.num = video_format_tab[j].timebase_num;
     netmap_ctx.v_timebase.den = video_format_tab[j].timebase_den;    
+    netmap_ctx.video_freq = av_rescale_q( 1, netmap_ctx.v_timebase, (AVRational){1, OBE_CLOCK} );
 
     netmap_ctx.a_timebase.num = 1;
     netmap_ctx.a_timebase.den = 48000;
+
+    if( netmap_opts->picture_on_loss )
+    {
+        netmap_ctx.sample_pattern = get_sample_pattern( netmap_opts->video_format );
+        if( !netmap_ctx.sample_pattern )
+        {
+            fprintf( stderr, "[netmap] Invalid sample pattern" );
+            return NULL;
+        }
+
+        /* Setup Picture on Loss */
+        if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
+            netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
+        {
+            setup_stored_video_frame( &netmap_ctx.stored_video_frame, video_format_tab[j].width,
+                                       video_format_tab[j].height );
+            blank_yuv422p_frame( &netmap_ctx.stored_video_frame );
+        }
+        else if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BARS )
+        {
+            netmap_ctx.raw_frames = (obe_raw_frame_t**)calloc( 2, sizeof(*netmap_ctx.raw_frames) );
+            if( !netmap_ctx.raw_frames )
+            {
+                fprintf( stderr, "[netmap] Malloc failed\n" );
+                return NULL;
+            }
+
+            netmap_opts->obe_bars_opts.video_format = netmap_opts->video_format;
+            /* Setup bars later if we don't know the video format */
+            if( open_bars( &netmap_ctx.bars_hnd, &netmap_opts->obe_bars_opts ) < 0 )
+            {
+                fprintf( stderr, "[netmap] Could not open bars\n" );
+                return NULL;
+            }
+        }
+
+        /* Setup stored audio frame */
+        if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
+            netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
+        {
+            setup_stored_audio_frame( &netmap_ctx.stored_audio_frame, netmap_ctx.sample_pattern->max );
+        }
+    }
 
     open_netmap( &netmap_ctx );
 
