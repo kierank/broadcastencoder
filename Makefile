@@ -67,7 +67,10 @@ libobe.a: .depend $(OBJS) $(OBJSCXX) $(OBJASM)
 	$(AR) rc libobe.a $(OBJS) $(OBJSCXX) $(OBJASM)
 	$(RANLIB) libobe.a
 
-obed$(EXE): $(OBJD) $(OBJO) libobe.a
+$(SONAME): .depend $(OBJS) $(OBJSCXX) $(OBJASM) $(OBJSO)
+	$(CC) -shared -o $@ $(OBJS) $(OBJASM) $(OBJSO) $(SOFLAGS) $(LDFLAGS)
+
+obed$(EXE): $(OBJCLI) libobe.a
 	$(CC) -o $@ $+ $(LDFLAGSCLI) $(LDFLAGS)
 
 %.o: %.asm

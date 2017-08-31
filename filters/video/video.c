@@ -172,6 +172,7 @@ static int set_sar( obe_raw_frame_t *raw_frame, int is_wide )
     return -1;
 }
 
+#if 0
 static void scale_plane_c( uint16_t *src, int stride, int width, int height, int lshift, int rshift )
 {
     for( int i = 0; i < height; i++ )
@@ -182,6 +183,7 @@ static void scale_plane_c( uint16_t *src, int stride, int width, int height, int
         src += stride / 2;
     }
 }
+#endif
 
 static void dither_plane_10_to_8_c( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height )
 {

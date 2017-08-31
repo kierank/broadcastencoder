@@ -198,6 +198,9 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
             p_rtp->encoding_symbols_tab[i+j] = &p_rtp->repair_symbols[j*LDPC_PACKET_SIZE + LDPC_FEC_HEADER_SIZE];
     }
     else if( p_rtp->fec_columns && p_rtp->fec_rows )
+%else
+    if( p_rtp->fec_columns && p_rtp->fec_rows )
+#endif
     {
         /* Set SSRC for both streams to zero as per specification */
         p_rtp->ssrc = 0;
@@ -224,7 +227,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
             return -1;
         }
     }
-#endif
+
     if( output_dest->dup_delay )
     {
         p_rtp->dup_fifo = av_fifo_alloc( sizeof(AVBufferRef) * 100 );
@@ -344,7 +347,7 @@ static int write_fec_packet( hnd_t udp_handle, uint8_t *data, int len )
 static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestamp, int fec_type )
 {
     obe_rtp_ctx *p_rtp = handle;
-    int ret = 0, enc_ret = 0;
+    int ret = 0;
     uint8_t *pkt_ptr;
     AVBufferRef *output_buffer;
 
@@ -420,6 +423,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
 
         if( fec_idx == (p_rtp->ldpc_params.nb_source_symbols-1) )
         {
+            int enc_ret = 0;
             if( p_rtp->ses )
             {
                 of_release_codec_instance( p_rtp->ses );
@@ -478,6 +482,9 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         }
     }
     else if( p_rtp->fec_columns && p_rtp->fec_rows )
+%else
+    if( p_rtp->fec_columns && p_rtp->fec_rows )
+%endif
     {
         int row_idx = (p_rtp->seq / p_rtp->fec_columns) % p_rtp->fec_rows;
         int column_idx = p_rtp->seq % p_rtp->fec_columns;

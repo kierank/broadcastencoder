@@ -32,8 +32,6 @@
 
 static int check_send_packet( obe_t *h, obe_output_stream_t *output_stream, obe_passthrough_t *passthrough )
 {
-    int offset;
-    
     if( passthrough->num_out_frames == output_stream->ts_opts.frames_per_pes )
     {
         int data_size = av_fifo_size( passthrough->out_fifo );

@@ -69,7 +69,6 @@ static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50"
 static const char * const input_video_connections[]  = { "sdi", "hdmi", "optical-sdi", "component", "composite", "s-video", 0 };
 static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", "analogue", 0 };
 static const char * const picture_on_losses[]        = { "", "bars", "lastframe", "black", 0 };
-static const char * const ttx_locations[]            = { "dvb-ttx", "dvb-vbi", "both", 0 };
 static const char * const stream_actions[]           = { "passthrough", "encode", 0 };
 static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", "e-ac3", "s302m", "aac", "opus", 0 };
 static const char * const frame_packing_modes[]      = { "none", "checkerboard", "column", "row", "side-by-side", "top-bottom", "temporal", 0 };
@@ -109,7 +108,7 @@ static const char * stream_opts[] = { "action", "format",
                                       /* VBI options */
                                       "vbi-ttx", "vbi-inv-ttx", "vbi-vps", "vbi-wss",
                                       NULL };
-static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrough", "ts-id", "program-num", "pmt-pid", "pcr-pid",
+static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", "service-name", "provider-name", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
 static const char * output_opts[] = { "type", "target", "fec-columns", "fec-rows", "fec-type", "dup-delay", NULL };
@@ -544,7 +543,7 @@ static int set_input( char *command, obecli_command_t *child )
         FAIL_IF_ERROR( picture_on_loss && ( check_enum_value( picture_on_loss, picture_on_losses ) < 0 ),
                        "Invalid picture on loss\n" );
 
-        if( cli.input.netmap_uri )
+        if( netmap_uri )
             strncpy(cli.input.netmap_uri, netmap_uri, sizeof(cli.input.netmap_uri));
         cli.input.card_idx = obe_otoi( card_idx, cli.input.card_idx );
         if( video_format )
@@ -932,15 +931,14 @@ static int set_muxer( char *command, obecli_command_t *child )
         char *ts_type     = obe_get_option( muxer_opts[0], opts );
         char *ts_cbr      = obe_get_option( muxer_opts[1], opts );
         char *ts_muxrate  = obe_get_option( muxer_opts[2], opts );
-        char *passthrough = obe_get_option( muxer_opts[3], opts );
-        char *ts_id       = obe_get_option( muxer_opts[4], opts );
-        char *program_num = obe_get_option( muxer_opts[5], opts );
-        char *pmt_pid     = obe_get_option( muxer_opts[6], opts );
-        char *pcr_pid     = obe_get_option( muxer_opts[7], opts );
-        char *pcr_period  = obe_get_option( muxer_opts[8], opts );
-        char *pat_period  = obe_get_option( muxer_opts[9], opts );
-        char *service_name  = obe_get_option( muxer_opts[10], opts );
-        char *provider_name = obe_get_option( muxer_opts[11], opts );
+        char *ts_id       = obe_get_option( muxer_opts[3], opts );
+        char *program_num = obe_get_option( muxer_opts[4], opts );
+        char *pmt_pid     = obe_get_option( muxer_opts[5], opts );
+        char *pcr_pid     = obe_get_option( muxer_opts[6], opts );
+        char *pcr_period  = obe_get_option( muxer_opts[7], opts );
+        char *pat_period  = obe_get_option( muxer_opts[8], opts );
+        char *service_name  = obe_get_option( muxer_opts[9], opts );
+        char *provider_name = obe_get_option( muxer_opts[10], opts );
 
         FAIL_IF_ERROR( ts_type && ( check_enum_value( ts_type, ts_types ) < 0 ),
                       "Invalid AVC profile\n" );

@@ -146,6 +146,111 @@ void obe_blank_line_uyvy_c( uint16_t *dst, int width )
     }
 }
 
+
+void blank_yuv422p_frame( obe_raw_frame_t *stored_video_frame )
+{
+    /* Assume YUV422P */
+    uint8_t *px;
+
+    px = stored_video_frame->img.plane[0];
+    for( int i = 0; i < stored_video_frame->img.height; i++ )
+    {
+        for( int j = 0; j < stored_video_frame->img.width; j++ )
+            px[j] = 0x10;
+
+        px += stored_video_frame->img.stride[0];
+    }
+
+    px = stored_video_frame->img.plane[1];
+    for( int i = 0; i < stored_video_frame->img.height; i++ )
+    {
+        for( int j = 0; j < stored_video_frame->img.width/2; j++ )
+            px[j] = 0x80;
+
+        px += stored_video_frame->img.stride[1];
+    }
+
+    px = stored_video_frame->img.plane[2];
+    for( int i = 0; i < stored_video_frame->img.height; i++ )
+    {
+        for( int j = 0; j < stored_video_frame->img.width/2; j++ )
+            px[j] = 0x80;
+
+        px += stored_video_frame->img.stride[2];
+    }
+}
+
+int setup_stored_video_frame( obe_raw_frame_t *stored_video_frame, int width, int height )
+{
+    stored_video_frame->alloc_img.width  = width;
+    stored_video_frame->alloc_img.height = height;
+    stored_video_frame->alloc_img.csp    = AV_PIX_FMT_YUV422P;
+    int size = av_image_alloc( stored_video_frame->alloc_img.plane, stored_video_frame->alloc_img.stride,
+                               stored_video_frame->alloc_img.width, stored_video_frame->alloc_img.height,
+                               stored_video_frame->alloc_img.csp, 32 );
+
+    if( size < 0 )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+    memcpy( &stored_video_frame->img, &stored_video_frame->alloc_img, sizeof(stored_video_frame->alloc_img) );
+
+    stored_video_frame->buf_ref[0] = av_buffer_create( stored_video_frame->alloc_img.plane[0],
+                                                       size, av_buffer_default_free,
+                                                       NULL, 0 );
+    if( !stored_video_frame->buf_ref[0] )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+    stored_video_frame->buf_ref[1] = NULL;
+    stored_video_frame->release_data = obe_release_bufref;
+    stored_video_frame->release_frame = obe_release_frame;
+
+    return 0;
+}
+
+int setup_stored_audio_frame( obe_raw_frame_t *stored_audio_frame, int max_samples )
+{
+    /* Allocate the maximum allowed of silence allowed by the sample pattern */
+    int size = 0;
+
+    stored_audio_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
+    stored_audio_frame->audio_frame.num_samples = max_samples;
+    stored_audio_frame->audio_frame.num_channels = 16;
+
+    if( av_samples_alloc( stored_audio_frame->audio_frame.audio_data, &stored_audio_frame->audio_frame.linesize, 1,
+                          stored_audio_frame->audio_frame.num_samples, stored_audio_frame->audio_frame.sample_fmt, 0 ) < 0 )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+
+    /* Work around annoyance in libavutil */
+    size = stored_audio_frame->audio_frame.linesize;
+
+    av_samples_set_silence( stored_audio_frame->audio_frame.audio_data, 0, stored_audio_frame->audio_frame.num_samples, 1,
+                            stored_audio_frame->audio_frame.sample_fmt );
+
+    /* Copy pointer to all 16 channels */
+    for( int i = 1; i < MAX_CHANNELS; i++ )
+        stored_audio_frame->audio_frame.audio_data[i] = stored_audio_frame->audio_frame.audio_data[0];
+
+    stored_audio_frame->buf_ref[0] = av_buffer_create( stored_audio_frame->audio_frame.audio_data[0],
+                                                       size, av_buffer_default_free, NULL, 0 );
+    if( !stored_audio_frame->buf_ref[0] )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+    stored_audio_frame->buf_ref[1] = NULL;
+    stored_audio_frame->release_data = obe_release_bufref;
+    stored_audio_frame->release_frame = obe_release_frame;
+
+    return 0;
+}
+
 int add_non_display_services( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream, int location )
 {
     int idx = 0, count = 0;

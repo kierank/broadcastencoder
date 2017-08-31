@@ -123,5 +123,8 @@ int check_active_non_display_data( obe_raw_frame_t *raw_frame, int type );
 int check_user_selected_non_display_data( obe_t *h, int type, int location );
 int add_teletext_service( obe_sdi_non_display_data_t *non_display_data, obe_int_input_stream_t *stream );
 int sdi_next_line( int format, int line_smpte );
+void blank_yuv422p_frame( obe_raw_frame_t *stored_video_frame );
+int setup_stored_video_frame( obe_raw_frame_t *stored_video_frame, int width, int height );
+int setup_stored_audio_frame( obe_raw_frame_t *stored_audio_frame, int max_samples );
 
 #endif
