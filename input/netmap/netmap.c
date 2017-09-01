@@ -565,6 +565,11 @@ static void upipe_event_timer(struct upump *upump)
             upump_stop(upump);
             upump_free(upump);
 
+            if (netmap_ctx->no_video_upump) {
+                upump_stop(netmap_ctx->no_video_upump);
+                upump_free(netmap_ctx->no_video_upump);
+            }
+
             upipe_release(netmap_ctx->upipe_main_src);
         }
     }
@@ -747,11 +752,6 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 
     /* main loop */
     upump_mgr_run(main_upump_mgr, NULL);
-
-    if (netmap_ctx->no_video_upump) {
-        upump_stop(netmap_ctx->no_video_upump);
-        upump_free(netmap_ctx->no_video_upump);
-    }
 
     /* Wait on all upumps */
     upump_mgr_release(main_upump_mgr);
