@@ -229,7 +229,6 @@ static void no_video_timer(struct upump *upump)
         if( add_to_filter_queue( h, video_frame ) < 0 )
             return;
 
-
         if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
             netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
         {
@@ -406,7 +405,37 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
             }
             setup_picture_on_signal_loss_timer(netmap_ctx);
 
-            // FIXME, backup copy of last shown frame
+            /* Make a copy of the frame for showing the last frame */
+            if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
+            {
+                if( netmap_ctx->stored_video_frame.release_data )
+                    netmap_ctx->stored_video_frame.release_data( &netmap_ctx->stored_video_frame );
+
+                memcpy( &netmap_ctx->stored_video_frame, raw_frame, sizeof(netmap_ctx->stored_video_frame) );
+
+                uref = uref_dup(uref);
+                /* Map the frame again to create another buffer reference */
+                for (int i = 0; i < 3 && netmap_ctx->input_chroma_map[i] != NULL; i++)
+                {
+                    const uint8_t *data;
+                    size_t stride;
+                    if (unlikely(!ubase_check(uref_pic_plane_read(uref, netmap_ctx->input_chroma_map[i], 0, 0, -1, -1, &data)) ||
+                                !ubase_check(uref_pic_plane_size(uref, netmap_ctx->input_chroma_map[i], &stride, NULL, NULL, NULL)))) {
+                        syslog(LOG_ERR, "invalid buffer received");
+                        uref_free(uref);
+                        goto end;
+                    }
+
+                    raw_frame->alloc_img.plane[i] = (uint8_t *)data;
+                    raw_frame->alloc_img.stride[i] = stride;
+                    netmap_ctx->stored_video_frame.buf_ref[i] = NULL;
+                }
+                
+                netmap_ctx->stored_video_frame.release_data = obe_release_video_uref;
+                netmap_ctx->stored_video_frame.num_user_data = 0;
+                netmap_ctx->stored_video_frame.user_data = NULL;
+                netmap_ctx->stored_video_frame.uref = uref;
+            }
 
             if( add_to_filter_queue( h, raw_frame ) < 0 )
                 goto end;
