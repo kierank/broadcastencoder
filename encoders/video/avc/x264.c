@@ -218,10 +218,10 @@ static void *start_encoder( void *ptr )
                 /* time elapsed since last frame was removed */
                 int64_t last_frame_delta = get_input_clock_in_mpeg_ticks( h ) - h->enc_smoothing_last_exit_time;
 
-                if( !ulist_empty( &encoder->queue.ulist ) )
+                if( !ulist_empty( &h->enc_smoothing_queue.ulist ) )
                 {
                     obe_coded_frame_t *first_frame, *last_frame;
-                    struct uchain *first_uchain = &encoder->queue.ulist;
+                    struct uchain *first_uchain = &h->enc_smoothing_queue.ulist;
                     first_frame = obe_coded_frame_t_from_uchain( ulist_peek( first_uchain ) );
                     last_frame = obe_coded_frame_t_from_uchain( first_uchain->prev );
                     int64_t frame_durations = last_frame->real_dts - first_frame->real_dts + frame_duration;
