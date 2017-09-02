@@ -599,6 +599,19 @@ static void upipe_event_timer(struct upump *upump)
                 upump_free(netmap_ctx->no_video_upump);
             }
 
+            if( netmap_ctx->raw_frames )
+               free( netmap_ctx->raw_frames );
+    
+            if( netmap_ctx->bars_hnd )
+                close_bars( netmap_ctx->bars_hnd );
+        
+            /* Stored frames are not malloced */
+            if( netmap_ctx->stored_video_frame.release_data )
+                netmap_ctx->stored_video_frame.release_data( &netmap_ctx->stored_video_frame );
+        
+            if( netmap_ctx->stored_audio_frame.release_data )
+                netmap_ctx->stored_audio_frame.release_data( &netmap_ctx->stored_audio_frame );
+
             upipe_release(netmap_ctx->upipe_main_src);
         }
     }
