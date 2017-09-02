@@ -349,6 +349,7 @@ const static obe_video_config_t video_format_tab[] =
     { INPUT_VIDEO_FORMAT_1080P_2997,                 1001, 30000, 1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_50,                   1,    50,    1920, 1080, 0 },
     { INPUT_VIDEO_FORMAT_1080P_5994,                 1001, 60000, 1920, 1080, 0 },
+    { INPUT_VIDEO_FORMAT_1080P_60,                   1,    60,    1920, 1080, 0 },
     { -1, -1, -1, -1, -1, -1 },
 };
 
@@ -379,7 +380,7 @@ const static obe_audio_sample_pattern_t audio_sample_patterns[] =
     { INPUT_VIDEO_FORMAT_NTSC,       { 1602, 1601, 1602, 1601, 1602 }, 1602, 5 },
     { INPUT_VIDEO_FORMAT_720P_50,    {  960 },  960, 1 },
     { INPUT_VIDEO_FORMAT_720P_5994,  {  801,  800,  801,  801,  801 },  801, 5 },
-    { INPUT_VIDEO_FORMAT_720P_60,    {  960 },  960, 1 },
+    { INPUT_VIDEO_FORMAT_720P_60,    {  800 },  800, 1 },
     { INPUT_VIDEO_FORMAT_1080I_50,   { 1920 }, 1920, 1 },
     { INPUT_VIDEO_FORMAT_1080I_5994, { 1602, 1601, 1602, 1601, 1602 }, 1602, 5 },
     { INPUT_VIDEO_FORMAT_1080P_2398, { 2002 }, 2002, 1 },
@@ -388,6 +389,7 @@ const static obe_audio_sample_pattern_t audio_sample_patterns[] =
     { INPUT_VIDEO_FORMAT_1080P_2997, { 1602, 1601, 1602, 1601, 1602 }, 1602, 5 },
     { INPUT_VIDEO_FORMAT_1080P_50,   {  960 },  960, 1 },
     { INPUT_VIDEO_FORMAT_1080P_5994, {  801,  800,  801,  801,  801 },  801, 5 },
+    { INPUT_VIDEO_FORMAT_1080P_60,   {  800 }, 800, 1 },
     { -1 },
 };
 
