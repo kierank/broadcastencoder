@@ -208,13 +208,37 @@ static void no_video_timer(struct upump *upump)
                 return;
             }
             memcpy( video_frame, &netmap_ctx->stored_video_frame, sizeof(*video_frame) );
-            int i = 0;
-            while( video_frame->buf_ref[i] != NULL )
+
+            /* Handle the case where no frames received, so first frame in LASTFRAME mode is black */
+            if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK || netmap_ctx->stored_video_frame.uref == NULL )
             {
-                video_frame->buf_ref[i] = av_buffer_ref( netmap_ctx->stored_video_frame.buf_ref[i] );
-                i++;
+                int i = 0;
+                while( video_frame->buf_ref[i] != NULL )
+                {
+                    video_frame->buf_ref[i] = av_buffer_ref( netmap_ctx->stored_video_frame.buf_ref[i] );
+                    i++;
+                }
+                video_frame->buf_ref[i] = NULL;
             }
-            video_frame->buf_ref[i] = NULL;
+            else if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
+            {
+                video_frame->uref = uref_dup(netmap_ctx->stored_video_frame.uref);
+                /* Map the frame again to create another buffer reference */
+                for (int i = 0; i < 3 && netmap_ctx->input_chroma_map[i] != NULL; i++)
+                {
+                    const uint8_t *data;
+                    size_t stride;
+                    if (unlikely(!ubase_check(uref_pic_plane_read(video_frame->uref, netmap_ctx->input_chroma_map[i], 0, 0, -1, -1, &data)) ||
+                                !ubase_check(uref_pic_plane_size(video_frame->uref, netmap_ctx->input_chroma_map[i], &stride, NULL, NULL, NULL)))) {
+                        syslog(LOG_ERR, "invalid buffer received");
+                        uref_free(video_frame->uref);
+                        return;
+                    }
+
+                    video_frame->alloc_img.plane[i] = (uint8_t *)data;
+                    video_frame->alloc_img.stride[i] = stride;
+                }
+            }
         }
         else if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BARS )
         {
