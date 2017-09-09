@@ -168,6 +168,15 @@ static void *open_input( void *ptr )
 
     while( 1 )
     {
+        int stop;
+        
+        pthread_mutex_lock( &h->device.device_mutex );
+        stop = h->device.stop;
+        pthread_mutex_unlock( &h->device.device_mutex);
+
+        if( stop )
+            break;
+
         get_bars( bars_handle, (obe_raw_frame_t**)raw_frames );
         if( start_time == 0 )
             start_time = get_wallclock_in_mpeg_ticks();
