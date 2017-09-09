@@ -331,7 +331,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             {
                 if( video_opts_in->latency == 1 || video_opts_in->latency == 2 )
                     video_stream->avc_param.b_intra_refresh = 1;
-                video_stream->avc_param.i_threads = 4;
+                video_stream->avc_param.i_threads = 8;
             }
 
             if( video_opts_in->quality_metric )
