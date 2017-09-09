@@ -823,7 +823,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     static struct upump *event_upump;
     /* stop timer */
     event_upump = upump_alloc_timer(main_upump_mgr, upipe_event_timer, netmap_ctx, NULL,
-                                    UCLOCK_FREQ, UCLOCK_FREQ);
+                                    UCLOCK_FREQ/2, UCLOCK_FREQ/2);
     assert(event_upump != NULL);
     upump_start(event_upump);
 
