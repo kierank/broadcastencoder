@@ -150,6 +150,8 @@ typedef struct
 
     struct upump *no_video_upump;
 
+    int stop;
+
     obe_t *h;
 } netmap_ctx_t;
 
@@ -306,6 +308,9 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     struct uprobe_obe *uprobe_obe = uprobe_obe_from_uprobe(uprobe);
     netmap_ctx_t *netmap_ctx = uprobe_obe->data;
     netmap_opts_t *netmap_opts = &netmap_ctx->netmap_opts;
+
+    if (netmap_ctx->stop)
+        return UBASE_ERR_NONE;
 
     if (event == UPROBE_NEW_FLOW_DEF) {
         flow_def = va_arg(args, struct uref *);
@@ -480,7 +485,12 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
 {
     struct uref *flow_def;
     const char *def;
+    netmap_ctx_t *netmap_ctx = uprobe_obe->data;
+    netmap_opts_t *netmap_opts = &netmap_ctx->netmap_opts;
 
+    if (netmap_ctx->stop)
+        return UBASE_ERR_NONE;
+    
     if (event == UPROBE_PROBE_UREF) {
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
         struct uref *uref = va_arg(args, struct uref *);
@@ -489,8 +499,7 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
         *drop = true;
 
         struct uprobe_obe *uprobe_obe = uprobe_obe_from_uprobe(uprobe);
-        netmap_ctx_t *netmap_ctx = uprobe_obe->data;
-        netmap_opts_t *netmap_opts = &netmap_ctx->netmap_opts;
+
 
         if(netmap_opts->probe) {
 
@@ -613,7 +622,7 @@ static void upipe_event_timer(struct upump *upump)
         int stop, active;
 
         pthread_mutex_lock( &h->device.device_mutex );
-        stop = h->device.stop;
+        netmap_ctx->stop = h->device.stop;
         active = h->device.active;
         pthread_mutex_unlock( &h->device.device_mutex);
 
@@ -626,7 +635,7 @@ static void upipe_event_timer(struct upump *upump)
             pthread_mutex_unlock( &h->device.device_mutex);
         }
 
-        if( stop )
+        if( netmap_ctx->stop )
         {
             upump_stop(upump);
             upump_free(upump);
