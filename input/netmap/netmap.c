@@ -485,6 +485,7 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
 {
     struct uref *flow_def;
     const char *def;
+    struct uprobe_obe *uprobe_obe = uprobe_obe_from_uprobe(uprobe);   
     netmap_ctx_t *netmap_ctx = uprobe_obe->data;
     netmap_opts_t *netmap_opts = &netmap_ctx->netmap_opts;
 
@@ -497,9 +498,6 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
         va_arg(args, struct upump **);
         bool *drop = va_arg(args, bool *);
         *drop = true;
-
-        struct uprobe_obe *uprobe_obe = uprobe_obe_from_uprobe(uprobe);
-
 
         if(netmap_opts->probe) {
 
