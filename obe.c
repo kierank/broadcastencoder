@@ -1479,13 +1479,13 @@ fail:
     return -1;
 };
 
-int obe_input_status( obe_t *h )
+int obe_input_status( obe_t *h, obe_input_status_t *input_status )
 {
     int ret = 0;
     if( h )
     {
         pthread_mutex_lock( &h->device.device_mutex );
-        ret = h->device.active;
+        memcpy( input_status, &h->device.input_status, sizeof(h->device.input_status) );
         pthread_mutex_unlock( &h->device.device_mutex );
     }
 

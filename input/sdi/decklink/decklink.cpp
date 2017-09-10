@@ -421,7 +421,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             if( !decklink_opts_->probe )
             {
                 pthread_mutex_lock( &h->device.device_mutex );
-                h->device.active = 0;
+                h->device.input_status.active = 0;
                 pthread_mutex_unlock( &h->device.device_mutex );
             }
             decklink_ctx->drop_count++;
@@ -512,7 +512,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         if( !decklink_opts_->probe )
         {
             pthread_mutex_lock( &h->device.device_mutex );
-            h->device.active = 1;
+            h->device.input_status.active = 1;
             pthread_mutex_unlock( &h->device.device_mutex );
         }
 

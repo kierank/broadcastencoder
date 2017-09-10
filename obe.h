@@ -574,8 +574,13 @@ int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts );
 
 int obe_start( obe_t *h );
 
-/* 0 if inactive, 1 if active */
-int obe_input_status( obe_t *h );
+typedef struct
+{
+    int active; /* 0 if inactive, 1 if active */    
+    int detected_video_format;
+} obe_input_status_t;
+
+int obe_input_status( obe_t *h, obe_input_status_t *input_status );
 
 void obe_close( obe_t *h );
 

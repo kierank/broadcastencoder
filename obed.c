@@ -103,6 +103,19 @@ const static int video_formats[] =
     -1,
 };
 
+static int get_return_format( int video_format )
+{
+    int i = 0;
+    for( ; video_formats[i] != -1; i++ )
+    {
+        if( video_formats[i] == video_format )
+            break;
+    }
+
+    return i;
+}
+
+
 const static int s302m_bit_depths[] =
 {
     16,
@@ -549,25 +562,18 @@ static void obed__encoder_status(Obed__EncoderCommunicate_Service *service,
                                  void *closure_data)
 {
     Obed__EncoderStatusResponse result = OBED__ENCODER_STATUS_RESPONSE__INIT;
+    obe_input_status_t input_status = {0};
+
+    obe_input_status( d.h, &input_status );
 
     result.encoder_id = encoder_id;
     result.status_version = 1;
     result.has_input_active = 1;
-    result.input_active = obe_input_status( d.h );
+    result.input_active = input_status.active;
+    result.has_detected_video_format = 1;
+    result.detected_video_format = input_status.active ? get_return_format( input_status.detected_video_format ) : -1;
 
     closure( &result, closure_data );
-}
-
-static int get_return_format( int video_format )
-{
-    int i = 0;
-    for( ; video_formats[i] != -1; i++ )
-    {
-        if( video_formats[i] == video_format )
-            break;
-    }
-
-    return i;
 }
 
 static void obed__encoder_format(Obed__EncoderCommunicate_Service *service,

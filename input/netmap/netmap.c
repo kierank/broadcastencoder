@@ -122,6 +122,7 @@ typedef struct
     int             video_good;
 
     /* Video */
+    int             detected_video_format;
     int64_t         v_counter;
     AVRational      v_timebase;
     int64_t         video_freq;
@@ -308,6 +309,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     struct uprobe_obe *uprobe_obe = uprobe_obe_from_uprobe(uprobe);
     netmap_ctx_t *netmap_ctx = uprobe_obe->data;
     netmap_opts_t *netmap_opts = &netmap_ctx->netmap_opts;
+    obe_t *h = netmap_ctx->h;    
 
     if (netmap_ctx->stop)
         return UBASE_ERR_NONE;
@@ -333,7 +335,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         }
         else {
             /* check this matches the configured format */
-            int j = 0;
+            int j = 0, detected_video_format = -1;
             for( ; video_format_tab[j].obe_name != -1; j++ )
             {
                 if( netmap_opts->video_format == video_format_tab[j].obe_name )
@@ -347,14 +349,38 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                 video_format_tab[j].interlaced == netmap_opts->interlaced )
             {
                 netmap_ctx->video_good = 1;
+                detected_video_format = video_format_tab[j].obe_name;
             }
             else
             {
                 netmap_ctx->video_good = 0;
+
+                /* Find the actual format */
+                j = 0;
+                for( ; video_format_tab[j].obe_name != -1; j++ )
+                {
+                    if( video_format_tab[j].width == netmap_opts->width &&
+                        video_format_tab[j].height == netmap_opts->height &&
+                        video_format_tab[j].timebase_num == netmap_opts->timebase_num &&
+                        video_format_tab[j].timebase_den == netmap_opts->timebase_den &&
+                        video_format_tab[j].interlaced == netmap_opts->interlaced )
+                    {
+                        detected_video_format = video_format_tab[j].obe_name;
+                        break;           
+                    }
+                }
+            }
+
+            printf("\n detected %i \n", detected_video_format);
+
+            if( netmap_ctx->detected_video_format != detected_video_format )
+            {
+                pthread_mutex_lock( &h->device.device_mutex );
+                h->device.input_status.detected_video_format = detected_video_format;
+                pthread_mutex_unlock( &h->device.device_mutex );
+                netmap_ctx->detected_video_format = detected_video_format;
             }
         }
-
-
     }
     else if (event == UPROBE_PROBE_UREF) {
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
@@ -366,24 +392,23 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
         bool discontinuity = ubase_check(uref_flow_get_discontinuity(uref));
 
+        pthread_mutex_lock( &h->device.device_mutex );
+        h->device.input_status.active = 1;
+        pthread_mutex_unlock( &h->device.device_mutex );
+
+        netmap_ctx->last_frame_time = obe_mdate();       
+
         if(netmap_opts->probe) {
             netmap_opts->probe_success = 1;
         }
         else if(netmap_ctx->video_good) {
             obe_raw_frame_t *raw_frame = NULL;
             int64_t pts = -1;
-            obe_t *h = netmap_ctx->h;
             uref = uref_dup(uref);
 
             pts = av_rescale_q( netmap_ctx->v_counter, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
             /* use SDI ticks as clock source */
             obe_clock_tick( h, pts );
-
-            pthread_mutex_lock( &h->device.device_mutex );
-            h->device.active = 1;
-            pthread_mutex_unlock( &h->device.device_mutex );
-
-            netmap_ctx->last_frame_time = obe_mdate();
 
             raw_frame = new_raw_frame();
             if( !raw_frame )
@@ -617,11 +642,11 @@ static void upipe_event_timer(struct upump *upump)
     }
     else
     {
-        int stop, active;
+        int active;
 
         pthread_mutex_lock( &h->device.device_mutex );
         netmap_ctx->stop = h->device.stop;
-        active = h->device.active;
+        active = h->device.input_status.active;
         pthread_mutex_unlock( &h->device.device_mutex);
 
         /* Note obe_mdate() is in microseconds */
@@ -629,7 +654,7 @@ static void upipe_event_timer(struct upump *upump)
              active ) 
         {
             pthread_mutex_lock( &h->device.device_mutex );
-            h->device.active = 0;
+            h->device.input_status.active = 0;
             pthread_mutex_unlock( &h->device.device_mutex);
         }
 
@@ -665,6 +690,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 {
     char *uri = netmap_ctx->uri;
 
+    netmap_ctx->detected_video_format = -1;
     netmap_ctx->input_chroma_map[0] = "y10l";
     netmap_ctx->input_chroma_map[1] = "u10l";
     netmap_ctx->input_chroma_map[2] = "v10l";
