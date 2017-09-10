@@ -87,7 +87,7 @@
 #define XFER_QUEUE              255
 #define XFER_POOL               20
 
-static enum uprobe_log_level loglevel = UPROBE_LOG_DEBUG;
+static enum uprobe_log_level loglevel = UPROBE_LOG_WARNING;
 
 typedef struct
 {
