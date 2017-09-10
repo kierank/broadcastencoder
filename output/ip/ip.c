@@ -417,7 +417,6 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
             xor_packet_c( &column[RTP_HEADER_SIZE+COP3_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
         }
     }
-#endif
 
 end:
     av_buffer_unref( &p_rtp->buf_ref );
