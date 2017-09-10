@@ -33,10 +33,6 @@
 #include "output/output.h"
 #include "common/bitstream.h"
 
-#ifdef HAVE_LIBOPENFEC
-# include <openfec/lib_common/of_openfec_api.h>
-#endif
-
 #define RTP_VERSION 2
 
 #define MPEG_TS_PAYLOAD_TYPE 33
@@ -87,13 +83,7 @@ typedef struct
 
     uint64_t column_seq;
     uint64_t row_seq;
-#ifdef HAVE_LIBOPENFEC
-    /* LDPC FECFRAME */
-    hnd_t ldpc_handle;
 
-    of_session_t *ses;
-    of_ldpc_parameters_t ldpc_params;
-#endif
     uint8_t *source_symbols;
     uint8_t *repair_symbols;
 
@@ -139,68 +129,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
     p_rtp->fec_columns = output_dest->fec_columns;
     p_rtp->fec_rows = output_dest->fec_rows;
 
-#ifdef HAVE_LIBOPENFEC
-    /* FIXME support stream duplication for LDPC staircase */
-    if( output_dest->fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE )
-    {
-        int n;
-
-        udp_opts->port += 2;
-        if( udp_open( &p_rtp->ldpc_handle, udp_opts ) < 0 )
-        {
-            fprintf( stderr, "[rtp] Could not create LDPC FEC output \n" );
-            return -1;
-        }
-
-        // FIXME make this configurable
-        p_rtp->ldpc_params.nb_source_symbols = 100;
-        p_rtp->ldpc_params.nb_repair_symbols = 25;
-        p_rtp->ldpc_params.encoding_symbol_length = RTP_PACKET_SIZE;
-        p_rtp->ldpc_params.prng_seed = rand();
-        p_rtp->ldpc_params.N1 = 7;
-
-        n = p_rtp->ldpc_params.nb_source_symbols + p_rtp->ldpc_params.nb_repair_symbols;
-
-        p_rtp->source_symbols = malloc( p_rtp->ldpc_params.nb_source_symbols * RTP_PACKET_SIZE );
-        if( !p_rtp->source_symbols )
-        {
-            fprintf( stderr, "[rtp] could not allocate source symbols \n" );
-            return -1;
-        }
-
-        p_rtp->repair_symbols = malloc( p_rtp->ldpc_params.nb_repair_symbols * LDPC_PACKET_SIZE );
-        if( !p_rtp->repair_symbols )
-        {
-            fprintf( stderr, "[rtp] could not allocate repair symbols \n" );
-            return -1;
-        }
-
-        p_rtp->encoding_symbols_tab = malloc( n * sizeof(*p_rtp->encoding_symbols_tab) );
-        if( !p_rtp->encoding_symbols_tab )
-        {
-            fprintf( stderr, "[rtp] could not allocate encoding symbols table \n" );
-            return -1;
-        }
-
-        p_rtp->output_order = malloc( n * sizeof(*p_rtp->output_order) );
-        if( !p_rtp->output_order )
-        {
-            fprintf( stderr, "[rtp] could not allocate output order table \n" );
-            return -1;
-        }
-
-        int i;
-        for( i = 0; i < p_rtp->ldpc_params.nb_source_symbols; i++ )
-            p_rtp->encoding_symbols_tab[i] = &p_rtp->source_symbols[i*RTP_PACKET_SIZE];
-
-        /* offset the encoding symbols table so FEC is applied after the header */
-        for( int j = 0; j < p_rtp->ldpc_params.nb_repair_symbols; j++ )
-            p_rtp->encoding_symbols_tab[i+j] = &p_rtp->repair_symbols[j*LDPC_PACKET_SIZE + LDPC_FEC_HEADER_SIZE];
-    }
-    else if( p_rtp->fec_columns && p_rtp->fec_rows )
-%else
     if( p_rtp->fec_columns && p_rtp->fec_rows )
-#endif
     {
         /* Set SSRC for both streams to zero as per specification */
         p_rtp->ssrc = 0;
@@ -353,18 +282,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
 
     /* Throughout this function, don't exit early because the decoder is expecting a sequence number increase
      * and consistent FEC packets. Return -1 at the end so the user knows there was a failure to submit a packet. */
-#ifdef HAVE_LIBOPENFEC
-    if( fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE )
-    {
-        int src_pkt_idx = p_rtp->seq % p_rtp->ldpc_params.nb_source_symbols;
-        pkt_ptr = &p_rtp->source_symbols[src_pkt_idx * RTP_PACKET_SIZE];
-    }
-    else
-#endif
-    {
-        p_rtp->buf_ref = av_buffer_alloc( RTP_PACKET_SIZE );
-        pkt_ptr = p_rtp->buf_ref->data;
-    }
+    p_rtp->buf_ref = av_buffer_alloc( RTP_PACKET_SIZE );
+    pkt_ptr = p_rtp->buf_ref->data;
 
     uint32_t ts_90 = timestamp / 300;
     write_rtp_header( pkt_ptr, MPEG_TS_PAYLOAD_TYPE, p_rtp->seq & 0xffff, ts_90, p_rtp->ssrc );
@@ -415,76 +334,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
             }
         }
     }
-#ifdef HAVE_LIBOPENFEC
-    if( fec_type == FEC_TYPE_FECFRAME_LDPC_STAIRCASE && p_rtp->seq >= (p_rtp->ldpc_params.nb_source_symbols-1) )
-    {
-        int fec_interval = p_rtp->ldpc_params.nb_source_symbols / p_rtp->ldpc_params.nb_repair_symbols;
-        int fec_idx = p_rtp->seq % p_rtp->ldpc_params.nb_source_symbols;
 
-        if( fec_idx == (p_rtp->ldpc_params.nb_source_symbols-1) )
-        {
-            int enc_ret = 0;
-            if( p_rtp->ses )
-            {
-                of_release_codec_instance( p_rtp->ses );
-                p_rtp->ses = NULL;
-            }
-
-            if( of_create_codec_instance( &p_rtp->ses, OF_CODEC_LDPC_STAIRCASE_STABLE, OF_ENCODER, 2 ) != OF_STATUS_OK )
-            {
-                fprintf( stderr, "[rtp] could not create fec encoder instance \n" );
-                enc_ret = -1;
-            }
-
-            if( of_set_fec_parameters( p_rtp->ses, (of_parameters_t*)&p_rtp->ldpc_params ) != OF_STATUS_OK )
-            {
-                fprintf( stderr, "[rtp] could not create fec encoder instance \n" );
-                enc_ret = -1;
-            }
-
-            if( enc_ret == 0 )
-            {
-                uint64_t snbase = (p_rtp->seq - (p_rtp->ldpc_params.nb_source_symbols-1)) & 0xffff;
-                int n = p_rtp->ldpc_params.nb_source_symbols + p_rtp->ldpc_params.nb_repair_symbols;
-
-                for( int i = 0; i < p_rtp->ldpc_params.nb_repair_symbols; i++ )
-                {
-                    int esi = p_rtp->ldpc_params.nb_source_symbols+i;
-                    uint8_t *repair_symbol = &p_rtp->repair_symbols[i*LDPC_PACKET_SIZE];
-
-                    *repair_symbol++ = (snbase >> 8) & 0xff;
-                    *repair_symbol++ = snbase & 0xff;
-                    *repair_symbol++ = (esi >> 8) & 0xff;
-                    *repair_symbol++ = esi & 0xff;
-                    *repair_symbol++ = (p_rtp->ldpc_params.nb_source_symbols >> 8) & 0xff;
-                    *repair_symbol++ = p_rtp->ldpc_params.nb_source_symbols & 0xff;
-                    *repair_symbol++ = (n >> 8) & 0xff;
-                    *repair_symbol++ = n & 0xff;
-                    *repair_symbol++ = p_rtp->ldpc_params.N1 & 0xff;
-                    *repair_symbol++ = 0;
-                    *repair_symbol++ = 0;
-                    *repair_symbol++ = 0;
-
-                    if( of_build_repair_symbol( p_rtp->ses, p_rtp->encoding_symbols_tab, esi ) != OF_STATUS_OK )
-                    {
-                        ret = -1;
-                        fprintf( stderr, "could not build repair symbols" );
-                        break;
-                    }
-                }
-            }
-        }
-
-        if( (fec_idx % fec_interval) == 0 )
-        {
-            if( udp_write( p_rtp->ldpc_handle, &p_rtp->repair_symbols[(fec_idx / fec_interval)*LDPC_PACKET_SIZE], LDPC_PACKET_SIZE ) < 0 )
-                ret = -1;
-        }
-    }
-    else if( p_rtp->fec_columns && p_rtp->fec_rows )
-%else
     if( p_rtp->fec_columns && p_rtp->fec_rows )
-%endif
     {
         int row_idx = (p_rtp->seq / p_rtp->fec_columns) % p_rtp->fec_rows;
         int column_idx = p_rtp->seq % p_rtp->fec_columns;
@@ -597,7 +448,6 @@ static void rtp_close( hnd_t handle )
         av_fifo_freep( &p_rtp->dup_fifo );
     }
 
-#ifdef HAVE_LIBOPENFEC
     /* COP3 FEC */
     if( p_rtp->column_data )
         free( p_rtp->column_data );
@@ -608,10 +458,6 @@ static void rtp_close( hnd_t handle )
     if( p_rtp->row_handle )
         udp_close( p_rtp->row_handle );
 
-    /* LDPC FEC */
-    if( p_rtp->ses )
-        of_release_codec_instance( p_rtp->ses );
-#endif
     free( p_rtp );
 }
 
