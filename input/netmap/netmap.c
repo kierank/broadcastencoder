@@ -406,7 +406,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
             int64_t pts = -1;
             uref = uref_dup(uref);
 
-            pts = av_rescale_q( netmap_ctx->v_counter, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+            pts = av_rescale_q( netmap_ctx->v_counter++, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
             /* use SDI ticks as clock source */
             obe_clock_tick( h, pts );
 
@@ -417,7 +417,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                 goto end;
             }
 
-            pts = raw_frame->pts = av_rescale_q( netmap_ctx->v_counter++, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+            raw_frame->pts = pts;
 
             for (int i = 0; i < 3 && netmap_ctx->input_chroma_map[i] != NULL; i++)
             {
@@ -562,7 +562,6 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
                     int32_t *audio = (int32_t*)raw_frame->audio_frame.audio_data[j];
                     audio[i] = src[16*i + j];
                 }
-
 
             uref_sound_unmap(uref, 0, -1, 1);
 
