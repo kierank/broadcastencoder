@@ -824,8 +824,9 @@ int obe_autoconf_device( obe_t *h, obe_input_t *input_device, obe_input_program_
 #if HAVE_DECKLINK
     if( input_device->input_type == INPUT_DEVICE_DECKLINK )
         input = decklink_input;
+    else
 #endif
-    else if( input_device->input_type == INPUT_DEVICE_LINSYS_SDI )
+        if( input_device->input_type == INPUT_DEVICE_LINSYS_SDI )
         input = linsys_sdi_input;
     else if( input_device->input_type == INPUT_DEVICE_BARS )
         input = bars_input;
