@@ -62,6 +62,19 @@ static const char *format_strings[] =
     [INPUT_VIDEO_FORMAT_1080P_60]   = "1080p60",
 };
 
+static void drawtext_set_font_size(AVFilterContext *drawtext_ctx, int font_size)
+{
+    const AVOption *o = av_opt_find(drawtext_ctx, "fontsize", NULL, 0, AV_OPT_SEARCH_CHILDREN);
+    if (o && o->type == AV_OPT_TYPE_STRING) {
+        char font_size_str[32];
+        snprintf(font_size_str, sizeof(font_size_str), "%d", font_size);
+        av_opt_set( drawtext_ctx, "fontsize", font_size_str, AV_OPT_SEARCH_CHILDREN );
+    }
+    else
+        av_opt_set_int( drawtext_ctx, "fontsize", font_size, AV_OPT_SEARCH_CHILDREN );
+}
+
+
 int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
 {
     int ret = 0;
@@ -186,7 +199,7 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
     av_opt_set( drawtext_ctx1, "fontcolor", "white", AV_OPT_SEARCH_CHILDREN );
     av_opt_set_int( drawtext_ctx1, "box", 1, AV_OPT_SEARCH_CHILDREN );
     av_opt_set( drawtext_ctx1, "boxcolor", "black", AV_OPT_SEARCH_CHILDREN );
-    av_opt_set_int( drawtext_ctx1, "fontsize", font_size, AV_OPT_SEARCH_CHILDREN );
+    drawtext_set_font_size(drawtext_ctx1, font_size);
 
     if( avfilter_init_str( drawtext_ctx1, NULL ) < 0 )
     {
@@ -211,7 +224,7 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
     av_opt_set( drawtext_ctx2, "fontcolor", "white", AV_OPT_SEARCH_CHILDREN );
     av_opt_set_int( drawtext_ctx2, "box", 1, AV_OPT_SEARCH_CHILDREN );
     av_opt_set( drawtext_ctx2, "boxcolor", "black", AV_OPT_SEARCH_CHILDREN );
-    av_opt_set_int( drawtext_ctx2, "fontsize", font_size, AV_OPT_SEARCH_CHILDREN );
+    drawtext_set_font_size(drawtext_ctx2, font_size);
 
     if( avfilter_init_str( drawtext_ctx2, NULL ) < 0 )
     {
@@ -236,7 +249,7 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
     av_opt_set( drawtext_ctx3, "fontcolor", "white", AV_OPT_SEARCH_CHILDREN );
     av_opt_set_int( drawtext_ctx3, "box", 1, AV_OPT_SEARCH_CHILDREN );
     av_opt_set( drawtext_ctx3, "boxcolor", "black", AV_OPT_SEARCH_CHILDREN );
-    av_opt_set_int( drawtext_ctx3, "fontsize", font_size, AV_OPT_SEARCH_CHILDREN );
+    drawtext_set_font_size(drawtext_ctx3, font_size);
 
     if( avfilter_init_str( drawtext_ctx3, NULL ) < 0 )
     {
@@ -261,7 +274,7 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
     av_opt_set( drawtext_ctx4, "fontcolor", "white", AV_OPT_SEARCH_CHILDREN );
     av_opt_set_int( drawtext_ctx4, "box", 1, AV_OPT_SEARCH_CHILDREN );
     av_opt_set( drawtext_ctx4, "boxcolor", "black", AV_OPT_SEARCH_CHILDREN );
-    av_opt_set_int( drawtext_ctx4, "fontsize", font_size, AV_OPT_SEARCH_CHILDREN );
+    drawtext_set_font_size(drawtext_ctx4, font_size);
 
     if( avfilter_init_str( drawtext_ctx4, NULL ) < 0 )
     {
@@ -289,7 +302,7 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
     av_opt_set( drawtext_ctx5, "fontcolor", "white", AV_OPT_SEARCH_CHILDREN );
     av_opt_set_int( drawtext_ctx5, "box", 1, AV_OPT_SEARCH_CHILDREN );
     av_opt_set( drawtext_ctx5, "boxcolor", "black", AV_OPT_SEARCH_CHILDREN );
-    av_opt_set_int( drawtext_ctx5, "fontsize", font_size, AV_OPT_SEARCH_CHILDREN );
+    drawtext_set_font_size(drawtext_ctx5, font_size);
 
     if( avfilter_init_str( drawtext_ctx5, NULL ) < 0 )
     {
