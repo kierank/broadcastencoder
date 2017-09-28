@@ -23,10 +23,12 @@
 
 #include "common/common.h"
 #include "common/lavc.h"
+#include "common/bitstream.h"
 #include "encoders/audio/audio.h"
 #include <libavutil/fifo.h>
 #include <libavresample/avresample.h>
 #include <libavutil/opt.h>
+#include <libavformat/avformat.h>
 
 typedef struct
 {
@@ -39,8 +41,29 @@ static const lavc_encoder_t lavc_encoders[] =
     { AUDIO_AC_3,   AV_CODEC_ID_AC3 },
     { AUDIO_E_AC_3, AV_CODEC_ID_EAC3 },
     { AUDIO_AAC,    AV_CODEC_ID_AAC },
+    { AUDIO_OPUS,   AV_CODEC_ID_OPUS },
     { -1, -1 },
 };
+
+static int write_opus_ts_header( uint8_t *data, int au_len )
+{
+    bs_t s;
+    int i;
+    bs_init( &s, data, 1000 );
+
+    bs_write( &s, 11, 0x3ff ); // control_header_prefix
+    bs_write1( &s, 0 ); // start_trim_flag
+    bs_write1( &s, 0 ); // end_trim_flag
+    bs_write1( &s, 0 ); // control_extension_flag
+    bs_write( &s, 2, 0 ); // Reserved
+
+    for( i = 0; i <= au_len-255; i += 255 )
+        bs_write( &s, 8, 0xff ); // ff_byte
+     bs_write( &s, 8, au_len-i ); // au_size_last_byte
+     bs_flush( &s );
+
+    return (bs_pos( &s ) / 8);
+}
 
 static void *start_encoder( void *ptr )
 {
@@ -51,16 +74,22 @@ static void *start_encoder( void *ptr )
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
     int64_t cur_pts = -1, pts_increment;
-    int i, frame_size, ret, got_pkt, num_frames = 0, total_size = 0;
+    int i, frame_size, ret, got_pkt, num_frames = 0, total_size = 0, header_size = 0;
     AVFifoBuffer *out_fifo = NULL;
     AVAudioResampleContext *avr = NULL;
     AVPacket pkt;
     AVCodecContext *codec = NULL;
     AVFrame *frame = NULL;
     AVDictionary *opts = NULL;
-    char is_latm[2];
+    AVFormatContext *fmt = NULL;
+    AVIOContext *avio = NULL;
+    AVStream *st = NULL;
+    char tmp[20];
     uint8_t *audio_planes[8] = { NULL };
+    uint8_t *avio_buf = NULL;
+    uint8_t tmp2[1000];
 
+    av_register_all();
     avcodec_register_all();
 
     codec = avcodec_alloc_context3( NULL );
@@ -106,14 +135,53 @@ static void *start_encoder( void *ptr )
                      stream->aac_opts.aac_profile == AAC_HE_V1 ? FF_PROFILE_AAC_HE :
                      FF_PROFILE_AAC_LOW;
 
-    snprintf( is_latm, sizeof(is_latm), "%i", stream->aac_opts.latm_output );
-    av_dict_set( &opts, "latm", is_latm, 0 );
+    snprintf( tmp, sizeof(tmp), "%i", stream->aac_opts.latm_output );
+    av_dict_set( &opts, "latm", tmp, 0 );
     av_dict_set( &opts, "header_period", "2", 0 );
+    if( stream->audio_metadata.ref_level < 0 )
+    {
+        snprintf( tmp, sizeof(tmp), "%i", stream->audio_metadata.ref_level );
+        av_dict_set( &opts, "dialnorm", tmp, 0 );
+    }
+
+    if( stream->stream_format == AUDIO_OPUS )
+    {
+        snprintf( tmp, sizeof(tmp), "%s", "constrained" );
+        av_dict_set( &opts, "vbr", tmp, 0 );
+        codec->compression_level = 10;
+    }
 
     if( avcodec_open2( codec, enc, &opts ) < 0 )
     {
         fprintf( stderr, "[lavc] Could not open encoder\n" );
         goto finish;
+    }
+
+    if( stream->stream_format == AUDIO_AAC )
+    {
+        int is_latm = stream->aac_opts.latm_output;
+
+        fmt = avformat_alloc_context();
+        if( !fmt )
+        {
+            fprintf( stderr, "Malloc failed\n" );
+            goto finish;
+        }
+
+        fmt->oformat = av_guess_format( is_latm ? "latm" : "adts", NULL, NULL );
+        if( !fmt->oformat )
+        {
+            fprintf( stderr, "ADTS muxer not found\n" );
+            goto finish;
+        }
+
+        st = avformat_new_stream( fmt, NULL );
+        if( !st )
+        {
+            fprintf( stderr, "Malloc failed\n" );
+            goto finish;
+        }
+        st->codec = codec;
     }
 
     avr = avresample_alloc_context();
@@ -159,7 +227,7 @@ static void *start_encoder( void *ptr )
         goto finish;
     }
 
-    frame = avcodec_alloc_frame();
+    frame = av_frame_alloc();
     if( !frame )
     {
         fprintf( stderr, "Could not allocate frame\n" );
@@ -177,7 +245,7 @@ static void *start_encoder( void *ptr )
         /* TODO: detect bitrate or channel reconfig */
         pthread_mutex_lock( &encoder->queue.mutex );
 
-        while( !encoder->queue.size && !encoder->cancel_thread )
+        while( ulist_empty( &encoder->queue.ulist ) && !encoder->cancel_thread )
             pthread_cond_wait( &encoder->queue.in_cv, &encoder->queue.mutex );
 
         if( encoder->cancel_thread )
@@ -186,7 +254,7 @@ static void *start_encoder( void *ptr )
             goto finish;
         }
 
-        raw_frame = encoder->queue.queue[0];
+        raw_frame = obe_raw_frame_t_from_uchain( ulist_pop( &encoder->queue.ulist ) );
         pthread_mutex_unlock( &encoder->queue.mutex );
 
         if( cur_pts == -1 )
@@ -201,12 +269,11 @@ static void *start_encoder( void *ptr )
 
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
-        remove_from_queue( &encoder->queue );
 
         while( avresample_available( avr ) >= codec->frame_size )
         {
             got_pkt = 0;
-            avcodec_get_frame_defaults( frame );
+            av_frame_unref( frame );
             frame->nb_samples = codec->frame_size;
             memcpy( frame->data, audio_planes, sizeof(frame->data) );
             avresample_read( avr, frame->data, codec->frame_size );
@@ -225,17 +292,53 @@ static void *start_encoder( void *ptr )
             if( !got_pkt )
                 continue;
 
-            total_size += pkt.size;
-            num_frames++;
-
-            if( av_fifo_realloc2( out_fifo, av_fifo_size( out_fifo ) + pkt.size ) < 0 )
+            /* Encapsulate AAC frames in ADTS or LATM */
+            if( stream->stream_format == AUDIO_AAC )
             {
-                syslog( LOG_ERR, "Malloc failed\n" );
-                break;
+                /* Allocate a dynamic memory buffer with avio */
+                if( avio_open_dyn_buf( &avio ) )
+                {
+                    syslog( LOG_ERR, "Malloc failed\n" );
+                    goto finish;
+                }
+                fmt->pb = avio;
+                /* TODO: handle fails */
+                avformat_write_header( fmt, NULL );
+                av_write_frame( fmt, &pkt );
+                obe_free_packet( &pkt );
+                /* Reuse frame_size variable */
+                frame_size = avio_close_dyn_buf( avio, &avio_buf );
+
+                if( av_fifo_realloc2( out_fifo, av_fifo_size( out_fifo ) + frame_size ) < 0 )
+                {
+                    syslog( LOG_ERR, "Malloc failed\n" );
+                    break;
+                }
+                av_fifo_generic_write( out_fifo, avio_buf, frame_size, NULL );
+                av_freep( &avio_buf );
+
+                total_size += frame_size;
+            }
+            else
+            {
+                if( stream->stream_format == AUDIO_OPUS )
+                    header_size = write_opus_ts_header( tmp2, pkt.size );
+
+                if( av_fifo_realloc2( out_fifo, av_fifo_size( out_fifo ) + pkt.size + header_size ) < 0 )
+                {
+                    syslog( LOG_ERR, "Malloc failed\n" );
+                    break;
+                }
+
+                if( stream->stream_format == AUDIO_OPUS )
+                    av_fifo_generic_write( out_fifo, tmp2, header_size, NULL );
+                av_fifo_generic_write( out_fifo, pkt.data, pkt.size, NULL );
+
+                total_size += pkt.size + header_size;
+                obe_free_packet( &pkt );
             }
 
-            av_fifo_generic_write( out_fifo, pkt.data, pkt.size, NULL );
-            obe_free_packet( &pkt );
+            num_frames++;
 
             if( num_frames == enc_params->frames_per_pes )
             {
@@ -250,7 +353,7 @@ static void *start_encoder( void *ptr )
 
                 coded_frame->pts = cur_pts;
                 coded_frame->random_access = 1; /* Every frame output is a random access point */
-                add_to_queue( &h->mux_queue, coded_frame );
+                add_to_queue( &h->mux_queue, &coded_frame->uchain );
 
                 /* We need to generate PTS because frame sizes have changed */
                 cur_pts += pts_increment;
@@ -261,7 +364,7 @@ static void *start_encoder( void *ptr )
 
 finish:
     if( frame )
-       avcodec_free_frame( &frame );
+       av_frame_free( &frame );
 
     if( audio_planes[0] )
         av_free( audio_planes[0] );
@@ -269,14 +372,17 @@ finish:
     if( out_fifo )
         av_fifo_free( out_fifo );
 
+    if( avio_buf )
+        av_free( avio_buf );
+
     if( avr )
         avresample_free( &avr );
 
     if( codec )
-    {
-        avcodec_close( codec );
-        av_free( codec );
-    }
+        avcodec_free_context( &codec );
+
+    if( fmt )
+        avformat_free_context( fmt );
 
     free( enc_params );
 

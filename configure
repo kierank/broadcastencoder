@@ -194,6 +194,8 @@ lavf="auto"
 readline="auto"
 decklink="auto"
 lzvbi="auto"
+lopenfec="auto"
+upipe="auto"
 
 CFLAGS="$CFLAGS -Wall -I."
 CXXFLAGS="$CXXFLAGS -c -Wall -I."
@@ -581,13 +583,13 @@ fi
 
 if [ "$lavf" = "auto" ] ; then
     lavf="no"
-    if ${cross_prefix}pkg-config --exists libavformat libavcodec libswscale 2>/dev/null; then
-        LAVF_LIBS="$LAVF_LIBS $(${cross_prefix}pkg-config --libs libavformat libavcodec libavresample libavutil libswscale)"
-        LAVF_CFLAGS="$LAVF_CFLAGS $(${cross_prefix}pkg-config --cflags libavformat libavcodec libavresample libavutil libswscale)"
+    if ${cross_prefix}pkg-config --exists libavformat libavcodec libswscale libavfilter 2>/dev/null; then
+        LAVF_LIBS="$LAVF_LIBS $(${cross_prefix}pkg-config --libs libavformat libavcodec libavresample libavutil libswscale libavfilter)"
+        LAVF_CFLAGS="$LAVF_CFLAGS $(${cross_prefix}pkg-config --cflags libavformat libavcodec libavresample libavutil libswscale libavfilter)"
     fi
     if [ -z "$LAVF_LIBS" -a -z "$LAVF_CFLAGS" ]; then
         LAVF_LIBS="-lavformat"
-        for lib in -lavcodec -lswscale -lavutil -lavresample -lm -lz -lbz2 $libpthread -lavifil32; do
+        for lib in -lavcodec -lswscale -lavutil -lavresample -lavfilter -lm -lz -lbz2 $libpthread -lavifil32; do
             cc_check "" $lib && LAVF_LIBS="$LAVF_LIBS $lib"
         done
     fi
@@ -689,6 +691,35 @@ if [ "$lzvbi" = "yes" ] ; then
     LDFLAGS="$LDFLAGS $LZVBI_LIBS"
 fi
 
+LOPENFEC_LIBS="-lopenfec"
+if [ "$lopenfec" = "auto" ] ; then
+    lopenfec="no"
+    if cc_check "openfec/lib_common/of_openfec_api.h" "$LOPENFEC_LIBS" ; then
+        lopenfec="yes"
+    fi
+fi
+
+if [ "$lopenfec" = "yes" ] ; then
+    define HAVE_LIBOPENFEC
+    LDFLAGS="$LDFLAGS $LOPENFEC_LIBS"
+fi
+
+if [ "$upipe" = "auto" ] ; then
+    upipe="no"
+    if ${cross_prefix}pkg-config --libs libupump_ev libupipe_netmap libupipe_hbrmt libupipe_pthread libupipe_modules libupipe 2>/dev/null; then
+        UPIPE_LIBS="$UPIPE_LIBS $(${cross_prefix}pkg-config --libs libupump_ev libupipe_netmap libupipe_hbrmt libupipe_pthread libupipe_modules libupipe)"
+        UPIPE_CFLAGS="$UPIPE_CFLAGS $(${cross_prefix}pkg-config --cflags libupump_ev libupipe_netmap libupipe_hbrmt libupipe_pthread libupipe_modules libupipe)"
+        upipe="yes"
+    fi
+fi
+
+if [ "$upipe" = "yes" ]; then
+    LDFLAGS="$UPIPE_LIBS $LDFLAGS"
+    CFLAGS="$CFLAGS $UPIPE_CFLAGS"
+    CXXFLAGS="$CXXFLAGS $UPIPE_CFLAGS"
+fi
+
+
 if [ "$pic" = "yes" ] ; then
     CFLAGS="$CFLAGS -fPIC"
     ASFLAGS="$ASFLAGS -DPIC"
@@ -773,6 +804,7 @@ Input
 
 decklink:   $decklink
 libzvbi:    $lzvbi
+upipe:      $upipe
 
 Audio/Video Decoding
 
@@ -790,6 +822,10 @@ libtwolame: $ltwolame
 Mux
 
 libmpegts:  $lmpegts
+
+Output
+
+openfec:    $lopenfec
 
 Frontends
 

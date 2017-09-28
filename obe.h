@@ -25,7 +25,7 @@
 #define OBE_H
 
 #include <inttypes.h>
-#include <libavutil/audioconvert.h>
+#include <libavutil/channel_layout.h>
 #include <x264.h>
 
 #define OBE_VERSION_MAJOR 0
@@ -45,7 +45,14 @@ enum obe_system_type_e
     OBE_SYSTEM_TYPE_LOW_LATENCY,
 };
 
-int obe_set_config( obe_t *h, int system_type );
+/* Internal filter bit depth */
+enum obe_internal_bit_depth
+{
+    OBE_BIT_DEPTH_10,
+    OBE_BIT_DEPTH_8,
+};
+
+int obe_set_config( obe_t *h, int system_type, int filter_bit_depth );
 
 enum input_video_connection_e
 {
@@ -73,21 +80,21 @@ enum input_video_format_e
     /* 720p HD */
     INPUT_VIDEO_FORMAT_720P_50,
     INPUT_VIDEO_FORMAT_720P_5994,
-    INPUT_VIDEO_FORMAT_720P_60 , /* NB: actually 60.00Hz */
+    INPUT_VIDEO_FORMAT_720P_60,
 
     /* 1080i/p HD */
     INPUT_VIDEO_FORMAT_1080I_50,
     INPUT_VIDEO_FORMAT_1080I_5994,
-    INPUT_VIDEO_FORMAT_1080I_60, /* NB: actually 60.00Hz */
 
     INPUT_VIDEO_FORMAT_1080P_2398,
     INPUT_VIDEO_FORMAT_1080P_24,
     INPUT_VIDEO_FORMAT_1080P_25,
     INPUT_VIDEO_FORMAT_1080P_2997,
-    INPUT_VIDEO_FORMAT_1080P_30, /* NB: actually 30.00Hz */
     INPUT_VIDEO_FORMAT_1080P_50,
     INPUT_VIDEO_FORMAT_1080P_5994,
-    INPUT_VIDEO_FORMAT_1080P_60, /* NB: actually 60.00Hz */
+    INPUT_VIDEO_FORMAT_1080P_60,
+
+    INPUT_VIDEO_FORMAT_AUTODETECT = 100,
 };
 
 enum input_type_e
@@ -95,20 +102,41 @@ enum input_type_e
     INPUT_URL,
     INPUT_DEVICE_DECKLINK,
     INPUT_DEVICE_LINSYS_SDI,
+    INPUT_DEVICE_BARS,
 //    INPUT_DEVICE_V4L2,
 //    INPUT_DEVICE_ASI,
+    INPUT_DEVICE_NETMAP,
 };
+
+enum picture_on_loss_e
+{
+    PICTURE_ON_LOSS_NONE,
+    PICTURE_ON_LOSS_BARS,
+    PICTURE_ON_LOSS_LASTFRAME,
+    PICTURE_ON_LOSS_BLACK,
+};
+
+/* video_format should be set to -1 for auto detection */
 
 typedef struct
 {
     int input_type;
-    char *location;
 
     int card_idx;
 
     int video_format;
     int video_connection;
     int audio_connection;
+
+    char netmap_uri[150];
+
+    char bars_line1[30];
+    char bars_line2[30];
+    char bars_line3[30];
+    char bars_line4[30];
+
+    int picture_on_loss;
+    int downscale;
 } obe_input_t;
 
 /**** Stream Formats ****/
@@ -131,8 +159,9 @@ enum stream_formats_e
     AUDIO_MP2,    /* MPEG-1 Layer II */
     AUDIO_AC_3,   /* ATSC A/52B / AC-3 */
     AUDIO_E_AC_3, /* ATSC A/52B Annex E / Enhanced AC-3 */
-//    AUDIO_E_DIST, /* E Distribution Audio */
+    AUDIO_S302M,  /* SMPTE 302M audio */
     AUDIO_AAC,
+    AUDIO_OPUS,
 
     SUBTITLES_DVB,
     MISC_TELETEXT,
@@ -203,6 +232,7 @@ typedef struct
     char *codec_desc_text;
 
     /** Video **/
+    int video_format;
     int csp;
     int width;
     int height;
@@ -248,6 +278,9 @@ typedef struct
 /* Only one program is returned */
 int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *program );
 
+/* Allows a guessed configuration of a device without probe */
+int obe_autoconf_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *program );
+
 enum stream_action_e
 {
     STREAM_PASSTHROUGH,
@@ -282,8 +315,6 @@ typedef struct
 
 typedef struct
 {
-    int passthrough_opts;
-
     int pid;
 
     /* Audio */
@@ -341,13 +372,13 @@ enum frame_packing_arrangement_e
  * override - Metadata will be passed through if E-distribution audio or AC-3 audio is used or the SDI stream has metadata as per SMPTE 2020-AB.
  *            This flag forces the use of the specified settings
  *
- * dialnorm - dialogue normalisation (valid range -31 to -1)
+ * ref_level - dialogue normalisation (valid range -31 to -1)
  */
 typedef struct
 {
     int override;
 
-    int dialnorm;
+    int ref_level;
     int dsur_mode;
     int original;
 
@@ -411,6 +442,7 @@ typedef struct
     /* Video */
     int is_wide;
     obe_frame_anc_opts_t video_anc;
+    int downscale;
 
     /* AVC */
     x264_param_t avc_param;
@@ -431,6 +463,10 @@ typedef struct
     /* MP2 */
     int mp2_mode;
 
+    /* 302M */
+    int num_pairs;
+    int bit_depth;
+
     /* DVB-VBI */
     obe_dvb_vbi_opts_t dvb_vbi_opts;
 
@@ -441,6 +477,8 @@ typedef struct
 
 int obe_setup_streams( obe_t *h, obe_output_stream_t *output_streams, int num_streams );
 
+/* Only video bitrate and VBV buffer size are currently updatable */
+void obe_update_stream( obe_t *h, obe_output_stream_t *output_stream );
 /**** Muxers *****/
 enum muxers_e
 {
@@ -466,9 +504,6 @@ typedef struct
     int cbr;
     int ts_muxrate;
 
-    int passthrough;
-// TODO mention only passthrough next four things
-// TODO mention default pids
     int ts_id;
     int program_num;
     int pmt_pid;
@@ -490,11 +525,15 @@ typedef struct
 
 int obe_setup_muxer( obe_t *h, obe_mux_opts_t *mux_opts );
 
+/* Only ts-muxrate can be updated currently */
+void obe_update_mux( obe_t *h, obe_mux_opts_t *mux_opts );
+
 /**** Output *****/
 enum output_e
 {
     OUTPUT_UDP, /* MPEG-TS in UDP */
     OUTPUT_RTP, /* MPEG-TS in RTP in UDP */
+    OUTPUT_FILE, /* File output */
 //    OUTPUT_LINSYS_ASI,
 //    OUTPUT_LINSYS_SMPTE_310M,
 };
@@ -505,10 +544,23 @@ enum output_e
  *
  */
 
+enum fec_type_e
+{
+    FEC_TYPE_COP3_BLOCK_ALIGNED,
+    FEC_TYPE_COP3_NON_BLOCK_ALIGNED,
+    FEC_TYPE_FECFRAME_LDPC_STAIRCASE,
+};
+
 typedef struct
 {
     int type;
     char *target;
+
+    int fec_type;
+    int fec_columns;
+    int fec_rows;
+
+    int dup_delay;
 } obe_output_dest_t;
 
 typedef struct

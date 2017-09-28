@@ -24,44 +24,6 @@
 #include "common/common.h"
 #include <libavcodec/avcodec.h>
 
-int obe_get_buffer( AVCodecContext *codec, AVFrame *pic )
-{
-    int w = codec->width;
-    int h = codec->height;
-    int stride[4];
-
-    avcodec_align_dimensions2( codec, &w, &h, stride );
-
-    /* Only EDGE_EMU codecs are used
-     * Allocate an extra line so that SIMD can modify the entire stride for every active line */
-    if( av_image_alloc( pic->data, pic->linesize, w, h + 1, codec->pix_fmt, 32 ) < 0 )
-        return -1;
-
-    pic->reordered_opaque = codec->reordered_opaque;
-    pic->pkt_pts = codec->pkt ? codec->pkt->pts : AV_NOPTS_VALUE;
-
-    return 0;
-}
-
-void obe_release_buffer( AVCodecContext *codec, AVFrame *pic )
-{
-     /* FIXME: need to release frame when both decoder and encoder are done */
-     //av_freep( &pic->data[0] );
-     memset( pic->data, 0, sizeof(pic->data) );
-}
-
-/* FFmpeg shouldn't call this at the moment */
-int obe_reget_buffer( AVCodecContext *codec, AVFrame *pic )
-{
-    if( pic->data[0] == NULL )
-        return codec->get_buffer( codec, pic );
-
-    pic->reordered_opaque = codec->reordered_opaque;
-    pic->pkt_pts = codec->pkt ? codec->pkt->pts : AV_NOPTS_VALUE;
-
-    return 0;
-}
-
 int obe_lavc_lockmgr( void **mutex, enum AVLockOp op )
 {
     if( op == AV_LOCK_CREATE )

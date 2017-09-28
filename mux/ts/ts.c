@@ -32,12 +32,13 @@ static const int mpegts_stream_info[][3] =
 {
     { VIDEO_AVC,   LIBMPEGTS_VIDEO_AVC,      LIBMPEGTS_STREAM_ID_MPEGVIDEO },
     { VIDEO_MPEG2, LIBMPEGTS_VIDEO_MPEG2,    LIBMPEGTS_STREAM_ID_MPEGVIDEO },
-    /* TODO 302M */
-    { AUDIO_MP2,   LIBMPEGTS_AUDIO_MPEG2,    LIBMPEGTS_STREAM_ID_MPEGAUDIO },
+    { AUDIO_MP2,   LIBMPEGTS_AUDIO_MPEG1,    LIBMPEGTS_STREAM_ID_MPEGAUDIO },
     { AUDIO_AC_3,  LIBMPEGTS_AUDIO_AC3,      LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { AUDIO_E_AC_3,  LIBMPEGTS_AUDIO_EAC3,   LIBMPEGTS_STREAM_ID_PRIVATE_1 },
+    { AUDIO_S302M,   LIBMPEGTS_AUDIO_302M,   LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { AUDIO_AAC,     LIBMPEGTS_AUDIO_ADTS,   LIBMPEGTS_STREAM_ID_MPEGAUDIO },
     { AUDIO_AAC,     LIBMPEGTS_AUDIO_LATM,   LIBMPEGTS_STREAM_ID_MPEGAUDIO },
+    { AUDIO_OPUS,    LIBMPEGTS_AUDIO_OPUS,   LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { SUBTITLES_DVB, LIBMPEGTS_DVB_SUB,      LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { MISC_TELETEXT, LIBMPEGTS_DVB_TELETEXT, LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { VBI_RAW,       LIBMPEGTS_DVB_VBI,      LIBMPEGTS_STREAM_ID_PRIVATE_1 },
@@ -143,69 +144,38 @@ void *open_muxer( void *ptr )
     }
 
     program.num_streams = mux_params->num_output_streams;
-
-    if( mux_opts->passthrough )
-    {
-        /* TODO lock when we can add multiple devices */
-        params.ts_id = h->devices[0]->ts_id;
-        program.program_num = h->devices[0]->program_num;
-        program.pmt_pid = h->devices[0]->pmt_pid;
-        program.pcr_pid = h->devices[0]->pcr_pid;
-    }
-    else
-    {
-        params.ts_id = mux_opts->ts_id ? mux_opts->ts_id : 1;
-        program.program_num = mux_opts->program_num ? mux_opts->program_num : 1;
-        program.pmt_pid = mux_opts->pmt_pid ? mux_opts->pmt_pid : cur_pid++;
-        /* PCR PID is done later once we know the video pid */
-    }
+    params.ts_id = mux_opts->ts_id ? mux_opts->ts_id : 1;
+    program.program_num = mux_opts->program_num ? mux_opts->program_num : 1;
+    program.pmt_pid = mux_opts->pmt_pid ? mux_opts->pmt_pid : cur_pid++;
+    /* PCR PID is done later once we know the video pid */
 
     for( int i = 0; i < program.num_streams; i++ )
     {
         stream = &program.streams[i];
         output_stream = &mux_params->output_streams[i];
-        input_stream = get_input_stream( h, output_stream->input_stream_id );
-
-        if( output_stream->stream_action == STREAM_ENCODE )
-            stream_format = output_stream->stream_format;
-        else
-            stream_format = input_stream->stream_format;
+        input_stream = get_input_stream( h, output_stream->input_stream_id);
+        stream_format = output_stream->stream_format;
 
         int j = 0;
         while( mpegts_stream_info[j][0] != -1 && stream_format != mpegts_stream_info[j][0] )
             j++;
 
         /* OBE does not distinguish between ADTS and LATM but MPEG-TS does */
-        if( stream_format == AUDIO_AAC && ( ( output_stream->stream_action == STREAM_PASSTHROUGH && input_stream->is_latm ) ||
-            ( output_stream->stream_action == STREAM_ENCODE && output_stream->aac_opts.latm_output ) ) )
+        if( stream_format == AUDIO_AAC && ( output_stream->stream_action == STREAM_ENCODE && output_stream->aac_opts.latm_output ) )
             j++;
 
         stream->stream_format = mpegts_stream_info[j][1];
         stream->stream_id = mpegts_stream_info[j][2]; /* Note this is the MPEG-TS stream_id, not the OBE stream_id */
-        if( mux_opts->passthrough )
+
+        output_stream->ts_opts.pid = stream->pid = output_stream->ts_opts.pid ? output_stream->ts_opts.pid : cur_pid++;
+        if( input_stream->stream_type == STREAM_TYPE_AUDIO )
         {
-            output_stream->ts_opts.pid = stream->pid = input_stream->pid ? input_stream->pid : cur_pid++;
-            if( input_stream->stream_type == STREAM_TYPE_AUDIO )
-            {
-                stream->write_lang_code = !!strlen( input_stream->lang_code );
-                memcpy( stream->lang_code, input_stream->lang_code, 4 );
-                stream->audio_type = input_stream->audio_type;
-            }
-            stream->has_stream_identifier = input_stream->has_stream_identifier;
-            stream->stream_identifier = input_stream->stream_identifier;
+            stream->write_lang_code = !!strlen( output_stream->ts_opts.lang_code );
+            memcpy( stream->lang_code, output_stream->ts_opts.lang_code, 4 );
+            stream->audio_type = output_stream->ts_opts.audio_type;
         }
-        else
-        {
-            output_stream->ts_opts.pid = stream->pid = output_stream->ts_opts.pid ? output_stream->ts_opts.pid : cur_pid++;
-            if( input_stream->stream_type == STREAM_TYPE_AUDIO )
-            {
-                stream->write_lang_code = !!strlen( output_stream->ts_opts.lang_code );
-                memcpy( stream->lang_code, output_stream->ts_opts.lang_code, 4 );
-                stream->audio_type = output_stream->ts_opts.audio_type;
-            }
-            stream->has_stream_identifier = output_stream->ts_opts.has_stream_identifier;
-            stream->stream_identifier = output_stream->ts_opts.stream_identifier;
-        }
+        stream->has_stream_identifier = output_stream->ts_opts.has_stream_identifier;
+        stream->stream_identifier = output_stream->ts_opts.stream_identifier;
 
         if( stream_format == VIDEO_AVC )
         {
@@ -225,11 +195,12 @@ void *open_muxer( void *ptr )
             encoder = get_encoder( h, output_stream->output_stream_id );
             stream->audio_frame_size = (double)encoder->num_samples * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
         }
+        else if( stream_format == AUDIO_OPUS )
+            stream->audio_frame_size = (double)OPUS_NUM_SAMPLES * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
     }
 
     /* Video stream isn't guaranteed to be first so populate program parameters here */
-    if( !mux_opts->passthrough )
-        program.pcr_pid = mux_opts->pcr_pid ? mux_opts->pcr_pid : video_pid;
+    program.pcr_pid = mux_opts->pcr_pid ? mux_opts->pcr_pid : video_pid;
 
     program.sdt.service_type = height >= 720 ? DVB_SERVICE_TYPE_ADVANCED_CODEC_HD : DVB_SERVICE_TYPE_ADVANCED_CODEC_SD;
     program.sdt.service_name = mux_opts->service_name ? mux_opts->service_name : service_name;
@@ -257,15 +228,11 @@ void *open_muxer( void *ptr )
         output_stream = &mux_params->output_streams[i];
         input_stream = get_input_stream( h, output_stream->input_stream_id );
         encoder = get_encoder( h, output_stream->output_stream_id );
-
-        if( output_stream->stream_action == STREAM_ENCODE )
-            stream_format = output_stream->stream_format;
-        else
-            stream_format = input_stream->stream_format;
+        stream_format = output_stream->stream_format;
 
         if( stream_format == VIDEO_AVC )
         {
-            x264_param_t *p_param = encoder->encoder_params;
+            x264_param_t *p_param = &output_stream->avc_param;
             int j = 0;
             while( avc_profiles[j][0] && p_param->i_profile != avc_profiles[j][0] )
                 j++;
@@ -297,6 +264,16 @@ void *open_muxer( void *ptr )
             if( ts_setup_mpeg4_aac_stream( w, stream->pid, profile_and_level, num_channels ) < 0 )
             {
                 fprintf( stderr, "[ts] Could not setup AAC stream\n" );
+                goto end;
+            }
+        }
+        else if( stream_format == AUDIO_OPUS )
+        {
+            int channel_map = LIBMPEGTS_CHANNEL_CONFIG_STEREO; // FIXME
+
+            if( ts_setup_opus_stream( w, stream->pid, channel_map ) < 0 )
+            {
+                fprintf( stderr, "[ts] Could not setup Opus stream\n" );
                 goto end;
             }
         }
@@ -387,6 +364,7 @@ void *open_muxer( void *ptr )
     {
         video_found = 0;
         video_dts = 0;
+        struct uchain *uchain, *uchain_tmp;
 
         pthread_mutex_lock( &h->mux_queue.mutex );
 
@@ -396,11 +374,18 @@ void *open_muxer( void *ptr )
             goto end;
         }
 
+        if( h->mux_params_update )
+        {
+            params.muxrate = mux_opts->ts_muxrate;
+            ts_update_transport_stream( w, &params );
+            h->mux_params_update = 0;
+        }
+
         while( !video_found )
         {
-            for( int i = 0; i < h->mux_queue.size; i++ )
+            ulist_foreach( &h->mux_queue.ulist, uchain )
             {
-                coded_frame = h->mux_queue.queue[i];
+                coded_frame = obe_coded_frame_t_from_uchain( uchain );
                 if( coded_frame->is_video )
                 {
                     video_found = 1;
@@ -427,7 +412,8 @@ void *open_muxer( void *ptr )
             }
         }
 
-        frames = calloc( h->mux_queue.size, sizeof(*frames) );
+        int mux_queue_size = ulist_depth( &h->mux_queue.ulist );
+        frames = calloc( mux_queue_size, sizeof(*frames) );
         if( !frames )
         {
             syslog( LOG_ERR, "Malloc failed\n" );
@@ -438,9 +424,9 @@ void *open_muxer( void *ptr )
         //printf("\n START - queuelen %i \n", h->mux_queue.size);
 
         num_frames = 0;
-        for( int i = 0; i < h->mux_queue.size; i++ )
+        ulist_delete_foreach( &h->mux_queue.ulist, uchain, uchain_tmp )
         {
-            coded_frame = h->mux_queue.queue[i];
+            coded_frame = obe_coded_frame_t_from_uchain( uchain );
             output_stream = get_output_mux_stream( mux_params, coded_frame->output_stream_id );
             // FIXME name
             int64_t rescaled_dts = coded_frame->pts - first_video_pts + first_video_real_pts;
@@ -451,7 +437,7 @@ void *open_muxer( void *ptr )
 
             if( rescaled_dts <= video_dts )
             {
-                frames[num_frames].opaque = h->mux_queue.queue[i];
+                frames[num_frames].opaque = coded_frame;
                 frames[num_frames].size = coded_frame->len;
                 frames[num_frames].data = coded_frame->data;
                 frames[num_frames].pid = output_stream->ts_opts.pid;
@@ -466,6 +452,7 @@ void *open_muxer( void *ptr )
                 {
                     frames[num_frames].dts = coded_frame->pts - first_video_pts + first_video_real_pts;
                     frames[num_frames].pts = coded_frame->pts - first_video_pts + first_video_real_pts;
+                    frames[num_frames].duration = coded_frame->duration;
                 }
 
                 frames[num_frames].dts /= 300;
@@ -475,6 +462,7 @@ void *open_muxer( void *ptr )
                 frames[num_frames].random_access = coded_frame->random_access;
                 frames[num_frames].priority = coded_frame->priority;
                 num_frames++;
+                ulist_delete(uchain);
             }
         }
 
@@ -501,14 +489,11 @@ void *open_muxer( void *ptr )
                 goto end;
             }
             memcpy( muxed_data->pcr_list, pcr_list, (len / 188) * sizeof(int64_t) );
-            add_to_queue( &h->mux_smoothing_queue, muxed_data );
+            add_to_queue( &h->mux_smoothing_queue, &muxed_data->uchain );
         }
 
         for( int i = 0; i < num_frames; i++ )
-        {
-            remove_item_from_queue( &h->mux_queue, frames[i].opaque );
             destroy_coded_frame( frames[i].opaque );
-        }
 
         free( frames );
     }

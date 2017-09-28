@@ -85,6 +85,13 @@ static void *start_encoder( void *ptr )
         goto end;
     }
 
+    /* Allocate the output buffer */
+    if( av_samples_alloc( (uint8_t**)&audio_buf, &linesize, 2, MP2_NUM_SAMPLES, AV_SAMPLE_FMT_FLT, 0 ) < 0 )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        goto end;
+    }
+
     avr = avresample_alloc_context();
     if( !avr )
     {
@@ -117,28 +124,20 @@ static void *start_encoder( void *ptr )
     {
         pthread_mutex_lock( &encoder->queue.mutex );
 
-        while( !encoder->queue.size && !encoder->cancel_thread )
+        while( ulist_empty( &encoder->queue.ulist ) && !encoder->cancel_thread )
             pthread_cond_wait( &encoder->queue.in_cv, &encoder->queue.mutex );
 
         if( encoder->cancel_thread )
         {
             pthread_mutex_unlock( &encoder->queue.mutex );
-            break;
+            goto end;
         }
 
-        raw_frame = encoder->queue.queue[0];
+        raw_frame = obe_raw_frame_t_from_uchain( ulist_pop( &encoder->queue.ulist ) );
         pthread_mutex_unlock( &encoder->queue.mutex );
 
         if( cur_pts == -1 )
             cur_pts = raw_frame->pts;
-
-        /* Allocate the output buffer */
-        if( av_samples_alloc( (uint8_t**)&audio_buf, &linesize, av_get_channel_layout_nb_channels( raw_frame->audio_frame.channel_layout ),
-                              raw_frame->audio_frame.linesize, AV_SAMPLE_FMT_FLT, 0 ) < 0 )
-        {
-            syslog( LOG_ERR, "Malloc failed\n" );
-            goto end;
-        }
 
         if( avresample_convert( avr, NULL, 0, raw_frame->audio_frame.num_samples, raw_frame->audio_frame.audio_data,
                                 raw_frame->audio_frame.linesize, raw_frame->audio_frame.num_samples ) < 0 )
@@ -147,30 +146,29 @@ static void *start_encoder( void *ptr )
             break;
         }
 
-        avresample_read( avr, (uint8_t**)&audio_buf, avresample_available( avr ) );
-
-        output_size = twolame_encode_buffer_float32_interleaved( tl_opts, audio_buf, raw_frame->audio_frame.num_samples, output_buf, MP2_AUDIO_BUFFER_SIZE );
-
-        if( output_size < 0 )
+        while( avresample_available( avr ) >= MP2_NUM_SAMPLES )
         {
-            syslog( LOG_ERR, "[twolame] Encode failed\n" );
-            break;
-        }
+            avresample_read( avr, (uint8_t**)&audio_buf, MP2_NUM_SAMPLES );
 
-        free( audio_buf );
-        audio_buf = NULL;
+            output_size = twolame_encode_buffer_float32_interleaved( tl_opts, audio_buf, MP2_NUM_SAMPLES, output_buf, MP2_AUDIO_BUFFER_SIZE );
+
+            if( output_size < 0 )
+            {
+                syslog( LOG_ERR, "[twolame] Encode failed\n" );
+                break;
+            }
+
+            if( av_fifo_realloc2( fifo, av_fifo_size( fifo ) + output_size ) < 0 )
+            {
+                syslog( LOG_ERR, "Malloc failed\n" );
+                break;
+            }
+
+            av_fifo_generic_write( fifo, output_buf, output_size, NULL );
+        }
 
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
-        remove_from_queue( &encoder->queue );
-
-        if( av_fifo_realloc2( fifo, av_fifo_size( fifo ) + output_size ) < 0 )
-        {
-            syslog( LOG_ERR, "Malloc failed\n" );
-            break;
-        }
-
-        av_fifo_generic_write( fifo, output_buf, output_size, NULL );
 
         while( av_fifo_size( fifo ) >= frame_size )
         {
@@ -184,7 +182,7 @@ static void *start_encoder( void *ptr )
             coded_frame->pts = cur_pts;
             coded_frame->random_access = 1; /* Every frame output is a random access point */
 
-            add_to_queue( &h->mux_queue, coded_frame );
+            add_to_queue( &h->mux_queue, &coded_frame->uchain );
             /* We need to generate PTS because frame sizes have changed */
             cur_pts += (double)MP2_NUM_SAMPLES * OBE_CLOCK * enc_params->frames_per_pes / enc_params->sample_rate;
         }
@@ -195,7 +193,7 @@ end:
         free( output_buf );
 
     if( audio_buf )
-        free( audio_buf );
+        av_freep( &audio_buf );
 
     if( avr )
         avresample_free( &avr );

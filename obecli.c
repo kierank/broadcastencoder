@@ -61,17 +61,16 @@ static char *line_read = NULL;
 
 static int running = 0;
 static int system_type_value = OBE_SYSTEM_TYPE_GENERIC;
+static int filter_bit_depth_value = OBE_BIT_DEPTH_10;
 
 static const char * const system_types[]             = { "generic", "lowestlatency", "lowlatency", 0 };
-static const char * const input_types[]              = { "url", "decklink", "linsys-sdi", 0 };
-static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50", "720p59.94", "720p60", "1080i50", "1080i59.94", "1080i60",
-                                                         "1080p23.98", "1080p24", "1080p25", "1080p29.97", "1080p30", "1080p50", "1080p59.94",
-                                                         "1080p60", 0 };
+static const char * const input_types[]              = { "url", "decklink", "linsys-sdi", "bars", "netmap", 0 };
+static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50", "720p59.94", "720p60", "1080i50", "1080i59.94", "1080p23.98", "1080p24", "1080p25", "1080p29.97", "1080p50", "1080p59.94", 0 };
 static const char * const input_video_connections[]  = { "sdi", "hdmi", "optical-sdi", "component", "composite", "s-video", 0 };
 static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", "analogue", 0 };
-static const char * const ttx_locations[]            = { "dvb-ttx", "dvb-vbi", "both", 0 };
+static const char * const picture_on_losses[]        = { "", "bars", "lastframe", "black", 0 };
 static const char * const stream_actions[]           = { "passthrough", "encode", 0 };
-static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", "e-ac3", "aac", 0 };
+static const char * const encode_formats[]           = { "", "avc", "", "", "mp2", "ac3", "e-ac3", "s302m", "aac", "opus", 0 };
 static const char * const frame_packing_modes[]      = { "none", "checkerboard", "column", "row", "side-by-side", "top-bottom", "temporal", 0 };
 static const char * const teletext_types[]           = { "", "initial", "subtitle", "additional-info", "program-schedule", "hearing-imp", 0 };
 static const char * const audio_types[]              = { "undefined", "clean-effects", "hearing-impaired", "visual-impaired", 0 };
@@ -80,11 +79,15 @@ static const char * const aac_encapsulations[]       = { "adts", "latm", 0 };
 static const char * const mp2_modes[]                = { "auto", "stereo", "joint-stereo", "dual-channel", 0 };
 static const char * const channel_maps[]             = { "", "mono", "stereo", "5.0", "5.1", 0 };
 static const char * const mono_channels[]            = { "left", "right", 0 };
-static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
-static const char * const addable_streams[]          = { "audio", "ttx" };
+static const char * const output_modules[]           = { "udp", "rtp", "file", 0 };
+static const char * const addable_streams[]          = { "audio", "ttx", 0};
+static const char * const filter_bit_depths[]        = { "10", "8", 0 };
+static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned", "ldpc-staircase", 0 };
+static const char * const downscale_types[]          = { "", "fast" };
 
-static const char * system_opts[] = { "system-type", NULL };
-static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", NULL };
+static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
+static const char * input_opts[]  = { "netmap-uri", "card-idx", "video-format", "video-connection", "audio-connection",
+                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", NULL };
 static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
@@ -92,10 +95,10 @@ static const char * stream_opts[] = { "action", "format",
                                       "vbv-maxrate", "vbv-bufsize", "bitrate",
                                       "profile", "level", "keyint", "lookahead", "threads", "bframes", "b-pyramid", "weightp",
                                       "interlaced", "tff", "frame-packing", "csp", "filler", "intra-refresh", "aspect-ratio",
-                                      "width", "max-refs",
+                                      "width", "max-refs", "slices", "downscale",
 
                                       /* Audio options */
-                                      "sdi-audio-pair", "channel-map", "mono-channel", "audio-offset",
+                                      "sdi-audio-pair", "channel-map", "mono-channel", "ref-level", "audio-offset", "num-pairs", "bit-depth",
                                       /* AAC options */
                                       "aac-profile", "aac-encap",
                                       /* MP2 options */
@@ -105,10 +108,12 @@ static const char * stream_opts[] = { "action", "format",
                                       /* VBI options */
                                       "vbi-ttx", "vbi-inv-ttx", "vbi-vps", "vbi-wss",
                                       NULL };
-static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "passthrough", "ts-id", "program-num", "pmt-pid", "pcr-pid",
+static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", "service-name", "provider-name", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
-static const char * output_opts[] = { "type", "target", NULL };
+static const char * output_opts[] = { "type", "target", "fec-columns", "fec-rows", "fec-type", "dup-delay", NULL };
+static const char * update_stream_opts[]  = { "bitrate", "vbv-bufsize" };
+static const char * update_muxer_opts[]  = { "ts-muxrate" };
 
 const static int allowed_resolutions[17][2] =
 {
@@ -479,6 +484,7 @@ static int set_obe( char *command, obecli_command_t *child )
             return -1;
 
         char *system_type     = obe_get_option( system_opts[0], opts );
+        char *filter_bit_depth     = obe_get_option( system_opts[1], opts );
 
         FAIL_IF_ERROR( system_type && ( check_enum_value( system_type, system_types ) < 0 ),
                        "Invalid system type\n" );
@@ -486,10 +492,11 @@ static int set_obe( char *command, obecli_command_t *child )
         FAIL_IF_ERROR( cli.program.num_streams, "Cannot change OBE options after probing\n" )
 
         if( system_type )
-        {
             parse_enum_value( system_type, system_types, &system_type_value );
-            obe_set_config( cli.h, system_type_value );
-        }
+        if( filter_bit_depth )
+            parse_enum_value( filter_bit_depth, filter_bit_depths, &filter_bit_depth_value );
+
+        obe_set_config( cli.h, system_type_value, filter_bit_depth_value );
 
         obe_free_string_array( opts );
     }
@@ -513,11 +520,16 @@ static int set_input( char *command, obecli_command_t *child )
         if( !opts && params )
             return -1;
 
-        char *location     = obe_get_option( input_opts[0], opts );
+        char *netmap_uri   = obe_get_option( input_opts[0], opts );
         char *card_idx     = obe_get_option( input_opts[1], opts );
         char *video_format = obe_get_option( input_opts[2], opts );
         char *video_connection = obe_get_option( input_opts[3], opts );
         char *audio_connection = obe_get_option( input_opts[4], opts );
+        char *bars_line1 = obe_get_option( input_opts[5], opts );
+        char *bars_line2 = obe_get_option( input_opts[6], opts );
+        char *bars_line3 = obe_get_option( input_opts[7], opts );
+        char *bars_line4 = obe_get_option( input_opts[8], opts );
+        char *picture_on_loss = obe_get_option( input_opts[9], opts );
 
         FAIL_IF_ERROR( video_format && ( check_enum_value( video_format, input_video_formats ) < 0 ),
                        "Invalid video format\n" );
@@ -528,16 +540,11 @@ static int set_input( char *command, obecli_command_t *child )
         FAIL_IF_ERROR( audio_connection && ( check_enum_value( audio_connection, input_audio_connections ) < 0 ),
                        "Invalid audio connection\n" );
 
-        if( location )
-        {
-             if( cli.input.location )
-                 free( cli.input.location );
+        FAIL_IF_ERROR( picture_on_loss && ( check_enum_value( picture_on_loss, picture_on_losses ) < 0 ),
+                       "Invalid picture on loss\n" );
 
-             cli.input.location = malloc( strlen( location ) + 1 );
-             FAIL_IF_ERROR( !cli.input.location, "malloc failed\n" );
-             strcpy( cli.input.location, location );
-        }
-
+        if( netmap_uri )
+            strncpy(cli.input.netmap_uri, netmap_uri, sizeof(cli.input.netmap_uri));
         cli.input.card_idx = obe_otoi( card_idx, cli.input.card_idx );
         if( video_format )
             parse_enum_value( video_format, input_video_formats, &cli.input.video_format );
@@ -545,6 +552,16 @@ static int set_input( char *command, obecli_command_t *child )
             parse_enum_value( video_connection, input_video_connections, &cli.input.video_connection );
         if( audio_connection )
             parse_enum_value( audio_connection, input_audio_connections, &cli.input.audio_connection );
+        if( bars_line1 )
+            strncpy( cli.input.bars_line1, bars_line1, sizeof(cli.input.bars_line1) - 1 );
+        if( bars_line2 )
+            strncpy( cli.input.bars_line2, bars_line2, sizeof(cli.input.bars_line2) - 1 );
+        if( bars_line3 )
+            strncpy( cli.input.bars_line3, bars_line3, sizeof(cli.input.bars_line3) - 1 );
+        if( bars_line4 )
+            strncpy( cli.input.bars_line4, bars_line4, sizeof(cli.input.bars_line4) - 1 );
+        if( picture_on_loss )
+            parse_enum_value( picture_on_loss, picture_on_losses, &cli.input.picture_on_loss );
 
         obe_free_string_array( opts );
     }
@@ -615,24 +632,29 @@ static int set_stream( char *command, obecli_command_t *child )
             char *aspect_ratio = obe_get_option( stream_opts[19], opts );
             char *width = obe_get_option( stream_opts[20], opts );
             char *max_refs = obe_get_option( stream_opts[21], opts );
+            char *slices = obe_get_option( stream_opts[22], opts );
+            char *downscale = obe_get_option( stream_opts[23], opts );
 
             /* Audio Options */
-            char *sdi_audio_pair = obe_get_option( stream_opts[22], opts );
-            char *channel_map    = obe_get_option( stream_opts[23], opts );
-            char *mono_channel   = obe_get_option( stream_opts[24], opts );
-            char *audio_offset   = obe_get_option( stream_opts[25], opts );
+            char *sdi_audio_pair = obe_get_option( stream_opts[24], opts );
+            char *channel_map    = obe_get_option( stream_opts[25], opts );
+            char *mono_channel   = obe_get_option( stream_opts[26], opts );
+            char *reference_level = obe_get_option( stream_opts[27], opts );
+            char *audio_offset   = obe_get_option( stream_opts[28], opts );
+            char *num_pairs = obe_get_option( stream_opts[29], opts );
+            char *bit_depth = obe_get_option( stream_opts[30], opts );
 
             /* AAC options */
-            char *aac_profile = obe_get_option( stream_opts[26], opts );
-            char *aac_encap   = obe_get_option( stream_opts[27], opts );
+            char *aac_profile = obe_get_option( stream_opts[31], opts );
+            char *aac_encap   = obe_get_option( stream_opts[32], opts );
 
             /* MP2 options */
-            char *mp2_mode    = obe_get_option( stream_opts[28], opts );
+            char *mp2_mode    = obe_get_option( stream_opts[33], opts );
 
             /* NB: remap these and the ttx values below if more encoding options are added - TODO: split them up */
-            char *pid         = obe_get_option( stream_opts[29], opts );
-            char *lang        = obe_get_option( stream_opts[30], opts );
-            char *audio_type  = obe_get_option( stream_opts[31], opts );
+            char *pid         = obe_get_option( stream_opts[34], opts );
+            char *lang        = obe_get_option( stream_opts[35], opts );
+            char *audio_type  = obe_get_option( stream_opts[36], opts );
 
             if( input_stream->stream_type == STREAM_TYPE_VIDEO )
             {
@@ -646,6 +668,9 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 FAIL_IF_ERROR( frame_packing && ( check_enum_value( frame_packing, frame_packing_modes ) < 0 ),
                                "Invalid frame packing mode\n" )
+    
+                FAIL_IF_ERROR( downscale && ( check_enum_value( downscale, downscale_types ) < 0 ),
+                               "Invalid downscale type\n" )
 
                 if( aspect_ratio )
                 {
@@ -689,6 +714,7 @@ static int set_stream( char *command, obecli_command_t *child )
                 avc_param->b_tff               = obe_otob( tff, avc_param->b_tff );
                 avc_param->b_intra_refresh     = obe_otob( intra_refresh, avc_param->b_intra_refresh );
                 avc_param->i_frame_reference   = obe_otoi( max_refs, avc_param->i_frame_reference );
+                avc_param->i_slice_count       = obe_otoi( slices, avc_param->i_slice_count );
 
                 if( profile )
                     parse_enum_value( profile, x264_profile_names, &cli.avc_profile );
@@ -718,6 +744,9 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 if( filler )
                     avc_param->i_nal_hrd = obe_otob( filler, 0 ) ? X264_NAL_HRD_FAKE_CBR : X264_NAL_HRD_FAKE_VBR;
+
+                if( downscale )
+                    parse_enum_value( downscale, downscale_types, &cli.output_streams[output_stream_id].downscale );
 
                 /* Turn on the 3DTV mux option automatically */
                 if( avc_param->i_frame_packing >= 0 )
@@ -786,7 +815,7 @@ static int set_stream( char *command, obecli_command_t *child )
                     default_bitrate = 192;
                 else if( cli.output_streams[output_stream_id].stream_format == AUDIO_E_AC_3 )
                     default_bitrate = 192;
-                else // AAC
+                else if( cli.output_streams[output_stream_id].stream_format == AUDIO_AAC )
                 {
                     default_bitrate = 128;
 
@@ -796,11 +825,22 @@ static int set_stream( char *command, obecli_command_t *child )
                     if( aac_encap )
                         parse_enum_value( aac_encap, aac_encapsulations, &cli.output_streams[output_stream_id].aac_opts.latm_output );
                 }
+                else // Opus
+                {
+                    default_bitrate = 96;
+                }
 
                 cli.output_streams[output_stream_id].bitrate = obe_otoi( bitrate, default_bitrate );
                 cli.output_streams[output_stream_id].sdi_audio_pair = obe_otoi( sdi_audio_pair, cli.output_streams[output_stream_id].sdi_audio_pair );
                 if( channel_map )
                     cli.output_streams[output_stream_id].channel_layout = channel_layout;
+
+
+                if( cli.output_streams[output_stream_id].stream_format == AUDIO_S302M )
+                {
+                    cli.output_streams[output_stream_id].num_pairs = obe_otoi( num_pairs, 1 );
+                    cli.output_streams[output_stream_id].bit_depth = obe_otoi( bit_depth, 20 );
+                }
 
                 if( lang && strlen( lang ) >= 3 )
                 {
@@ -808,16 +848,20 @@ static int set_stream( char *command, obecli_command_t *child )
                     memcpy( cli.output_streams[output_stream_id].ts_opts.lang_code, lang, 3 );
                     cli.output_streams[output_stream_id].ts_opts.lang_code[3] = 0;
                 }
+
+                int ref_level = obe_otoi( reference_level, -23 );
+                if( ref_level < 0 && ref_level >= -32 )
+                    cli.output_streams[output_stream_id].audio_metadata.ref_level = ref_level;
                 cli.output_streams[output_stream_id].audio_offset = obe_otoi( audio_offset, cli.output_streams[output_stream_id].audio_offset );
             }
             else if( output_stream->stream_format == MISC_TELETEXT ||
                      output_stream->stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
-                char *ttx_lang = obe_get_option( stream_opts[33], opts );
-                char *ttx_type = obe_get_option( stream_opts[34], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[35], opts );
-                char *ttx_page = obe_get_option( stream_opts[36], opts );
+                char *ttx_lang = obe_get_option( stream_opts[38], opts );
+                char *ttx_type = obe_get_option( stream_opts[39], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[40], opts );
+                char *ttx_page = obe_get_option( stream_opts[41], opts );
 
                 FAIL_IF_ERROR( ttx_type && ( check_enum_value( ttx_type, teletext_types ) < 0 ),
                                "Invalid Teletext type\n" );
@@ -846,10 +890,10 @@ static int set_stream( char *command, obecli_command_t *child )
                 if( output_stream->stream_format == VBI_RAW )
                 {
                     obe_dvb_vbi_opts_t *vbi_opts = &cli.output_streams[output_stream_id].dvb_vbi_opts;
-                    char *vbi_ttx = obe_get_option( stream_opts[37], opts );
-                    char *vbi_inv_ttx = obe_get_option( stream_opts[38], opts );
-                    char *vbi_vps  = obe_get_option( stream_opts[39], opts );
-                    char *vbi_wss = obe_get_option( stream_opts[40], opts );
+                    char *vbi_ttx = obe_get_option( stream_opts[40], opts );
+                    char *vbi_inv_ttx = obe_get_option( stream_opts[41], opts );
+                    char *vbi_vps  = obe_get_option( stream_opts[42], opts );
+                    char *vbi_wss = obe_get_option( stream_opts[43], opts );
 
                     vbi_opts->ttx = obe_otob( vbi_ttx, vbi_opts->ttx );
                     vbi_opts->inverted_ttx = obe_otob( vbi_inv_ttx, vbi_opts->inverted_ttx );
@@ -887,15 +931,14 @@ static int set_muxer( char *command, obecli_command_t *child )
         char *ts_type     = obe_get_option( muxer_opts[0], opts );
         char *ts_cbr      = obe_get_option( muxer_opts[1], opts );
         char *ts_muxrate  = obe_get_option( muxer_opts[2], opts );
-        char *passthrough = obe_get_option( muxer_opts[3], opts );
-        char *ts_id       = obe_get_option( muxer_opts[4], opts );
-        char *program_num = obe_get_option( muxer_opts[5], opts );
-        char *pmt_pid     = obe_get_option( muxer_opts[6], opts );
-        char *pcr_pid     = obe_get_option( muxer_opts[7], opts );
-        char *pcr_period  = obe_get_option( muxer_opts[8], opts );
-        char *pat_period  = obe_get_option( muxer_opts[9], opts );
-        char *service_name  = obe_get_option( muxer_opts[10], opts );
-        char *provider_name = obe_get_option( muxer_opts[11], opts );
+        char *ts_id       = obe_get_option( muxer_opts[3], opts );
+        char *program_num = obe_get_option( muxer_opts[4], opts );
+        char *pmt_pid     = obe_get_option( muxer_opts[5], opts );
+        char *pcr_pid     = obe_get_option( muxer_opts[6], opts );
+        char *pcr_period  = obe_get_option( muxer_opts[7], opts );
+        char *pat_period  = obe_get_option( muxer_opts[8], opts );
+        char *service_name  = obe_get_option( muxer_opts[9], opts );
+        char *provider_name = obe_get_option( muxer_opts[10], opts );
 
         FAIL_IF_ERROR( ts_type && ( check_enum_value( ts_type, ts_types ) < 0 ),
                       "Invalid AVC profile\n" );
@@ -906,7 +949,6 @@ static int set_muxer( char *command, obecli_command_t *child )
         cli.mux_opts.cbr = obe_otob( ts_cbr, cli.mux_opts.cbr );
         cli.mux_opts.ts_muxrate = obe_otoi( ts_muxrate, cli.mux_opts.ts_muxrate );
 
-        cli.mux_opts.passthrough = obe_otob( passthrough, cli.mux_opts.passthrough );
         cli.mux_opts.ts_id = obe_otoi( ts_id, cli.mux_opts.ts_id );
         cli.mux_opts.program_num = obe_otoi( program_num, cli.mux_opts.program_num );
         cli.mux_opts.pmt_pid    = obe_otoi( pmt_pid, cli.mux_opts.pmt_pid );
@@ -980,9 +1022,16 @@ static int set_output( char *command, obecli_command_t *child )
 
         char *type = obe_get_option( output_opts[0], opts );
         char *target = obe_get_option( output_opts[1], opts );
+        char *fec_columns = obe_get_option( output_opts[2], opts );
+        char *fec_rows = obe_get_option( output_opts[3], opts );
+        char *fec_type = obe_get_option( output_opts[4], opts );
+        char *dup_delay = obe_get_option( output_opts[5], opts );
 
         FAIL_IF_ERROR( type && ( check_enum_value( type, output_modules ) < 0 ),
                       "Invalid Output Type\n" );
+
+        FAIL_IF_ERROR( fec_type && ( check_enum_value( fec_type, fec_types ) < 0 ),
+                      "Invalid FEC type\n" );
 
         if( type )
             parse_enum_value( type, output_modules, &cli.output.outputs[output_id].type );
@@ -995,12 +1044,109 @@ static int set_output( char *command, obecli_command_t *child )
              FAIL_IF_ERROR( !cli.output.outputs[output_id].target, "malloc failed\n" );
              strcpy( cli.output.outputs[output_id].target, target );
         }
+        if( fec_columns )
+            cli.output.outputs[output_id].fec_columns = obe_otoi( fec_columns, cli.output.outputs[output_id].fec_columns );
+        if( fec_rows )
+            cli.output.outputs[output_id].fec_rows = obe_otoi( fec_rows, cli.output.outputs[output_id].fec_rows );
+        if( fec_type )
+            parse_enum_value( fec_type, fec_types, &cli.output.outputs[output_id].fec_type );
+        if( dup_delay )
+            cli.output.outputs[output_id].dup_delay = obe_otoi( dup_delay, cli.output.outputs[output_id].dup_delay );
         obe_free_string_array( opts );
     }
 
     return 0;
 }
 
+static int update_stream( char *command, obecli_command_t *child )
+{
+    obe_input_stream_t *input_stream;
+
+    FAIL_IF_ERROR( !cli.num_output_streams, "no output streams \n" );
+
+    if( !strlen( command ) )
+        return -1;
+
+    int tok_len = strcspn( command, " " );
+    int str_len = strlen( command );
+    command[tok_len] = 0;
+
+    if( !strcasecmp( command, "opts" ) && str_len > tok_len )
+    {
+        command += tok_len+1;
+        int tok_len2 = strcspn( command, ":" );
+        int str_len2 = strlen( command );
+        command[tok_len2] = 0;
+
+        int output_stream_id = obe_otoi( command, -1 );
+        input_stream = &cli.program.streams[cli.output_streams[output_stream_id].input_stream_id];
+
+        FAIL_IF_ERROR( output_stream_id < 0 || output_stream_id > cli.num_output_streams-1,
+                       "Invalid stream id\n" );
+
+        if( str_len > str_len2 )
+        {
+            char *params = command + tok_len2 + 1;
+            char **opts = obe_split_options( params, update_stream_opts );
+            if( !opts && params )
+                return -1;
+
+            char *bitrate = obe_get_option( update_stream_opts[0], opts );
+            char *vbv_bufsize = obe_get_option( update_stream_opts[1], opts );
+
+            if( input_stream->stream_type == STREAM_TYPE_VIDEO )
+            {
+                x264_param_t *avc_param = &cli.output_streams[output_stream_id].avc_param;
+
+                if( bitrate )
+                    avc_param->rc.i_vbv_max_bitrate = avc_param->rc.i_bitrate = obe_otoi( bitrate, avc_param->rc.i_bitrate );
+                if( vbv_bufsize )
+                    avc_param->rc.i_vbv_buffer_size = obe_otoi( vbv_bufsize, avc_param->rc.i_vbv_buffer_size );
+                if( bitrate || vbv_bufsize )
+                    obe_update_stream( cli.h, &cli.output_streams[output_stream_id] );
+            }
+            else
+            {
+                fprintf( stderr, "Bitrate reconfiguration only supported for Video\n" );
+                return -1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static int update_mux( char *command, obecli_command_t *child )
+{
+    if( !strlen( command ) )
+        return -1;
+
+    int tok_len = strcspn( command, " " );
+    int str_len = strlen( command );
+    command[tok_len] = 0;
+
+    if( !strcasecmp( command, "mpegts" ) )
+        cli.mux_opts.muxer = MUXERS_MPEGTS;
+    else if( !strcasecmp( command, "opts" ) && str_len > tok_len )
+    {
+        char *params = command + tok_len + 1;
+        char **opts = obe_split_options( params, update_muxer_opts );
+        if( !opts && params )
+            return -1;
+
+        char *ts_muxrate  = obe_get_option( update_muxer_opts[0], opts );
+        if( ts_muxrate )
+        {
+            int muxrate = obe_otoi( ts_muxrate, cli.mux_opts.ts_muxrate );
+            FAIL_IF_ERROR( !muxrate, "No mux rate selected\n" );
+            FAIL_IF_ERROR( muxrate < 100000, "Mux rate too low - mux rate is in bits/s, not kb/s\n" );
+            cli.mux_opts.ts_muxrate = muxrate;
+            obe_update_mux( cli.h, &cli.mux_opts );
+        }
+    }
+
+    return 0;
+}
 
 /* show functions */
 static int show_bitdepth( char *command, obecli_command_t *child )
@@ -1250,7 +1396,6 @@ static int show_output_streams( char *command, obecli_command_t *child )
             format_name = get_format_name( cli.output_streams[i].stream_format, format_names, 0 );
             printf( "Audio: %s - SDI audio pair: %d \n", format_name, cli.output_streams[i].sdi_audio_pair );
         }
-
     }
 
     printf( "\n" );
@@ -1284,6 +1429,13 @@ static int start_encode( char *command, obecli_command_t *child )
             if( !cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate && cli.output_streams[i].avc_param.rc.i_bitrate )
                 cli.output_streams[i].avc_param.rc.i_vbv_max_bitrate = cli.output_streams[i].avc_param.rc.i_bitrate;
 
+            /* FIXME support NTSC */
+            if( cli.output_streams[i].downscale )
+            {
+                 cli.output_streams[i].avc_param.i_width = 720;
+                 cli.output_streams[i].avc_param.i_height = 576;
+            }
+
             cli.output_streams[i].stream_action = STREAM_ENCODE;
             cli.output_streams[i].stream_format = VIDEO_AVC;
             if( cli.avc_profile >= 0 )
@@ -1298,7 +1450,9 @@ static int start_encode( char *command, obecli_command_t *child )
                 fprintf( stderr, "Output-stream-id %i: Uncompressed audio cannot yet be placed in TS\n", cli.output_streams[i].output_stream_id );
                 return -1;
             }
-            else if( cli.output_streams[i].stream_action == STREAM_ENCODE && !cli.output_streams[i].bitrate )
+            else if( cli.output_streams[i].stream_action == STREAM_ENCODE &&
+                     cli.output_streams[i].stream_format != AUDIO_S302M &&
+                     !cli.output_streams[i].bitrate )
             {
                 fprintf( stderr, "Output-stream-id %i: Audio stream requires bitrate\n", cli.output_streams[i].output_stream_id );
                 return -1;
@@ -1359,12 +1513,6 @@ static int stop_encode( char *command, obecli_command_t *child )
     obe_close( cli.h );
     cli.h = NULL;
 
-    if( cli.input.location )
-    {
-        free( cli.input.location );
-        cli.input.location = NULL;
-    }
-
     if( cli.mux_opts.service_name )
     {
         free( cli.mux_opts.service_name );
@@ -1396,20 +1544,8 @@ static int stop_encode( char *command, obecli_command_t *child )
     return 0;
 }
 
-static int probe_device( char *command, obecli_command_t *child )
+static int set_defaults( void )
 {
-    if( !strlen( command ) )
-        return -1;
-
-    FAIL_IF_ERROR( strcasecmp( command, "input" ), "%s is not a valid item to probe\n", command )
-
-    /* TODO check for validity */
-
-    if( obe_probe_device( cli.h, &cli.input, &cli.program ) < 0 )
-        return -1;
-
-    show_input_streams( NULL, NULL );
-
     if( cli.program.num_streams )
     {
         if( cli.output_streams )
@@ -1437,8 +1573,54 @@ static int probe_device( char *command, obecli_command_t *child )
                 cli.output_streams[i].sdi_audio_pair = 1;
                 cli.output_streams[i].channel_layout = AV_CH_LAYOUT_STEREO;
             }
+            else if( cli.program.streams[i].stream_format == MISC_TELETEXT )
+            {
+                cli.output_streams[i].stream_format = MISC_TELETEXT;
+            }
         }
     }
+
+    return 0;
+}
+
+static int autoconf_device( char *command, obecli_command_t *child )
+{
+    if( !strlen( command ) )
+        return -1;
+
+    FAIL_IF_ERROR( strcasecmp( command, "input" ), "%s is not a valid item to probe\n", command )
+
+    /* TODO check for validity */
+
+    if( obe_autoconf_device( cli.h, &cli.input, &cli.program ) < 0 )
+        return -1;
+
+    show_input_streams( NULL, NULL );
+
+    if( set_defaults() < 0 )
+        return -1;
+
+    show_output_streams( NULL, NULL );
+
+    return 0;
+}
+
+static int probe_device( char *command, obecli_command_t *child )
+{
+    if( !strlen( command ) )
+        return -1;
+
+    FAIL_IF_ERROR( strcasecmp( command, "input" ), "%s is not a valid item to probe\n", command )
+
+    /* TODO check for validity */
+
+    if( obe_probe_device( cli.h, &cli.input, &cli.program ) < 0 )
+        return -1;
+
+    show_input_streams( NULL, NULL );
+
+    if( set_defaults() < 0 )
+        return -1;
 
     show_output_streams( NULL, NULL );
 
@@ -1491,6 +1673,7 @@ int main( int argc, char **argv )
     }
 
     cli.avc_profile = -1;
+    cli.input.video_format = INPUT_VIDEO_FORMAT_AUTODETECT;
 
     printf( "\nOpen Broadcast Encoder command line interface.\n" );
     printf( "Version 1.0 \n" );
@@ -1530,6 +1713,7 @@ int main( int argc, char **argv )
                     return -1;
                 }
                 cli.avc_profile = -1;
+                cli.input.video_format = INPUT_VIDEO_FORMAT_AUTODETECT;
             }
         }
     }

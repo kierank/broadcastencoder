@@ -34,7 +34,8 @@ static void *start_smoothing( void *ptr )
     int64_t start_clock = -1, start_pcr, end_pcr, temporal_vbv_size = 0, cur_pcr;
     obe_muxed_data_t **muxed_data = NULL, *start_data, *end_data;
     AVFifoBuffer *fifo_data = NULL, *fifo_pcr = NULL;
-    AVBufferRef **output_buffers = NULL;
+    obe_buf_ref_t **output_buffers = NULL;
+    AVBufferPool *buffer_pool = NULL;
 
     struct sched_param param = {0};
     param.sched_priority = 99;
@@ -62,6 +63,13 @@ static void *start_smoothing( void *ptr )
         return NULL;
     }
 
+    buffer_pool = av_buffer_pool_init( sizeof(obe_buf_ref_t) * 100, NULL );
+    if( !buffer_pool )
+    {
+        fprintf( stderr, "[mux-smoothing] Could not allocate buffer pool" );
+        return NULL;
+    }
+
     if( h->obe_system != OBE_SYSTEM_TYPE_LOWEST_LATENCY )
     {
         for( int i = 0; i < h->num_encoders; i++ )
@@ -71,7 +79,8 @@ static void *start_smoothing( void *ptr )
                 pthread_mutex_lock( &h->encoders[i]->queue.mutex );
                 while( !h->encoders[i]->is_ready )
                     pthread_cond_wait( &h->encoders[i]->queue.in_cv, &h->encoders[i]->queue.mutex );
-                x264_param_t *params = h->encoders[i]->encoder_params;
+                obe_output_stream_t *output_stream = get_output_stream( h, h->encoders[i]->output_stream_id );
+                x264_param_t *params = &output_stream->avc_param;
                 temporal_vbv_size = av_rescale_q_rnd(
                 (int64_t)params->rc.i_vbv_buffer_size * params->rc.f_vbv_buffer_init,
                 (AVRational){1, params->rc.i_vbv_max_bitrate }, (AVRational){ 1, OBE_CLOCK }, AV_ROUND_UP );
@@ -85,7 +94,7 @@ static void *start_smoothing( void *ptr )
     {
         pthread_mutex_lock( &h->mux_smoothing_queue.mutex );
 
-        while( h->mux_smoothing_queue.size == num_muxed_data && !h->cancel_mux_smoothing_thread )
+        while( ulist_depth( &h->mux_smoothing_queue.ulist ) == num_muxed_data && !h->cancel_mux_smoothing_thread )
             pthread_cond_wait( &h->mux_smoothing_queue.in_cv, &h->mux_smoothing_queue.mutex );
 
         if( h->cancel_mux_smoothing_thread )
@@ -94,7 +103,7 @@ static void *start_smoothing( void *ptr )
             break;
         }
 
-        num_muxed_data = h->mux_smoothing_queue.size;
+        num_muxed_data = ulist_depth( &h->mux_smoothing_queue.ulist );
 
         /* Refill the buffer after a drop */
         pthread_mutex_lock( &h->drop_mutex );
@@ -111,8 +120,12 @@ static void *start_smoothing( void *ptr )
 
         if( !buffer_complete )
         {
-            start_data = h->mux_smoothing_queue.queue[0];
-            end_data = h->mux_smoothing_queue.queue[num_muxed_data-1];
+            struct uchain *first_uchain = &h->mux_smoothing_queue.ulist;
+            start_data = obe_muxed_data_t_from_uchain( ulist_peek( first_uchain ) );
+            if( num_muxed_data == 1 )
+                end_data = start_data;
+            else
+                end_data = obe_muxed_data_t_from_uchain( first_uchain->prev );
 
             start_pcr = start_data->pcr_list[0];
             end_pcr = end_data->pcr_list[(end_data->len / 188)-1];
@@ -137,7 +150,9 @@ static void *start_smoothing( void *ptr )
             syslog( LOG_ERR, "Malloc failed\n" );
             return NULL;
         }
-        memcpy( muxed_data, h->mux_smoothing_queue.queue, num_muxed_data * sizeof(*muxed_data) );
+
+        for( int i = 0; i < num_muxed_data; i++ )
+            muxed_data[i] = obe_muxed_data_t_from_uchain( ulist_pop( &h->mux_smoothing_queue.ulist ) );
         pthread_mutex_unlock( &h->mux_smoothing_queue.mutex );
 
         for( int i = 0; i < num_muxed_data; i++ )
@@ -158,7 +173,6 @@ static void *start_smoothing( void *ptr )
 
             av_fifo_generic_write( fifo_pcr, muxed_data[i]->pcr_list, (muxed_data[i]->len * sizeof(int64_t)) / 188, NULL );
 
-            remove_from_queue( &h->mux_smoothing_queue );
             destroy_muxed_data( muxed_data[i] );
         }
 
@@ -168,13 +182,21 @@ static void *start_smoothing( void *ptr )
 
         while( av_fifo_size( fifo_data ) >= TS_PACKETS_SIZE )
         {
-            output_buffers[0] = av_buffer_alloc( TS_PACKETS_SIZE + 7 * sizeof(int64_t) );
-            av_fifo_generic_read( fifo_pcr, output_buffers[0]->data, 7 * sizeof(int64_t), NULL );
-            av_fifo_generic_read( fifo_data, &output_buffers[0]->data[7 * sizeof(int64_t)], TS_PACKETS_SIZE, NULL );
+            /* Wrap data buffer reference inside obe_buf_ref_t which is also buffer reffed.. */
+            AVBufferRef *data_buf_ref = av_buffer_alloc( TS_PACKETS_SIZE + 7 * sizeof(int64_t) );
+            av_fifo_generic_read( fifo_pcr, data_buf_ref->data, 7 * sizeof(int64_t), NULL );
+            av_fifo_generic_read( fifo_data, &data_buf_ref->data[7 * sizeof(int64_t)], TS_PACKETS_SIZE, NULL );
 
-            for( int i = 1; i < h->num_outputs; i++ )
+            for( int i = 0; i < h->num_outputs; i++ )
             {
-                output_buffers[i] = av_buffer_ref( output_buffers[0] );
+                AVBufferRef *self_buf_ref = av_buffer_pool_get( buffer_pool );
+                obe_buf_ref_t *obe_buf_ref = (obe_buf_ref_t *)self_buf_ref->data;
+                obe_buf_ref->self_buf_ref = self_buf_ref;
+                uchain_init( &obe_buf_ref->uchain );
+                obe_buf_ref->data_buf_ref = i == 0 ? data_buf_ref : av_buffer_ref( data_buf_ref );
+
+                output_buffers[i] = obe_buf_ref;
+              
                 if( !output_buffers[i] )
                 {
                     syslog( LOG_ERR, "Malloc failed\n" );
@@ -182,7 +204,7 @@ static void *start_smoothing( void *ptr )
                 }
             }
 
-            cur_pcr = AV_RN64( output_buffers[0]->data );
+            cur_pcr = AV_RN64( output_buffers[0]->data_buf_ref->data );
 
             if( start_clock != -1 )
             {
@@ -197,7 +219,7 @@ static void *start_smoothing( void *ptr )
 
             for( int i = 0; i < h->num_outputs; i++ )
             {
-                if( add_to_queue( &h->outputs[i]->queue, output_buffers[i] ) < 0 )
+                if( add_to_queue( &h->outputs[i]->queue, &output_buffers[i]->uchain ) < 0 )
                     return NULL;
                 output_buffers[i] = NULL;
             }
@@ -206,6 +228,7 @@ static void *start_smoothing( void *ptr )
 
     av_fifo_free( fifo_data );
     av_fifo_free( fifo_pcr );
+    av_buffer_pool_uninit( &buffer_pool );
     free( output_buffers );
 
     return NULL;

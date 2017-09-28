@@ -41,7 +41,7 @@ static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_fr
     memcpy( pic->img.i_stride, img->stride, sizeof(img->stride) );
     memcpy( pic->img.plane, img->plane, sizeof(img->plane) );
     pic->img.i_plane = img->planes;
-    pic->img.i_csp = img->csp == PIX_FMT_YUV422P || img->csp == PIX_FMT_YUV422P10 ? X264_CSP_I422 : X264_CSP_I420;
+    pic->img.i_csp = img->csp == AV_PIX_FMT_YUV422P || img->csp == AV_PIX_FMT_YUV422P10 ? X264_CSP_I422 : X264_CSP_I420;
 
     if( X264_BIT_DEPTH == 10 )
         pic->img.i_csp |= X264_CSP_HIGH_DEPTH;
@@ -112,14 +112,16 @@ static void *start_encoder( void *ptr )
     float buffer_fill;
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
+    obe_output_stream_t *stream = get_output_stream( h, encoder->output_stream_id );
+    x264_param_t *param = &stream->avc_param;
 
     /* TODO: check for width, height changes */
 
     /* Lock the mutex until we verify and fetch new parameters */
     pthread_mutex_lock( &encoder->queue.mutex );
 
-    enc_params->avc_param.pf_log = x264_logger;
-    s = x264_encoder_open( &enc_params->avc_param );
+    param->pf_log = x264_logger;
+    s = x264_encoder_open( param );
     if( !s )
     {
         pthread_mutex_unlock( &encoder->queue.mutex );
@@ -127,21 +129,12 @@ static void *start_encoder( void *ptr )
         goto end;
     }
 
-    x264_encoder_parameters( s, &enc_params->avc_param );
-
-    encoder->encoder_params = malloc( sizeof(enc_params->avc_param) );
-    if( !encoder->encoder_params )
-    {
-        pthread_mutex_unlock( &encoder->queue.mutex );
-        syslog( LOG_ERR, "Malloc failed\n" );
-        goto end;
-    }
-    memcpy( encoder->encoder_params, &enc_params->avc_param, sizeof(enc_params->avc_param) );
+    x264_encoder_parameters( s, param );
 
     encoder->is_ready = 1;
     /* XXX: This will need fixing for soft pulldown streams */
-    frame_duration = av_rescale_q( 1, (AVRational){enc_params->avc_param.i_fps_den, enc_params->avc_param.i_fps_num}, (AVRational){1, OBE_CLOCK} );
-    buffer_duration = frame_duration * enc_params->avc_param.sc.i_buffer_size;
+    frame_duration = av_rescale_q( 1, (AVRational){param->i_fps_den, param->i_fps_num}, (AVRational){1, OBE_CLOCK} );
+    buffer_duration = frame_duration * param->sc.i_buffer_size;
 
     /* Broadcast because input and muxer can be stuck waiting for encoder */
     pthread_cond_broadcast( &encoder->queue.in_cv );
@@ -151,7 +144,13 @@ static void *start_encoder( void *ptr )
     {
         pthread_mutex_lock( &encoder->queue.mutex );
 
-        while( !encoder->queue.size && !encoder->cancel_thread )
+        if( encoder->params_update )
+        {
+            x264_encoder_reconfig( s, param );
+            encoder->params_update = 0;
+        }
+
+        while( ulist_empty( &encoder->queue.ulist ) && !encoder->cancel_thread )
             pthread_cond_wait( &encoder->queue.in_cv, &encoder->queue.mutex );
 
         if( encoder->cancel_thread )
@@ -169,12 +168,12 @@ static void *start_encoder( void *ptr )
             h->enc_smoothing_buffer_complete = 0;
             pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
             syslog( LOG_INFO, "Speedcontrol reset\n" );
-            x264_speedcontrol_sync( s, enc_params->avc_param.sc.i_buffer_size, enc_params->avc_param.sc.f_buffer_init, 0 );
+            x264_speedcontrol_sync( s, param->sc.i_buffer_size, param->sc.f_buffer_init, 0 );
             h->encoder_drop = 0;
         }
         pthread_mutex_unlock( &h->drop_mutex );
 
-        raw_frame = encoder->queue.queue[0];
+        raw_frame = obe_raw_frame_t_from_uchain( ulist_pop( &encoder->queue.ulist ) );
         pthread_mutex_unlock( &encoder->queue.mutex );
 
         if( convert_obe_to_x264_pic( &pic, raw_frame ) < 0 )
@@ -197,13 +196,13 @@ static void *start_encoder( void *ptr )
 
         /* If the AFD has changed, then change the SAR. x264 will write the SAR at the next keyframe
          * TODO: allow user to force keyframes in order to be frame accurate */
-        if( raw_frame->sar_width  != enc_params->avc_param.vui.i_sar_width ||
-            raw_frame->sar_height != enc_params->avc_param.vui.i_sar_height )
+        if( raw_frame->sar_width  != param->vui.i_sar_width ||
+            raw_frame->sar_height != param->vui.i_sar_height )
         {
-            enc_params->avc_param.vui.i_sar_width  = raw_frame->sar_width;
-            enc_params->avc_param.vui.i_sar_height = raw_frame->sar_height;
+            param->vui.i_sar_width  = raw_frame->sar_width;
+            param->vui.i_sar_height = raw_frame->sar_height;
 
-            pic.param = &enc_params->avc_param;
+            pic.param = param;
         }
 
         /* Update speedcontrol based on the system state */
@@ -219,18 +218,19 @@ static void *start_encoder( void *ptr )
                 /* time elapsed since last frame was removed */
                 int64_t last_frame_delta = get_input_clock_in_mpeg_ticks( h ) - h->enc_smoothing_last_exit_time;
 
-                if( h->enc_smoothing_queue.size )
+                if( !ulist_empty( &h->enc_smoothing_queue.ulist ) )
                 {
                     obe_coded_frame_t *first_frame, *last_frame;
-                    first_frame = h->enc_smoothing_queue.queue[0];
-                    last_frame = h->enc_smoothing_queue.queue[h->enc_smoothing_queue.size-1];
+                    struct uchain *first_uchain = &h->enc_smoothing_queue.ulist;
+                    first_frame = obe_coded_frame_t_from_uchain( ulist_peek( first_uchain ) );
+                    last_frame = obe_coded_frame_t_from_uchain( first_uchain->prev );
                     int64_t frame_durations = last_frame->real_dts - first_frame->real_dts + frame_duration;
                     buffer_fill = (float)(frame_durations - last_frame_delta)/buffer_duration;
                 }
                 else
                     buffer_fill = (float)(-1 * last_frame_delta)/buffer_duration;
 
-                x264_speedcontrol_sync( s, buffer_fill, enc_params->avc_param.sc.i_buffer_size, 1 );
+                x264_speedcontrol_sync( s, buffer_fill, param->sc.i_buffer_size, 1 );
             }
 
             pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
@@ -241,7 +241,6 @@ static void *start_encoder( void *ptr )
         arrival_time = raw_frame->arrival_time;
         raw_frame->release_data( raw_frame );
         raw_frame->release_frame( raw_frame );
-        remove_from_queue( &encoder->queue );
 
         if( frame_size < 0 )
         {
@@ -273,11 +272,11 @@ static void *start_encoder( void *ptr )
             if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY || h->obe_system == OBE_SYSTEM_TYPE_LOW_LATENCY )
             {
                 coded_frame->arrival_time = arrival_time;
-                add_to_queue( &h->mux_queue, coded_frame );
+                add_to_queue( &h->mux_queue, &coded_frame->uchain );
                 //printf("\n Encode Latency %"PRIi64" \n", obe_mdate() - coded_frame->arrival_time );
             }
             else
-                add_to_queue( &h->enc_smoothing_queue, coded_frame );
+                add_to_queue( &h->enc_smoothing_queue, &coded_frame->uchain );
         }
      }
 

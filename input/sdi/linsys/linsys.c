@@ -77,21 +77,16 @@ struct obe_to_linsys_video
     int tff;
 };
 
-const static struct obe_to_linsys_video video_format_tab[] =
+const static struct obe_to_linsys_video linsys_video_format_tab[] =
 {
     { INPUT_VIDEO_FORMAT_PAL,        SDIVIDEO_CTL_BT_601_576I_50HZ,         1,    25,    720,  576,  625,  1 },
     { INPUT_VIDEO_FORMAT_NTSC,       SDIVIDEO_CTL_SMPTE_125M_486I_59_94HZ,  1001, 30000, 720,  486,  525,  0 },
     { INPUT_VIDEO_FORMAT_720P_50,    SDIVIDEO_CTL_SMPTE_296M_720P_50HZ,     1,    50,    1280, 720,  750,  0 },
     { INPUT_VIDEO_FORMAT_720P_5994,  SDIVIDEO_CTL_SMPTE_296M_720P_59_94HZ,  1001, 60000, 1280, 720,  750,  0 },
-    { INPUT_VIDEO_FORMAT_720P_60,    SDIVIDEO_CTL_SMPTE_296M_720P_60HZ,     1,    60,    1280, 720,  750,  0 },
     { INPUT_VIDEO_FORMAT_1080I_50,   SDIVIDEO_CTL_SMPTE_274M_1080I_50HZ,    1,    25,    1920, 1080, 1125, 1 },
     { INPUT_VIDEO_FORMAT_1080I_5994, SDIVIDEO_CTL_SMPTE_274M_1080I_59_94HZ, 1001, 30000, 1920, 1080, 1125, 1 },
-    { INPUT_VIDEO_FORMAT_1080I_60,   SDIVIDEO_CTL_SMPTE_274M_1080I_60HZ,    1,    60,    1920, 1080, 1125, 1 },
-    { INPUT_VIDEO_FORMAT_1080P_2398, SDIVIDEO_CTL_SMPTE_274M_1080P_23_98HZ, 1001, 24000, 1920, 1080, 1125, 0 },
-    { INPUT_VIDEO_FORMAT_1080P_24,   SDIVIDEO_CTL_SMPTE_274M_1080P_24HZ,    1,    24,    1920, 1080, 1125, 0 },
     { INPUT_VIDEO_FORMAT_1080P_25,   SDIVIDEO_CTL_SMPTE_274M_1080P_25HZ,    1,    25,    1920, 1080, 1125, 0 },
     { INPUT_VIDEO_FORMAT_1080P_2997, SDIVIDEO_CTL_SMPTE_274M_1080P_29_97HZ, 1001, 30000, 1920, 1080, 1125, 0 },
-    { INPUT_VIDEO_FORMAT_1080P_30,   SDIVIDEO_CTL_SMPTE_274M_1080P_30HZ,    1,    30,    1920, 1080, 1125, 0 },
     { -1, -1, -1, -1, -1, -1 },
 };
 
@@ -99,26 +94,6 @@ struct linsys_audio_channels
 {
     int linsys_name;
     int num_channels;
-};
-
-const static struct linsys_audio_channels active_audio_tab[] =
-{
-    { SDIAUDIO_CTL_ACT_CHAN_0, 0 },
-    { SDIAUDIO_CTL_ACT_CHAN_2, 2 },
-    { SDIAUDIO_CTL_ACT_CHAN_4, 4 },
-    { SDIAUDIO_CTL_ACT_CHAN_6, 6 },
-    { SDIAUDIO_CTL_ACT_CHAN_8, 8 },
-    { -1, -1 },
-};
-
-const static struct linsys_audio_channels audio_channels_tab[] =
-{
-    { SDIAUDIO_CTL_AUDCH_EN_0, 0 },
-    { SDIAUDIO_CTL_AUDCH_EN_2, 2 },
-    { SDIAUDIO_CTL_AUDCH_EN_4, 4 },
-    { SDIAUDIO_CTL_AUDCH_EN_6, 6 },
-    { SDIAUDIO_CTL_AUDCH_EN_8, 8 },
-    { -1, -1 },
 };
 
 typedef struct
@@ -344,15 +319,15 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
     raw_frame->release_frame = obe_release_frame;
     raw_frame->arrival_time = linsys_ctx->last_frame_time;
 
-    output->csp = PIX_FMT_YUV422P10;
-    output->planes = av_pix_fmt_descriptors[output->csp].nb_components;
+    output->csp = AV_PIX_FMT_YUV422P10;
+    output->planes = av_pix_fmt_count_planes(output->csp);
     output->width = linsys_ctx->width;
     output->height = linsys_opts->height;
 
     if( av_image_fill_linesizes( output->stride, output->csp, output->width ) < 0 )
         goto fail;
 
-    if( av_image_alloc( output->plane, output->stride, linsys_ctx->width, linsys_ctx->coded_height + 1, PIX_FMT_YUV422P10, 16 ) < 0 )
+    if( av_image_alloc( output->plane, output->stride, linsys_ctx->width, linsys_ctx->coded_height + 1, AV_PIX_FMT_YUV422P10, 16 ) < 0 )
         goto fail;
 
     uint16_t *y_dst = (uint16_t*)output->plane[0];
@@ -585,8 +560,8 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
                 cur_line = sdi_next_line( linsys_opts->video_format, cur_line );
             }
 
-            raw_frame->img.csp = PIX_FMT_YUV422P10;
-            raw_frame->img.planes = av_pix_fmt_descriptors[raw_frame->img.csp].nb_components;
+            raw_frame->img.csp = AV_PIX_FMT_YUV422P10;
+            raw_frame->img.planes = av_pix_fmt_count_planes(raw_frame->img.csp);
             raw_frame->img.plane[0] = (uint8_t*)y_src;
             raw_frame->img.plane[1] = (uint8_t*)u_src;
             raw_frame->img.plane[2] = (uint8_t*)v_src;
@@ -607,9 +582,6 @@ static int handle_video_frame( linsys_opts_t *linsys_opts, uint8_t *data )
 
         if( IS_SD( linsys_opts->video_format ) )
             raw_frame->img.first_line = first_active_line[j].line;
-
-        raw_frame->timebase_num = linsys_opts->timebase_num;
-        raw_frame->timebase_den = linsys_opts->timebase_den;
 
         /* If AFD is present and the stream is SD this will be changed in the video filter */
         raw_frame->sar_width = raw_frame->sar_height = 1;
@@ -640,6 +612,7 @@ fail:
 static int handle_audio_frame( linsys_opts_t *linsys_opts, uint8_t *data )
 {
     linsys_ctx_t *linsys_ctx = &linsys_opts->linsys_ctx;
+    obe_t *h = linsys_ctx->h;
 
     obe_raw_frame_t *raw_frame = new_raw_frame();
     if( !raw_frame )
@@ -672,10 +645,10 @@ static int handle_audio_frame( linsys_opts_t *linsys_opts, uint8_t *data )
 
     raw_frame->release_data = obe_release_audio_data;
     raw_frame->release_frame = obe_release_frame;
-    for( int i = 0; i < linsys_ctx->device->num_input_streams; i++ )
+    for( int i = 0; i < h->device.num_input_streams; i++ )
     {
-        if( linsys_ctx->device->streams[i]->stream_format == AUDIO_PCM )
-            raw_frame->input_stream_id = linsys_ctx->device->streams[i]->input_stream_id;
+        if( h->device.streams[i]->stream_format == AUDIO_PCM )
+            raw_frame->input_stream_id = h->device.streams[i]->input_stream_id;
     }
 
     if( add_to_filter_queue( linsys_ctx->h, raw_frame ) < 0 )
@@ -861,31 +834,31 @@ static int open_card( linsys_opts_t *linsys_opts )
         goto finish;
     }
 
-    for( i = 0; video_format_tab[i].obe_name != -1; i++ )
+    for( i = 0; linsys_video_format_tab[i].obe_name != -1; i++ )
     {
-        if( video_format_tab[i].linsys_name == linsys_ctx->standard )
+        if( linsys_video_format_tab[i].linsys_name == linsys_ctx->standard )
             break;
     }
 
-    if( video_format_tab[i].obe_name == -1 )
+    if( linsys_video_format_tab[i].obe_name == -1 )
     {
         fprintf( stderr, "[linsys-sdivideo] Unsupported video format\n" );
         ret = -1;
         goto finish;
     }
 
-    linsys_opts->video_format = video_format_tab[i].obe_name;
-    linsys_opts->width = linsys_ctx->width = video_format_tab[i].width;
-    linsys_opts->height = linsys_ctx->coded_height = video_format_tab[i].height;
+    linsys_opts->video_format = linsys_video_format_tab[i].obe_name;
+    linsys_opts->width = linsys_ctx->width = linsys_video_format_tab[i].width;
+    linsys_opts->height = linsys_ctx->coded_height = linsys_video_format_tab[i].height;
     /* Ignore any 6 junk lines */
     if( linsys_opts->video_format == INPUT_VIDEO_FORMAT_NTSC )
         linsys_opts->height = 480;
 
-    linsys_opts->timebase_num = video_format_tab[i].timebase_num;
-    linsys_opts->timebase_den = video_format_tab[i].timebase_den;
+    linsys_opts->timebase_num = linsys_video_format_tab[i].timebase_num;
+    linsys_opts->timebase_den = linsys_video_format_tab[i].timebase_den;
     linsys_opts->interlaced = IS_INTERLACED( linsys_opts->video_format );
     if( linsys_opts->interlaced )
-        linsys_opts->tff = video_format_tab[i].tff;
+        linsys_opts->tff = linsys_video_format_tab[i].tff;
 
     linsys_ctx->v_timebase.num = linsys_opts->timebase_num;
     linsys_ctx->v_timebase.den = linsys_opts->timebase_den;
@@ -1062,8 +1035,8 @@ static int open_card( linsys_opts_t *linsys_opts )
     /* Increase the buffer size if VANC is being included and make the v210 decoder act on the full frame */
     if( linsys_ctx->has_vanc )
     {
-        linsys_ctx->vbuffer_size += (video_format_tab[i].total_height - video_format_tab[i].height) * linsys_ctx->stride;
-        linsys_ctx->coded_height = video_format_tab[i].total_height;
+        linsys_ctx->vbuffer_size += (linsys_video_format_tab[i].total_height - linsys_video_format_tab[i].height) * linsys_ctx->stride;
+        linsys_ctx->coded_height = linsys_video_format_tab[i].total_height;
     }
 
     linsys_ctx->num_vbuffers = NB_VBUFFERS;
@@ -1138,7 +1111,7 @@ static void *probe_stream( void *ptr )
     obe_input_t *user_opts = &probe_ctx->user_opts;
     obe_device_t *device;
     obe_int_input_stream_t *streams[MAX_STREAMS];
-    int num_streams = 0, vbi_stream_services = 0;
+    int num_streams = 0, vbi_stream_services = 0, cur_input_stream_id = 0;
     obe_sdi_non_display_data_t *non_display_parser;
 
     linsys_opts_t linsys_opts;
@@ -1179,10 +1152,7 @@ static void *probe_stream( void *ptr )
         if( !streams[i] )
             goto finish;
 
-        /* TODO: make it take a continuous set of stream-ids */
-        pthread_mutex_lock( &h->device_list_mutex );
-        streams[i]->input_stream_id = h->cur_input_stream_id++;
-        pthread_mutex_unlock( &h->device_list_mutex );
+        streams[i]->input_stream_id = cur_input_stream_id++;
 
         if( i == 0 )
         {
@@ -1192,7 +1162,7 @@ static void *probe_stream( void *ptr )
             streams[i]->height = linsys_opts.height;
             streams[i]->timebase_num = linsys_opts.timebase_num;
             streams[i]->timebase_den = linsys_opts.timebase_den;
-            streams[i]->csp    = PIX_FMT_YUV422P10;
+            streams[i]->csp    = AV_PIX_FMT_YUV422P10;
             streams[i]->interlaced = linsys_opts.interlaced;
             streams[i]->tff = linsys_opts.tff;
             streams[i]->sar_num = streams[i]->sar_den = 1; /* The user can choose this when encoding */
@@ -1232,7 +1202,8 @@ static void *probe_stream( void *ptr )
     memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
 
     /* add device */
-    add_device( h, device );
+    memcpy( &h->device, device, sizeof(*device) );
+    free( device );
 
 finish:
     free( probe_ctx );
@@ -1244,8 +1215,7 @@ static void *open_input( void *ptr )
 {
     obe_input_params_t *input = ptr;
     obe_t *h = input->h;
-    obe_device_t *device = input->device;
-    obe_input_t *user_opts = &device->user_opts;
+    obe_input_t *user_opts = &h->device.user_opts;
     linsys_opts_t *linsys_opts;
     linsys_ctx_t *linsys_ctx;
     obe_sdi_non_display_data_t *non_display_parser;
@@ -1268,12 +1238,11 @@ static void *open_input( void *ptr )
 
     linsys_ctx = &linsys_opts->linsys_ctx;
 
-    linsys_ctx->device = device;
     linsys_ctx->h = h;
     linsys_ctx->last_frame_time = -1;
 
     non_display_parser = &linsys_ctx->non_display_parser;
-    non_display_parser->device = device;
+    non_display_parser->device = &h->device;
 
     /* TODO: wait for encoder */
 
@@ -1291,5 +1260,5 @@ static void *open_input( void *ptr )
     return NULL;
 }
 
-const obe_input_func_t linsys_sdi_input = { probe_stream, open_input };
+const obe_input_func_t linsys_sdi_input = { probe_stream, NULL, open_input };
 

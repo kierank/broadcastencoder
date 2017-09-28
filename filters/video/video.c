@@ -22,7 +22,10 @@
  */
 
 #include <libavutil/cpu.h>
-#include <libswscale/swscale.h>
+#include <libavutil/opt.h>
+#include <libavfilter/avfiltergraph.h>
+#include <libavfilter/buffersink.h>
+#include <libavfilter/buffersrc.h>
 #include "common/common.h"
 #include "common/bitstream.h"
 #include "video.h"
@@ -31,15 +34,10 @@
 #include "x86/vfilter.h"
 #include "input/sdi/sdi.h"
 
-
-#if X264_BIT_DEPTH > 8
-typedef uint16_t pixel;
-#else
-typedef uint8_t pixel;
-#endif
-
 typedef struct
 {
+    int filter_bit_depth;
+
     /* cpu flags */
     uint32_t avutil_cpu;
 
@@ -47,16 +45,25 @@ typedef struct
     void (*scale_plane)( uint16_t *src, int stride, int width, int height, int lshift, int rshift );
 
     /* resize */
-    struct SwsContext *sws_ctx;
-    int sws_ctx_flags;
-    enum PixelFormat dst_pix_fmt;
+    int src_width;
+    int src_height;
+    int src_csp;
+    int dst_width;
+    int dst_height;
+    int dst_csp;
+    AVFilterGraph   *resize_filter_graph;
+    AVFilterContext *buffersrc_ctx;
+    AVFilterContext *resize_ctx;
+    AVFilterContext *format_ctx;
+    AVFilterContext *buffersink_ctx;
+    AVFrame *frame;
 
     /* downsample */
-    void (*downsample_chroma_row_top)( uint16_t *src, uint16_t *dst, int width, int stride );
-    void (*downsample_chroma_row_bottom)( uint16_t *src, uint16_t *dst, int width, int stride );
+    void (*downsample_chroma_fields_8)( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
+    void (*downsample_chroma_fields_10)( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
 
     /* dither */
-    void (*dither_row_10_to_8)( uint16_t *src, uint8_t *dst, const uint16_t *dithers, int width, int stride );
+    void (*dither_plane_10_to_8)( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height );
     int16_t *error_buf;
 } obe_vid_filter_ctx_t;
 
@@ -86,11 +93,11 @@ typedef struct
 
 const static obe_cli_csp_t obe_cli_csps[] =
 {
-    [PIX_FMT_YUV420P] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 8 },
-    [PIX_FMT_NV12] =    { 2, { 1,  1 },     { 1, .5 },     2, 2, 8 },
-    [PIX_FMT_YUV420P10] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 10 },
-    [PIX_FMT_YUV422P10] = { 3, { 1, .5, .5 }, { 1, 1, 1 }, 2, 2, 10 },
-    [PIX_FMT_YUV420P16] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 16 },
+    [AV_PIX_FMT_YUV420P] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 8 },
+    [AV_PIX_FMT_YUV422P] = { 3, { 1, .5, .5 }, { 1, 1, 1 }, 2, 2, 8 },
+    [AV_PIX_FMT_YUV420P10] = { 3, { 1, .5, .5 }, { 1, .5, .5 }, 2, 2, 10 },
+    [AV_PIX_FMT_YUV422P10] = { 3, { 1, .5, .5 }, { 1, 1, 1 }, 2, 2, 10 },
+    [AV_PIX_FMT_NV12] =    { 2, { 1,  1 },     { 1, .5 },     2, 2, 8 },
 };
 
 /* These SARs are often based on historical convention so often cannot be calculated */
@@ -165,47 +172,101 @@ static int set_sar( obe_raw_frame_t *raw_frame, int is_wide )
     return -1;
 }
 
-static void dither_row_10_to_8_c( uint16_t *src, uint8_t *dst, const uint16_t *dither, int width, int stride )
+#if 0
+static void scale_plane_c( uint16_t *src, int stride, int width, int height, int lshift, int rshift )
+{
+    for( int i = 0; i < height; i++ )
+    {
+        for( int j = 0; j < width; j++ )
+            src[j] = (src[j] << lshift);
+
+        src += stride / 2;
+    }
+}
+#endif
+
+static void dither_plane_10_to_8_c( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height )
 {
     const int scale = 511;
     const uint16_t shift = 11;
 
-    int k;
-    for (k = 0; k < width-7; k+=8)
+    for( int j = 0; j < height; j++ )
     {
-        dst[k+0] = (src[k+0] + dither[0])*scale>>shift;
-        dst[k+1] = (src[k+1] + dither[1])*scale>>shift;
-        dst[k+2] = (src[k+2] + dither[2])*scale>>shift;
-        dst[k+3] = (src[k+3] + dither[3])*scale>>shift;
-        dst[k+4] = (src[k+4] + dither[4])*scale>>shift;
-        dst[k+5] = (src[k+5] + dither[5])*scale>>shift;
-        dst[k+6] = (src[k+6] + dither[6])*scale>>shift;
-        dst[k+7] = (src[k+7] + dither[7])*scale>>shift;
-    }
-    for (; k < width; k++)
-        dst[k] = (src[k] + dither[k&7])*scale>>shift;
+        const uint16_t *dither = obe_dithers[j&7];
+        int k;
+        for (k = 0; k < width-7; k+=8)
+        {
+            dst[k+0] = (src[k+0] + dither[0])*scale>>shift;
+            dst[k+1] = (src[k+1] + dither[1])*scale>>shift;
+            dst[k+2] = (src[k+2] + dither[2])*scale>>shift;
+            dst[k+3] = (src[k+3] + dither[3])*scale>>shift;
+            dst[k+4] = (src[k+4] + dither[4])*scale>>shift;
+            dst[k+5] = (src[k+5] + dither[5])*scale>>shift;
+            dst[k+6] = (src[k+6] + dither[6])*scale>>shift;
+            dst[k+7] = (src[k+7] + dither[7])*scale>>shift;
+        }
+        for (; k < width; k++)
+            dst[k] = (src[k] + dither[k&7])*scale>>shift;
 
+        src += src_stride / 2;
+        dst += dst_stride;
+    }
 }
 
 /* Note: srcf is the next field (two pixels down) */
-static void downsample_chroma_row_top_c( uint16_t *src, uint16_t *dst, int width, int stride )
+static void downsample_chroma_fields_8_c( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height )
 {
-    uint16_t *srcf = src + stride;
+    uint8_t *src = src_ptr;
+    uint8_t *dst = dst_ptr;
+    for( int i = 0; i < height; i += 2 )
+    {
+        uint8_t *srcf = src + src_stride*2;
 
-    for( int i = 0; i < width/2; i++ )
-        dst[i] = (3*src[i] + srcf[i] + 2) >> 2;
+        /* Top field */
+        for( int j = 0; j < width; j++ )
+            dst[j] = (3*src[j] + srcf[j] + 2) >> 2;
+
+        dst  += dst_stride;
+        src  += src_stride;
+        srcf += src_stride;
+
+        /* Bottom field */
+        for( int j = 0; j < width; j++ )
+            dst[j] = (src[j] + 3*srcf[j] + 2) >> 2;
+
+        dst += dst_stride;
+        src = srcf + src_stride;
+    }
 }
 
-static void downsample_chroma_row_bottom_c( uint16_t *src, uint16_t *dst, int width, int stride )
+static void downsample_chroma_fields_10_c( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height )
 {
-    uint16_t *srcf = src + stride;
+    uint16_t *src = src_ptr;
+    uint16_t *dst = dst_ptr;
+    for( int i = 0; i < height; i += 2 )
+    {
+        uint16_t *srcf = src + src_stride;
 
-    for( int i = 0; i < width/2; i++ )
-        dst[i] = (src[i] + 3*srcf[i] + 2) >> 2;
+        /* Top field */
+        for( int j = 0; j < width; j++ )
+            dst[j] = (3*src[j] + srcf[j] + 2) >> 2;
+
+        dst  += dst_stride/2;
+        src  += src_stride/2;
+        srcf += src_stride/2;
+
+        /* Bottom field */
+        for( int j = 0; j < width; j++ )
+            dst[j] = (src[j] + 3*srcf[j] + 2) >> 2;
+
+        dst += dst_stride/2;
+        src = srcf + src_stride/2;
+    }
 }
 
-static void init_filter( obe_vid_filter_ctx_t *vfilt )
+static void init_filter( obe_t *h, obe_vid_filter_ctx_t *vfilt )
 {
+    vfilt->filter_bit_depth = h->filter_bit_depth;
     vfilt->avutil_cpu = av_get_cpu_flags();
 
 #if 0
@@ -221,28 +282,204 @@ static void init_filter( obe_vid_filter_ctx_t *vfilt )
         vfilt->scale_plane = obe_scale_plane_avx;
 #endif
 
-    /* downsampling */
-    vfilt->downsample_chroma_row_top = downsample_chroma_row_top_c;
-    vfilt->downsample_chroma_row_bottom = downsample_chroma_row_bottom_c;
-
     /* dither */
-    vfilt->dither_row_10_to_8 = dither_row_10_to_8_c;
+    vfilt->dither_plane_10_to_8 = dither_plane_10_to_8_c;
+
+    /* downsampling */
+    vfilt->downsample_chroma_fields_8 = downsample_chroma_fields_8_c;
+    vfilt->downsample_chroma_fields_10 = downsample_chroma_fields_10_c;
 
     if( vfilt->avutil_cpu & AV_CPU_FLAG_SSE2 )
     {
-        vfilt->downsample_chroma_row_top = obe_downsample_chroma_row_top_sse2;
-        vfilt->downsample_chroma_row_bottom = obe_downsample_chroma_row_bottom_sse2;
+        vfilt->downsample_chroma_fields_8 = obe_downsample_chroma_fields_8_sse2;
+        vfilt->downsample_chroma_fields_10 = obe_downsample_chroma_fields_10_sse2;
     }
 
     if( vfilt->avutil_cpu & AV_CPU_FLAG_SSE4 )
-        vfilt->dither_row_10_to_8 = obe_dither_row_10_to_8_sse4;
+        vfilt->dither_plane_10_to_8 = obe_dither_plane_10_to_8_sse4;
 
     if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX )
     {
-        vfilt->downsample_chroma_row_top = obe_downsample_chroma_row_top_avx;
-        vfilt->downsample_chroma_row_bottom = obe_downsample_chroma_row_bottom_avx;
-        vfilt->dither_row_10_to_8 = obe_dither_row_10_to_8_avx;
+        vfilt->downsample_chroma_fields_8 = obe_downsample_chroma_fields_8_avx;
+        vfilt->downsample_chroma_fields_10 = obe_downsample_chroma_fields_10_avx;
+
+        vfilt->dither_plane_10_to_8 = obe_dither_plane_10_to_8_avx;
     }
+
+    if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX2 )
+    {
+        vfilt->downsample_chroma_fields_8 = obe_downsample_chroma_fields_8_avx2;
+        vfilt->downsample_chroma_fields_10 = obe_downsample_chroma_fields_10_avx2;
+    }
+}
+
+static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt,
+                             obe_output_stream_t *output_stream, obe_raw_frame_t *raw_frame )
+{
+    char tmp[1024];
+    int ret = 0;
+    int interlaced = 0;
+
+    if( vfilt->resize_filter_graph )
+    {
+        avfilter_graph_free( &vfilt->resize_filter_graph );
+        vfilt->resize_filter_graph = NULL;
+    }
+
+    if( !vfilt->frame )
+    {
+        vfilt->frame = av_frame_alloc();
+        if( !vfilt->frame )
+        {
+            fprintf( stderr, "Could not allocate input frame \n" );
+            ret = -1;
+            goto end;
+        }
+    }
+
+    /* Setup destination parameters */
+    vfilt->src_width = raw_frame->img.width;
+    vfilt->src_height = raw_frame->img.height;
+    vfilt->src_csp = raw_frame->img.csp;
+
+    /* Resize filter graph */
+    vfilt->resize_filter_graph = avfilter_graph_alloc();
+    if( !vfilt->resize_filter_graph )
+    {
+        fprintf( stderr, "Could not allocate filter graph \n" );
+        ret = -1;
+        goto end;
+    }
+
+    vfilt->buffersrc_ctx = avfilter_graph_alloc_filter( vfilt->resize_filter_graph, avfilter_get_by_name( "buffer" ), "src" );
+    if( !vfilt->buffersrc_ctx )
+    {
+        syslog( LOG_ERR, "Failed to create buffersrc\n" );
+        ret = -1;
+        goto end;
+    }
+
+    /* buffersrc flags */
+    snprintf( tmp, sizeof(tmp), "%i", raw_frame->img.width );
+    av_opt_set( vfilt->buffersrc_ctx, "width", tmp, AV_OPT_SEARCH_CHILDREN );
+
+    snprintf( tmp, sizeof(tmp), "%i", raw_frame->img.height );
+    av_opt_set( vfilt->buffersrc_ctx, "height", tmp, AV_OPT_SEARCH_CHILDREN );
+
+    snprintf( tmp, sizeof(tmp), "%s", av_get_pix_fmt_name( raw_frame->img.csp ) );
+    av_opt_set( vfilt->buffersrc_ctx, "pix_fmt", tmp, AV_OPT_SEARCH_CHILDREN );
+
+    /* We don't care too much about this */
+    snprintf( tmp, sizeof(tmp), "%i/%i", 1, 27000000 );
+    av_opt_set( vfilt->buffersrc_ctx, "time_base", tmp, AV_OPT_SEARCH_CHILDREN );
+
+    if( avfilter_init_str( vfilt->buffersrc_ctx, NULL ) < 0 )
+    {
+        fprintf( stderr, "Could not init source \n" );
+        ret = -1;
+        goto end;
+    }
+
+    vfilt->resize_ctx = avfilter_graph_alloc_filter( vfilt->resize_filter_graph, avfilter_get_by_name( "scale" ), "scale" );
+    if( !vfilt->resize_ctx )
+    {
+        syslog( LOG_ERR, "Failed to create scaler\n" );
+        ret = -1;
+        goto end;
+    }
+
+    /* swscale flags */
+    interlaced = IS_INTERLACED( raw_frame->img.format );
+
+    /* Pretend the video is progressive if it's just a horizontal resize */
+    if( raw_frame->img.height == output_stream->avc_param.i_height )
+        interlaced = 0;
+
+    /* Use decent settings if not default */
+    if( !output_stream->downscale )
+    {
+        const char *sws_flags = "sws_flags=lanczos,accurate_rnd,full_chroma_int,bitexact";
+        av_opt_set( vfilt->resize_ctx, "sws_flags", sws_flags, AV_OPT_SEARCH_CHILDREN );
+    }
+
+    snprintf( tmp, sizeof(tmp), "%i", interlaced );
+    av_opt_set( vfilt->resize_ctx, "interl", tmp, AV_OPT_SEARCH_CHILDREN );
+
+    snprintf( tmp, sizeof(tmp), "%i", output_stream->avc_param.i_width );
+    av_opt_set( vfilt->resize_ctx, "width", tmp, AV_OPT_SEARCH_CHILDREN );
+
+    snprintf( tmp, sizeof(tmp), "%i", output_stream->avc_param.i_height );
+    av_opt_set( vfilt->resize_ctx, "height", tmp, AV_OPT_SEARCH_CHILDREN );
+
+    vfilt->format_ctx = avfilter_graph_alloc_filter( vfilt->resize_filter_graph, avfilter_get_by_name( "format" ), "format" );
+    if( !vfilt->format_ctx )
+    {
+        syslog( LOG_ERR, "Failed to create format\n" );
+        ret = -1;
+        goto end;
+    }
+
+    if( IS_PROGRESSIVE( raw_frame->img.format ) )
+        vfilt->dst_csp = h->filter_bit_depth == OBE_BIT_DEPTH_8 ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_YUV420P10;
+    else
+        vfilt->dst_csp = h->filter_bit_depth == OBE_BIT_DEPTH_8 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV422P10;
+
+    av_opt_set( vfilt->format_ctx, "pix_fmts", av_get_pix_fmt_name( vfilt->dst_csp ), AV_OPT_SEARCH_CHILDREN );
+
+    if( avfilter_init_str( vfilt->format_ctx, NULL ) < 0 )
+    {
+        fprintf( stderr, "Could not init format \n" );
+        ret = -1;
+        goto end;
+    }
+
+    vfilt->buffersink_ctx = avfilter_graph_alloc_filter( vfilt->resize_filter_graph, avfilter_get_by_name( "buffersink" ), "sink" );
+    if( !vfilt->buffersink_ctx )
+    {
+        syslog( LOG_ERR, "Failed to create buffersink\n" );
+        ret = -1;
+        goto end;
+    }
+
+    if( avfilter_init_str( vfilt->buffersink_ctx, NULL ) < 0 )
+    {
+        fprintf( stderr, "Could not init buffersink \n" );
+        ret = -1;
+        goto end;
+    }
+
+    ret = avfilter_link( vfilt->buffersrc_ctx, 0, vfilt->resize_ctx, 0 );
+    if( ret < 0 )
+    {
+        syslog( LOG_ERR, "Failed to link filter chain\n" );
+        goto end;
+    }
+
+    ret = avfilter_link( vfilt->resize_ctx, 0, vfilt->format_ctx, 0 );
+    if( ret < 0 )
+    {
+        syslog( LOG_ERR, "Failed to link filter chain\n" );
+        goto end;
+    }
+
+    ret = avfilter_link( vfilt->format_ctx, 0, vfilt->buffersink_ctx, 0 );
+    if( ret < 0 )
+    {
+        syslog( LOG_ERR, "Failed to link filter chain\n" );
+        goto end;
+    }
+
+    /* Configure the graph. */
+    ret = avfilter_graph_config( vfilt->resize_filter_graph, NULL );
+    if( ret < 0 )
+    {
+        syslog( LOG_ERR, "Failed to configure filter chain\n" );
+        goto end;
+    }
+
+end:
+
+    return ret;
 }
 
 static void blank_line( uint16_t *y, uint16_t *u, uint16_t *v, int width )
@@ -270,55 +507,64 @@ static void blank_lines( obe_raw_frame_t *raw_frame )
     blank_line( y, u, v, raw_frame->img.width / 2 );
 }
 
-static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame, int width )
+static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
-    obe_image_t tmp_image = {0};
-
-    if( !vfilt->sws_ctx || raw_frame->reset_obe )
+    AVFrame *frame = vfilt->frame;
+    /* Setup AVFrame */
+    memcpy( frame->buf, raw_frame->buf_ref, sizeof(frame->buf) );
+    memcpy( frame->linesize, raw_frame->img.stride, sizeof(raw_frame->img.stride) );
+    memcpy( frame->data, raw_frame->img.plane, sizeof(raw_frame->img.plane) );
+    frame->format = raw_frame->img.csp;
+    frame->width = raw_frame->img.width;
+    frame->height = raw_frame->img.height;
+    
+    if( av_buffersrc_add_frame( vfilt->buffersrc_ctx, vfilt->frame ) < 0 )
     {
-        if( IS_INTERLACED( raw_frame->img.format ) )
-            vfilt->dst_pix_fmt = raw_frame->img.csp;
-        else
-            vfilt->dst_pix_fmt = raw_frame->img.csp == PIX_FMT_YUV422P10 ? PIX_FMT_YUV420P10 : PIX_FMT_YUV420P;
-
-        vfilt->sws_ctx_flags |= SWS_FULL_CHR_H_INP | SWS_ACCURATE_RND | SWS_LANCZOS;
-
-        vfilt->sws_ctx = sws_getContext( raw_frame->img.width, raw_frame->img.height, raw_frame->img.csp,
-                                         width, raw_frame->img.height, vfilt->dst_pix_fmt,
-                                         vfilt->sws_ctx_flags, NULL, NULL, NULL );
-        if( !vfilt->sws_ctx )
-        {
-            fprintf( stderr, "Video scaling failed\n" );
-            return -1;
-        }
-    }
-
-    tmp_image.width = width;
-    tmp_image.height = raw_frame->img.height;
-    tmp_image.planes = av_pix_fmt_descriptors[vfilt->dst_pix_fmt].nb_components;
-    tmp_image.csp = vfilt->dst_pix_fmt;
-    tmp_image.format = raw_frame->img.format;
-
-    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
-                        tmp_image.csp, 16 ) < 0 )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
+        fprintf( stderr, "Could not write frame to buffer source \n" );
         return -1;
     }
 
-    sws_scale( vfilt->sws_ctx, (const uint8_t* const*)raw_frame->img.plane, raw_frame->img.stride,
-               0, tmp_image.height, tmp_image.plane, tmp_image.stride );
+    int ret;
 
-    raw_frame->release_data( raw_frame );
-    memcpy( &raw_frame->alloc_img, &tmp_image, sizeof(obe_image_t) );
-    memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
+    while( 1 )
+    {
+        ret = av_buffersink_get_frame( vfilt->buffersink_ctx, vfilt->frame );
+
+        if( ret == AVERROR(EAGAIN) || ret == AVERROR_EOF )
+            continue; // shouldn't happen
+        if( ret < 0 )
+        {
+            fprintf( stderr, "Could not get frame from buffersink \n" );
+            return -1;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    raw_frame->alloc_img.width = frame->width;
+    raw_frame->alloc_img.height = frame->height;
+
+    raw_frame->release_data = obe_release_bufref;
+
+    memcpy( raw_frame->alloc_img.stride, frame->linesize, sizeof(raw_frame->alloc_img.stride) );
+    memcpy( raw_frame->alloc_img.plane, frame->data, sizeof(raw_frame->alloc_img.plane) );
+    raw_frame->alloc_img.csp = frame->format;
+    raw_frame->alloc_img.planes = av_pix_fmt_count_planes( raw_frame->alloc_img.csp );
+
+    memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
+
+    memcpy( raw_frame->buf_ref, frame->buf, sizeof(frame->buf) );
+
+    raw_frame->sar_width = raw_frame->sar_height = 1;
 
     return 0;
 }
 
 static int csp_num_interleaved( int csp, int plane )
 {
-    return ( csp == PIX_FMT_NV12 && plane == 1 ) ? 2 : 1;
+    return ( csp == AV_PIX_FMT_NV12 && plane == 1 ) ? 2 : 1;
 }
 
 #if 0
@@ -357,12 +603,12 @@ static int dither_image( obe_raw_frame_t *raw_frame, int16_t *error_buf )
     obe_image_t tmp_image = {0};
     obe_image_t *out = &tmp_image;
 
-    tmp_image.csp = X264_BIT_DEPTH == 10 ? PIX_FMT_YUV420P10 : PIX_FMT_YUV420P;
+    tmp_image.csp = X264_BIT_DEPTH == 10 ? AV_PIX_FMT_YUV420P10 : AV_PIX_FMT_YUV420P;
     tmp_image.width = raw_frame->img.width;
     tmp_image.height = raw_frame->img.height;
 
     if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height,
-                        tmp_image.csp, 16 ) < 0 )
+                        tmp_image.csp, 32 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
@@ -390,6 +636,7 @@ static int dither_image( obe_raw_frame_t *raw_frame, int16_t *error_buf )
     }
 
     raw_frame->release_data( raw_frame );
+    raw_frame->release_data = obe_release_video_data;
     memcpy( &raw_frame->alloc_img, out, sizeof(obe_image_t) );
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
 
@@ -403,16 +650,18 @@ static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_fr
     obe_image_t *img = &raw_frame->img;
     obe_image_t tmp_image = {0};
     obe_image_t *out = &tmp_image;
+    const AVPixFmtDescriptor *pfd = av_pix_fmt_desc_get( raw_frame->img.csp );
+    const AVComponentDescriptor *c = &pfd->comp[0];
+    int bpp = c->depth > 8 ? 2 : 1;
 
-    /* FIXME: support 8-bit. Note hardcoded width*2 below. */
-    tmp_image.csp = PIX_FMT_YUV420P10;
-    tmp_image.width = raw_frame->img.width;
+    tmp_image.csp    = bpp == 2 ? AV_PIX_FMT_YUV420P10 : AV_PIX_FMT_YUV420P;
+    tmp_image.width  = raw_frame->img.width;
     tmp_image.height = raw_frame->img.height;
-    tmp_image.planes = av_pix_fmt_descriptors[tmp_image.csp].nb_components;
+    tmp_image.planes = av_pix_fmt_count_planes( raw_frame->img.csp );
     tmp_image.format = raw_frame->img.format;
 
     if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
-                        tmp_image.csp, 16 ) < 0 )
+                        tmp_image.csp, 32 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
@@ -420,29 +669,22 @@ static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_fr
 
     av_image_copy_plane( (uint8_t*)tmp_image.plane[0], tmp_image.stride[0],
                          (const uint8_t *)raw_frame->img.plane[0], raw_frame->img.stride[0],
-                          raw_frame->img.width * 2, raw_frame->img.height );
+                          raw_frame->img.width * bpp, raw_frame->img.height );
 
     for( int i = 1; i < tmp_image.planes; i++ )
     {
         int num_interleaved = csp_num_interleaved( img->csp, i );
         int height = obe_cli_csps[out->csp].height[i] * img->height;
         int width = obe_cli_csps[out->csp].width[i] * img->width / num_interleaved;
-        uint16_t *src = (uint16_t*)img->plane[i];
-        uint16_t *dst = (uint16_t*)out->plane[i];
 
-        for( int j = 0; j < height; j += 2 )
-        {
-            uint16_t *srcp = (uint16_t*)src + img->stride[i] / 2;
-            uint16_t *dstp = (uint16_t*)dst + out->stride[i] / 2;
-            vfilt->downsample_chroma_row_top( src, dst, width*2, img->stride[i] );
-            vfilt->downsample_chroma_row_bottom( srcp, dstp, width*2, img->stride[i] );
-
-            src += img->stride[i] * 2;
-            dst += out->stride[i];
-        }
+        if( bpp == 1 )
+            vfilt->downsample_chroma_fields_8( img->plane[i], img->stride[i], out->plane[i], out->stride[i], width, height );
+        else
+            vfilt->downsample_chroma_fields_10( img->plane[i], img->stride[i], out->plane[i], out->stride[i], width, height );
     }
 
     raw_frame->release_data( raw_frame );
+    raw_frame->release_data = obe_release_video_data;
     memcpy( &raw_frame->alloc_img, out, sizeof(obe_image_t) );
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
 
@@ -455,14 +697,14 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     obe_image_t tmp_image = {0};
     obe_image_t *out = &tmp_image;
 
-    tmp_image.csp = img->csp == PIX_FMT_YUV422P10 ? PIX_FMT_YUV422P : PIX_FMT_YUV420P;
+    tmp_image.csp = img->csp == AV_PIX_FMT_YUV422P10 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV420P;
     tmp_image.width = raw_frame->img.width;
     tmp_image.height = raw_frame->img.height;
-    tmp_image.planes = av_pix_fmt_descriptors[tmp_image.csp].nb_components;
+    tmp_image.planes = av_pix_fmt_count_planes( tmp_image.csp );
     tmp_image.format = raw_frame->img.format;
 
-    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
-                        tmp_image.csp, 16 ) < 0 )
+    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height,
+                        tmp_image.csp, 32 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
@@ -470,30 +712,17 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
 
     for( int i = 0; i < img->planes; i++ )
     {
-        //const int src_depth = av_pix_fmt_descriptors[img->csp].comp[i].depth_minus1+1;
-        //const int dst_depth = av_pix_fmt_descriptors[out->csp].comp[i].depth_minus1+1;
-
-        //uint16_t scale = obe_dither_scale[dst_depth-1][src_depth-1];
-        //int shift = src_depth-dst_depth + obe_dither_scale[src_depth-2][dst_depth-1];
-
         int num_interleaved = csp_num_interleaved( img->csp, i );
         int height = obe_cli_csps[img->csp].height[i] * img->height;
         int width = obe_cli_csps[img->csp].width[i] * img->width / num_interleaved;
         uint16_t *src = (uint16_t*)img->plane[i];
         uint8_t *dst = out->plane[i];
 
-        for( int j = 0; j < height; j++ )
-        {
-            const uint16_t *dither = obe_dithers[j&7];
-
-            vfilt->dither_row_10_to_8( src, dst, dither, width, img->stride[i] );
-
-            src += img->stride[i] / 2;
-            dst += out->stride[i];
-        }
+        vfilt->dither_plane_10_to_8( src, img->stride[i], dst, out->stride[i], width, height );
     }
 
     raw_frame->release_data( raw_frame );
+    raw_frame->release_data = obe_release_video_data;
     memcpy( &raw_frame->alloc_img, &tmp_image, sizeof(obe_image_t) );
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
 
@@ -638,7 +867,7 @@ static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stre
     for( int i = 0; i < raw_frame->num_user_data; i++ )
     {
         if( raw_frame->user_data[i].type == USER_DATA_CEA_608 )
-            ret = write_608_cc( &raw_frame->user_data[i], raw_frame );
+            ret = write_608_cc( &raw_frame->user_data[i], input_stream );
         else if( raw_frame->user_data[i].type == USER_DATA_CEA_708_CDP )
             ret = read_cdp( &raw_frame->user_data[i] );
         else if( raw_frame->user_data[i].type == USER_DATA_AFD )
@@ -680,7 +909,6 @@ static void *start_filter( void *ptr )
     obe_raw_frame_t *raw_frame;
     obe_output_stream_t *output_stream = get_output_stream( h, 0 ); /* FIXME when output_stream_id for video is not zero */
     int h_shift, v_shift;
-    const AVPixFmtDescriptor *pfd;
 
     obe_vid_filter_ctx_t *vfilt = calloc( 1, sizeof(*vfilt) );
     if( !vfilt )
@@ -689,7 +917,10 @@ static void *start_filter( void *ptr )
         goto end;
     }
 
-    init_filter( vfilt );
+    init_filter( h, vfilt );
+
+    vfilt->dst_width = output_stream->avc_param.i_width;
+    vfilt->dst_height = output_stream->avc_param.i_height;
 
     while( 1 )
     {
@@ -698,7 +929,7 @@ static void *start_filter( void *ptr )
 
         pthread_mutex_lock( &filter->queue.mutex );
 
-        while( !filter->queue.size && !filter->cancel_thread )
+        while( ulist_empty( &filter->queue.ulist ) && !filter->cancel_thread )
             pthread_cond_wait( &filter->queue.in_cv, &filter->queue.mutex );
 
         if( filter->cancel_thread )
@@ -707,38 +938,49 @@ static void *start_filter( void *ptr )
             goto end;
         }
 
-        raw_frame = filter->queue.queue[0];
+        raw_frame = obe_raw_frame_t_from_uchain( ulist_pop( &filter->queue.ulist ) );
         pthread_mutex_unlock( &filter->queue.mutex );
 
-        /* TODO: scale 8-bit to 10-bit
-         * TODO: convert from 4:2:0 to 4:2:2 */
+        /* TODO: scale 8-bit to 10-bit */
 
-        if( raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL )
-            blank_lines( raw_frame );
-
-        /* Resize if necessary. Together with colourspace conversion if progressive */
-        if( raw_frame->img.width != output_stream->avc_param.i_width || (!IS_INTERLACED( raw_frame->img.format ) &&
-                                                                          filter_params->target_csp == X264_CSP_I420 ) )
+        if( 1 )
         {
-            if( resize_frame( vfilt, raw_frame, output_stream->avc_param.i_width ) < 0 )
-                goto end;
-        }
+            const AVPixFmtDescriptor *pfd = av_pix_fmt_desc_get( raw_frame->img.csp );
+            const AVComponentDescriptor *c = &pfd->comp[0];
+            if( raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL && c->depth == 10 )
+                blank_lines( raw_frame );
 
-        if( av_pix_fmt_get_chroma_sub_sample( raw_frame->img.csp, &h_shift, &v_shift ) < 0 )
-            goto end;
+            /* Resize if wrong pixel format or wrong resolution */
+            if( !( raw_frame->img.csp == AV_PIX_FMT_YUV422P   || raw_frame->img.csp == AV_PIX_FMT_YUV422P10 )
+                || vfilt->dst_width   != raw_frame->img.width || vfilt->dst_height != raw_frame->img.height )
+            {
+                /* Reset the filter if it has been setup incorrectly or not setup at all */
+                if( vfilt->src_csp    != raw_frame->img.csp || vfilt->src_width != raw_frame->img.width ||
+                    vfilt->src_height != raw_frame->img.height )
+                {
+                    init_libavfilter( h, vfilt, output_stream, raw_frame );
+                }
 
-        /* Downconvert using interlaced scaling if input is 4:2:2 and target is 4:2:0 */
-        if( h_shift == 1 && v_shift == 0 && filter_params->target_csp == X264_CSP_I420 )
-        {
-            if( downconvert_image_interlaced( vfilt, raw_frame ) < 0 )
-                goto end;
-        }
+                resize_frame( vfilt, raw_frame );
+            }
 
-        pfd = av_pix_fmt_desc_get( raw_frame->img.csp );
-        if( pfd->comp[0].depth_minus1+1 == 10 && X264_BIT_DEPTH == 8 )
-        {
-            if( dither_image( vfilt, raw_frame ) < 0 )
+            if( av_pix_fmt_get_chroma_sub_sample( raw_frame->img.csp, &h_shift, &v_shift ) < 0 )
                 goto end;
+
+            /* Downconvert using interlaced scaling if input is 4:2:2 and target is 4:2:0 */
+            if( h_shift == 1 && v_shift == 0 && filter_params->target_csp == X264_CSP_I420 )
+            {
+                if( downconvert_image_interlaced( vfilt, raw_frame ) < 0 )
+                    goto end;
+            }
+
+            pfd = av_pix_fmt_desc_get( raw_frame->img.csp );
+            c = &pfd->comp[0];
+            if( c->depth == 10 && X264_BIT_DEPTH == 8 )
+            {
+                if( dither_image( vfilt, raw_frame ) < 0 )
+                    goto end;
+            }
         }
 
         if( encapsulate_user_data( raw_frame, input_stream ) < 0 )
@@ -752,15 +994,14 @@ static void *start_filter( void *ptr )
             raw_frame->sar_guess = 1;
         }
 
-        remove_from_queue( &filter->queue );
         add_to_encode_queue( h, raw_frame, 0 );
     }
 
 end:
     if( vfilt )
     {
-        if( vfilt->sws_ctx )
-            sws_freeContext( vfilt->sws_ctx );
+        if( vfilt->resize_filter_graph )
+            avfilter_graph_free( &vfilt->resize_filter_graph );
 
         free( vfilt );
     }

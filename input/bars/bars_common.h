@@ -1,7 +1,7 @@
 /*****************************************************************************
- * 337m.c : SMPTE 337M functions
+ * bars_common.h: SMPTE bars common header
  *****************************************************************************
- * Copyright (C) 2010 NAMETBD
+ * Copyright (C) 2014 Open Broadcast Systems Ltd.
  *
  * Authors: Kieran Kunhya <kieran@kunhya.com>
  *
@@ -21,21 +21,19 @@
  *
  *****************************************************************************/
 
-#define 337M_SYNCWORD_1_16_BIT 0xf872
-#define 337M_SYNCWORD_1_20_BIT 0x6f872
-#define 337M_SYNCWORD_1_24_BIT 0x96f872
+#include "common/common.h"
 
-#define 337M_SYNCWORD_2_16_BIT 0x4e1f
-#define 337M_SYNCWORD_2_20_BIT 0x54e1f
-#define 337M_SYNCWORD_2_24_BIT 0xa54e1f
+typedef struct
+{
+    int video_format;
+    int no_signal;
 
-#define 337M_DATA_TYPE_NULL      0
-#define 337M_DATA_TYPE_AC_3      1
-#define 337M_DATA_TYPE_TIMESTAMP 2
-#define 337M_DATA_TYPE_MP2       6
-#define 337M_DATA_TYPE_AAC       10
-#define 337M_DATA_TYPE_HE_AAC    11
-#define 337M_DATA_TYPE_E_AC_3    16
-#define 337M_DATA_TYPE_E_DIST    28
+    char *bars_line1;
+    char *bars_line2;
+    char *bars_line3;
+    char *bars_line4;
+} obe_bars_opts_t;
 
-// 337M startcode search function TODO
+int open_bars( hnd_t *p_handle, obe_bars_opts_t *obe_bars_opts );
+int get_bars( hnd_t ptr, obe_raw_frame_t **raw_frames );
+void close_bars( hnd_t ptr );

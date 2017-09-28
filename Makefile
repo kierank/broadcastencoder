@@ -6,11 +6,13 @@ all: default
 
 SRCS = obe.c common/lavc.c common/network/udp/udp.c \
        common/linsys/util.c \
+       input/bars/bars.c input/bars/bars_common.c \
        input/sdi/sdi.c input/sdi/ancillary.c input/sdi/vbi.c input/sdi/linsys/linsys.c  \
+       input/netmap/netmap.c  \
        filters/video/video.c filters/video/cc.c filters/audio/audio.c \
        encoders/smoothing.c encoders/audio/lavc/lavc.c encoders/video/avc/x264.c \
        mux/smoothing.c mux/ts/ts.c \
-       output/ip/ip.c
+       output/ip/ip.c output/file/file.c
 
 SRCCXX =
 
@@ -68,7 +70,7 @@ $(SONAME): .depend $(OBJS) $(OBJSCXX) $(OBJASM) $(OBJSO)
 	$(CC) -shared -o $@ $(OBJS) $(OBJASM) $(OBJSO) $(SOFLAGS) $(LDFLAGS)
 
 obecli$(EXE): $(OBJCLI) libobe.a
-	$(CC) -o $@ $+ $(LDFLAGSCLI) $(LDFLAGS)
+	$(CC) -o $@ $+ $(LDFLAGSCLI) $(LDFLAGS) -no-pie
 
 %.o: %.asm
 	$(AS) $(ASFLAGS) -o $@ $<
