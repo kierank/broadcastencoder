@@ -185,7 +185,7 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
     av_opt_set( drawtext_ctx1, "y", "(2*lh)/2", AV_OPT_SEARCH_CHILDREN );
     av_opt_set( drawtext_ctx1, "fontcolor", "white", AV_OPT_SEARCH_CHILDREN );
     av_opt_set_int( drawtext_ctx1, "box", 1, AV_OPT_SEARCH_CHILDREN );
-    av_opt_set( drawtext_ctx1, "boxcolor", "0x00000000@1", AV_OPT_SEARCH_CHILDREN );
+    av_opt_set( drawtext_ctx1, "boxcolor", "black", AV_OPT_SEARCH_CHILDREN );
     av_opt_set_int( drawtext_ctx1, "fontsize", font_size, AV_OPT_SEARCH_CHILDREN );
 
     if( avfilter_init_str( drawtext_ctx1, NULL ) < 0 )
@@ -210,7 +210,7 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
     av_opt_set( drawtext_ctx2, "y", "(5*lh)/2", AV_OPT_SEARCH_CHILDREN );
     av_opt_set( drawtext_ctx2, "fontcolor", "white", AV_OPT_SEARCH_CHILDREN );
     av_opt_set_int( drawtext_ctx2, "box", 1, AV_OPT_SEARCH_CHILDREN );
-    av_opt_set( drawtext_ctx2, "boxcolor", "0x00000000@1", AV_OPT_SEARCH_CHILDREN );
+    av_opt_set( drawtext_ctx2, "boxcolor", "black", AV_OPT_SEARCH_CHILDREN );
     av_opt_set_int( drawtext_ctx2, "fontsize", font_size, AV_OPT_SEARCH_CHILDREN );
 
     if( avfilter_init_str( drawtext_ctx2, NULL ) < 0 )
@@ -235,7 +235,7 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
     av_opt_set( drawtext_ctx3, "y", "(8*lh)/2", AV_OPT_SEARCH_CHILDREN );
     av_opt_set( drawtext_ctx3, "fontcolor", "white", AV_OPT_SEARCH_CHILDREN );
     av_opt_set_int( drawtext_ctx3, "box", 1, AV_OPT_SEARCH_CHILDREN );
-    av_opt_set( drawtext_ctx3, "boxcolor", "0x00000000@1", AV_OPT_SEARCH_CHILDREN );
+    av_opt_set( drawtext_ctx3, "boxcolor", "black", AV_OPT_SEARCH_CHILDREN );
     av_opt_set_int( drawtext_ctx3, "fontsize", font_size, AV_OPT_SEARCH_CHILDREN );
 
     if( avfilter_init_str( drawtext_ctx3, NULL ) < 0 )
@@ -260,7 +260,7 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
     av_opt_set( drawtext_ctx4, "y", "(11*lh)/2", AV_OPT_SEARCH_CHILDREN );
     av_opt_set( drawtext_ctx4, "fontcolor", "white", AV_OPT_SEARCH_CHILDREN );
     av_opt_set_int( drawtext_ctx4, "box", 1, AV_OPT_SEARCH_CHILDREN );
-    av_opt_set( drawtext_ctx4, "boxcolor", "0x00000000@1", AV_OPT_SEARCH_CHILDREN );
+    av_opt_set( drawtext_ctx4, "boxcolor", "black", AV_OPT_SEARCH_CHILDREN );
     av_opt_set_int( drawtext_ctx4, "fontsize", font_size, AV_OPT_SEARCH_CHILDREN );
 
     if( avfilter_init_str( drawtext_ctx4, NULL ) < 0 )
@@ -288,7 +288,7 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
     av_opt_set( drawtext_ctx5, "y", "(14*lh)/2", AV_OPT_SEARCH_CHILDREN );
     av_opt_set( drawtext_ctx5, "fontcolor", "white", AV_OPT_SEARCH_CHILDREN );
     av_opt_set_int( drawtext_ctx5, "box", 1, AV_OPT_SEARCH_CHILDREN );
-    av_opt_set( drawtext_ctx5, "boxcolor", "0x00000000@1", AV_OPT_SEARCH_CHILDREN );
+    av_opt_set( drawtext_ctx5, "boxcolor", "black", AV_OPT_SEARCH_CHILDREN );
     av_opt_set_int( drawtext_ctx5, "fontsize", font_size, AV_OPT_SEARCH_CHILDREN );
 
     if( avfilter_init_str( drawtext_ctx5, NULL ) < 0 )
