@@ -100,6 +100,11 @@ const static int video_formats[] =
     INPUT_VIDEO_FORMAT_1080P_24,
     INPUT_VIDEO_FORMAT_1080P_25,
     INPUT_VIDEO_FORMAT_720P_60,
+    INPUT_VIDEO_FORMAT_1080P_50,
+    INPUT_VIDEO_FORMAT_1080P_5994,
+    INPUT_VIDEO_FORMAT_1080P_60,
+    INPUT_VIDEO_FORMAT_1080P_2997,
+    INPUT_VIDEO_FORMAT_1080P_30,
     -1,
 };
 
@@ -344,8 +349,12 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             {
                 if( video_opts_in->latency == 1 || video_opts_in->latency == 2 )
                     video_stream->avc_param.b_intra_refresh = 1;
-                video_stream->avc_param.i_threads = 8;
             }
+
+            if( video_opts_in->has_threads )
+                video_stream->avc_param.i_threads = video_opts_in->threads;
+            else
+                video_stream->avc_param.i_threads = 4;
 
             if( video_opts_in->quality_metric )
             {
@@ -360,7 +369,6 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                     video_stream->avc_param.analyse.b_psy = 0;
                 }
             }
-            // FIXME decide on threads
 
             /* Video frame ancillary data */
             video_stream->video_anc.afd                 = video_opts_in->afd_passthrough;
