@@ -36,7 +36,7 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_helper_uprobe.h>
 #include <upipe/uprobe_helper_alloc.h>
-#include <upipe/uprobe_stdio_color.h>
+#include <upipe/uprobe_stdio.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uprobe_uref_mgr.h>
 #include <upipe/uprobe_ubuf_mem.h>
@@ -668,7 +668,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 
     /* probes */
     /* main (thread-safe) probe, whose first element is uprobe_pthread_upump_mgr */
-    struct uprobe *uprobe_main = uprobe_stdio_color_alloc(NULL, stdout, loglevel);
+    struct uprobe *uprobe_main = uprobe_stdio_alloc(NULL, stdout, loglevel);
     assert(uprobe_main);
     uprobe_main = uprobe_uref_mgr_alloc(uprobe_main, uref_mgr);
     assert(uprobe_main);
