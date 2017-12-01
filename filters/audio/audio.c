@@ -77,6 +77,8 @@ static void *start_filter( void *ptr )
         goto finish;
     }
 
+    codec->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
+
     AVCodec *enc = avcodec_find_encoder( AV_CODEC_ID_S302M );
     if( !enc )
     {
