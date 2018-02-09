@@ -23,7 +23,6 @@
 
 #include <libavutil/cpu.h>
 #include <libavutil/opt.h>
-#include <libavfilter/avfiltergraph.h>
 #include <libavfilter/buffersink.h>
 #include <libavfilter/buffersrc.h>
 #include "common/common.h"
