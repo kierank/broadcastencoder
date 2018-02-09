@@ -1027,7 +1027,9 @@ static int open_card( decklink_opts_t *decklink_opts )
             goto finish;
         }
 
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(55, 48, 102)
         decklink_ctx->codec->flags |= CODEC_FLAG_EMU_EDGE;
+#endif
 
         /* TODO: setup custom strides */
         if( avcodec_open2( decklink_ctx->codec, decklink_ctx->dec, NULL ) < 0 )
