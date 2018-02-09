@@ -44,12 +44,6 @@ typedef struct
     int64_t audio_samples;
 } bars_ctx_t;
 
-const char *filter_string = "%s=s=%ux%u,format=yuv422p,drawtext=fontfile=/usr/share/fonts/truetype/droid/DroidSans.ttf:text=%s:x=(w-text_w)*sin(0.25*t)*sin(0.25*t):y=(2*lh)/2:fontcolor=white:box=1:boxcolor=0x00000000@1:fontsize=%u," \
-                            "drawtext=fontfile=/usr/share/fonts/truetype/droid/DroidSans.ttf:text=%s:x=(w-text_w)/2:y=(5*lh)/2:fontcolor=white:box=1:boxcolor=0x00000000@1:fontsize=%u," \
-                            "drawtext=fontfile=/usr/share/fonts/truetype/droid/DroidSans.ttf:text=%s:x=(w-text_w)/2:y=(8*lh)/2:fontcolor=white:box=1:boxcolor=0x00000000@1:fontsize=%u," \
-                            "drawtext=fontfile=/usr/share/fonts/truetype/droid/DroidSans.ttf:text=%s:x=(w-text_w)/2:y=(11*lh)/2:fontcolor=white:box=1:boxcolor=0x00000000@1:fontsize=%u," \
-                            "drawtext=fontfile=/usr/share/fonts/truetype/droid/DroidSans.ttf:text=%s:x=(w-text_w)/2:y=(14*lh)/2:fontcolor=white:box=1:boxcolor=0x00000000@1:fontsize=%u";
-
 static const char *format_strings[] =
 {
     [INPUT_VIDEO_FORMAT_PAL]        = "625i",
