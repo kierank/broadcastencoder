@@ -87,8 +87,6 @@
 #define XFER_QUEUE              255
 #define XFER_POOL               20
 
-static enum uprobe_log_level loglevel = UPROBE_LOG_DEBUG;
-
 typedef struct
 {
     int probe;
@@ -665,6 +663,8 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
     udict_mgr_release(udict_mgr);
+
+    enum uprobe_log_level loglevel = UPROBE_LOG_DEBUG;
 
     /* probes */
     /* main (thread-safe) probe, whose first element is uprobe_pthread_upump_mgr */
