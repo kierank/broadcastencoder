@@ -717,6 +717,8 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     pthread_attr_getschedparam (&thread_attribs, &params);
     params.sched_priority = sched_get_priority_max(SCHED_FIFO);;
     int ret = pthread_attr_setschedparam(&thread_attribs, &params);
+    if (ret < 0)
+        perror("setschedparam");
 
     struct upipe_mgr *xfer_mgr =  upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
             XFER_POOL, uprobe_use(uprobe_main_pthread), upump_ev_mgr_alloc_loop,
