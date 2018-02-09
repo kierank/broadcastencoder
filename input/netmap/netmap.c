@@ -195,101 +195,101 @@ static void no_video_timer(struct upump *upump)
     if (!video_stream)
         return;
 
-    if( netmap_opts->picture_on_loss )
+    if (!netmap_opts->picture_on_loss)
+        return;
+
+    obe_raw_frame_t *video_frame = NULL, *audio_frame = NULL;
+    pts = av_rescale_q( netmap_ctx->v_counter, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+    obe_clock_tick( h, pts );
+
+    if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
+        netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
     {
-        obe_raw_frame_t *video_frame = NULL, *audio_frame = NULL;
-        pts = av_rescale_q( netmap_ctx->v_counter, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
-        obe_clock_tick( h, pts );
-
-        if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
-            netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
+        video_frame = new_raw_frame();
+        if( !video_frame )
         {
-            video_frame = new_raw_frame();
-            if( !video_frame )
-            {
-                syslog( LOG_ERR, "Malloc failed\n" );
-                return;
-            }
-            memcpy( video_frame, &netmap_ctx->stored_video_frame, sizeof(*video_frame) );
-
-            /* Handle the case where no frames received, so first frame in LASTFRAME mode is black */
-            if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK || netmap_ctx->stored_video_frame.uref == NULL )
-            {
-                int i = 0;
-                while( video_frame->buf_ref[i] != NULL )
-                {
-                    video_frame->buf_ref[i] = av_buffer_ref( netmap_ctx->stored_video_frame.buf_ref[i] );
-                    i++;
-                }
-                video_frame->buf_ref[i] = NULL;
-            }
-            else if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
-            {
-                video_frame->uref = uref_dup(netmap_ctx->stored_video_frame.uref);
-                /* Map the frame again to create another buffer reference */
-                for (int i = 0; i < 3 && netmap_ctx->input_chroma_map[i] != NULL; i++)
-                {
-                    const uint8_t *data;
-                    size_t stride;
-                    if (unlikely(!ubase_check(uref_pic_plane_read(video_frame->uref, netmap_ctx->input_chroma_map[i], 0, 0, -1, -1, &data)) ||
-                                !ubase_check(uref_pic_plane_size(video_frame->uref, netmap_ctx->input_chroma_map[i], &stride, NULL, NULL, NULL)))) {
-                        syslog(LOG_ERR, "invalid buffer received");
-                        uref_free(video_frame->uref);
-                        return;
-                    }
-
-                    video_frame->alloc_img.plane[i] = (uint8_t *)data;
-                    video_frame->alloc_img.stride[i] = stride;
-                }
-            }
-        }
-        else if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BARS )
-        {
-            get_bars( netmap_ctx->bars_hnd, netmap_ctx->raw_frames );
-
-            video_frame = netmap_ctx->raw_frames[0];
-            audio_frame = netmap_ctx->raw_frames[1];
-        }
-
-        video_frame->pts = pts;
-
-        if( add_to_filter_queue( h, video_frame ) < 0 )
+            syslog( LOG_ERR, "Malloc failed\n" );
             return;
+        }
+        memcpy( video_frame, &netmap_ctx->stored_video_frame, sizeof(*video_frame) );
 
-        if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
-            netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
+        /* Handle the case where no frames received, so first frame in LASTFRAME mode is black */
+        if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK || netmap_ctx->stored_video_frame.uref == NULL )
         {
-            audio_frame = new_raw_frame();
-            if( !audio_frame )
+            int i = 0;
+            while( video_frame->buf_ref[i] != NULL )
             {
-                syslog( LOG_ERR, "Malloc failed\n" );
-                return;
+                video_frame->buf_ref[i] = av_buffer_ref( netmap_ctx->stored_video_frame.buf_ref[i] );
+                i++;
             }
-
-            memcpy( audio_frame, &netmap_ctx->stored_audio_frame, sizeof(*audio_frame) );
-            /* Assumes only one buffer reference */
-            audio_frame->buf_ref[0] = av_buffer_ref( netmap_ctx->stored_audio_frame.buf_ref[0] );
-            audio_frame->buf_ref[1] = NULL;
-
-            audio_frame->audio_frame.num_samples = netmap_ctx->sample_pattern->pattern[netmap_ctx->v_counter % netmap_ctx->sample_pattern->mod];
+            video_frame->buf_ref[i] = NULL;
         }
-
-        /* Write audio frame */
-        for( int i = 0; i < h->device.num_input_streams; i++ )
+        else if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
         {
-            if( h->device.streams[i]->stream_format == AUDIO_PCM )
-                audio_frame->input_stream_id = h->device.streams[i]->input_stream_id;
+            video_frame->uref = uref_dup(netmap_ctx->stored_video_frame.uref);
+            /* Map the frame again to create another buffer reference */
+            for (int i = 0; i < 3 && netmap_ctx->input_chroma_map[i] != NULL; i++)
+            {
+                const uint8_t *data;
+                size_t stride;
+                if (unlikely(!ubase_check(uref_pic_plane_read(video_frame->uref, netmap_ctx->input_chroma_map[i], 0, 0, -1, -1, &data)) ||
+                            !ubase_check(uref_pic_plane_size(video_frame->uref, netmap_ctx->input_chroma_map[i], &stride, NULL, NULL, NULL)))) {
+                    syslog(LOG_ERR, "invalid buffer received");
+                    uref_free(video_frame->uref);
+                    return;
+                }
+
+                video_frame->alloc_img.plane[i] = (uint8_t *)data;
+                video_frame->alloc_img.stride[i] = stride;
+            }
         }
-
-        audio_frame->pts = av_rescale_q( netmap_ctx->a_counter, netmap_ctx->a_timebase,
-                                            (AVRational){1, OBE_CLOCK} );
-        netmap_ctx->a_counter += audio_frame->audio_frame.num_samples;
-
-        if( add_to_filter_queue( h, audio_frame ) < 0 )
-            return;
-        /* Increase video PTS at the end so it can be used in NTSC sample size generation */
-        netmap_ctx->v_counter++;
     }
+    else if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BARS )
+    {
+        get_bars( netmap_ctx->bars_hnd, netmap_ctx->raw_frames );
+
+        video_frame = netmap_ctx->raw_frames[0];
+        audio_frame = netmap_ctx->raw_frames[1];
+    }
+
+    video_frame->pts = pts;
+
+    if( add_to_filter_queue( h, video_frame ) < 0 )
+        return;
+
+    if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
+        netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
+    {
+        audio_frame = new_raw_frame();
+        if( !audio_frame )
+        {
+            syslog( LOG_ERR, "Malloc failed\n" );
+            return;
+        }
+
+        memcpy( audio_frame, &netmap_ctx->stored_audio_frame, sizeof(*audio_frame) );
+        /* Assumes only one buffer reference */
+        audio_frame->buf_ref[0] = av_buffer_ref( netmap_ctx->stored_audio_frame.buf_ref[0] );
+        audio_frame->buf_ref[1] = NULL;
+
+        audio_frame->audio_frame.num_samples = netmap_ctx->sample_pattern->pattern[netmap_ctx->v_counter % netmap_ctx->sample_pattern->mod];
+    }
+
+    /* Write audio frame */
+    for( int i = 0; i < h->device.num_input_streams; i++ )
+    {
+        if( h->device.streams[i]->stream_format == AUDIO_PCM )
+            audio_frame->input_stream_id = h->device.streams[i]->input_stream_id;
+    }
+
+    audio_frame->pts = av_rescale_q( netmap_ctx->a_counter, netmap_ctx->a_timebase,
+                                        (AVRational){1, OBE_CLOCK} );
+    netmap_ctx->a_counter += audio_frame->audio_frame.num_samples;
+
+    if( add_to_filter_queue( h, audio_frame ) < 0 )
+        return;
+    /* Increase video PTS at the end so it can be used in NTSC sample size generation */
+    netmap_ctx->v_counter++;
 }
 
 static void setup_picture_on_signal_loss_timer(netmap_ctx_t *netmap_ctx)
