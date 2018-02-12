@@ -30,7 +30,7 @@
 #include <syslog.h>
 #include <sys/time.h>
 
-#include "crypto/amd64/crypto_sign.h"
+#include <nacl/crypto_sign.h>
 
 #include "config.h"
 
@@ -642,7 +642,7 @@ static void obed__encoder_auth2(Obed__EncoderCommunicate_Service *service,
 {
     Obed__EncoderResponse result = OBED__ENCODER_RESPONSE__INIT;
     char tmp[100];
-    char tmp2[100];
+    uint8_t tmp2[100];
     int ret;
     unsigned long long mlen;
 
