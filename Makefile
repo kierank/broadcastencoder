@@ -56,8 +56,9 @@ OBJS = $(SRCS:%.c=%.o)
 OBJSCXX = $(SRCCXX:%.cpp=%.o)
 OBJD = $(SRCCLI:%.c=%.o)
 OBJSO = $(SRCSO:%.c=%.o)
-OBJO = crypto/cpucycles.o crypto/randombytes.o
 DEP  = depend
+
+LDFLAGS += -lnacl -lrandombytes
 
 .PHONY: all default fprofiled clean distclean install uninstall dox test testclean
 
