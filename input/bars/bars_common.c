@@ -23,7 +23,6 @@
 
 #include "bars_common.h"
 #include "common/common.h"
-#include <libavfilter/avfiltergraph.h>
 #include <libavfilter/buffersink.h>
 #include <libavutil/opt.h>
 
