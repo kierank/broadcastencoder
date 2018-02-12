@@ -632,20 +632,6 @@ static int obe_validate_input_params( obe_input_t *input_device )
     return 0;
 }
 
-static int __pthread_cancel( pthread_t thread )
-{
-    if ( thread )
-        return pthread_cancel( thread );
-    return -1;
-}
-
-static int __pthread_join( pthread_t thread, void **retval )
-{
-    if ( thread )
-        return pthread_join( thread, retval );
-    return -1;
-}
-
 int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *program )
 {
     pthread_t thread;
@@ -736,8 +722,8 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
 
     
     
-    //__pthread_cancel( thread );
-    __pthread_join( thread, &ret_ptr );
+    //pthread_cancel( thread );
+    pthread_join( thread, &ret_ptr );
 
     if( h->device.num_input_streams == 0 )
     {
@@ -1501,8 +1487,8 @@ void obe_close( obe_t *h )
     h->device.stop = 1;
     pthread_mutex_unlock( &h->device.device_mutex);
     /* Cancel input thread */
-    //__pthread_cancel( h->device.device_thread );
-     __pthread_join( h->device.device_thread, &ret_ptr );
+    //pthread_cancel( h->device.device_thread );
+     pthread_join( h->device.device_thread, &ret_ptr );
 
     fprintf( stderr, "input cancelled \n" );
 
@@ -1513,7 +1499,7 @@ void obe_close( obe_t *h )
         h->filters[i]->cancel_thread = 1;
         pthread_cond_signal( &h->filters[i]->queue.in_cv );
         pthread_mutex_unlock( &h->filters[i]->queue.mutex );
-        __pthread_join( h->filters[i]->filter_thread, &ret_ptr );
+        pthread_join( h->filters[i]->filter_thread, &ret_ptr );
     }
 
     fprintf( stderr, "filters cancelled \n" );
@@ -1525,7 +1511,7 @@ void obe_close( obe_t *h )
         h->encoders[i]->cancel_thread = 1;
         pthread_cond_signal( &h->encoders[i]->queue.in_cv );
         pthread_mutex_unlock( &h->encoders[i]->queue.mutex );
-        __pthread_join( h->encoders[i]->encoder_thread, &ret_ptr );
+        pthread_join( h->encoders[i]->encoder_thread, &ret_ptr );
     }
 
     fprintf( stderr, "encoders cancelled \n" );
@@ -1542,7 +1528,7 @@ void obe_close( obe_t *h )
         pthread_cond_broadcast( &h->obe_clock_cv );
         pthread_mutex_unlock( &h->obe_clock_mutex );
         if ( h->enc_smoothing_thread )
-            __pthread_join( h->enc_smoothing_thread, &ret_ptr );
+            pthread_join( h->enc_smoothing_thread, &ret_ptr );
     }
 
     fprintf( stderr, "encoder smoothing cancelled \n" );
@@ -1552,7 +1538,7 @@ void obe_close( obe_t *h )
     h->cancel_mux_thread = 1;
     pthread_cond_signal( &h->mux_queue.in_cv );
     pthread_mutex_unlock( &h->mux_queue.mutex );
-    __pthread_join( h->mux_thread, &ret_ptr );
+    pthread_join( h->mux_thread, &ret_ptr );
 
     fprintf( stderr, "mux cancelled \n" );
 
@@ -1561,7 +1547,7 @@ void obe_close( obe_t *h )
     h->cancel_mux_smoothing_thread = 1;
     pthread_cond_signal( &h->mux_smoothing_queue.in_cv );
     pthread_mutex_unlock( &h->mux_smoothing_queue.mutex );
-    __pthread_join( h->mux_smoothing_thread, &ret_ptr );
+    pthread_join( h->mux_smoothing_thread, &ret_ptr );
 
     fprintf( stderr, "mux smoothing cancelled \n" );
 
@@ -1573,8 +1559,8 @@ void obe_close( obe_t *h )
         pthread_cond_signal( &h->outputs[i]->queue.in_cv );
         pthread_mutex_unlock( &h->outputs[i]->queue.mutex );
         /* could be blocking on OS so have to cancel thread too */
-        __pthread_cancel( h->outputs[i]->output_thread );
-        __pthread_join( h->outputs[i]->output_thread, &ret_ptr );
+        pthread_cancel( h->outputs[i]->output_thread );
+        pthread_join( h->outputs[i]->output_thread, &ret_ptr );
     }
 
     fprintf( stderr, "output thread cancelled \n" );
