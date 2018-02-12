@@ -264,7 +264,7 @@ static void destroy_passthrough( obe_passthrough_t *passthrough )
 {
     av_fifo_free( passthrough->in_fifo );
     av_fifo_free( passthrough->out_fifo );
-    
+
     free( passthrough );
 }
 
@@ -316,12 +316,12 @@ static void destroy_enc_smoothing( obe_queue_t *queue )
         ulist_delete_foreach( &queue->ulist, uchain, uchain_tmp)
         {
             obe_coded_frame_t *coded_frame = obe_coded_frame_t_from_uchain( uchain );
-            
+
             ulist_delete(uchain);
             destroy_coded_frame( coded_frame );
         }
     }
-    
+
     obe_destroy_queue( queue );
 }
 
@@ -335,12 +335,12 @@ static void destroy_mux( obe_t *h )
         ulist_delete_foreach( &h->mux_queue.ulist, uchain, uchain_tmp)
         {
             obe_coded_frame_t *coded_frame = obe_coded_frame_t_from_uchain( uchain );
-            
+
             ulist_delete( uchain );
             destroy_coded_frame( coded_frame );
         }
     }
-    
+
     obe_destroy_queue( &h->mux_queue );
 
     if( h->mux_opts.service_name )
@@ -364,7 +364,7 @@ static void destroy_mux_smoothing( obe_queue_t *queue )
             destroy_muxed_data( muxed_data );
         }
     }
-    
+
     obe_destroy_queue( queue );
 }
 
@@ -404,7 +404,7 @@ static void destroy_output( obe_output_t *output )
             av_buffer_unref( &buf_ref->self_buf_ref );
         }
     }
-    
+
     obe_destroy_queue( &output->queue );
     free( output );
 }
@@ -607,20 +607,6 @@ static int obe_validate_input_params( obe_input_t *input_device )
     return 0;
 }
 
-static int __pthread_cancel( pthread_t thread )
-{
-    if ( thread )
-        return pthread_cancel( thread );
-    return -1;
-}
-
-static int __pthread_join( pthread_t thread, void **retval )
-{
-    if ( thread )
-        return pthread_join( thread, retval );
-    return -1;
-}
-
 int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *program )
 {
     pthread_t thread;
@@ -706,8 +692,8 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
             break;
     }
 
-    __pthread_cancel( thread );
-    __pthread_join( thread, &ret_ptr );
+    //pthread_cancel( thread );
+    pthread_join( thread, &ret_ptr );
 
     if( h->device.num_input_streams == 0 )
     {
@@ -1454,7 +1440,7 @@ void obe_close( obe_t *h )
         ts.tv_sec = sleep_time / 1000000;
         ts.tv_nsec = sleep_time % 1000000;
 
-        fprintf( stderr, "closed too quickly - sleeping for %"PRIi64" us \n", sleep_time - cur_time ); 
+        fprintf( stderr, "closed too quickly - sleeping for %"PRIi64" us \n", sleep_time - cur_time );
 
         clock_nanosleep( CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, &ts );
     }
@@ -1462,8 +1448,8 @@ void obe_close( obe_t *h )
     fprintf( stderr, "closing obe \n" );
 
     /* Cancel input thread */
-     __pthread_cancel( h->device.device_thread );
-     __pthread_join( h->device.device_thread, &ret_ptr );
+    //pthread_cancel( h->device.device_thread );
+     pthread_join( h->device.device_thread, &ret_ptr );
 
     fprintf( stderr, "input cancelled \n" );
 
@@ -1474,7 +1460,7 @@ void obe_close( obe_t *h )
         h->filters[i]->cancel_thread = 1;
         pthread_cond_signal( &h->filters[i]->queue.in_cv );
         pthread_mutex_unlock( &h->filters[i]->queue.mutex );
-        __pthread_join( h->filters[i]->filter_thread, &ret_ptr );
+        pthread_join( h->filters[i]->filter_thread, &ret_ptr );
     }
 
     fprintf( stderr, "filters cancelled \n" );
@@ -1486,7 +1472,7 @@ void obe_close( obe_t *h )
         h->encoders[i]->cancel_thread = 1;
         pthread_cond_signal( &h->encoders[i]->queue.in_cv );
         pthread_mutex_unlock( &h->encoders[i]->queue.mutex );
-        __pthread_join( h->encoders[i]->encoder_thread, &ret_ptr );
+        pthread_join( h->encoders[i]->encoder_thread, &ret_ptr );
     }
 
     fprintf( stderr, "encoders cancelled \n" );
@@ -1503,7 +1489,7 @@ void obe_close( obe_t *h )
         pthread_cond_broadcast( &h->obe_clock_cv );
         pthread_mutex_unlock( &h->obe_clock_mutex );
         if ( h->enc_smoothing_thread )
-            __pthread_join( h->enc_smoothing_thread, &ret_ptr );
+            pthread_join( h->enc_smoothing_thread, &ret_ptr );
     }
 
     fprintf( stderr, "encoder smoothing cancelled \n" );
@@ -1513,7 +1499,7 @@ void obe_close( obe_t *h )
     h->cancel_mux_thread = 1;
     pthread_cond_signal( &h->mux_queue.in_cv );
     pthread_mutex_unlock( &h->mux_queue.mutex );
-    __pthread_join( h->mux_thread, &ret_ptr );
+    pthread_join( h->mux_thread, &ret_ptr );
 
     fprintf( stderr, "mux cancelled \n" );
 
@@ -1522,7 +1508,7 @@ void obe_close( obe_t *h )
     h->cancel_mux_smoothing_thread = 1;
     pthread_cond_signal( &h->mux_smoothing_queue.in_cv );
     pthread_mutex_unlock( &h->mux_smoothing_queue.mutex );
-    __pthread_join( h->mux_smoothing_thread, &ret_ptr );
+    pthread_join( h->mux_smoothing_thread, &ret_ptr );
 
     fprintf( stderr, "mux smoothing cancelled \n" );
 
@@ -1534,8 +1520,8 @@ void obe_close( obe_t *h )
         pthread_cond_signal( &h->outputs[i]->queue.in_cv );
         pthread_mutex_unlock( &h->outputs[i]->queue.mutex );
         /* could be blocking on OS so have to cancel thread too */
-        __pthread_cancel( h->outputs[i]->output_thread );
-        __pthread_join( h->outputs[i]->output_thread, &ret_ptr );
+        pthread_cancel( h->outputs[i]->output_thread );
+        pthread_join( h->outputs[i]->output_thread, &ret_ptr );
     }
 
     fprintf( stderr, "output thread cancelled \n" );
@@ -1554,7 +1540,7 @@ void obe_close( obe_t *h )
     /* Destroy passthrough */
     for( int i = 0; i < h->num_passthrough; i++ )
         destroy_passthrough( h->passthrough[i] );
-    
+
     fprintf( stderr, "passthrough destroyed \n" );
 
     /* Destroy encoders */
