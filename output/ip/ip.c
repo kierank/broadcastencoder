@@ -528,7 +528,6 @@ static void *open_output( void *ptr )
 
         if( output->cancel_thread )
         {
-            pthread_mutex_unlock( &output->queue.mutex );
             break;
         }
 
