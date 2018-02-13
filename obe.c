@@ -720,9 +720,6 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
             break;
     }
 
-    
-    
-    //pthread_cancel( thread );
     pthread_join( thread, &ret_ptr );
 
     if( h->device.num_input_streams == 0 )
@@ -1185,8 +1182,11 @@ int obe_start( obe_t *h )
         if( pthread_create( &h->outputs[i]->output_thread, NULL, output.open_output, (void*)h->outputs[i] ) < 0 )
         {
             fprintf( stderr, "Couldn't create output thread \n" );
+            h->outputs[i]->thread_running = false;
             goto fail;
         }
+        else
+            h->outputs[i]->thread_running = true;
     }
 
     /* Setup streams */
@@ -1226,8 +1226,11 @@ int obe_start( obe_t *h )
                 if( pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, x264_encoder.start_encoder, (void*)vid_enc_params ) < 0 )
                 {
                     fprintf( stderr, "Couldn't create encode thread \n" );
+                    h->encoders[h->num_encoders]->thread_running = false;
                     goto fail;
                 }
+                else
+                    h->encoders[h->num_encoders]->thread_running = true;
             }
             else if( h->output_streams[i].stream_format == AUDIO_AC_3 || h->output_streams[i].stream_format == AUDIO_E_AC_3 ||
                      h->output_streams[i].stream_format == AUDIO_AAC  || h->output_streams[i].stream_format == AUDIO_MP2 ||
@@ -1284,8 +1287,11 @@ int obe_start( obe_t *h )
                     pthread_create( &h->encoders[h->num_encoders]->encoder_thread, NULL, audio_encoder.start_encoder, (void*)aud_enc_params ) < 0 )
                 {
                     fprintf( stderr, "Couldn't create encode thread \n" );
+                    h->encoders[h->num_encoders]->thread_running = false;
                     goto fail;
                 }
+                else
+                    h->encoders[h->num_encoders]->thread_running = true;
             }
 
             h->num_encoders++;
@@ -1339,17 +1345,20 @@ int obe_start( obe_t *h )
         if( pthread_create( &h->enc_smoothing_thread, NULL, enc_smoothing.start_smoothing, (void*)h ) < 0 )
         {
             fprintf( stderr, "Couldn't create encoder smoothing thread \n" );
+            h->enc_smoothing_thread_running = false;
             goto fail;
         }
+            h->enc_smoothing_thread_running = true;
     }
 
     /* Open Mux Smoothing Thread */
     if( pthread_create( &h->mux_smoothing_thread, NULL, mux_smoothing.start_smoothing, (void*)h ) < 0 )
     {
         fprintf( stderr, "Couldn't create mux smoothing thread \n" );
+        h->mux_smoothing_thread_running = false;
         goto fail;
     }
-
+    h->mux_smoothing_thread_running = true;
 
     /* Open Mux Thread */
     obe_mux_params_t *mux_params = calloc( 1, sizeof(*mux_params) );
@@ -1365,8 +1374,10 @@ int obe_start( obe_t *h )
     if( pthread_create( &h->mux_thread, NULL, ts_muxer.open_muxer, (void*)mux_params ) < 0 )
     {
         fprintf( stderr, "Couldn't create mux thread \n" );
+        h->mux_thread_running = false;
         goto fail;
     }
+        h->mux_thread_running = true;
 
     /* Open Filter Thread */
     for( int i = 0; i < h->device.num_input_streams; i++ )
@@ -1407,8 +1418,11 @@ int obe_start( obe_t *h )
                 if( pthread_create( &h->filters[h->num_filters]->filter_thread, NULL, video_filter.start_filter, vid_filter_params ) < 0 )
                 {
                     fprintf( stderr, "Couldn't create video filter thread \n" );
+                    h->filters[h->num_filters]->thread_running = false;
                     goto fail;
                 }
+                else
+                    h->filters[h->num_filters]->thread_running = true;
             }
             else
             {
@@ -1425,8 +1439,11 @@ int obe_start( obe_t *h )
                 if( pthread_create( &h->filters[h->num_filters]->filter_thread, NULL, audio_filter.start_filter, aud_filter_params ) < 0 )
                 {
                     fprintf( stderr, "Couldn't create filter thread \n" );
+                    h->filters[h->num_filters]->thread_running = false;
                     goto fail;
                 }
+                else
+                    h->filters[h->num_filters]->thread_running = true;
             }
 
             h->num_filters++;
@@ -1450,8 +1467,11 @@ int obe_start( obe_t *h )
     if( pthread_create( &h->device.device_thread, NULL, input.open_input, (void*)input_params ) < 0 )
     {
         fprintf( stderr, "Couldn't create input thread \n" );
+        h->device.thread_running = false;
         goto fail;
     }
+    else
+        h->device.thread_running = true;
     
     h->is_active = 1;
     h->start_time = obe_mdate();
@@ -1487,8 +1507,11 @@ void obe_close( obe_t *h )
     h->device.stop = 1;
     pthread_mutex_unlock( &h->device.device_mutex);
     /* Cancel input thread */
-    //pthread_cancel( h->device.device_thread );
-     pthread_join( h->device.device_thread, &ret_ptr );
+    if (h->device.thread_running)
+    {
+        //pthread_cancel( h->device.device_thread );
+        pthread_join( h->device.device_thread, &ret_ptr );
+    }
 
     fprintf( stderr, "input cancelled \n" );
 
@@ -1499,7 +1522,8 @@ void obe_close( obe_t *h )
         h->filters[i]->cancel_thread = 1;
         pthread_cond_signal( &h->filters[i]->queue.in_cv );
         pthread_mutex_unlock( &h->filters[i]->queue.mutex );
-        pthread_join( h->filters[i]->filter_thread, &ret_ptr );
+        if (h->filters[i]->thread_running)
+            pthread_join( h->filters[i]->filter_thread, &ret_ptr );
     }
 
     fprintf( stderr, "filters cancelled \n" );
@@ -1511,7 +1535,8 @@ void obe_close( obe_t *h )
         h->encoders[i]->cancel_thread = 1;
         pthread_cond_signal( &h->encoders[i]->queue.in_cv );
         pthread_mutex_unlock( &h->encoders[i]->queue.mutex );
-        pthread_join( h->encoders[i]->encoder_thread, &ret_ptr );
+        if (h->encoders[i]->thread_running)
+            pthread_join( h->encoders[i]->encoder_thread, &ret_ptr );
     }
 
     fprintf( stderr, "encoders cancelled \n" );
@@ -1527,7 +1552,7 @@ void obe_close( obe_t *h )
         pthread_mutex_lock( &h->obe_clock_mutex );
         pthread_cond_broadcast( &h->obe_clock_cv );
         pthread_mutex_unlock( &h->obe_clock_mutex );
-        if ( h->enc_smoothing_thread )
+        if (h->enc_smoothing_thread_running)
             pthread_join( h->enc_smoothing_thread, &ret_ptr );
     }
 
@@ -1538,7 +1563,8 @@ void obe_close( obe_t *h )
     h->cancel_mux_thread = 1;
     pthread_cond_signal( &h->mux_queue.in_cv );
     pthread_mutex_unlock( &h->mux_queue.mutex );
-    pthread_join( h->mux_thread, &ret_ptr );
+    if (h->mux_thread_running)
+        pthread_join( h->mux_thread, &ret_ptr );
 
     fprintf( stderr, "mux cancelled \n" );
 
@@ -1547,7 +1573,8 @@ void obe_close( obe_t *h )
     h->cancel_mux_smoothing_thread = 1;
     pthread_cond_signal( &h->mux_smoothing_queue.in_cv );
     pthread_mutex_unlock( &h->mux_smoothing_queue.mutex );
-    pthread_join( h->mux_smoothing_thread, &ret_ptr );
+    if (h->mux_smoothing_thread_running)
+        pthread_join( h->mux_smoothing_thread, &ret_ptr );
 
     fprintf( stderr, "mux smoothing cancelled \n" );
 
@@ -1558,9 +1585,12 @@ void obe_close( obe_t *h )
         h->outputs[i]->cancel_thread = 1;
         pthread_cond_signal( &h->outputs[i]->queue.in_cv );
         pthread_mutex_unlock( &h->outputs[i]->queue.mutex );
-        /* could be blocking on OS so have to cancel thread too */
-        pthread_cancel( h->outputs[i]->output_thread );
-        pthread_join( h->outputs[i]->output_thread, &ret_ptr );
+        if (h->outputs[i]->thread_running)
+        {
+            /* could be blocking on OS so have to cancel thread too */
+            pthread_cancel( h->outputs[i]->output_thread );
+            pthread_join( h->outputs[i]->output_thread, &ret_ptr );
+        }
     }
 
     fprintf( stderr, "output thread cancelled \n" );
