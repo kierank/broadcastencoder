@@ -227,6 +227,7 @@ typedef struct
 
     pthread_mutex_t device_mutex;
     pthread_t device_thread;
+    bool thread_running;
 
     int num_input_streams;
     obe_int_input_stream_t *streams[MAX_STREAMS];
@@ -466,6 +467,7 @@ typedef struct
     int *stream_id_list;
 
     pthread_t filter_thread;
+    bool thread_running;
     obe_queue_t queue;
     int cancel_thread;
 
@@ -478,6 +480,7 @@ typedef struct
     int is_video;
 
     pthread_t encoder_thread;
+    bool thread_running;
     obe_queue_t queue;
     int cancel_thread;
 
@@ -506,6 +509,7 @@ typedef struct
 {
     /* Output */
     pthread_t output_thread;
+    bool thread_running;
     int cancel_thread;
     obe_output_dest_t output_dest;
 
@@ -592,16 +596,19 @@ struct obe_t
     /** Individual Threads */
     /* Smoothing (video) */
     pthread_t enc_smoothing_thread;
+    bool enc_smoothing_thread_running;
     int cancel_enc_smoothing_thread;
 
     /* Mux */
     int mux_params_update;
     pthread_t mux_thread;
+    bool mux_thread_running;
     int cancel_mux_thread;
     obe_mux_opts_t mux_opts;
 
     /* Smoothing (video) */
     pthread_t mux_smoothing_thread;
+    bool mux_smoothing_thread_running;
     int cancel_mux_smoothing_thread;
 
     /* Filtering */
