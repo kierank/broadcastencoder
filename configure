@@ -683,7 +683,7 @@ if [ "$lopenfec" = "yes" ] ; then
     LDFLAGS="$LDFLAGS $LOPENFEC_LIBS"
 fi
 
-PROTOBUF_LIBS="-lprotobuf -lprotobuf-c"
+PROTOBUF_LIBS="-lprotobuf-c"
 if [ "$protobuf" = "auto" ] ; then
     protobuf="no"
     if cc_check google/protobuf-c/protobuf-c-rpc.h "$PROTOBUF_LIBS" ; then
