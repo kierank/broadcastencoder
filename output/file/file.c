@@ -41,7 +41,7 @@ static void close_output( void *handle )
     if( status->output->output_dest.target  )
         free( status->output->output_dest.target );
 
-    pthread_mutex_unlock( &output->queue.mutex );
+    pthread_mutex_unlock( &status->output->queue.mutex );
 }
 
 static void *open_output( void *ptr )
