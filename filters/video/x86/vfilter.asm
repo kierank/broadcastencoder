@@ -30,14 +30,14 @@ cglobal dither_plane_10_to_8, 6, 9, 11
     neg       r4
     mov       org_w, r4
     xor       cur_row, cur_row
+    lea       r9, [rel dithers]
     pxor      m6, m6
 
 .loop1
     mov       dither, cur_row
     and       dither, 7
     shl       dither, 4
-    add       dither, dithers
-    mova      m2, [dither]
+    mova      m2, [r9 + dither]
 
 .loop2
     paddw     m0, m2, [r0+2*r4]
