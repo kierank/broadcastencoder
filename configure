@@ -8,6 +8,7 @@ echo "available options:"
 echo ""
 echo "  --help                   print this message"
 echo "  --enable-debug           adds -g, doesn't strip"
+echo "  --enable-pic             position independant code"
 echo "  --extra-asflags=EASFLAGS add EASFLAGS to ASFLAGS"
 echo "  --extra-cflags=ECFLAGS   add ECFLAGS to CFLAGS"
 echo "  --extra-ldflags=ELDFLAGS add ELDFLAGS to LDFLAGS"
@@ -189,6 +190,7 @@ lmpegts="auto"
 pthread="auto"
 ltwolame="auto"
 swscale="auto"
+pic="no"
 avresample="auto"
 lavf="auto"
 readline="auto"
@@ -263,6 +265,9 @@ for opt do
             CXXFLAGS="$CXXFLAGS --sysroot=${opt#--sysroot=}"
             LDFLAGS="$LDFLAGS --sysroot=${opt#--sysroot=}"
             ;;
+        --enable-pic)
+            pic="yes"
+        ;;
         *)
             echo "Unknown option $opt, ignored"
             ;;
