@@ -20,7 +20,7 @@ cextern dithers
 
 %macro dither_plane 0
 
-cglobal dither_plane_10_to_8, 6, 9, 11
+cglobal dither_plane_10_to_8, 6, 10, 11
 %define cur_row r6
 %define dither r7
 %define org_w r8
