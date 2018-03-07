@@ -16,6 +16,9 @@ SRCS = obe.c common/lavc.c common/network/udp/udp.c \
 
 SRCCXX =
 
+%.pb-c.h %.pb-c.c: %.proto
+	protoc-c --c_out=. $<
+
 SRCCLI = obed.c proto/obed.pb-c.c
 
 SRCSO =
@@ -56,8 +59,9 @@ OBJS = $(SRCS:%.c=%.o)
 OBJSCXX = $(SRCCXX:%.cpp=%.o)
 OBJD = $(SRCCLI:%.c=%.o)
 OBJSO = $(SRCSO:%.c=%.o)
-OBJO = crypto/cpucycles.o crypto/randombytes.o
 DEP  = depend
+
+LDFLAGS += -lnacl -lrandombytes
 
 .PHONY: all default fprofiled clean distclean install uninstall dox test testclean
 

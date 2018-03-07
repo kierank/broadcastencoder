@@ -477,8 +477,11 @@ static void close_output( void *handle )
 
     if( status->output->output_dest.target  )
         free( status->output->output_dest.target );
+}
 
-    pthread_mutex_unlock( &status->output->queue.mutex );
+static void clean_mutex(void *mutex)
+{
+    pthread_mutex_unlock((pthread_mutex_t*)mutex);
 }
 
 static void *open_output( void *ptr )
@@ -499,7 +502,6 @@ static void *open_output( void *ptr )
     status.output = output;
     status.ip_handle = &ip_handle;
     status.queue = &queue;
-    pthread_cleanup_push( close_output, (void*)&status );
 
     udp_populate_opts( &udp_opts, output_dest->target );
 
@@ -517,8 +519,11 @@ static void *open_output( void *ptr )
         }
     }
 
-    while( 1 )
+    pthread_cleanup_push( close_output, (void*)&status );
+    while(1)
     {
+        bool end;
+        pthread_cleanup_push( clean_mutex, &output->queue.mutex);
         pthread_mutex_lock( &output->queue.mutex );
         while( ulist_empty( &output->queue.ulist ) && !output->cancel_thread )
         {
@@ -526,18 +531,17 @@ static void *open_output( void *ptr )
             pthread_cond_wait( &output->queue.in_cv, &output->queue.mutex );
         }
 
-        if( output->cancel_thread )
-        {
-            pthread_mutex_unlock( &output->queue.mutex );
-            break;
-        }
-
         while( !ulist_empty( &output->queue.ulist ) )
         {
             struct uchain *out = ulist_pop( &output->queue.ulist );
             ulist_add( &queue, out );
         }
-        pthread_mutex_unlock( &output->queue.mutex );
+
+        end = output->cancel_thread;
+        pthread_cleanup_pop( 1 );
+
+        if (end)
+            break;
 
 //        printf("\n START %i \n", num_buf_refs );
 
