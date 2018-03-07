@@ -380,6 +380,13 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
             if( netmap_ctx->last_frame_time == -1 )
                 netmap_ctx->last_frame_time = obe_mdate();
 
+            if( discontinuity )
+            {
+                pthread_mutex_lock( &h->drop_mutex );
+                h->encoder_drop = h->mux_drop = 1;
+                pthread_mutex_unlock( &h->drop_mutex );
+            }
+
             raw_frame = new_raw_frame();
             if( !raw_frame )
             {
