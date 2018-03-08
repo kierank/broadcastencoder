@@ -63,6 +63,9 @@
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
 #include <upump-ev/upump_ev.h>
 #include <upipe-modules/upipe_transfer.h>
+#include <upipe-modules/upipe_setflowdef.h>
+#include <upipe-modules/upipe_rtp_source.h>
+#include <upipe-modules/upipe_rtp_pcm_unpack.h>
 #include <upipe-modules/upipe_htons.h>
 #include <upipe-modules/upipe_worker_source.h>
 #include <upipe-modules/upipe_worker_linear.h>
@@ -70,6 +73,7 @@
 #include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_probe_uref.h>
 #include <upipe-hbrmt/upipe_sdi_dec.h>
+#include <upipe-hbrmt/upipe_unpack_rfc4175.h>
 #include <upipe-netmap/upipe_netmap_source.h>
 #include <upipe/uref_dump.h>
 
@@ -119,6 +123,8 @@ typedef struct
     /* Normal run */
     int             video_good;
 
+    bool            rfc4175;
+
     /* Video */
     int64_t         v_counter;
     AVRational      v_timebase;
@@ -134,6 +140,7 @@ typedef struct
     obe_raw_frame_t **raw_frames;
 
     /* Audio */
+    char            *audio_uri;
     int64_t         a_counter;
     AVRational      a_timebase;
     const obe_audio_sample_pattern_t *sample_pattern;
@@ -568,7 +575,6 @@ end:
         return UBASE_ERR_NONE;
     } else if (event == UPROBE_NEW_FLOW_DEF) {
         flow_def = va_arg(args, struct uref *);
-        uint8_t channels;
         if (!ubase_check(uref_sound_flow_get_channels(flow_def, &netmap_ctx->channels))) {
             netmap_ctx->channels = 0;
         }
@@ -754,25 +760,48 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 
     upipe_mgr_release(wsrc_mgr);
 
-    /* sdi dec to y10 */
-    struct upipe_mgr *upipe_sdi_dec_mgr = upipe_sdi_dec_mgr_alloc();
-    struct uref *uref = uref_alloc(uref_mgr);
-    uref_flow_set_def(uref, "pic.");
-    uref_pic_flow_set_macropixel(uref, 1);
-    uref_pic_flow_add_plane(uref, 1, 1, 1, "y10l");
-    uref_pic_flow_add_plane(uref, 2, 2, 1, "u10l");
-    uref_pic_flow_add_plane(uref, 2, 2, 1, "v10l");
+    struct upipe *sdi_dec;
 
-    struct upipe *sdi_dec = upipe_sdi_dec_alloc_output(netmap_ctx->upipe_main_src,
-        upipe_sdi_dec_mgr,
-        uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "sdi_dec"),
-        uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "sdi_dec vanc"),
-        uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "sdi_dec vbi"),
-        uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "sdi_dec audio"),
-        uref);
-    uref_free(uref);
-    //upipe_set_option(sdi_dec, "debug", "1");
-    upipe_mgr_release(upipe_sdi_dec_mgr);
+    if (!netmap_ctx->rfc4175) {
+        /* sdi dec to y10 */
+        struct upipe_mgr *upipe_sdi_dec_mgr = upipe_sdi_dec_mgr_alloc();
+        struct uref *uref = uref_alloc(uref_mgr);
+        uref_flow_set_def(uref, "pic.");
+        uref_pic_flow_set_macropixel(uref, 1);
+        uref_pic_flow_add_plane(uref, 1, 1, 1, "y10l");
+        uref_pic_flow_add_plane(uref, 2, 2, 1, "u10l");
+        uref_pic_flow_add_plane(uref, 2, 2, 1, "v10l");
+
+        sdi_dec = upipe_sdi_dec_alloc_output(netmap_ctx->upipe_main_src,
+                upipe_sdi_dec_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "sdi_dec"),
+                uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "sdi_dec vanc"),
+                uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "sdi_dec vbi"),
+                uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "sdi_dec audio"),
+                uref);
+        uref_free(uref);
+        //upipe_set_option(sdi_dec, "debug", "1");
+        upipe_mgr_release(upipe_sdi_dec_mgr);
+    } else {
+        struct upipe_mgr *rfc_mgr = upipe_unpack_rfc4175_mgr_alloc();
+        struct uref *uref = uref_alloc(uref_mgr);
+        uref_flow_set_def(uref, "pic.");
+        obe_int_input_stream_t *video_stream = get_input_stream(netmap_ctx->h, 0);
+        uref_pic_flow_set_vsize(uref, video_stream->height);
+        uref_pic_flow_set_hsize(uref, video_stream->width);
+        uref_pic_flow_set_macropixel(uref, 1);
+        uref_pic_flow_add_plane(uref, 1, 1, 1, "y10l");
+        uref_pic_flow_add_plane(uref, 2, 2, 1, "u10l");
+        uref_pic_flow_add_plane(uref, 2, 2, 1, "v10l");
+        struct upipe *rfc_dec = upipe_flow_alloc_output(netmap_ctx->upipe_main_src, rfc_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "rfc unpack"),
+                uref);
+        upipe_release(rfc_dec);
+        uref_free(uref);
+
+        sdi_dec = rfc_dec;
+        upipe_mgr_release(rfc_mgr);
+    }
 
     /* video callback */
     struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
@@ -782,50 +811,100 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
             loglevel, "probe_uref_video"));
     upipe_release(probe_uref_video);
 
-    /* audio */
-    struct upipe *audio = NULL;
-    if (!ubase_check(upipe_sdi_dec_get_audio_sub(sdi_dec, &audio))) {
-        printf("NO AUDIO\n");
-        return 1;
-    }
-    else {
-        upipe_release(audio);
-    }
+    if (!netmap_ctx->rfc4175) {
+        /* audio */
+        struct upipe *audio = NULL;
+        if (!ubase_check(upipe_sdi_dec_get_audio_sub(sdi_dec, &audio))) {
+            printf("NO AUDIO\n");
+            return 1;
+        }
+        else {
+            upipe_release(audio);
+        }
 
-    /* audio callback */
-    struct upipe *probe_uref_audio = upipe_void_alloc_output(audio,
-            upipe_probe_uref_mgr,
-            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_audio, netmap_ctx),
-            loglevel, "audio probe_uref"));
-    upipe_release(probe_uref_audio);
+        /* audio callback */
+        struct upipe *probe_uref_audio = upipe_void_alloc_output(audio,
+                upipe_probe_uref_mgr,
+                uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_audio, netmap_ctx),
+                    loglevel, "audio probe_uref"));
+        upipe_release(probe_uref_audio);
 
-    /* vanc */
-    struct upipe *vanc = NULL;
-    if (!ubase_check(upipe_sdi_dec_get_vanc_sub(sdi_dec, &vanc))) {
-        printf("NO vanc\n");
-        return 1;
-    }
-    else {
-        upipe_release(vanc);
-    }
+        /* vanc */
+        struct upipe *vanc = NULL;
+        if (!ubase_check(upipe_sdi_dec_get_vanc_sub(sdi_dec, &vanc))) {
+            printf("NO vanc\n");
+            return 1;
+        }
+        else {
+            upipe_release(vanc);
+        }
 
-    /* vanc callback */
-    struct upipe *probe_uref_vanc = upipe_void_alloc_output(vanc,
-            upipe_probe_uref_mgr,
-            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_vanc, netmap_ctx),
-            loglevel, "vanc probe_uref"));
-    upipe_release(probe_uref_vanc);
+        /* vanc callback */
+        struct upipe *probe_uref_vanc = upipe_void_alloc_output(vanc,
+                upipe_probe_uref_mgr,
+                uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_vanc, netmap_ctx),
+                    loglevel, "vanc probe_uref"));
+        upipe_release(probe_uref_vanc);
 
-    upipe_mgr_release(upipe_probe_uref_mgr);
+        upipe_mgr_release(upipe_probe_uref_mgr);
 
-    /* vbi */
-    struct upipe *vbi = NULL;
-    if (!ubase_check(upipe_sdi_dec_get_vbi_sub(sdi_dec, &vbi))) {
-        printf("NO vbi\n");
-        return 1;
-    }
-    else {
-        upipe_release(vbi);
+        /* vbi */
+        struct upipe *vbi = NULL;
+        if (!ubase_check(upipe_sdi_dec_get_vbi_sub(sdi_dec, &vbi))) {
+            printf("NO vbi\n");
+            return 1;
+        }
+        else {
+            upipe_release(vbi);
+        }
+    } else {
+        struct upipe_mgr *rtpsrc_mgr = upipe_rtpsrc_mgr_alloc();
+        struct upipe *pcm_src = upipe_void_alloc(rtpsrc_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "pcm src"));
+        assert(pcm_src);
+        char *audio = netmap_ctx->audio_uri;
+        if (!audio) {
+            printf("Missing audio URI\n");
+            return 1;
+        }
+        char *slash = strrchr(audio, '/');
+        if (!slash) {
+            printf("audio URI missing channels\n");
+            return 1;
+        }
+        *slash++ = '\0';
+        ubase_assert(upipe_set_uri(pcm_src, audio));
+        ubase_assert(upipe_attach_uclock(pcm_src));
+
+        struct upipe_mgr *setflowdef_mgr = upipe_setflowdef_mgr_alloc();
+        struct upipe *setflowdef = upipe_void_alloc_output(pcm_src,
+                setflowdef_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe_main), loglevel, "pcm setflowdef"));
+        assert(setflowdef);
+        upipe_mgr_release(setflowdef_mgr);
+
+        struct uref *flow_def = uref_alloc(uref_mgr);
+        uref_flow_set_def(flow_def, "block.s24be.sound.");
+        uref_sound_flow_set_rate(flow_def, 48000);
+        uref_sound_flow_set_channels(flow_def, atoi(slash));
+        uref_sound_flow_set_planes(flow_def, 0);
+        uref_sound_flow_add_plane(flow_def, "lr");
+        upipe_setflowdef_set_dict(setflowdef, flow_def);
+        uref_free(flow_def);
+
+        struct upipe_mgr *pcm_unpack_mgr = upipe_rtp_pcm_unpack_mgr_alloc();
+        struct upipe *pcm_unpack = upipe_void_chain_output(setflowdef,
+                pcm_unpack_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe_main), loglevel, "pcm unpack"));
+        assert(pcm_unpack);
+        upipe_mgr_release(pcm_unpack_mgr);
+
+        /* audio callback */
+        struct upipe *probe_uref_audio = upipe_void_alloc_output(pcm_unpack,
+                upipe_probe_uref_mgr,
+                uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_audio, netmap_ctx),
+                    loglevel, "audio probe_uref"));
+        upipe_release(probe_uref_audio);
     }
 
     static struct upump *event_upump;
@@ -930,6 +1009,8 @@ static void *probe_input( void *ptr )
 
     netmap_ctx_t netmap_ctx = {0};
     netmap_ctx.uri = user_opts->netmap_uri;
+    netmap_ctx.audio_uri = user_opts->netmap_audio;
+    netmap_ctx.rfc4175 = user_opts->netmap_mode && !strcmp(user_opts->netmap_mode, "rfc4175");
     netmap_ctx.h = h;
     netmap_opts_t *netmap_opts = &netmap_ctx.netmap_opts;
     netmap_opts->probe = 1;
@@ -1022,6 +1103,8 @@ static void *open_input( void *ptr )
     netmap_opts->obe_bars_opts.no_signal = 1;
 
     netmap_ctx.uri = user_opts->netmap_uri;
+    netmap_ctx.audio_uri = user_opts->netmap_audio;
+    netmap_ctx.rfc4175 = user_opts->netmap_mode && !strcmp(user_opts->netmap_mode, "rfc4175");
     netmap_ctx.h = h;
 
     int j = 0;

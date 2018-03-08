@@ -130,6 +130,8 @@ typedef struct
     int audio_connection;
 
     char netmap_uri[150];
+    char netmap_mode[10];
+    char netmap_audio[400];
 
     char bars_line1[30];
     char bars_line2[30];
