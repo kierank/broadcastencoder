@@ -789,9 +789,9 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         struct uref *uref = uref_alloc(uref_mgr);
         uref_flow_set_def(uref, "pic.");
         uref_pic_flow_set_macropixel(uref, 1);
-        uref_pic_flow_add_plane(uref, 1, 1, 1, "y10l");
-        uref_pic_flow_add_plane(uref, 2, 2, 1, "u10l");
-        uref_pic_flow_add_plane(uref, 2, 2, 1, "v10l");
+        uref_pic_flow_add_plane(uref, 1, 1, 2, "y10l");
+        uref_pic_flow_add_plane(uref, 2, 1, 2, "u10l");
+        uref_pic_flow_add_plane(uref, 2, 1, 2, "v10l");
 
         sdi_dec = upipe_sdi_dec_alloc_output(netmap_ctx->upipe_main_src,
                 upipe_sdi_dec_mgr,
