@@ -125,6 +125,7 @@ static void *start_smoothing( void *ptr )
 
         pthread_mutex_lock( &h->enc_smoothing_queue.mutex );
         h->enc_smoothing_last_exit_time = get_input_clock_in_mpeg_ticks( h );
+        pthread_cond_signal( &h->enc_smoothing_queue.out_cv );
         pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
         num_enc_smoothing_frames = 0;
     }
