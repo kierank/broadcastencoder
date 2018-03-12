@@ -73,7 +73,6 @@
 #include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_probe_uref.h>
 #include <upipe-hbrmt/upipe_sdi_dec.h>
-#include <upipe-hbrmt/upipe_unpack_rfc4175.h>
 #include <upipe-netmap/upipe_netmap_source.h>
 #include <upipe/uref_dump.h>
 
@@ -716,9 +715,30 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 
     /* netmap source */
     struct upipe_mgr *upipe_netmap_source_mgr = upipe_netmap_source_mgr_alloc();
-    netmap_ctx->upipe_main_src = upipe_void_alloc(upipe_netmap_source_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_main),
-                loglevel, "netmap source"));
+    if (netmap_ctx->rfc4175) {
+        struct uref *uref = uref_alloc(uref_mgr);
+        uref_flow_set_def(uref, "pic.");
+        obe_int_input_stream_t *video_stream = get_input_stream(netmap_ctx->h, 0);
+        uref_pic_flow_set_vsize(uref, video_stream->height);
+        uref_pic_flow_set_hsize(uref, video_stream->width);
+        uref_pic_flow_set_macropixel(uref, 1);
+        uref_pic_flow_add_plane(uref, 1, 1, 2, "y10l");
+        uref_pic_flow_add_plane(uref, 2, 1, 2, "u10l");
+        uref_pic_flow_add_plane(uref, 2, 1, 2, "v10l");
+        struct urational fps = {25, 1}; // XXX
+        uref_pic_flow_set_fps(uref, fps);
+        // progressive
+        netmap_ctx->upipe_main_src = upipe_flow_alloc(upipe_netmap_source_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe_dejitter),
+                    loglevel, "netmap source"), uref);
+        uref_free(uref);
+    } else {
+        netmap_ctx->upipe_main_src = upipe_void_alloc(upipe_netmap_source_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe_main),
+                    loglevel, "netmap source"));
+    }
+
+    assert(netmap_ctx->upipe_main_src);
     upipe_attach_uclock(netmap_ctx->upipe_main_src);
     if (!ubase_check(upipe_set_uri(netmap_ctx->upipe_main_src, uri))) {
         return 2;
@@ -760,7 +780,8 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 
     upipe_mgr_release(wsrc_mgr);
 
-    struct upipe *sdi_dec;
+    /* in rfc4175 mode, netmap_src output pictures */
+    struct upipe *sdi_dec = netmap_ctx->upipe_main_src;
 
     if (!netmap_ctx->rfc4175) {
         /* sdi dec to y10 */
@@ -783,24 +804,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         //upipe_set_option(sdi_dec, "debug", "1");
         upipe_mgr_release(upipe_sdi_dec_mgr);
     } else {
-        struct upipe_mgr *rfc_mgr = upipe_unpack_rfc4175_mgr_alloc();
-        struct uref *uref = uref_alloc(uref_mgr);
-        uref_flow_set_def(uref, "pic.");
-        obe_int_input_stream_t *video_stream = get_input_stream(netmap_ctx->h, 0);
-        uref_pic_flow_set_vsize(uref, video_stream->height);
-        uref_pic_flow_set_hsize(uref, video_stream->width);
-        uref_pic_flow_set_macropixel(uref, 1);
-        uref_pic_flow_add_plane(uref, 1, 1, 1, "y10l");
-        uref_pic_flow_add_plane(uref, 2, 2, 1, "u10l");
-        uref_pic_flow_add_plane(uref, 2, 2, 1, "v10l");
-        struct upipe *rfc_dec = upipe_flow_alloc_output(netmap_ctx->upipe_main_src, rfc_mgr,
-                uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "rfc unpack"),
-                uref);
-        upipe_release(rfc_dec);
-        uref_free(uref);
-
-        sdi_dec = rfc_dec;
-        upipe_mgr_release(rfc_mgr);
+        upipe_use(sdi_dec);
     }
 
     /* video callback */
