@@ -167,7 +167,7 @@ typedef struct
 
     /** Video **/
     int video_format;
-    int csp;
+    enum AVPixelFormat csp;       /* colorspace */
     int width;
     int height;
     int sar_num;
@@ -243,7 +243,7 @@ typedef struct
 
 typedef struct
 {
-    int     csp;       /* colorspace */
+    enum AVPixelFormat csp;       /* colorspace */
     int     width;     /* width of the picture */
     int     height;    /* height of the picture */
     int     planes;    /* number of planes */
