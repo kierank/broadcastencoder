@@ -25,7 +25,6 @@
 #include <libavutil/random_seed.h>
 #include <libavutil/intreadwrite.h>
 #include <libavutil/fifo.h>
-#include <sys/time.h>
 
 #include "common/common.h"
 #include "common/network/network.h"
