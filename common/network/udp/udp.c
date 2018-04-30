@@ -255,9 +255,6 @@ void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri )
         if( av_find_info_tag( buf, sizeof(buf), "localport", p ) )
             udp_opts->local_port = strtol( buf, NULL, 10 );
 
-        if( av_find_info_tag( buf, sizeof(buf), "buffer_size", p ) )
-            udp_opts->buffer_size = strtol( buf, NULL, 10 );
-
         if( av_find_info_tag( buf, sizeof(buf), "iface", p ) )
         {
             udp_opts->bind_iface = 1;

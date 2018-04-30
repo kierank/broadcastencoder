@@ -32,7 +32,6 @@ typedef struct obe_udp_opts_t
     int  reuse_socket;
     int  ttl;
     int  tos;
-    int  buffer_size;
     int  bind_iface;
     char iface[10];
 } obe_udp_opts_t;
