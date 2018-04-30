@@ -204,31 +204,6 @@ static inline int is_multicast_address( struct sockaddr *addr )
     return 0;
 }
 
-/**
- * If no filename is given to av_open_input_file because you want to
- * get the local port first, then you must call this function to set
- * the remote server address.
- *
- * url syntax: udp://host:port[?option=val...]
- * option: 'ttl=n'       : set the ttl value (for multicast only)
- *         'localport=n' : set the local port
- *         'pkt_size=n'  : set max packet size
- *         'reuse=1'     : enable reusing the socket
- *
- * @param h media file context
- * @param uri of the remote server
- * @return zero if no error.
- */
-static int udp_set_remote_url( obe_udp_ctx *s, const char *hostname, int port )
-{
-    /* set the destination address */
-    s->dest_addr_len = udp_set_url( &s->dest_addr, hostname, port );
-    if( s->dest_addr_len < 0 )
-        return -1;
-
-    return 0;
-}
-
 void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri )
 {
     char buf[256];
@@ -277,7 +252,9 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
     if( !s )
         return -1;
 
-    if( udp_set_remote_url( s, udp_opts->hostname, udp_opts->port ) < 0 )
+    s->dest_addr_len = udp_set_url( &s->dest_addr, udp_opts->hostname,
+            udp_opts->port );
+    if( s->dest_addr_len < 0 )
         goto fail;
 
     udp_fd = udp_socket_create( s, &my_addr, &len, udp_opts->local_port );
