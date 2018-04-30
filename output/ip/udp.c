@@ -308,15 +308,7 @@ int udp_write( hnd_t handle, uint8_t *buf, int size )
 {
     obe_udp_ctx *s = handle;
 
-    int ret = sendto( s->udp_fd, buf, size, 0, (struct sockaddr *)&s->dest_addr, s->dest_addr_len );
-
-    if( ret < 0 )
-    {
-        //syslog( LOG_WARNING, "UDP packet failed to send \n" );
-        return -1;
-    }
-
-    return size;
+    return sendto( s->udp_fd, buf, size, 0, (struct sockaddr *)&s->dest_addr, s->dest_addr_len );
 }
 
 void udp_close( hnd_t handle )
