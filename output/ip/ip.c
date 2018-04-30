@@ -85,10 +85,10 @@ struct ip_status
     struct uchain *queue;
 };
 
-static void xor_packet_c( uint8_t *dst, uint8_t *src, int len )
+static void xor_packet_c( uint8_t *dst, uint8_t *src, unsigned len )
 {
     for( int i = 0; i < len; i++ )
-        dst[i] = src[i] ^ dst[i];
+        dst[i] ^= src[i];
 }
 
 static void rtp_close( hnd_t handle )
