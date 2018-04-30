@@ -37,12 +37,8 @@
 typedef struct
 {
     int udp_fd;
-    int local_port;
     struct sockaddr_storage dest_addr;
     int dest_addr_len;
-
-    int bind_iface;
-    char iface[10];
 } obe_udp_ctx;
 
 static int udp_set_multicast_opts( int sockfd, obe_udp_ctx *s, int ttl )
@@ -136,7 +132,7 @@ static int udp_set_url( struct sockaddr_storage *addr, const char *hostname, int
     return addr_len;
 }
 
-static int udp_socket_create( obe_udp_ctx *s, struct sockaddr_storage *addr, int *addr_len )
+static int udp_socket_create( obe_udp_ctx *s, struct sockaddr_storage *addr, int *addr_len, int local_port )
 {
     int udp_fd = -1;
     struct addrinfo *res0 = NULL, *res = NULL;
@@ -144,7 +140,7 @@ static int udp_socket_create( obe_udp_ctx *s, struct sockaddr_storage *addr, int
 
     if( ((struct sockaddr *) &s->dest_addr)->sa_family )
         family = ((struct sockaddr *) &s->dest_addr)->sa_family;
-    res0 = udp_resolve_host( 0, s->local_port, SOCK_DGRAM, family, AI_PASSIVE );
+    res0 = udp_resolve_host( 0, local_port, SOCK_DGRAM, family, AI_PASSIVE );
     if( res0 == 0 )
         goto fail;
     for( res = res0; res; res=res->ai_next )
@@ -284,14 +280,10 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
     if( !s )
         return -1;
 
-    s->local_port = udp_opts->local_port;
-    s->bind_iface = udp_opts->bind_iface;
-    strncpy( s->iface, udp_opts->iface, sizeof(s->iface) - 1 );
-
     if( udp_set_remote_url( s, udp_opts->hostname, udp_opts->port ) < 0 )
         goto fail;
 
-    udp_fd = udp_socket_create( s, &my_addr, &len );
+    udp_fd = udp_socket_create( s, &my_addr, &len, udp_opts->local_port );
     if( udp_fd < 0 )
         goto fail;
 
@@ -299,9 +291,9 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
     if( setsockopt( udp_fd, SOL_SOCKET, SO_REUSEADDR, &(udp_opts->reuse_socket), sizeof(udp_opts->reuse_socket) ) != 0)
         goto fail;
 
-    if( s->bind_iface )
+    if( udp_opts->bind_iface )
     {
-        if( setsockopt( udp_fd, SOL_SOCKET, SO_BINDTODEVICE, s->iface, strlen(s->iface ) ) )
+        if( setsockopt( udp_fd, SOL_SOCKET, SO_BINDTODEVICE, udp_opts->iface, strlen(udp_opts->iface ) ) )
             goto fail;
     }
     else
@@ -314,7 +306,7 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
 
     len = sizeof(my_addr);
     getsockname( udp_fd, (struct sockaddr *)&my_addr, (socklen_t *) &len );
-    s->local_port = udp_port( &my_addr, len );
+    udp_opts->local_port = udp_port( &my_addr, len );
 
     /* set output multicast ttl */
 
