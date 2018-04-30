@@ -36,14 +36,12 @@
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ietf/rtp3551.h>
 #include <bitstream/mpeg/ts.h>
+#include <bitstream/smpte/2022_1_fec.h>
 
 #define FEC_PAYLOAD_TYPE 96
 
-#define COP3_FEC_HEADER_SIZE 16
-#define TS_OFFSET 8
-
 #define RTP_PACKET_SIZE (RTP_HEADER_SIZE+TS_PACKETS_SIZE)
-#define COP3_FEC_PACKET_SIZE (RTP_PACKET_SIZE+COP3_FEC_HEADER_SIZE)
+#define COP3_FEC_PACKET_SIZE (RTP_PACKET_SIZE+SMPTE_2022_FEC_HEADER_SIZE)
 
 typedef struct
 {
@@ -226,20 +224,20 @@ static void write_fec_header( hnd_t handle, uint8_t *data, int row, uint16_t snb
         payload_recovery = p_rtp->fec_rows & 1 ? RTP_TYPE_MP2T : 0;
     }
 
-    *data++ = snbase >> 8;
-    *data++ = snbase & 0xff;
-    *data++ = length_recovery >> 8;
-    *data++ = length_recovery & 0xff;
-    *data++ = 1 << 7 | payload_recovery;
-    /* marker */
-    *data++ = 0;
-    *data++ = 0;
-    *data++ = 0;
-     data   += 4; /* skip already written timestamp */
-    *data++ = (row & 1) << 6;
-    *data++ = row ? 1 : p_rtp->fec_columns;
-    *data++ = row ? p_rtp->fec_columns : p_rtp->fec_rows;
-    *data++ = 0; // SNBase ext bits
+    memset(data, 0, SMPTE_2022_FEC_HEADER_SIZE);
+    smpte_fec_set_snbase_low(data, snbase);
+    smpte_fec_set_length_rec(data, length_recovery);
+    smpte_fec_set_extension(data);
+    smpte_fec_set_pt_recovery(data, payload_recovery);
+    if (row) {
+        smpte_fec_set_d(data);
+        smpte_fec_set_offset(data, 1);
+        smpte_fec_set_na(data, p_rtp->fec_columns);
+    } else {
+        smpte_fec_set_offset(data, p_rtp->fec_columns);
+        smpte_fec_set_na(data, p_rtp->fec_rows);
+    }
+    smpte_fec_set_snbase_ext(data, 0);
 }
 
 static int write_fec_packet( hnd_t udp_handle, uint8_t *data, int len )
@@ -329,22 +327,13 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         uint8_t *row = &p_rtp->row_data[row_idx*p_rtp->fec_pkt_len];
         uint8_t *column = &p_rtp->column_data[(column_idx*2+p_rtp->column_phase)*p_rtp->fec_pkt_len];
 
-        uint8_t *row_ts = &row[RTP_HEADER_SIZE+TS_OFFSET];
-        *row_ts++ ^= (ts_90 >> 24) & 0xff;
-        *row_ts++ ^= (ts_90 >> 16) & 0xff;
-        *row_ts++ ^= (ts_90 >>  8) & 0xff;
-        *row_ts++ ^= (ts_90) & 0xff;
-        xor_packet_c( &row[RTP_HEADER_SIZE+COP3_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
+        smpte_fec_set_ts_recovery(&row[RTP_HEADER_SIZE], ts_90);
+        xor_packet_c( &row[RTP_HEADER_SIZE+SMPTE_2022_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
 
         if( fec_type == FEC_TYPE_COP3_BLOCK_ALIGNED )
         {
-            uint8_t *column_ts = &column[RTP_HEADER_SIZE+TS_OFFSET];
-            *column_ts++ ^= (ts_90 >> 24) & 0xff;
-            *column_ts++ ^= (ts_90 >> 16) & 0xff;
-            *column_ts++ ^= (ts_90 >>  8) & 0xff;
-            *column_ts++ ^= (ts_90) & 0xff;
-
-            xor_packet_c( &column[RTP_HEADER_SIZE+COP3_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
+            smpte_fec_set_ts_recovery(&column[RTP_HEADER_SIZE], ts_90);
+            xor_packet_c( &column[RTP_HEADER_SIZE+SMPTE_2022_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
         }
 
         /* Check if we can send packets. Start with rows to match the suggestion in the ProMPEG spec */
@@ -389,13 +378,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
 
         if( fec_type == FEC_TYPE_COP3_NON_BLOCK_ALIGNED && p_rtp->seq >= column_idx*(p_rtp->fec_columns+1) )
         {
-            uint8_t *column_ts = &column[RTP_HEADER_SIZE+TS_OFFSET];
-            *column_ts++ ^= ts_90 >> 24;
-            *column_ts++ ^= (ts_90 >> 16) & 0xff;
-            *column_ts++ ^= (ts_90 >>  8) & 0xff;
-            *column_ts++ ^= (ts_90) & 0xff;
-
-            xor_packet_c( &column[RTP_HEADER_SIZE+COP3_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
+            smpte_fec_set_ts_recovery(&column[RTP_HEADER_SIZE], ts_90);
+            xor_packet_c( &column[RTP_HEADER_SIZE+SMPTE_2022_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
         }
     }
 
