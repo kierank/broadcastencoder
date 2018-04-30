@@ -36,8 +36,6 @@
 
 typedef struct
 {
-    int buffer_size;
-
     int udp_fd;
     int local_port;
     struct sockaddr_storage dest_addr;
@@ -287,7 +285,6 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
         return -1;
 
     s->local_port = udp_opts->local_port;
-    s->buffer_size = udp_opts->buffer_size;
     s->bind_iface = udp_opts->bind_iface;
     strncpy( s->iface, udp_opts->iface, sizeof(s->iface) - 1 );
 
