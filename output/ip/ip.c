@@ -138,7 +138,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
     if( udp_open( &p_rtp->udp_handle, udp_opts ) < 0 )
     {
         fprintf( stderr, "[rtp] Could not create udp output \n" );
-        return -1;
+        goto error;
     }
 
     p_rtp->ssrc = av_get_random_seed();
@@ -157,21 +157,21 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         if( !p_rtp->column_data || !p_rtp->row_data )
         {
             fprintf( stderr, "[rtp] malloc failed \n" );
-            return -1;
+            goto error;
         }
 
         udp_opts->port += 2;
         if( udp_open( &p_rtp->column_handle, udp_opts ) < 0 )
         {
             fprintf( stderr, "[rtp] Could not create FEC column output \n" );
-            return -1;
+            goto error;
         }
 
         udp_opts->port += 2;
         if( udp_open( &p_rtp->row_handle, udp_opts ) < 0 )
         {
             fprintf( stderr, "[rtp] Could not create FEC row output \n" );
-            return -1;
+            goto error;
         }
     }
 
@@ -181,13 +181,18 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         if( !p_rtp->dup_fifo )
         {
             fprintf( stderr, "[rtp-dup] Could not allocate data fifo" );
-            return -1;
+            goto error;
         }
     }
 
     *p_handle = p_rtp;
 
     return 0;
+
+error:
+    rtp_close(p_rtp);
+
+    return -1;
 }
 
 static void write_rtp_header( uint8_t *data, uint8_t payload_type, uint16_t seq, uint32_t ts_90, uint32_t ssrc )
