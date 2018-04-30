@@ -206,9 +206,8 @@ static void write_rtp_header( uint8_t *data, uint8_t payload_type, uint16_t seq,
     rtp_set_ssrc(data, ssrc_p);
 }
 
-static void write_fec_header( hnd_t handle, uint8_t *rtp, int row, uint16_t snbase )
+static void write_fec_header( obe_rtp_ctx *p_rtp, uint8_t *rtp, int row, uint16_t snbase )
 {
-    obe_rtp_ctx *p_rtp = handle;
     uint8_t *data = &rtp[RTP_HEADER_SIZE];
 
     uint16_t length_recovery;
