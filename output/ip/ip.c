@@ -50,7 +50,6 @@ typedef struct
 {
     hnd_t udp_handle;
 
-    AVBufferRef *buf_ref;
     uint64_t seq;
     uint32_t ssrc;
 
@@ -230,8 +229,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
 
     /* Throughout this function, don't exit early because the decoder is expecting a sequence number increase
      * and consistent FEC packets. Return -1 at the end so the user knows there was a failure to submit a packet. */
-    p_rtp->buf_ref = av_buffer_alloc( RTP_PACKET_SIZE );
-    pkt_ptr = p_rtp->buf_ref->data;
+    AVBufferRef *buf_ref = av_buffer_alloc( RTP_PACKET_SIZE );
+    pkt_ptr = buf_ref->data;
 
     uint32_t ts_90 = timestamp / 300;
     write_rtp_header( pkt_ptr, RTP_TYPE_MP2T, p_rtp->seq & 0xffff, ts_90, p_rtp->ssrc );
@@ -243,7 +242,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     /* Check and send duplicate packets */
     if( p_rtp->dup_fifo )
     {
-        output_buffer = av_buffer_ref( p_rtp->buf_ref );
+        output_buffer = av_buffer_ref( buf_ref );
         if( !output_buffer )
         {
             syslog( LOG_ERR, "Malloc failed\n" );
@@ -367,7 +366,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     }
 
 end:
-    av_buffer_unref( &p_rtp->buf_ref );
+    av_buffer_unref( &buf_ref );
 
     p_rtp->seq++;
     p_rtp->pkt_cnt++;
