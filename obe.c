@@ -1079,6 +1079,7 @@ int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts )
                 return -1;
             }
         }
+        h->outputs[i]->output_dest.arq = output_opts->outputs[i].arq;
         h->outputs[i]->output_dest.dup_delay = output_opts->outputs[i].dup_delay;
         h->outputs[i]->output_dest.fec_type = output_opts->outputs[i].fec_type;
         h->outputs[i]->output_dest.fec_columns = output_opts->outputs[i].fec_columns;
