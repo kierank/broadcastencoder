@@ -111,10 +111,8 @@ static void rtp_close( hnd_t handle )
     }
 
     /* COP3 FEC */
-    if( p_rtp->column_data )
-        free( p_rtp->column_data );
-    if( p_rtp->row_data )
-        free( p_rtp->row_data );
+    free( p_rtp->column_data );
+    free( p_rtp->row_data );
     if( p_rtp->column_handle )
         udp_close( p_rtp->column_handle );
     if( p_rtp->row_handle )
@@ -427,8 +425,7 @@ static void close_output( void *handle )
             udp_close( *status->ip_handle );
     }
 
-    if( status->output->output_dest.target  )
-        free( status->output->output_dest.target );
+    free( status->output->output_dest.target );
 }
 
 static void clean_mutex(void *mutex)
