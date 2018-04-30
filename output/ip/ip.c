@@ -91,6 +91,38 @@ static void xor_packet_c( uint8_t *dst, uint8_t *src, int len )
         dst[i] = src[i] ^ dst[i];
 }
 
+static void rtp_close( hnd_t handle )
+{
+    obe_rtp_ctx *p_rtp = handle;
+    AVBufferRef *output_buffer;
+
+    udp_close( p_rtp->udp_handle );
+
+    if( p_rtp->dup_fifo )
+    {
+        while( av_fifo_size( p_rtp->dup_fifo ) > 0 )
+        {
+            av_fifo_drain( p_rtp->dup_fifo, sizeof(int64_t) );
+            av_fifo_generic_read( p_rtp->dup_fifo, &output_buffer, sizeof(output_buffer), NULL );
+            av_buffer_unref( &output_buffer );
+        }
+
+        av_fifo_freep( &p_rtp->dup_fifo );
+    }
+
+    /* COP3 FEC */
+    if( p_rtp->column_data )
+        free( p_rtp->column_data );
+    if( p_rtp->row_data )
+        free( p_rtp->row_data );
+    if( p_rtp->column_handle )
+        udp_close( p_rtp->column_handle );
+    if( p_rtp->row_handle )
+        udp_close( p_rtp->row_handle );
+
+    free( p_rtp );
+}
+
 static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_t *output_dest )
 {
     obe_rtp_ctx *p_rtp = calloc( 1, sizeof(*p_rtp) );
@@ -373,38 +405,6 @@ end:
     p_rtp->octet_cnt += len;
 
     return ret;
-}
-
-static void rtp_close( hnd_t handle )
-{
-    obe_rtp_ctx *p_rtp = handle;
-    AVBufferRef *output_buffer;
-
-    udp_close( p_rtp->udp_handle );
-
-    if( p_rtp->dup_fifo )
-    {
-        while( av_fifo_size( p_rtp->dup_fifo ) > 0 )
-        {
-            av_fifo_drain( p_rtp->dup_fifo, sizeof(int64_t) );
-            av_fifo_generic_read( p_rtp->dup_fifo, &output_buffer, sizeof(output_buffer), NULL );
-            av_buffer_unref( &output_buffer );
-        }
-
-        av_fifo_freep( &p_rtp->dup_fifo );
-    }
-
-    /* COP3 FEC */
-    if( p_rtp->column_data )
-        free( p_rtp->column_data );
-    if( p_rtp->row_data )
-        free( p_rtp->row_data );
-    if( p_rtp->column_handle )
-        udp_close( p_rtp->column_handle );
-    if( p_rtp->row_handle )
-        udp_close( p_rtp->row_handle );
-
-    free( p_rtp );
 }
 
 static void close_output( void *handle )
