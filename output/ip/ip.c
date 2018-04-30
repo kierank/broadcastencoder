@@ -240,14 +240,14 @@ static void write_fec_header( hnd_t handle, uint8_t *data, int row, uint16_t snb
     smpte_fec_set_snbase_ext(data, 0);
 }
 
-static int write_fec_packet( hnd_t udp_handle, uint8_t *data, int len )
+static int write_fec_packet( hnd_t udp_handle, uint8_t *data )
 {
     int ret = 0;
 
-    if( udp_write( udp_handle, data, len ) < 0 )
+    if( udp_write( udp_handle, data, COP3_FEC_PACKET_SIZE ) < 0 )
         ret = -1;
 
-    memset( data, 0, len );
+    memset( data, 0, COP3_FEC_PACKET_SIZE );
 
     return ret;
 }
@@ -321,7 +321,7 @@ static int fec(obe_rtp_ctx *p_rtp, int fec_type, uint8_t *pkt_ptr, uint32_t ts_9
         write_rtp_header( row, FEC_PAYLOAD_TYPE, p_rtp->row_seq++ & 0xffff, 0, 0 );
         write_fec_header( p_rtp, &row[RTP_HEADER_SIZE], 1, (p_rtp->seq - column_idx) & 0xffff );
 
-        if( write_fec_packet( p_rtp->row_handle, row, COP3_FEC_PACKET_SIZE ) < 0 )
+        if( write_fec_packet( p_rtp->row_handle, row ) < 0 )
             ret = -1;
     }
 
@@ -339,7 +339,7 @@ static int fec(obe_rtp_ctx *p_rtp, int fec_type, uint8_t *pkt_ptr, uint32_t ts_9
             uint64_t send_column_idx = (p_rtp->seq % (p_rtp->fec_columns*p_rtp->fec_rows)) / p_rtp->fec_rows;
             uint8_t *column_tx = &p_rtp->column_data[(send_column_idx*2+!p_rtp->column_phase)*p_rtp->fec_pkt_len];
 
-            if( write_fec_packet( p_rtp->column_handle, column_tx, COP3_FEC_PACKET_SIZE ) < 0 )
+            if( write_fec_packet( p_rtp->column_handle, column_tx ) < 0 )
                 ret = -1;
         }
     } else if( fec_type == FEC_TYPE_COP3_NON_BLOCK_ALIGNED ) {
@@ -351,7 +351,7 @@ static int fec(obe_rtp_ctx *p_rtp, int fec_type, uint8_t *pkt_ptr, uint32_t ts_9
                 write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++ & 0xffff, 0, 0 );
                 write_fec_header( p_rtp, &column[RTP_HEADER_SIZE], 0, (p_rtp->seq - (p_rtp->fec_columns*p_rtp->fec_rows)) & 0xffff );
 
-                if( write_fec_packet( p_rtp->column_handle, column, COP3_FEC_PACKET_SIZE ) < 0 )
+                if( write_fec_packet( p_rtp->column_handle, column ) < 0 )
                     ret = -1;
             }
         }
