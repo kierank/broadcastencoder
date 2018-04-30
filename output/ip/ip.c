@@ -33,25 +33,20 @@
 #include "output/output.h"
 #include "common/bitstream.h"
 
+
+#include <bitstream/ietf/rtp.h>
+#include <bitstream/ietf/rtp3551.h>
+#include <bitstream/mpeg/ts.h>
+
 #define RTP_VERSION 2
 
-#define MPEG_TS_PAYLOAD_TYPE 33
 #define FEC_PAYLOAD_TYPE 96
 
-#define RTP_HEADER_SIZE 12
 #define COP3_FEC_HEADER_SIZE 16
-#define LDPC_FEC_HEADER_SIZE 12
 #define TS_OFFSET 8
 
 #define RTP_PACKET_SIZE (RTP_HEADER_SIZE+TS_PACKETS_SIZE)
 #define COP3_FEC_PACKET_SIZE (RTP_PACKET_SIZE+COP3_FEC_HEADER_SIZE)
-#define LDPC_PACKET_SIZE (LDPC_FEC_HEADER_SIZE+RTP_PACKET_SIZE)
-
-#define RTCP_SR_PACKET_TYPE 200
-#define RTCP_PACKET_SIZE 28
-
-#define NTP_OFFSET 2208988800ULL
-#define NTP_OFFSET_US (NTP_OFFSET * 1000000ULL)
 
 typedef struct
 {
@@ -179,10 +174,16 @@ static int64_t obe_gettime(void)
     return (int64_t)tv.tv_sec * 1000000 + tv.tv_usec;
 }
 
+#define NTP_OFFSET 2208988800ULL
+#define NTP_OFFSET_US (NTP_OFFSET * 1000000ULL)
+
 static uint64_t obe_ntp_time(void)
 {
   return (obe_gettime() / 1000) * 1000 + NTP_OFFSET_US;
 }
+
+#define RTCP_SR_PACKET_TYPE 200
+#define RTCP_PACKET_SIZE 28
 
 static int write_rtcp_pkt( hnd_t handle )
 {
@@ -237,12 +238,12 @@ static void write_fec_header( hnd_t handle, uint8_t *data, int row, uint16_t snb
     if( row )
     {
         length_recovery = p_rtp->fec_columns & 1 ? TS_PACKETS_SIZE : 0;
-        payload_recovery = p_rtp->fec_columns & 1 ? MPEG_TS_PAYLOAD_TYPE : 0;
+        payload_recovery = p_rtp->fec_columns & 1 ? RTP_TYPE_MP2T : 0;
     }
     else
     {
         length_recovery = p_rtp->fec_rows & 1 ? TS_PACKETS_SIZE : 0;
-        payload_recovery = p_rtp->fec_rows & 1 ? MPEG_TS_PAYLOAD_TYPE : 0;
+        payload_recovery = p_rtp->fec_rows & 1 ? RTP_TYPE_MP2T : 0;
     }
 
     *data++ = snbase >> 8;
@@ -286,7 +287,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     pkt_ptr = p_rtp->buf_ref->data;
 
     uint32_t ts_90 = timestamp / 300;
-    write_rtp_header( pkt_ptr, MPEG_TS_PAYLOAD_TYPE, p_rtp->seq & 0xffff, ts_90, p_rtp->ssrc );
+    write_rtp_header( pkt_ptr, RTP_TYPE_MP2T, p_rtp->seq & 0xffff, ts_90, p_rtp->ssrc );
     memcpy( &pkt_ptr[RTP_HEADER_SIZE], data, len );
 
     if( udp_write( p_rtp->udp_handle, pkt_ptr, RTP_PACKET_SIZE ) < 0 )
