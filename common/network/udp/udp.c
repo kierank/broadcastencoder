@@ -46,7 +46,6 @@ typedef struct
     int is_connected;
 
     int udp_fd;
-    int is_multicast;
     int local_port;
     struct sockaddr_storage dest_addr;
     int dest_addr_len;
@@ -238,8 +237,6 @@ static int udp_set_remote_url( obe_udp_ctx *s )
     if( s->dest_addr_len < 0 )
         return -1;
 
-    s->is_multicast = is_multicast_address( (struct sockaddr*) &s->dest_addr );
-
     return 0;
 }
 
@@ -333,7 +330,9 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
     s->local_port = udp_port( &my_addr, len );
 
     /* set output multicast ttl */
-    if( s->is_multicast && udp_set_multicast_opts( udp_fd, s ) < 0 )
+
+    bool is_multicast = is_multicast_address( (struct sockaddr*) &s->dest_addr );
+    if( is_multicast && udp_set_multicast_opts( udp_fd, s ) < 0 )
         goto fail;
 
     /* set tos/diffserv */
