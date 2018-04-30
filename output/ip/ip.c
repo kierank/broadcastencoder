@@ -166,52 +166,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
 
     return 0;
 }
-#if 0
-static int64_t obe_gettime(void)
-{
-    struct timeval tv;
-    gettimeofday(&tv,NULL);
-    return (int64_t)tv.tv_sec * 1000000 + tv.tv_usec;
-}
 
-#define NTP_OFFSET 2208988800ULL
-#define NTP_OFFSET_US (NTP_OFFSET * 1000000ULL)
-
-static uint64_t obe_ntp_time(void)
-{
-  return (obe_gettime() / 1000) * 1000 + NTP_OFFSET_US;
-}
-
-#define RTCP_SR_PACKET_TYPE 200
-#define RTCP_PACKET_SIZE 28
-
-static int write_rtcp_pkt( hnd_t handle )
-{
-    obe_rtp_ctx *p_rtp = handle;
-    uint64_t ntp_time = obe_ntp_time();
-    uint8_t pkt[100];
-    bs_t s;
-    bs_init( &s, pkt, RTCP_PACKET_SIZE );
-
-    bs_write( &s, 2, RTP_VERSION ); // version
-    bs_write1( &s, 0 );             // padding
-    bs_write( &s, 5, 0 );           // reception report count
-    bs_write( &s, 8, RTCP_SR_PACKET_TYPE ); // packet type
-    bs_write( &s, 8, 6 );           // length (length in words - 1)
-    bs_write32( &s, p_rtp->ssrc );  // ssrc
-    bs_write32( &s, ntp_time / 1000000 ); // NTP timestamp, most significant word
-    bs_write32( &s, ((ntp_time % 1000000) << 32) / 1000000 ); // NTP timestamp, least significant word
-    bs_write32( &s, 0 );            // RTP timestamp FIXME
-    bs_write32( &s, p_rtp->pkt_cnt ); // sender's packet count
-    bs_write32( &s, p_rtp->octet_cnt ); // sender's octet count
-    bs_flush( &s );
-
-    if( udp_write( p_rtp->udp_handle, pkt, RTCP_PACKET_SIZE ) < 0 )
-        return -1;
-
-    return 0;
-}
-#endif
 static void write_rtp_header( uint8_t *data, uint8_t payload_type, uint16_t seq, uint32_t ts_90, uint32_t ssrc )
 {
     *data++ = RTP_VERSION << 6;
