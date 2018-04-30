@@ -252,12 +252,51 @@ static int write_fec_packet( hnd_t udp_handle, uint8_t *data, int len )
     return ret;
 }
 
+static int dup_stream(obe_rtp_ctx *p_rtp, AVBufferRef *buf_ref,
+        int64_t timestamp)
+{
+    AVFifoBuffer *dup_fifo = p_rtp->dup_fifo;
+    AVBufferRef *output_buffer = av_buffer_ref( buf_ref );
+    if( !output_buffer )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+
+    if( av_fifo_grow( dup_fifo, av_fifo_size( dup_fifo ) + sizeof(*output_buffer) ) < 0 )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+
+    av_fifo_generic_write( dup_fifo, &timestamp, sizeof(timestamp), NULL );
+    av_fifo_generic_write( dup_fifo, &output_buffer, sizeof(output_buffer), NULL );
+
+    while( av_fifo_size( dup_fifo ) >= sizeof(timestamp) + sizeof(output_buffer) )
+    {
+        uint8_t *peek = av_fifo_peek2( dup_fifo, 0 );
+        int64_t ts_dup = AV_RL64( peek );
+        if( ts_dup + (p_rtp->dup_delay * (OBE_CLOCK/1000)) >= timestamp )
+            break;
+
+        av_fifo_drain( dup_fifo, sizeof(timestamp) );
+        av_fifo_generic_read( dup_fifo, &output_buffer, sizeof(output_buffer), NULL );
+
+        bool ok = !udp_write( p_rtp->udp_handle, output_buffer->data, RTP_PACKET_SIZE );
+
+        av_buffer_unref( &output_buffer );
+        if (!ok)
+            return -1;
+    }
+
+    return 0;
+}
+
 static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestamp, int fec_type )
 {
     obe_rtp_ctx *p_rtp = handle;
     int ret = 0;
     uint8_t *pkt_ptr;
-    AVBufferRef *output_buffer;
 
     /* Throughout this function, don't exit early because the decoder is expecting a sequence number increase
      * and consistent FEC packets. Return -1 at the end so the user knows there was a failure to submit a packet. */
@@ -272,46 +311,10 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         ret = -1;
 
     /* Check and send duplicate packets */
-    if( p_rtp->dup_fifo )
-    {
-        output_buffer = av_buffer_ref( buf_ref );
-        if( !output_buffer )
-        {
-            syslog( LOG_ERR, "Malloc failed\n" );
+    if( p_rtp->dup_fifo ) {
+        if (dup_stream(p_rtp, buf_ref, timestamp))
             ret = -1;
-            goto end;
-        }
-
-        if( av_fifo_grow( p_rtp->dup_fifo, av_fifo_size( p_rtp->dup_fifo ) + sizeof(*output_buffer) ) < 0 )
-        {
-            syslog( LOG_ERR, "Malloc failed\n" );
-            ret = -1;
-            goto end;
-        }
-
-        av_fifo_generic_write( p_rtp->dup_fifo, &timestamp, sizeof(timestamp), NULL );
-        av_fifo_generic_write( p_rtp->dup_fifo, &output_buffer, sizeof(output_buffer), NULL );
-
-        int64_t ts_dup;
-        while( av_fifo_size( p_rtp->dup_fifo ) >= sizeof(timestamp) + sizeof(output_buffer) )
-        {
-            uint8_t *peek = av_fifo_peek2( p_rtp->dup_fifo, 0 );
-            ts_dup = AV_RL64( peek );
-            if( ts_dup + (p_rtp->dup_delay * (OBE_CLOCK/1000)) < timestamp )
-            {
-                av_fifo_drain( p_rtp->dup_fifo, sizeof(timestamp) );
-                av_fifo_generic_read( p_rtp->dup_fifo, &output_buffer, sizeof(output_buffer), NULL );
-
-                if( udp_write( p_rtp->udp_handle, output_buffer->data, RTP_PACKET_SIZE ) < 0 )
-                    ret = -1;
-
-                av_buffer_unref( &output_buffer );
-            }
-            else
-            {
-                break;
-            }
-        }
+        goto end;
     }
 
     if( p_rtp->fec_columns && p_rtp->fec_rows )
