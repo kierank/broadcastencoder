@@ -397,14 +397,10 @@ static void close_output( void *handle )
 {
     struct ip_status *status = handle;
 
-    if( status->output->output_dest.type == OUTPUT_RTP )
-    {
-        if( *status->ip_handle )
+    if( *status->ip_handle ) {
+        if( status->output->output_dest.type == OUTPUT_RTP )
             rtp_close( *status->ip_handle );
-    }
-    else
-    {
-        if( *status->ip_handle )
+        else
             udp_close( *status->ip_handle );
     }
 
