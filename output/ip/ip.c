@@ -318,7 +318,7 @@ static int fec(obe_rtp_ctx *p_rtp, int fec_type, uint8_t *pkt_ptr, uint32_t ts_9
     /* Check if we can send packets. Start with rows to match the suggestion in the ProMPEG spec */
     if( column_idx == (p_rtp->fec_columns-1) )
     {
-        write_rtp_header( row, FEC_PAYLOAD_TYPE, p_rtp->row_seq++ & 0xffff, 0, 0 );
+        write_rtp_header( row, FEC_PAYLOAD_TYPE, p_rtp->row_seq++, 0, 0 );
         write_fec_header( p_rtp, row, 1, (p_rtp->seq - column_idx) & 0xffff );
 
         if( write_fec_packet( p_rtp->row_handle, row ) < 0 )
@@ -329,7 +329,7 @@ static int fec(obe_rtp_ctx *p_rtp, int fec_type, uint8_t *pkt_ptr, uint32_t ts_9
         /* Pre-write the RTP and FEC header */
         if( row_idx == (p_rtp->fec_rows-1) )
         {
-            write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++ & 0xffff, 0, 0 );
+            write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++, 0, 0 );
             write_fec_header( p_rtp, column, 0, (p_rtp->seq - (p_rtp->fec_columns*(p_rtp->fec_rows-1))) & 0xffff );
         }
 
@@ -348,7 +348,7 @@ static int fec(obe_rtp_ctx *p_rtp, int fec_type, uint8_t *pkt_ptr, uint32_t ts_9
             int deoffsetted_seq = (p_rtp->seq - column_idx) - (column_idx*p_rtp->fec_columns);
             if( deoffsetted_seq % ( p_rtp->fec_columns * p_rtp->fec_rows ) == 0 )
             {
-                write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++ & 0xffff, 0, 0 );
+                write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++, 0, 0 );
                 write_fec_header( p_rtp, column, 0, (p_rtp->seq - (p_rtp->fec_columns*p_rtp->fec_rows)) & 0xffff );
 
                 if( write_fec_packet( p_rtp->column_handle, column ) < 0 )
@@ -378,7 +378,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     pkt_ptr = buf_ref->data;
 
     uint32_t ts_90 = timestamp / 300;
-    write_rtp_header( pkt_ptr, RTP_TYPE_MP2T, p_rtp->seq & 0xffff, ts_90, p_rtp->ssrc );
+    write_rtp_header( pkt_ptr, RTP_TYPE_MP2T, p_rtp->seq, ts_90, p_rtp->ssrc );
     memcpy( &pkt_ptr[RTP_HEADER_SIZE], data, len );
 
     if( udp_write( p_rtp->udp_handle, pkt_ptr, RTP_PACKET_SIZE ) < 0 )
