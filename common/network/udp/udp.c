@@ -36,7 +36,6 @@
 
 typedef struct
 {
-    char hostname[1024];
     int port;
     int ttl;
     int tos;
@@ -229,10 +228,10 @@ static inline int is_multicast_address( struct sockaddr *addr )
  * @param uri of the remote server
  * @return zero if no error.
  */
-static int udp_set_remote_url( obe_udp_ctx *s )
+static int udp_set_remote_url( obe_udp_ctx *s, const char *hostname )
 {
     /* set the destination address */
-    s->dest_addr_len = udp_set_url( &s->dest_addr, s->hostname, s->port );
+    s->dest_addr_len = udp_set_url( &s->dest_addr, hostname, s->port );
     if( s->dest_addr_len < 0 )
         return -1;
 
@@ -290,7 +289,6 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
     if( !s )
         return -1;
 
-    strncpy( s->hostname, udp_opts->hostname, sizeof(s->hostname) );
     s->port = udp_opts->port;
     s->local_port = udp_opts->local_port;
     s->reuse_socket = udp_opts->reuse_socket;
@@ -300,7 +298,7 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
     s->bind_iface = udp_opts->bind_iface;
     strncpy( s->iface, udp_opts->iface, sizeof(s->iface) - 1 );
 
-    if( udp_set_remote_url( s ) < 0 )
+    if( udp_set_remote_url( s, udp_opts->hostname ) < 0 )
         goto fail;
 
     udp_fd = udp_socket_create( s, &my_addr, &len );
