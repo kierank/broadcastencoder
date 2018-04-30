@@ -23,9 +23,16 @@
  *****************************************************************************/
 
 #include "common/common.h"
-#include "common/network/network.h"
 #include "output/output.h"
 #include "udp.h"
+
+#include <netinet/in.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+
+#include <libavformat/avformat.h>
+#include <libavutil/parseutils.h>
 
 typedef struct
 {
@@ -185,6 +192,28 @@ static int udp_port( struct sockaddr_storage *addr, int addr_len )
     }
 
     return strtol( sbuf, NULL, 10 );
+}
+
+static inline int is_multicast_address( struct sockaddr *addr )
+{
+    if( addr->sa_family == AF_INET )
+    {
+#ifndef IN_MULTICAST
+#define IN_MULTICAST(a) ((((uint32_t)(a)) & 0xf0000000) == 0xe0000000)
+#endif
+        return IN_MULTICAST( ntohl( ((struct sockaddr_in *)addr)->sin_addr.s_addr ) );
+    }
+#if HAVE_STRUCT_SOCKADDR_IN6
+    if( addr->sa_family == AF_INET6 )
+    {
+#ifndef IN6_IS_ADDR_MULTICAST
+#define IN6_IS_ADDR_MULTICAST(a) (((uint8_t *) (a))[0] == 0xff)
+#endif
+        return IN6_IS_ADDR_MULTICAST( &((struct sockaddr_in6 *)addr)->sin6_addr );
+    }
+#endif
+
+    return 0;
 }
 
 /**
