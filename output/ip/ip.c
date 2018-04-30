@@ -77,12 +77,6 @@ typedef struct
     uint64_t column_seq;
     uint64_t row_seq;
 
-    uint8_t *source_symbols;
-    uint8_t *repair_symbols;
-
-    void   **encoding_symbols_tab;
-    int     *output_order;
-
 } obe_rtp_ctx;
 
 struct ip_status
