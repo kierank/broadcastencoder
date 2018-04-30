@@ -27,9 +27,9 @@
 #include <libavutil/fifo.h>
 
 #include "common/common.h"
-#include "common/network/udp/udp.h"
 #include "output/output.h"
 #include "common/bitstream.h"
+#include "udp.h"
 
 
 #include <bitstream/ietf/rtp.h>
