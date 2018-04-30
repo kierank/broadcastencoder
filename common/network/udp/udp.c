@@ -43,7 +43,6 @@ typedef struct
     int miface;
     int buffer_size;
     int reuse_socket;
-    int is_connected;
 
     int udp_fd;
     int local_port;
@@ -339,9 +338,6 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
     if( s->tos && udp_set_tos_opts( udp_fd, s ) < 0 )
         goto fail;
 
-    if( s->is_connected && connect( udp_fd, (struct sockaddr *)&s->dest_addr, s->dest_addr_len ) )
-        goto fail;
-
     s->udp_fd = udp_fd;
     *p_handle = s;
     return 0;
@@ -357,12 +353,8 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
 int udp_write( hnd_t handle, uint8_t *buf, int size )
 {
     obe_udp_ctx *s = handle;
-    int ret;
 
-    if( !s->is_connected )
-        ret = sendto( s->udp_fd, buf, size, 0, (struct sockaddr *)&s->dest_addr, s->dest_addr_len );
-    else
-        ret = send( s->udp_fd, buf, size, 0 );
+    int ret = sendto( s->udp_fd, buf, size, 0, (struct sockaddr *)&s->dest_addr, s->dest_addr_len );
 
     if( ret < 0 )
     {
