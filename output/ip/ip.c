@@ -292,6 +292,78 @@ static int dup_stream(obe_rtp_ctx *p_rtp, AVBufferRef *buf_ref,
     return 0;
 }
 
+static int fec(obe_rtp_ctx *p_rtp, int fec_type, uint8_t *pkt_ptr, uint32_t ts_90)
+{
+    int ret = 0;
+    int row_idx = (p_rtp->seq / p_rtp->fec_columns) % p_rtp->fec_rows;
+    int column_idx = p_rtp->seq % p_rtp->fec_columns;
+
+    if( fec_type == FEC_TYPE_COP3_BLOCK_ALIGNED && row_idx == 0 && column_idx == 0 && p_rtp->seq >= p_rtp->fec_columns*p_rtp->fec_rows )
+    {
+        p_rtp->column_phase ^= 1;
+    }
+
+    uint8_t *row = &p_rtp->row_data[row_idx*p_rtp->fec_pkt_len];
+    uint8_t *column = &p_rtp->column_data[(column_idx*2+p_rtp->column_phase)*p_rtp->fec_pkt_len];
+
+    smpte_fec_set_ts_recovery(&row[RTP_HEADER_SIZE], ts_90);
+    xor_packet_c( &row[RTP_HEADER_SIZE+SMPTE_2022_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
+
+    if( fec_type == FEC_TYPE_COP3_BLOCK_ALIGNED )
+    {
+        smpte_fec_set_ts_recovery(&column[RTP_HEADER_SIZE], ts_90);
+        xor_packet_c( &column[RTP_HEADER_SIZE+SMPTE_2022_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
+    }
+
+    /* Check if we can send packets. Start with rows to match the suggestion in the ProMPEG spec */
+    if( column_idx == (p_rtp->fec_columns-1) )
+    {
+        write_rtp_header( row, FEC_PAYLOAD_TYPE, p_rtp->row_seq++ & 0xffff, 0, 0 );
+        write_fec_header( p_rtp, &row[RTP_HEADER_SIZE], 1, (p_rtp->seq - column_idx) & 0xffff );
+
+        if( write_fec_packet( p_rtp->row_handle, row, COP3_FEC_PACKET_SIZE ) < 0 )
+            ret = -1;
+    }
+
+    /* Pre-write the RTP and FEC header */
+    if( fec_type == FEC_TYPE_COP3_BLOCK_ALIGNED && row_idx == (p_rtp->fec_rows-1) )
+    {
+        write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++ & 0xffff, 0, 0 );
+        write_fec_header( p_rtp, &column[RTP_HEADER_SIZE], 0, (p_rtp->seq - (p_rtp->fec_columns*(p_rtp->fec_rows-1))) & 0xffff );
+    }
+
+    /* Interleave the column FEC data from the previous matrix */
+    if( fec_type == FEC_TYPE_COP3_BLOCK_ALIGNED && p_rtp->seq >= p_rtp->fec_columns*p_rtp->fec_rows && p_rtp->seq % p_rtp->fec_rows == 0 )
+    {
+        uint64_t send_column_idx = (p_rtp->seq % (p_rtp->fec_columns*p_rtp->fec_rows)) / p_rtp->fec_rows;
+        uint8_t *column_tx = &p_rtp->column_data[(send_column_idx*2+!p_rtp->column_phase)*p_rtp->fec_pkt_len];
+
+        if( write_fec_packet( p_rtp->column_handle, column_tx, COP3_FEC_PACKET_SIZE ) < 0 )
+            ret = -1;
+    }
+
+    if( fec_type == FEC_TYPE_COP3_NON_BLOCK_ALIGNED && p_rtp->seq >= (p_rtp->fec_columns * p_rtp->fec_rows + column_idx*(p_rtp->fec_columns+1)) )
+    {
+        int deoffsetted_seq = (p_rtp->seq - column_idx) - (column_idx*p_rtp->fec_columns);
+        if( deoffsetted_seq % ( p_rtp->fec_columns * p_rtp->fec_rows ) == 0 )
+        {
+            write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++ & 0xffff, 0, 0 );
+            write_fec_header( p_rtp, &column[RTP_HEADER_SIZE], 0, (p_rtp->seq - (p_rtp->fec_columns*p_rtp->fec_rows)) & 0xffff );
+
+            if( write_fec_packet( p_rtp->column_handle, column, COP3_FEC_PACKET_SIZE ) < 0 )
+                ret = -1;
+        }
+    }
+
+    if( fec_type == FEC_TYPE_COP3_NON_BLOCK_ALIGNED && p_rtp->seq >= column_idx*(p_rtp->fec_columns+1) )
+    {
+        smpte_fec_set_ts_recovery(&column[RTP_HEADER_SIZE], ts_90);
+        xor_packet_c( &column[RTP_HEADER_SIZE+SMPTE_2022_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
+    }
+
+    return ret;
+}
+
 static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestamp, int fec_type )
 {
     obe_rtp_ctx *p_rtp = handle;
@@ -318,73 +390,7 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     }
 
     if( p_rtp->fec_columns && p_rtp->fec_rows )
-    {
-        int row_idx = (p_rtp->seq / p_rtp->fec_columns) % p_rtp->fec_rows;
-        int column_idx = p_rtp->seq % p_rtp->fec_columns;
-
-        if( fec_type == FEC_TYPE_COP3_BLOCK_ALIGNED && row_idx == 0 && column_idx == 0 && p_rtp->seq >= p_rtp->fec_columns*p_rtp->fec_rows )
-        {
-            p_rtp->column_phase ^= 1;
-        }
-
-        uint8_t *row = &p_rtp->row_data[row_idx*p_rtp->fec_pkt_len];
-        uint8_t *column = &p_rtp->column_data[(column_idx*2+p_rtp->column_phase)*p_rtp->fec_pkt_len];
-
-        smpte_fec_set_ts_recovery(&row[RTP_HEADER_SIZE], ts_90);
-        xor_packet_c( &row[RTP_HEADER_SIZE+SMPTE_2022_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
-
-        if( fec_type == FEC_TYPE_COP3_BLOCK_ALIGNED )
-        {
-            smpte_fec_set_ts_recovery(&column[RTP_HEADER_SIZE], ts_90);
-            xor_packet_c( &column[RTP_HEADER_SIZE+SMPTE_2022_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
-        }
-
-        /* Check if we can send packets. Start with rows to match the suggestion in the ProMPEG spec */
-        if( column_idx == (p_rtp->fec_columns-1) )
-        {
-            write_rtp_header( row, FEC_PAYLOAD_TYPE, p_rtp->row_seq++ & 0xffff, 0, 0 );
-            write_fec_header( p_rtp, &row[RTP_HEADER_SIZE], 1, (p_rtp->seq - column_idx) & 0xffff );
-
-            if( write_fec_packet( p_rtp->row_handle, row, COP3_FEC_PACKET_SIZE ) < 0 )
-                ret = -1;
-        }
-
-        /* Pre-write the RTP and FEC header */
-        if( fec_type == FEC_TYPE_COP3_BLOCK_ALIGNED && row_idx == (p_rtp->fec_rows-1) )
-        {
-            write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++ & 0xffff, 0, 0 );
-            write_fec_header( p_rtp, &column[RTP_HEADER_SIZE], 0, (p_rtp->seq - (p_rtp->fec_columns*(p_rtp->fec_rows-1))) & 0xffff );
-        }
-
-        /* Interleave the column FEC data from the previous matrix */
-        if( fec_type == FEC_TYPE_COP3_BLOCK_ALIGNED && p_rtp->seq >= p_rtp->fec_columns*p_rtp->fec_rows && p_rtp->seq % p_rtp->fec_rows == 0 )
-        {
-            uint64_t send_column_idx = (p_rtp->seq % (p_rtp->fec_columns*p_rtp->fec_rows)) / p_rtp->fec_rows;
-            uint8_t *column_tx = &p_rtp->column_data[(send_column_idx*2+!p_rtp->column_phase)*p_rtp->fec_pkt_len];
-
-            if( write_fec_packet( p_rtp->column_handle, column_tx, COP3_FEC_PACKET_SIZE ) < 0 )
-                ret = -1;
-        }
-
-        if( fec_type == FEC_TYPE_COP3_NON_BLOCK_ALIGNED && p_rtp->seq >= (p_rtp->fec_columns * p_rtp->fec_rows + column_idx*(p_rtp->fec_columns+1)) )
-        {
-            int deoffsetted_seq = (p_rtp->seq - column_idx) - (column_idx*p_rtp->fec_columns);
-            if( deoffsetted_seq % ( p_rtp->fec_columns * p_rtp->fec_rows ) == 0 )
-            {
-                write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++ & 0xffff, 0, 0 );
-                write_fec_header( p_rtp, &column[RTP_HEADER_SIZE], 0, (p_rtp->seq - (p_rtp->fec_columns*p_rtp->fec_rows)) & 0xffff );
-
-                if( write_fec_packet( p_rtp->column_handle, column, COP3_FEC_PACKET_SIZE ) < 0 )
-                    ret = -1;
-            }
-        }
-
-        if( fec_type == FEC_TYPE_COP3_NON_BLOCK_ALIGNED && p_rtp->seq >= column_idx*(p_rtp->fec_columns+1) )
-        {
-            smpte_fec_set_ts_recovery(&column[RTP_HEADER_SIZE], ts_90);
-            xor_packet_c( &column[RTP_HEADER_SIZE+SMPTE_2022_FEC_HEADER_SIZE], &pkt_ptr[RTP_HEADER_SIZE], TS_PACKETS_SIZE );
-        }
-    }
+        ret |= fec(p_rtp, fec_type, pkt_ptr, ts_90);
 
 end:
     av_buffer_unref( &buf_ref );
