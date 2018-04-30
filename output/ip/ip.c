@@ -38,8 +38,6 @@
 #include <bitstream/ietf/rtp3551.h>
 #include <bitstream/mpeg/ts.h>
 
-#define RTP_VERSION 2
-
 #define FEC_PAYLOAD_TYPE 96
 
 #define COP3_FEC_HEADER_SIZE 16
@@ -169,18 +167,18 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
 
 static void write_rtp_header( uint8_t *data, uint8_t payload_type, uint16_t seq, uint32_t ts_90, uint32_t ssrc )
 {
-    *data++ = RTP_VERSION << 6;
-    *data++ = payload_type & 0x7f;
-    *data++ = seq >> 8;
-    *data++ = seq & 0xff;
-    *data++ = ts_90 >> 24;
-    *data++ = (ts_90 >> 16) & 0xff;
-    *data++ = (ts_90 >>  8) & 0xff;
-    *data++ = ts_90 & 0xff;
-    *data++ = ssrc >> 24;
-    *data++ = (ssrc >> 16) & 0xff;
-    *data++ = (ssrc >>  8) & 0xff;
-    *data++ = ssrc & 0xff;
+    uint8_t ssrc_p[4] = {
+        (ssrc >> 24) & 0xff,
+        (ssrc >> 16) & 0xff,
+        (ssrc >>  8) & 0xff,
+        (ssrc      ) & 0xff,
+    };
+
+    rtp_set_hdr(data);
+    rtp_set_type(data, payload_type);
+    rtp_set_seqnum(data, seq);
+    rtp_set_timestamp(data, ts_90);
+    rtp_set_ssrc(data, ssrc_p);
 }
 
 static void write_fec_header( hnd_t handle, uint8_t *data, int row, uint16_t snbase )
