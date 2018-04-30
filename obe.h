@@ -25,6 +25,7 @@
 #define OBE_H
 
 #include <inttypes.h>
+#include <stdbool.h>
 #include <libavutil/channel_layout.h>
 #include <x264.h>
 
@@ -562,6 +563,8 @@ typedef struct
     int fec_rows;
 
     int dup_delay;
+
+    bool arq;
 } obe_output_dest_t;
 
 typedef struct
