@@ -30,6 +30,7 @@
 #include "output/output.h"
 #include "common/bitstream.h"
 #include "udp.h"
+#include "arq.h"
 
 
 #include <bitstream/ietf/rtp.h>
@@ -57,6 +58,8 @@ typedef struct
     int dup_delay;
 
     bool arq;
+    uint8_t arq_pt;
+    unsigned arq_latency;
 
     /* COP3 FEC */
     hnd_t column_handle;
@@ -74,6 +77,7 @@ typedef struct
     uint64_t column_seq;
     uint64_t row_seq;
 
+    struct arq_ctx *arq_ctx;
 } obe_rtp_ctx;
 
 struct ip_status
@@ -93,6 +97,9 @@ static void rtp_close( hnd_t handle )
 {
     obe_rtp_ctx *p_rtp = handle;
     AVBufferRef *output_buffer;
+
+    if (p_rtp->arq)
+        close_arq(p_rtp->arq_ctx);
 
     udp_close( p_rtp->udp_handle );
 
@@ -141,6 +148,8 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
 
     p_rtp->dup_delay = output_dest->dup_delay;
     p_rtp->arq = output_dest->arq;
+    p_rtp->arq_pt = output_dest->arq_pt;
+    p_rtp->arq_latency = output_dest->arq_latency;
     p_rtp->fec_columns = output_dest->fec_columns;
     p_rtp->fec_rows = output_dest->fec_rows;
 
@@ -386,8 +395,12 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     write_rtp_header( pkt_ptr, RTP_TYPE_MP2T, p_rtp->seq, ts_90, p_rtp->ssrc );
     memcpy( &pkt_ptr[RTP_HEADER_SIZE], data, len );
 
-    if( udp_write( p_rtp->udp_handle, pkt_ptr, RTP_PACKET_SIZE ) < 0 )
-        ret = -1;
+    if (p_rtp->arq) {
+        arq_write(p_rtp->arq_ctx, pkt_ptr, RTP_PACKET_SIZE, timestamp);
+    } else {
+        if( udp_write( p_rtp->udp_handle, pkt_ptr, RTP_PACKET_SIZE ) < 0 )
+            ret = -1;
+    }
 
     /* Check and send duplicate packets */
     if( p_rtp->dup_fifo ) {
@@ -453,6 +466,23 @@ static void *open_output( void *ptr )
     {
         if( rtp_open( &ip_handle, &udp_opts, output_dest ) < 0 )
             return NULL;
+
+        obe_rtp_ctx *p_rtp = ip_handle;
+        if (p_rtp->arq) {
+            uint8_t rtx_pt = p_rtp->arq_pt;
+            if (!rtx_pt)
+                rtx_pt = 96;
+            unsigned latency = p_rtp->arq_latency;
+            if (!latency)
+                latency = 100;
+            obe_udp_ctx *p_udp = p_rtp->udp_handle;
+            p_rtp->arq_ctx = open_arq(p_udp, latency, rtx_pt);
+            if (!p_rtp->arq_ctx) {
+                rtp_close(p_rtp);
+                fprintf( stderr, "[rtp] Could not create arq output" );
+                return NULL;
+            }
+        }
     }
     else
     {
