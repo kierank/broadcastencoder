@@ -149,7 +149,11 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
     p_rtp->dup_delay = output_dest->dup_delay;
     p_rtp->arq = output_dest->arq;
     p_rtp->arq_pt = output_dest->arq_pt;
+    if (!p_rtp->arq_pt)
+        p_rtp->arq_pt = 96;
     p_rtp->arq_latency = output_dest->arq_latency;
+    if (!p_rtp->arq_latency)
+        p_rtp->arq_latency = 100;
     p_rtp->fec_columns = output_dest->fec_columns;
     p_rtp->fec_rows = output_dest->fec_rows;
 
@@ -469,14 +473,8 @@ static void *open_output( void *ptr )
 
         obe_rtp_ctx *p_rtp = ip_handle;
         if (p_rtp->arq) {
-            uint8_t rtx_pt = p_rtp->arq_pt;
-            if (!rtx_pt)
-                rtx_pt = 96;
-            unsigned latency = p_rtp->arq_latency;
-            if (!latency)
-                latency = 100;
             obe_udp_ctx *p_udp = p_rtp->udp_handle;
-            p_rtp->arq_ctx = open_arq(p_udp, latency, rtx_pt);
+            p_rtp->arq_ctx = open_arq(p_udp, p_rtp->arq_latency, p_rtp->arq_pt);
             if (!p_rtp->arq_ctx) {
                 rtp_close(p_rtp);
                 fprintf( stderr, "[rtp] Could not create arq output" );
