@@ -34,13 +34,6 @@
 #include <libavformat/avformat.h>
 #include <libavutil/parseutils.h>
 
-typedef struct
-{
-    int udp_fd;
-    struct sockaddr_storage dest_addr;
-    int dest_addr_len;
-} obe_udp_ctx;
-
 static int udp_set_multicast_opts( int sockfd, obe_udp_ctx *s, int ttl )
 {
     struct sockaddr *addr = (struct sockaddr *)&s->dest_addr;

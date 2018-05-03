@@ -24,6 +24,15 @@
 #ifndef OBE_COMMON_UDP_H
 #define OBE_COMMON_UDP_H
 
+#include <netinet/in.h>
+
+typedef struct
+{
+    int udp_fd;
+    struct sockaddr_storage dest_addr;
+    int dest_addr_len;
+} obe_udp_ctx;
+
 typedef struct obe_udp_opts_t
 {
     char hostname[1024];
