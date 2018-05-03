@@ -159,8 +159,6 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
 
     if( p_rtp->fec_columns && p_rtp->fec_rows )
     {
-        /* Set SSRC for both streams to zero as per specification */
-        p_rtp->ssrc = 0;
         p_rtp->fec_pkt_len = FFALIGN( COP3_FEC_PACKET_SIZE, 32 );
         p_rtp->column_data = calloc( output_dest->fec_columns*2, p_rtp->fec_pkt_len );
         p_rtp->row_data = calloc( output_dest->fec_rows, p_rtp->fec_pkt_len );
