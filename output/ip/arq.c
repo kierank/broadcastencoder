@@ -420,8 +420,8 @@ static void *arq_thread(void *arg)
 
     /* catch RTCP SR messages before they're output */
     upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
-    rtcp = upipe_void_chain_output(rtcp,
-            upipe_probe_uref_mgr, uprobe_use(logger));
+    rtcp = upipe_void_chain_output(rtcp, upipe_probe_uref_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "probe uref"));
     assert(rtcp);
     upipe_release(rtcp);
     upipe_mgr_release(upipe_probe_uref_mgr);
