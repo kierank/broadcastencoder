@@ -311,8 +311,8 @@ static int fec(obe_rtp_ctx *p_rtp, int fec_type, uint8_t *pkt_ptr, uint32_t ts_9
 {
     int ret = 0;
     const int rows = p_rtp->fec_rows;
-    const int columns = columns;
-    const uint64_t seq = seq;
+    const int columns = p_rtp->fec_columns;
+    const uint64_t seq = p_rtp->seq;
     int row_idx = (seq / columns) % rows;
     int column_idx = seq % columns;
 
