@@ -565,6 +565,8 @@ typedef struct
     int dup_delay;
 
     bool arq;
+    uint8_t arq_pt;
+    unsigned arq_latency;
 } obe_output_dest_t;
 
 typedef struct
