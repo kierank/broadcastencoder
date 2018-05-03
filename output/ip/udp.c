@@ -234,7 +234,7 @@ void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri )
     av_url_split( NULL, 0, NULL, 0, udp_opts->hostname, sizeof(udp_opts->hostname), &udp_opts->port, NULL, 0, uri );
 }
 
-int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
+int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, int fd )
 {
     int udp_fd = -1, bind_ret = -1;
     struct sockaddr_storage my_addr;
@@ -250,40 +250,46 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
     if( s->dest_addr_len < 0 )
         goto fail;
 
-    udp_fd = udp_socket_create( s, &my_addr, &len, udp_opts->local_port );
-    if( udp_fd < 0 )
-        goto fail;
-
-    udp_opts->reuse_socket = 1;
-    if( setsockopt( udp_fd, SOL_SOCKET, SO_REUSEADDR, &(udp_opts->reuse_socket), sizeof(udp_opts->reuse_socket) ) != 0)
-        goto fail;
-
-    if( udp_opts->bind_iface )
+    if (fd == -1)
     {
-        if( setsockopt( udp_fd, SOL_SOCKET, SO_BINDTODEVICE, udp_opts->iface, strlen(udp_opts->iface ) ) )
+        udp_fd = udp_socket_create( s, &my_addr, &len, udp_opts->local_port );
+        if( udp_fd < 0 )
             goto fail;
-    }
-    else
+
+        udp_opts->reuse_socket = 1;
+        if( setsockopt( udp_fd, SOL_SOCKET, SO_REUSEADDR, &(udp_opts->reuse_socket), sizeof(udp_opts->reuse_socket) ) != 0)
+            goto fail;
+
+        if( udp_opts->bind_iface )
+        {
+            if( setsockopt( udp_fd, SOL_SOCKET, SO_BINDTODEVICE, udp_opts->iface, strlen(udp_opts->iface ) ) )
+                goto fail;
+        }
+        else
+        {
+            /* bind to the local address if not multicast or if the multicast
+             * bind failed */
+            if( bind_ret < 0 && bind( udp_fd, (struct sockaddr *)&my_addr, len ) < 0 )
+                goto fail;
+        }
+
+        /* set output multicast ttl */
+
+        bool is_multicast = is_multicast_address( (struct sockaddr*) &s->dest_addr );
+        if( is_multicast && udp_set_multicast_opts( udp_fd, s, udp_opts->ttl) < 0 )
+            goto fail;
+
+        /* set tos/diffserv */
+        if( udp_set_tos_opts( udp_fd, s, udp_opts->tos) < 0 )
+            goto fail;
+    } else
     {
-        /* bind to the local address if not multicast or if the multicast
-         * bind failed */
-        if( bind_ret < 0 && bind( udp_fd, (struct sockaddr *)&my_addr, len ) < 0 )
-            goto fail;
+        udp_fd = dup(fd);
     }
 
     len = sizeof(my_addr);
     getsockname( udp_fd, (struct sockaddr *)&my_addr, (socklen_t *) &len );
     udp_opts->local_port = udp_port( &my_addr, len );
-
-    /* set output multicast ttl */
-
-    bool is_multicast = is_multicast_address( (struct sockaddr*) &s->dest_addr );
-    if( is_multicast && udp_set_multicast_opts( udp_fd, s, udp_opts->ttl) < 0 )
-        goto fail;
-
-    /* set tos/diffserv */
-    if( udp_set_tos_opts( udp_fd, s, udp_opts->tos) < 0 )
-        goto fail;
 
     s->udp_fd = udp_fd;
     *p_handle = s;
