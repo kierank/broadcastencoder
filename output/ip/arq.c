@@ -55,7 +55,7 @@
 
 #include <upump-ev/upump_ev.h>
 
-#include <upipe-modules/upipe_null.h>
+#include <upipe-modules/upipe_setflowdef.h>
 #include <upipe-modules/upipe_probe_uref.h>
 #include <upipe-modules/upipe_udp_source.h>
 #include <upipe-modules/upipe_udp_sink.h>
@@ -360,20 +360,27 @@ static void *arq_thread(void *arg)
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
 
     /* send through rtcp fb receiver */
+    struct upipe_mgr *upipe_setflowdef_mgr = upipe_setflowdef_mgr_alloc();
+    struct upipe *upipe_setflowdef = upipe_void_alloc(upipe_setflowdef_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "rtcp fb setflowdef"));
+    upipe_mgr_release(upipe_setflowdef_mgr);
+
+    struct uref *flow_def = uref_block_flow_alloc_def(ctx->uref_mgr, "");
+    upipe_set_flow_def(upipe_setflowdef, flow_def);
+    upipe_setflowdef_set_dict(upipe_setflowdef, flow_def);
+    uref_free(flow_def);
+
+    ctx->upipe_rtcpfb = upipe_setflowdef;
+
     struct upipe_mgr *upipe_rtcpfb_mgr = upipe_rtcpfb_mgr_alloc();
-    ctx->upipe_rtcpfb = upipe_void_alloc(upipe_rtcpfb_mgr,
+    struct upipe *upipe_rtcpfb = upipe_void_alloc_output(upipe_setflowdef, upipe_rtcpfb_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), loglevel, "rtcp fb"));
-    upipe_rtcpfb_set_rtx_pt(ctx->upipe_rtcpfb, ctx->rtx_pt);
+    upipe_rtcpfb_set_rtx_pt(upipe_rtcpfb, ctx->rtx_pt);
     upipe_mgr_release(upipe_rtcpfb_mgr);
 
     char slatency[20];
     snprintf(slatency, sizeof(slatency), "%d", ctx->latency);
-    ubase_assert(upipe_set_option(ctx->upipe_rtcpfb, "latency", slatency));
-
-    struct uref *flow_def = uref_block_flow_alloc_def(ctx->uref_mgr, "");
-    uref_free(flow_def); // XXX ?
-    //upipe_set_flow_def(ctx->upipe_rtcpfb, flow_def);
-    //uref_free(flow_def); // XXX ?
+    ubase_assert(upipe_set_option(upipe_rtcpfb, "latency", slatency));
 
     struct uprobe uprobe_udp_rtcp;
     uprobe_init(&uprobe_udp_rtcp, catch_udp, uprobe_pfx_alloc(uprobe_use(logger),
@@ -392,12 +399,12 @@ static void *arq_thread(void *arg)
     upipe_mgr_release(upipe_probe_uref_mgr);
 
     ctx->upipe_rtcp_sub = upipe_void_chain_output_sub(upipe_probe_uref,
-        ctx->upipe_rtcpfb,
+        upipe_rtcpfb,
         uprobe_pfx_alloc(uprobe_use(logger), loglevel, "rtcp fb sub"));
     assert(ctx->upipe_rtcp_sub);
 
     struct upipe_mgr *dup_mgr = upipe_dup_mgr_alloc();
-    struct upipe *dup = upipe_void_alloc_output(ctx->upipe_rtcpfb, dup_mgr,
+    struct upipe *dup = upipe_void_chain_output(upipe_rtcpfb, dup_mgr,
             uprobe_pfx_alloc(uprobe_use(logger),
                              loglevel, "dup"));
     upipe_mgr_release(dup_mgr);
