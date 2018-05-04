@@ -10,6 +10,8 @@ struct uclock;
 struct arq_ctx {
     pthread_t thread;
     struct upipe *upipe_udpsink;
+    struct upipe *upipe_row_udpsink;
+    struct upipe *upipe_col_udpsink;
     struct upipe *upipe_rtcpfb;
     struct upipe *upipe_udpsrc;
     struct upipe *upipe_rtcp_sub;
@@ -24,6 +26,12 @@ struct arq_ctx {
     int dest_addr_len;
     unsigned latency;
     uint8_t rtx_pt;
+    int row_fd;
+    struct sockaddr_storage row_dest_addr;
+    int row_dest_addr_len;
+    int col_fd;
+    struct sockaddr_storage col_dest_addr;
+    int col_dest_addr_len;
 
     pthread_mutex_t mutex;
     bool end;
@@ -31,6 +39,9 @@ struct arq_ctx {
     void *queue_extra;
 };
 
-void arq_write(struct arq_ctx *ctx, uint8_t *buf, size_t len, int64_t timestamp);
-struct arq_ctx *open_arq(obe_udp_ctx *p_udp, unsigned latency, uint8_t rtx_pt);
+void arq_write(struct arq_ctx *ctx, struct uref *uref);
+struct arq_ctx *open_arq(obe_udp_ctx *p_udp, obe_udp_ctx *p_row,
+        obe_udp_ctx *p_col, unsigned latency, uint8_t rtx_pt);
 void close_arq(struct arq_ctx *ctx);
+struct uref *make_uref(struct arq_ctx *ctx, uint8_t *buf, size_t len,
+        int64_t timestamp);

@@ -97,6 +97,8 @@ static void catch_event(struct upump *upump)
         upipe_release(ctx->upipe_udpsrc);
         upipe_release(ctx->upipe_rtcp_sub);
         upipe_release(ctx->upipe_rtcpfb);
+        upipe_release(ctx->upipe_row_udpsink);
+        upipe_release(ctx->upipe_col_udpsink);
         upump_stop(upump);
         return;
     }
@@ -105,7 +107,25 @@ static void catch_event(struct upump *upump)
         struct uref *uref = uqueue_pop(ctx->queue, struct uref *);
         if (!uref)
             break;
+        struct uref *row_uref = NULL, *col_uref = NULL;
+        struct uchain *next = uref->uchain.next;
+        for (int i = 0; i < 2; i++) {
+            if (!next)
+                break;
+
+            struct uref *uref_chain = uref_from_uchain(next);
+            if (uref_chain->priv == 1)
+                row_uref = uref_chain;
+            else
+                col_uref = uref_chain;
+            next = uref_chain->uchain.next;
+        }
+
         upipe_input(ctx->upipe_rtcpfb, uref, &upump);
+        if (row_uref)
+            upipe_input(ctx->upipe_row_udpsink, row_uref, &upump);
+        if (col_uref)
+            upipe_input(ctx->upipe_col_udpsink, col_uref, &upump);
     }
 }
 
@@ -302,20 +322,27 @@ unmap:
     return UBASE_ERR_INVALID;
 }
 
-void arq_write(struct arq_ctx *ctx, uint8_t *buf, size_t len, int64_t timestamp)
+struct uref *make_uref(struct arq_ctx *ctx, uint8_t *buf, size_t len,
+        int64_t timestamp)
 {
     struct uref *uref = uref_alloc(ctx->uref_mgr);;
     if (!uref)
-        return;
+        return NULL;
 
     struct ubuf *ubuf = ubuf_block_alloc_from_opaque(ctx->ubuf_mgr, buf, len);
     if (!ubuf) {
         uref_free(uref);
-        return;
+        return NULL;
     }
     uref_attach_ubuf(uref, ubuf);
     uref_clock_set_pts_prog(uref, timestamp);
     uref_clock_set_cr_sys(uref, uclock_now(ctx->uclock));
+
+    return uref;
+}
+
+void arq_write(struct arq_ctx *ctx, struct uref *uref)
+{
     if (!uqueue_push(ctx->queue, uref)) {
         printf("full\n");
         uref_free(uref);
@@ -437,7 +464,6 @@ static void *arq_thread(void *arg)
     struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
     ctx->upipe_udpsink = upipe_void_alloc_output(upipe_rtcpfb_dup, upipe_udpsink_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), loglevel, "udp sink"));
-    upipe_mgr_release(upipe_udpsink_mgr);
 
     int flags = fcntl(ctx->fd, F_GETFL);
     flags |= O_NONBLOCK;
@@ -453,6 +479,35 @@ static void *arq_thread(void *arg)
     upipe_set_output(rtcp, ctx->upipe_udpsink);
 
     upipe_release(ctx->upipe_udpsink);
+
+    /* fec */
+    flow_def = uref_block_flow_alloc_def(ctx->uref_mgr, "");
+
+    if (ctx->row_dest_addr_len) {
+        ctx->upipe_row_udpsink = upipe_void_alloc(upipe_udpsink_mgr,
+                uprobe_pfx_alloc(uprobe_use(logger), loglevel, "udp sink row fec"));
+
+        ubase_assert(upipe_udpsink_set_fd(ctx->upipe_row_udpsink, ctx->row_fd));
+        ubase_assert(upipe_udpsink_set_peer(ctx->upipe_row_udpsink,
+                    (const struct sockaddr*)&ctx->row_dest_addr, ctx->row_dest_addr_len));
+        ubase_assert(upipe_set_flow_def(ctx->upipe_row_udpsink, flow_def));
+    }
+
+    if (ctx->col_dest_addr_len) {
+        ctx->upipe_col_udpsink = upipe_void_alloc(upipe_udpsink_mgr,
+                uprobe_pfx_alloc(uprobe_use(logger), loglevel, "udp sink col fec"));
+
+        ubase_assert(upipe_udpsink_set_fd(ctx->upipe_col_udpsink, ctx->col_fd));
+        ubase_assert(upipe_udpsink_set_peer(ctx->upipe_col_udpsink,
+                    (const struct sockaddr*)&ctx->col_dest_addr, ctx->col_dest_addr_len));
+        ubase_assert(upipe_set_flow_def(ctx->upipe_col_udpsink, flow_def));
+    }
+
+    uref_free(flow_def);
+
+    upipe_mgr_release(upipe_udpsink_mgr);
+
+    /* */
 
     struct upump *event = ueventfd_upump_alloc(ctx->event, upump_mgr,
             catch_event, ctx, NULL);
@@ -480,7 +535,8 @@ static void *arq_thread(void *arg)
     return NULL;
 }
 
-struct arq_ctx *open_arq(obe_udp_ctx *p_udp, unsigned latency, uint8_t rtx_pt)
+struct arq_ctx *open_arq(obe_udp_ctx *p_udp, obe_udp_ctx *p_row,
+        obe_udp_ctx *p_col, unsigned latency, uint8_t rtx_pt)
 {
     struct arq_ctx *ctx = calloc(1, sizeof(*ctx));
     if (!ctx)
@@ -489,6 +545,16 @@ struct arq_ctx *open_arq(obe_udp_ctx *p_udp, unsigned latency, uint8_t rtx_pt)
     ctx->fd = p_udp->udp_fd;
     ctx->dest_addr = p_udp->dest_addr;
     ctx->dest_addr_len = p_udp->dest_addr_len;
+    if (p_row) {
+        ctx->row_fd = p_row->udp_fd;
+        ctx->row_dest_addr = p_row->dest_addr;
+        ctx->row_dest_addr_len = p_row->dest_addr_len;
+    }
+    if (p_col) {
+        ctx->col_fd = p_col->udp_fd;
+        ctx->col_dest_addr = p_col->dest_addr;
+        ctx->col_dest_addr_len = p_col->dest_addr_len;
+    }
     ctx->latency = latency;
     ctx->rtx_pt = rtx_pt;
     ctx->end = false;

@@ -38,6 +38,8 @@
 #include <bitstream/mpeg/ts.h>
 #include <bitstream/smpte/2022_1_fec.h>
 
+#include <upipe/uref.h>
+
 #define FEC_PAYLOAD_TYPE 96
 
 #define RTP_PACKET_SIZE (RTP_HEADER_SIZE+TS_PACKETS_SIZE)
@@ -256,14 +258,22 @@ static void write_fec_header( obe_rtp_ctx *p_rtp, uint8_t *rtp, int row, uint16_
     smpte_fec_set_snbase_ext(data, 0);
 }
 
-static int write_fec_packet( hnd_t udp_handle, uint8_t *data )
+static int write_fec_packet(obe_rtp_ctx *p_rtp, hnd_t udp_handle, uint8_t *data,
+        int64_t timestamp, struct uref **uref)
 {
     int ret = 0;
+    const size_t len = COP3_FEC_PACKET_SIZE;
 
-    if( udp_write( udp_handle, data, COP3_FEC_PACKET_SIZE ) < 0 )
-        ret = -1;
+    if (p_rtp->arq) {
+        *uref = make_uref(p_rtp->arq_ctx, data, len, timestamp);
+        if (!*uref)
+            ret = -1;
+    } else {
+        if( udp_write( udp_handle, data, len) < 0 )
+            ret = -1;
+    }
 
-    memset( data, 0, COP3_FEC_PACKET_SIZE );
+    memset( data, 0, len);
 
     return ret;
 }
@@ -308,12 +318,14 @@ static int dup_stream(obe_rtp_ctx *p_rtp, AVBufferRef *buf_ref,
     return 0;
 }
 
-static int fec(obe_rtp_ctx *p_rtp, int fec_type, uint8_t *pkt_ptr, uint32_t ts_90)
+static int fec(obe_rtp_ctx *p_rtp, int fec_type, uint8_t *pkt_ptr,
+        uint64_t timestamp, struct uref **row_uref, struct uref **col_uref)
 {
     int ret = 0;
     const int rows = p_rtp->fec_rows;
     const int columns = p_rtp->fec_columns;
     const uint64_t seq = p_rtp->seq;
+    uint32_t ts_90 = timestamp / 300;
     int row_idx = (seq / columns) % rows;
     int column_idx = seq % columns;
 
@@ -340,7 +352,7 @@ static int fec(obe_rtp_ctx *p_rtp, int fec_type, uint8_t *pkt_ptr, uint32_t ts_9
         write_rtp_header( row, FEC_PAYLOAD_TYPE, p_rtp->row_seq++, 0, 0 );
         write_fec_header( p_rtp, row, 1, seq - column_idx );
 
-        if( write_fec_packet( p_rtp->row_handle, row ) < 0 )
+        if( write_fec_packet( p_rtp, p_rtp->row_handle, row, timestamp, row_uref ) < 0 )
             ret = -1;
     }
 
@@ -358,7 +370,7 @@ static int fec(obe_rtp_ctx *p_rtp, int fec_type, uint8_t *pkt_ptr, uint32_t ts_9
             uint64_t send_column_idx = (seq % (columns*rows)) / rows;
             uint8_t *column_tx = &p_rtp->column_data[(send_column_idx*2+!p_rtp->column_phase)*p_rtp->fec_pkt_len];
 
-            if( write_fec_packet( p_rtp->column_handle, column_tx ) < 0 )
+            if( write_fec_packet( p_rtp, p_rtp->column_handle, column_tx, timestamp, col_uref ) < 0 )
                 ret = -1;
         }
     } else if( fec_type == FEC_TYPE_COP3_NON_BLOCK_ALIGNED ) {
@@ -370,7 +382,7 @@ static int fec(obe_rtp_ctx *p_rtp, int fec_type, uint8_t *pkt_ptr, uint32_t ts_9
                 write_rtp_header( column, FEC_PAYLOAD_TYPE, p_rtp->column_seq++, 0, 0 );
                 write_fec_header( p_rtp, column, 0, seq - (columns*rows) );
 
-                if( write_fec_packet( p_rtp->column_handle, column ) < 0 )
+                if( write_fec_packet( p_rtp, p_rtp->column_handle, column, timestamp, col_uref ) < 0 )
                     ret = -1;
             }
         }
@@ -400,8 +412,11 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     write_rtp_header( pkt_ptr, RTP_TYPE_MP2T, p_rtp->seq, ts_90, p_rtp->ssrc );
     memcpy( &pkt_ptr[RTP_HEADER_SIZE], data, len );
 
+    struct uref *uref = NULL;
     if (p_rtp->arq) {
-        arq_write(p_rtp->arq_ctx, pkt_ptr, RTP_PACKET_SIZE, timestamp);
+        uref = make_uref(p_rtp->arq_ctx, pkt_ptr, RTP_PACKET_SIZE, timestamp);
+        if (!uref)
+            ret = -1;
     } else {
         if( udp_write( p_rtp->udp_handle, pkt_ptr, RTP_PACKET_SIZE ) < 0 )
             ret = -1;
@@ -414,8 +429,30 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         goto end;
     }
 
+    struct uref *row_uref = NULL, *col_uref = NULL;
+
     if( p_rtp->fec_columns && p_rtp->fec_rows )
-        ret |= fec(p_rtp, fec_type, pkt_ptr, ts_90);
+        ret |= fec(p_rtp, fec_type, pkt_ptr, timestamp, &row_uref, &col_uref);
+
+    if (p_rtp->arq) {
+        if (!uref) {
+            uref_free(row_uref);
+            uref_free(col_uref);
+            goto end;
+        }
+
+        struct uchain **next = &uref->uchain.next;
+        if (row_uref) {
+            row_uref->priv = 1;
+            *next = &row_uref->uchain;
+            next = &row_uref->uchain.next;
+        }
+        if (col_uref) {
+            *next = &col_uref->uchain;
+        }
+
+        arq_write(p_rtp->arq_ctx, uref);
+    }
 
 end:
     av_buffer_unref( &buf_ref );
@@ -475,7 +512,8 @@ static void *open_output( void *ptr )
         obe_rtp_ctx *p_rtp = ip_handle;
         if (p_rtp->arq) {
             obe_udp_ctx *p_udp = p_rtp->udp_handle;
-            p_rtp->arq_ctx = open_arq(p_udp, p_rtp->arq_latency, p_rtp->arq_pt);
+            p_rtp->arq_ctx = open_arq(p_udp, p_rtp->row_handle,
+                    p_rtp->column_handle,  p_rtp->arq_latency, p_rtp->arq_pt);
             if (!p_rtp->arq_ctx) {
                 rtp_close(p_rtp);
                 fprintf( stderr, "[rtp] Could not create arq output" );
