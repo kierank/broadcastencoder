@@ -354,7 +354,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             if( video_opts_in->has_threads )
                 video_stream->avc_param.i_threads = video_opts_in->threads;
             else
-                video_stream->avc_param.i_threads = 4;
+                video_stream->avc_param.i_threads = 8;
 
             if( video_opts_in->quality_metric )
             {
