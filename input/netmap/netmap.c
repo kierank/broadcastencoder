@@ -1178,13 +1178,6 @@ static void *open_input( void *ptr )
 
     open_netmap( &netmap_ctx );
 
-
-
-    //pthread_cleanup_push( close_thread, (void*)&status );
-
-
-    //pthread_cleanup_pop( 1 );
-
     return NULL;
 }
 
