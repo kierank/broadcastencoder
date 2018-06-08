@@ -484,7 +484,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
             raw_frame->alloc_img.stride[i] = stride;
             netmap_ctx->stored_video_frame.buf_ref[i] = NULL;
         }
-        
+
         netmap_ctx->stored_video_frame.release_data = obe_release_video_uref;
         netmap_ctx->stored_video_frame.num_user_data = 0;
         netmap_ctx->stored_video_frame.user_data = NULL;
@@ -663,14 +663,14 @@ static void upipe_event_timer(struct upump *upump)
 
             if( netmap_ctx->raw_frames )
                free( netmap_ctx->raw_frames );
-    
+
             if( netmap_ctx->bars_hnd )
                 close_bars( netmap_ctx->bars_hnd );
-        
+
             /* Stored frames are not malloced */
             if( netmap_ctx->stored_video_frame.release_data )
                 netmap_ctx->stored_video_frame.release_data( &netmap_ctx->stored_video_frame );
-        
+
             if( netmap_ctx->stored_audio_frame.release_data )
                 netmap_ctx->stored_audio_frame.release_data( &netmap_ctx->stored_audio_frame );
 
@@ -770,7 +770,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     pthread_attr_init(&thread_attribs);
     pthread_attr_setschedpolicy(&thread_attribs, SCHED_FIFO);
     pthread_attr_setinheritsched(&thread_attribs, PTHREAD_EXPLICIT_SCHED);
-    
+
     pthread_attr_getschedparam (&thread_attribs, &params);
     params.sched_priority = sched_get_priority_max(SCHED_FIFO);;
     int ret = pthread_attr_setschedparam(&thread_attribs, &params);
@@ -950,7 +950,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 
     /* Wait on all upumps */
     upump_mgr_release(main_upump_mgr);
-    uprobe_release(uprobe_main);	
+    uprobe_release(uprobe_main);
     uprobe_release(uprobe_dejitter);
 
     return 0;
@@ -1122,7 +1122,7 @@ static void *open_input( void *ptr )
     netmap_opts_t *netmap_opts = &netmap_ctx.netmap_opts;
     netmap_opts->video_format = user_opts->video_format;
     netmap_opts->picture_on_loss = user_opts->picture_on_loss;
-    //netmap_opts->downscale = user_opts->downscale; 
+    //netmap_opts->downscale = user_opts->downscale;
 
     netmap_opts->obe_bars_opts.video_format = user_opts->video_format;
     netmap_opts->obe_bars_opts.bars_line1 = user_opts->bars_line1;
@@ -1144,7 +1144,7 @@ static void *open_input( void *ptr )
     }
 
     netmap_ctx.v_timebase.num = video_format_tab[j].timebase_num;
-    netmap_ctx.v_timebase.den = video_format_tab[j].timebase_den;    
+    netmap_ctx.v_timebase.den = video_format_tab[j].timebase_den;
     netmap_ctx.video_freq = av_rescale_q( 1, netmap_ctx.v_timebase, (AVRational){1, OBE_CLOCK} );
 
     netmap_ctx.a_timebase.num = 1;
