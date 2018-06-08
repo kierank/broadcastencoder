@@ -1,9 +1,10 @@
 /*****************************************************************************
  * netmap.c: netmap input
  *****************************************************************************
- * Copyright (C) 2017 Open Broadcast Systems Ltd.
+ * Copyright (C) 2017-2018 Open Broadcast Systems Ltd.
  *
  * Authors: Kieran Kunhya <kieran@kunhya.com>
+ *          Rafaël Carré
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
