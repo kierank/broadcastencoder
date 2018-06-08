@@ -419,6 +419,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                      !ubase_check(uref_pic_plane_size(uref, netmap_ctx->input_chroma_map[i], &stride, NULL, NULL, NULL)))) {
             syslog(LOG_ERR, "invalid buffer received");
             uref_free(uref);
+            raw_frame->release_frame( raw_frame );
             return UBASE_ERR_NONE;
         }
 
@@ -469,6 +470,8 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                         !ubase_check(uref_pic_plane_size(uref, netmap_ctx->input_chroma_map[i], &stride, NULL, NULL, NULL)))) {
                 syslog(LOG_ERR, "invalid buffer received");
                 uref_free(uref);
+                raw_frame->release_data( raw_frame );
+                raw_frame->release_frame( raw_frame );
                 return UBASE_ERR_NONE;
             }
 
@@ -484,6 +487,8 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     }
 
     if( add_to_filter_queue( h, raw_frame ) < 0 ) {
+        raw_frame->release_data( raw_frame );
+        raw_frame->release_frame( raw_frame );
     }
 
     return UBASE_ERR_NONE;
