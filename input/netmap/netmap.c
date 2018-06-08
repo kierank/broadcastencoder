@@ -410,6 +410,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     }
 
     raw_frame->pts = pts;
+    raw_frame->release_frame = obe_release_frame;
 
     for (int i = 0; i < 3 && netmap_ctx->input_chroma_map[i] != NULL; i++)
     {
@@ -444,7 +445,6 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
     raw_frame->uref = uref;
     raw_frame->release_data = obe_release_video_uref;
-    raw_frame->release_frame = obe_release_frame;
 
     if (netmap_ctx->no_video_upump) {
         upump_stop(netmap_ctx->no_video_upump);
@@ -549,6 +549,7 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     raw_frame->audio_frame.num_samples = size;
     raw_frame->audio_frame.num_channels = netmap_ctx->channels;
     raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
+    raw_frame->release_frame = obe_release_frame;
 
     if( av_samples_alloc( raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.linesize, raw_frame->audio_frame.num_channels,
                           raw_frame->audio_frame.num_samples, raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
@@ -579,7 +580,6 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
 #endif
     netmap_ctx->a_counter += raw_frame->audio_frame.num_samples;
     raw_frame->release_data = obe_release_audio_data;
-    raw_frame->release_frame = obe_release_frame;
     for( int i = 0; i < h->device.num_input_streams; i++ )
     {
         if( h->device.streams[i]->stream_format == AUDIO_PCM )
