@@ -863,8 +863,13 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         }
     } else {
         struct upipe_mgr *rtpsrc_mgr = upipe_rtpsrc_mgr_alloc();
-        struct upipe *pcm_src = upipe_void_alloc(rtpsrc_mgr,
-                uprobe_pfx_alloc(uprobe_use(uprobe_main), loglevel, "pcm src"));
+
+        struct uref *flow_def = uref_alloc(uref_mgr);
+        uref_sound_flow_set_rate(flow_def, 48000);
+
+        struct upipe *pcm_src = upipe_flow_alloc(rtpsrc_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe_main), loglevel, "pcm src"), flow_def);
+        uref_free(flow_def);
         assert(pcm_src);
         char *audio = netmap_ctx->audio_uri;
         if (!audio) {
@@ -890,7 +895,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         assert(setflowdef);
         upipe_mgr_release(setflowdef_mgr);
 
-        struct uref *flow_def = uref_alloc(uref_mgr);
+        flow_def = uref_alloc(uref_mgr);
         uref_flow_set_def(flow_def, "block.s24be.sound.");
         uref_sound_flow_set_rate(flow_def, 48000);
         uref_sound_flow_set_channels(flow_def, atoi(slash));
