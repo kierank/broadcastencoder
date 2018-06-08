@@ -662,7 +662,6 @@ int64_t obe_mdate( void );
 obe_device_t *new_device( void );
 void destroy_device( obe_device_t *device );
 obe_raw_frame_t *new_raw_frame( void );
-void destroy_raw_frame( obe_raw_frame_t *raw_frame );
 obe_coded_frame_t *new_coded_frame( int stream_id, int len );
 void destroy_coded_frame( obe_coded_frame_t *coded_frame );
 void obe_release_video_data( void *ptr );
