@@ -333,158 +333,158 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         netmap_opts->tff = ubase_check(uref_pic_get_tff(flow_def));
 
         /* FIXME: probe video_format!! */
-        if( netmap_opts->probe ) {
+        if( netmap_opts->probe )
+            return UBASE_ERR_NONE;
 
+        /* check this matches the configured format */
+        int j = 0;
+        for( ; video_format_tab[j].obe_name != -1; j++ )
+        {
+            if( netmap_opts->video_format == video_format_tab[j].obe_name )
+                break;
         }
-        else {
-            /* check this matches the configured format */
-            int j = 0;
-            for( ; video_format_tab[j].obe_name != -1; j++ )
-            {
-                if( netmap_opts->video_format == video_format_tab[j].obe_name )
-                    break;
-            }
 
-            if( video_format_tab[j].width == netmap_opts->width &&
+        if( video_format_tab[j].width == netmap_opts->width &&
                 video_format_tab[j].height == netmap_opts->height &&
                 video_format_tab[j].timebase_num == netmap_opts->timebase_num &&
                 video_format_tab[j].timebase_den == netmap_opts->timebase_den &&
                 video_format_tab[j].interlaced == netmap_opts->interlaced )
-            {
-                netmap_ctx->video_good = 1;
-            }
-            else
-            {
-                netmap_ctx->video_good = 0;
-            }
+        {
+            netmap_ctx->video_good = 1;
+        }
+        else
+        {
+            netmap_ctx->video_good = 0;
         }
 
-
-    }
-    else if (event == UPROBE_PROBE_UREF) {
-        UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
-        struct uref *uref = va_arg(args, struct uref *);
-        va_arg(args, struct upump **);
-        bool *drop = va_arg(args, bool *);
-
-        *drop = true;
-
-        bool discontinuity = ubase_check(uref_flow_get_discontinuity(uref));
-
-        if(netmap_opts->probe) {
-            netmap_opts->probe_success = 1;
-        }
-        else if(netmap_ctx->video_good) {
-            obe_raw_frame_t *raw_frame = NULL;
-            int64_t pts = -1;
-            obe_t *h = netmap_ctx->h;
-            uref = uref_dup(uref);
-
-            pts = av_rescale_q( netmap_ctx->v_counter++, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
-            /* use SDI ticks as clock source */
-            obe_clock_tick( h, pts );
-
-            if( netmap_ctx->last_frame_time == -1 )
-                netmap_ctx->last_frame_time = obe_mdate();
-
-            if( discontinuity )
-            {
-                pthread_mutex_lock( &h->drop_mutex );
-                h->encoder_drop = h->mux_drop = 1;
-                pthread_mutex_unlock( &h->drop_mutex );
-            }
-
-            raw_frame = new_raw_frame();
-            if( !raw_frame )
-            {
-                syslog( LOG_ERR, "Malloc failed\n" );
-                goto end;
-            }
-
-            raw_frame->pts = pts;
-
-            for (int i = 0; i < 3 && netmap_ctx->input_chroma_map[i] != NULL; i++)
-            {
-                const uint8_t *data;
-                size_t stride;
-                if (unlikely(!ubase_check(uref_pic_plane_read(uref, netmap_ctx->input_chroma_map[i], 0, 0, -1, -1, &data)) ||
-                             !ubase_check(uref_pic_plane_size(uref, netmap_ctx->input_chroma_map[i], &stride, NULL, NULL, NULL)))) {
-                    syslog(LOG_ERR, "invalid buffer received");
-                    uref_free(uref);
-                    goto end;
-                }
-
-                raw_frame->alloc_img.plane[i] = (uint8_t *)data;
-                raw_frame->alloc_img.stride[i] = stride;
-            }
-
-            raw_frame->alloc_img.width = netmap_opts->width;
-            raw_frame->alloc_img.height = netmap_opts->height;
-            raw_frame->alloc_img.csp = AV_PIX_FMT_YUV422P10;
-            raw_frame->alloc_img.planes = av_pix_fmt_count_planes(raw_frame->alloc_img.csp);
-            raw_frame->alloc_img.format = netmap_opts->video_format;
-
-            memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
-            raw_frame->sar_width = raw_frame->sar_height = 1;
-
-            for( int i = 0; i < h->device.num_input_streams; i++ )
-            {
-                if( h->device.streams[i]->stream_format == VIDEO_UNCOMPRESSED )
-                    raw_frame->input_stream_id = h->device.streams[i]->input_stream_id;
-            }
-
-            raw_frame->uref = uref;
-            raw_frame->release_data = obe_release_video_uref;
-            raw_frame->release_frame = obe_release_frame;
-
-            if (netmap_ctx->no_video_upump) {
-                upump_stop(netmap_ctx->no_video_upump);
-                upump_free(netmap_ctx->no_video_upump);
-            }
-            setup_picture_on_signal_loss_timer(netmap_ctx);
-
-            /* Make a copy of the frame for showing the last frame */
-            if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
-            {
-                if( netmap_ctx->stored_video_frame.release_data )
-                    netmap_ctx->stored_video_frame.release_data( &netmap_ctx->stored_video_frame );
-
-                memcpy( &netmap_ctx->stored_video_frame, raw_frame, sizeof(netmap_ctx->stored_video_frame) );
-
-                uref = uref_dup(uref);
-                /* Map the frame again to create another buffer reference */
-                for (int i = 0; i < 3 && netmap_ctx->input_chroma_map[i] != NULL; i++)
-                {
-                    const uint8_t *data;
-                    size_t stride;
-                    if (unlikely(!ubase_check(uref_pic_plane_read(uref, netmap_ctx->input_chroma_map[i], 0, 0, -1, -1, &data)) ||
-                                !ubase_check(uref_pic_plane_size(uref, netmap_ctx->input_chroma_map[i], &stride, NULL, NULL, NULL)))) {
-                        syslog(LOG_ERR, "invalid buffer received");
-                        uref_free(uref);
-                        goto end;
-                    }
-
-                    raw_frame->alloc_img.plane[i] = (uint8_t *)data;
-                    raw_frame->alloc_img.stride[i] = stride;
-                    netmap_ctx->stored_video_frame.buf_ref[i] = NULL;
-                }
-                
-                netmap_ctx->stored_video_frame.release_data = obe_release_video_uref;
-                netmap_ctx->stored_video_frame.num_user_data = 0;
-                netmap_ctx->stored_video_frame.user_data = NULL;
-                netmap_ctx->stored_video_frame.uref = uref;
-            }
-
-            if( add_to_filter_queue( h, raw_frame ) < 0 )
-                goto end;
-        }
-
-end:
         return UBASE_ERR_NONE;
     }
 
-    if (!uprobe_plumber(event, args, &flow_def, &def))
-        return uprobe_throw_next(uprobe, upipe, event, args);
+    if (event != UPROBE_PROBE_UREF) {
+        if (!uprobe_plumber(event, args, &flow_def, &def))
+            return uprobe_throw_next(uprobe, upipe, event, args);
+
+        return UBASE_ERR_NONE;
+    }
+
+    UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
+    struct uref *uref = va_arg(args, struct uref *);
+    va_arg(args, struct upump **);
+    bool *drop = va_arg(args, bool *);
+
+    *drop = true;
+
+    bool discontinuity = ubase_check(uref_flow_get_discontinuity(uref));
+
+    if(netmap_opts->probe) {
+        netmap_opts->probe_success = 1;
+    }
+    else if (!netmap_ctx->video_good) {
+        return UBASE_ERR_NONE;
+    }
+
+    obe_raw_frame_t *raw_frame = NULL;
+    int64_t pts = -1;
+    obe_t *h = netmap_ctx->h;
+    uref = uref_dup(uref);
+
+    pts = av_rescale_q( netmap_ctx->v_counter++, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+    /* use SDI ticks as clock source */
+    obe_clock_tick( h, pts );
+
+    if( netmap_ctx->last_frame_time == -1 )
+        netmap_ctx->last_frame_time = obe_mdate();
+
+    if( discontinuity )
+    {
+        pthread_mutex_lock( &h->drop_mutex );
+        h->encoder_drop = h->mux_drop = 1;
+        pthread_mutex_unlock( &h->drop_mutex );
+    }
+
+    raw_frame = new_raw_frame();
+    if( !raw_frame )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return UBASE_ERR_NONE;
+    }
+
+    raw_frame->pts = pts;
+
+    for (int i = 0; i < 3 && netmap_ctx->input_chroma_map[i] != NULL; i++)
+    {
+        const uint8_t *data;
+        size_t stride;
+        if (unlikely(!ubase_check(uref_pic_plane_read(uref, netmap_ctx->input_chroma_map[i], 0, 0, -1, -1, &data)) ||
+                     !ubase_check(uref_pic_plane_size(uref, netmap_ctx->input_chroma_map[i], &stride, NULL, NULL, NULL)))) {
+            syslog(LOG_ERR, "invalid buffer received");
+            uref_free(uref);
+            return UBASE_ERR_NONE;
+        }
+
+        raw_frame->alloc_img.plane[i] = (uint8_t *)data;
+        raw_frame->alloc_img.stride[i] = stride;
+    }
+
+    raw_frame->alloc_img.width = netmap_opts->width;
+    raw_frame->alloc_img.height = netmap_opts->height;
+    raw_frame->alloc_img.csp = AV_PIX_FMT_YUV422P10;
+    raw_frame->alloc_img.planes = av_pix_fmt_count_planes(raw_frame->alloc_img.csp);
+    raw_frame->alloc_img.format = netmap_opts->video_format;
+
+    memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
+    raw_frame->sar_width = raw_frame->sar_height = 1;
+
+    for( int i = 0; i < h->device.num_input_streams; i++ )
+    {
+        if( h->device.streams[i]->stream_format == VIDEO_UNCOMPRESSED )
+            raw_frame->input_stream_id = h->device.streams[i]->input_stream_id;
+    }
+
+    raw_frame->uref = uref;
+    raw_frame->release_data = obe_release_video_uref;
+    raw_frame->release_frame = obe_release_frame;
+
+    if (netmap_ctx->no_video_upump) {
+        upump_stop(netmap_ctx->no_video_upump);
+        upump_free(netmap_ctx->no_video_upump);
+    }
+    setup_picture_on_signal_loss_timer(netmap_ctx);
+
+    /* Make a copy of the frame for showing the last frame */
+    if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
+    {
+        if( netmap_ctx->stored_video_frame.release_data )
+            netmap_ctx->stored_video_frame.release_data( &netmap_ctx->stored_video_frame );
+
+        memcpy( &netmap_ctx->stored_video_frame, raw_frame, sizeof(netmap_ctx->stored_video_frame) );
+
+        uref = uref_dup(uref);
+        /* Map the frame again to create another buffer reference */
+        for (int i = 0; i < 3 && netmap_ctx->input_chroma_map[i] != NULL; i++)
+        {
+            const uint8_t *data;
+            size_t stride;
+            if (unlikely(!ubase_check(uref_pic_plane_read(uref, netmap_ctx->input_chroma_map[i], 0, 0, -1, -1, &data)) ||
+                        !ubase_check(uref_pic_plane_size(uref, netmap_ctx->input_chroma_map[i], &stride, NULL, NULL, NULL)))) {
+                syslog(LOG_ERR, "invalid buffer received");
+                uref_free(uref);
+                return UBASE_ERR_NONE;
+            }
+
+            raw_frame->alloc_img.plane[i] = (uint8_t *)data;
+            raw_frame->alloc_img.stride[i] = stride;
+            netmap_ctx->stored_video_frame.buf_ref[i] = NULL;
+        }
+        
+        netmap_ctx->stored_video_frame.release_data = obe_release_video_uref;
+        netmap_ctx->stored_video_frame.num_user_data = 0;
+        netmap_ctx->stored_video_frame.user_data = NULL;
+        netmap_ctx->stored_video_frame.uref = uref;
+    }
+
+    if( add_to_filter_queue( h, raw_frame ) < 0 ) {
+    }
 
     return UBASE_ERR_NONE;
 }
