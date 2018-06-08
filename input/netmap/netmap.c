@@ -709,7 +709,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     assert(uprobe_main);
 
     struct uprobe *uprobe_dejitter =
-        uprobe_dejitter_alloc(uprobe_use(uprobe_main), true, 1);
+        uprobe_dejitter_alloc(uprobe_use(uprobe_main), !netmap_ctx->rfc4175, 1);
 
     uprobe_throw(uprobe_main, NULL, UPROBE_FREEZE_UPUMP_MGR);
 
@@ -729,7 +729,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         uref_pic_flow_set_fps(uref, fps);
         // progressive
         netmap_ctx->upipe_main_src = upipe_flow_alloc(upipe_netmap_source_mgr,
-                uprobe_pfx_alloc(uprobe_use(uprobe_dejitter),
+                uprobe_pfx_alloc(uprobe_use(uprobe_main),
                     loglevel, "netmap source"), uref);
         uref_free(uref);
     } else {
@@ -864,7 +864,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     } else {
         struct upipe_mgr *rtpsrc_mgr = upipe_rtpsrc_mgr_alloc();
         struct upipe *pcm_src = upipe_void_alloc(rtpsrc_mgr,
-                uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "pcm src"));
+                uprobe_pfx_alloc(uprobe_use(uprobe_main), loglevel, "pcm src"));
         assert(pcm_src);
         char *audio = netmap_ctx->audio_uri;
         if (!audio) {
@@ -909,7 +909,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         /* audio callback */
         struct upipe *probe_uref_audio = upipe_void_alloc_output(pcm_unpack,
                 upipe_probe_uref_mgr,
-                uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_audio, netmap_ctx),
+                uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_main), catch_audio, netmap_ctx),
                     loglevel, "audio probe_uref"));
         upipe_release(probe_uref_audio);
     }
