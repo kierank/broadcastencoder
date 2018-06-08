@@ -296,8 +296,17 @@ static void no_video_timer(struct upump *upump)
     netmap_ctx->v_counter++;
 }
 
+static void stop_no_video_timer(netmap_ctx_t *netmap_ctx)
+{
+    if (netmap_ctx->no_video_upump) {
+        upump_stop(netmap_ctx->no_video_upump);
+        upump_free(netmap_ctx->no_video_upump);
+    }
+}
+
 static void setup_picture_on_signal_loss_timer(netmap_ctx_t *netmap_ctx)
 {
+    stop_no_video_timer(netmap_ctx);
     netmap_ctx->no_video_upump = upump_alloc_timer(netmap_ctx->upump_mgr,
             no_video_timer, netmap_ctx, NULL, UCLOCK_FREQ/4, netmap_ctx->video_freq);
     assert(netmap_ctx->no_video_upump != NULL);
@@ -446,10 +455,6 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     raw_frame->uref = uref;
     raw_frame->release_data = obe_release_video_uref;
 
-    if (netmap_ctx->no_video_upump) {
-        upump_stop(netmap_ctx->no_video_upump);
-        upump_free(netmap_ctx->no_video_upump);
-    }
     setup_picture_on_signal_loss_timer(netmap_ctx);
 
     /* Make a copy of the frame for showing the last frame */
@@ -648,10 +653,7 @@ static void upipe_event_timer(struct upump *upump)
             upump_stop(upump);
             upump_free(upump);
 
-            if (netmap_ctx->no_video_upump) {
-                upump_stop(netmap_ctx->no_video_upump);
-                upump_free(netmap_ctx->no_video_upump);
-            }
+            stop_no_video_timer(netmap_ctx);
 
             if( netmap_ctx->raw_frames )
                free( netmap_ctx->raw_frames );
@@ -934,6 +936,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     assert(event_upump != NULL);
     upump_start(event_upump);
 
+    netmap_ctx->no_video_upump = NULL;
     setup_picture_on_signal_loss_timer(netmap_ctx);
 
     /* main loop */
