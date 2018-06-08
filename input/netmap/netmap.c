@@ -872,6 +872,9 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
             return 1;
         }
         char *slash = strrchr(audio, '/');
+        while (slash && (slash[1] < '0' || slash[1] > '9')) {
+            slash = strchr(&slash[1], '/');
+        }
         if (!slash) {
             printf("audio URI missing channels\n");
             return 1;
