@@ -501,87 +501,87 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     if (netmap_ctx->stop)
         return UBASE_ERR_NONE;
     
-    if (event == UPROBE_PROBE_UREF) {
-        UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
-        struct uref *uref = va_arg(args, struct uref *);
-        va_arg(args, struct upump **);
-        bool *drop = va_arg(args, bool *);
-        *drop = true;
-
-        if(netmap_opts->probe) {
-
-        }
-        else if(netmap_ctx->video_good) {
-            obe_raw_frame_t *raw_frame = NULL;
-            obe_t *h = netmap_ctx->h;
-            const int32_t *src;
-
-            size_t size = 0;
-            uint8_t sample_size = 0;
-            uref_sound_size(uref, &size, &sample_size);
-
-            raw_frame = new_raw_frame();
-            if( !raw_frame )
-            {
-                syslog( LOG_ERR, "Malloc failed\n" );
-                goto end;
-            }
-
-            raw_frame->audio_frame.num_samples = size;
-            raw_frame->audio_frame.num_channels = netmap_ctx->channels;
-            raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
-
-            if( av_samples_alloc( raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.linesize, raw_frame->audio_frame.num_channels,
-                                  raw_frame->audio_frame.num_samples, raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
-            {
-                syslog( LOG_ERR, "Malloc failed\n" );
-                return -1;
-            }
-
-            uref_sound_read_int32_t(uref, 0, -1, &src, 1);
-
-            for( int i = 0; i < size; i++)
-                for( int j = 0; j < netmap_ctx->channels; j++ )
-                {
-                    int32_t *audio = (int32_t*)raw_frame->audio_frame.audio_data[j];
-                    audio[i] = src[netmap_ctx->channels*i + j];
-                }
-
-            uref_sound_unmap(uref, 0, -1, 1);
-
-            raw_frame->pts = av_rescale_q( netmap_ctx->a_counter, netmap_ctx->a_timebase, (AVRational){1, OBE_CLOCK} );
-#if 0
-            if( 0 ) // FIXME
-            {
-                raw_frame->video_pts = pts;
-                raw_frame->video_duration = av_rescale_q( 1, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
-            }
-#endif
-            netmap_ctx->a_counter += raw_frame->audio_frame.num_samples;
-            raw_frame->release_data = obe_release_audio_data;
-            raw_frame->release_frame = obe_release_frame;
-            for( int i = 0; i < h->device.num_input_streams; i++ )
-            {
-                if( h->device.streams[i]->stream_format == AUDIO_PCM )
-                    raw_frame->input_stream_id = h->device.streams[i]->input_stream_id;
-            }
-
-            if( add_to_filter_queue( netmap_ctx->h, raw_frame ) < 0 )
-                goto end;
-        }
-
-end:
-        return UBASE_ERR_NONE;
-    } else if (event == UPROBE_NEW_FLOW_DEF) {
+    if (event == UPROBE_NEW_FLOW_DEF) {
         flow_def = va_arg(args, struct uref *);
         if (!ubase_check(uref_sound_flow_get_channels(flow_def, &netmap_ctx->channels))) {
             netmap_ctx->channels = 0;
         }
 
+        return UBASE_ERR_NONE;
     }
 
-    if (!uprobe_plumber(event, args, &flow_def, &def))
-        return uprobe_throw_next(uprobe, upipe, event, args);
+    if (event != UPROBE_PROBE_UREF) {
+        if (!uprobe_plumber(event, args, &flow_def, &def))
+            return uprobe_throw_next(uprobe, upipe, event, args);
+
+        return UBASE_ERR_NONE;
+    }
+
+    UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
+    struct uref *uref = va_arg(args, struct uref *);
+    va_arg(args, struct upump **);
+    bool *drop = va_arg(args, bool *);
+    *drop = true;
+
+    if (netmap_opts->probe || !netmap_ctx->video_good)
+        return UBASE_ERR_NONE;
+
+    obe_raw_frame_t *raw_frame = NULL;
+    obe_t *h = netmap_ctx->h;
+    const int32_t *src;
+
+    size_t size = 0;
+    uint8_t sample_size = 0;
+    uref_sound_size(uref, &size, &sample_size);
+
+    raw_frame = new_raw_frame();
+    if( !raw_frame )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return UBASE_ERR_NONE;
+    }
+
+    raw_frame->audio_frame.num_samples = size;
+    raw_frame->audio_frame.num_channels = netmap_ctx->channels;
+    raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
+
+    if( av_samples_alloc( raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.linesize, raw_frame->audio_frame.num_channels,
+                          raw_frame->audio_frame.num_samples, raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return UBASE_ERR_NONE;
+    }
+
+    uref_sound_read_int32_t(uref, 0, -1, &src, 1);
+
+    for( int i = 0; i < size; i++)
+        for( int j = 0; j < netmap_ctx->channels; j++ )
+        {
+            int32_t *audio = (int32_t*)raw_frame->audio_frame.audio_data[j];
+            audio[i] = src[netmap_ctx->channels*i + j];
+        }
+
+    uref_sound_unmap(uref, 0, -1, 1);
+
+    raw_frame->pts = av_rescale_q( netmap_ctx->a_counter, netmap_ctx->a_timebase, (AVRational){1, OBE_CLOCK} );
+#if 0
+    if( 0 ) // FIXME
+    {
+        raw_frame->video_pts = pts;
+        raw_frame->video_duration = av_rescale_q( 1, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+    }
+#endif
+    netmap_ctx->a_counter += raw_frame->audio_frame.num_samples;
+    raw_frame->release_data = obe_release_audio_data;
+    raw_frame->release_frame = obe_release_frame;
+    for( int i = 0; i < h->device.num_input_streams; i++ )
+    {
+        if( h->device.streams[i]->stream_format == AUDIO_PCM )
+            raw_frame->input_stream_id = h->device.streams[i]->input_stream_id;
+    }
+
+    if( add_to_filter_queue( netmap_ctx->h, raw_frame ) < 0 ) {
+    }
 
     return UBASE_ERR_NONE;
 }
