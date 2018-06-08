@@ -549,6 +549,7 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
                           raw_frame->audio_frame.num_samples, raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
+        raw_frame->release_frame( raw_frame );
         return UBASE_ERR_NONE;
     }
 
@@ -581,6 +582,8 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     }
 
     if( add_to_filter_queue( netmap_ctx->h, raw_frame ) < 0 ) {
+        raw_frame->release_data( raw_frame );
+        raw_frame->release_frame( raw_frame );
     }
 
     return UBASE_ERR_NONE;
