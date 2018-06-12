@@ -56,7 +56,7 @@
 #include <upipe/uref_block_flow.h>
 #include <upipe/ubuf.h>
 #include <upipe/uclock.h>
-#include <upipe/uclock_std.h>
+#include <upipe/uclock_ptp.h>
 #include <upipe/upipe.h>
 #include <upipe/upump.h>
 #include <upipe/upipe_dump.h>
@@ -158,6 +158,8 @@ typedef struct
 
     int stop;
 
+    struct uchain uchain_audio;
+
     obe_t *h;
 } netmap_ctx_t;
 
@@ -189,6 +191,15 @@ UPROBE_HELPER_ALLOC(uprobe_obe)
 #undef ARGS
 #undef ARGS_DECL
 
+static void release_buffered_audio(netmap_ctx_t *ctx)
+{
+    struct uchain *uchain_uref = NULL, *uchain_tmp;
+    ulist_delete_foreach(&ctx->uchain_audio, uchain_uref, uchain_tmp) {
+        uref_free(uref_from_uchain(uchain_uref));
+        ulist_delete(uchain_uref);
+    }
+}
+
 static void no_video_timer(struct upump *upump)
 {
     netmap_ctx_t *netmap_ctx = upump_get_opaque(upump, netmap_ctx_t *);
@@ -196,6 +207,8 @@ static void no_video_timer(struct upump *upump)
     obe_t *h = netmap_ctx->h;
     obe_int_input_stream_t *video_stream = get_input_stream(h, 0);
     int64_t pts = -1;
+
+    release_buffered_audio(netmap_ctx);
 
     if (!video_stream)
         return;
@@ -453,9 +466,54 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         return UBASE_ERR_NONE;
     }
 
+    uint64_t cr_sys = 0, pts_orig = 0;
+    uref_clock_get_cr_sys(uref, &cr_sys);
+    uref_clock_get_pts_orig(uref, &pts_orig);
+    // * 48000 / 27000000
+    pts_orig = pts_orig * 2 / 1125;
+
+    uint64_t ptp_rtp = cr_sys * 2 / 1125;
+    uint32_t timestamp = pts_orig;
+    uint32_t expected_timestamp = ptp_rtp;
+    int32_t diff = expected_timestamp - timestamp;
+    uint64_t vpts = cr_sys + diff * 300;
+
+    struct uchain *uchain_uref = NULL, *uchain_tmp;
+    ulist_delete_foreach(&netmap_ctx->uchain_audio, uchain_uref, uchain_tmp) {
+        struct uref *uref_buf = uref_from_uchain(uchain_uref);
+        uint64_t pts;
+        uref_clock_get_pts_prog(uref_buf, &pts);
+        if (pts >= vpts)
+            break;
+
+        fprintf(stderr, "dropping audio\n");
+        uref_free(uref_buf);
+        ulist_delete(uchain_uref);
+    }
+
+    obe_t *h = netmap_ctx->h;
+
+    unsigned samples = 1920;
+    while (samples) {
+        struct uchain *uchain = ulist_pop(&netmap_ctx->uchain_audio);
+        if (!uchain) {
+            fprintf(stderr, "Missing %u samples\n", samples);
+            break;
+        }
+        assert(uchain);
+        struct uref *uref_audio = uref_from_uchain(uchain);
+
+        obe_raw_frame_t *raw_frame = frame_from_uref_audio(netmap_ctx, uref_audio);
+        assert(raw_frame);
+        if( add_to_filter_queue( h, raw_frame ) < 0 ) {
+            raw_frame->release_data( raw_frame );
+            raw_frame->release_frame( raw_frame );
+        } else
+            samples -= raw_frame->audio_frame.num_samples;
+    }
+
     obe_raw_frame_t *raw_frame = NULL;
     int64_t pts = -1;
-    obe_t *h = netmap_ctx->h;
     uref = uref_dup(uref);
 
     pts = av_rescale_q( netmap_ctx->v_counter++, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
@@ -597,11 +655,27 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     if (netmap_opts->probe || !netmap_ctx->video_good)
         return UBASE_ERR_NONE;
 
-    obe_raw_frame_t *raw_frame = frame_from_uref_audio(netmap_ctx, uref);
-    if( raw_frame && add_to_filter_queue( netmap_ctx->h, raw_frame ) < 0 ) {
-        raw_frame->release_data( raw_frame );
-        raw_frame->release_frame( raw_frame );
-    }
+    uref = uref_dup(uref);
+    if (!uref)
+        return UBASE_ERR_NONE;
+
+    uint64_t cr_sys = 0, pts_orig = 0;
+    uref_clock_get_cr_sys(uref, &cr_sys);
+    uref_clock_get_pts_orig(uref, &pts_orig);
+    // * 48000 / 27000000
+    pts_orig = pts_orig * 2 / 1125;
+
+    uint64_t ptp_rtp = cr_sys * 2 / 1125;
+    uint32_t timestamp = pts_orig;
+    uint32_t expected_timestamp = ptp_rtp;
+    int32_t diff = expected_timestamp - timestamp;
+    uint64_t pts = cr_sys + diff * 300;
+    uref_clock_set_pts_prog(uref, pts);
+
+    size_t size = 0;
+    uint8_t sample_size = 0;
+    uref_sound_size(uref, &size, &sample_size);
+    ulist_add(&netmap_ctx->uchain_audio, uref_to_uchain(uref));
 
     return UBASE_ERR_NONE;
 }
@@ -689,6 +763,8 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     netmap_ctx->input_chroma_map[2] = "v10l";
     netmap_ctx->input_chroma_map[3] = NULL;
 
+    ulist_init(&netmap_ctx->uchain_audio);
+
     /* upump manager for the main thread */
     struct upump_mgr *main_upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(main_upump_mgr);
@@ -719,7 +795,16 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     uprobe_pthread_upump_mgr_set(uprobe_main, main_upump_mgr);
 
     struct uprobe *uprobe_main_pthread = uprobe_main;
-    struct uclock *uclock = uclock_std_alloc(0);
+#if 0
+    char *intf = NULL;
+    if (sscanf(uri, "netmap:%m[^]-]", &intf) != 1)
+        intf = NULL;
+    assert(intf);
+#else
+    char *intf = strdup("p1p1");
+#endif
+    struct uclock *uclock = uclock_ptp_alloc(uprobe_main, intf);
+    free(intf);
     assert(uclock);
     uprobe_main = uprobe_uclock_alloc(uprobe_main, uclock);
     uclock_release(uclock);
@@ -949,13 +1034,14 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     /* main loop */
     upump_mgr_run(main_upump_mgr, NULL);
 
+    release_buffered_audio(netmap_ctx);
+
     /* Wait on all upumps */
     upump_mgr_release(main_upump_mgr);
     uprobe_release(uprobe_main);
     uprobe_release(uprobe_dejitter);
 
     return 0;
-
 }
 
 static void *autoconf_input( void *ptr )
@@ -1038,6 +1124,7 @@ static void *probe_input( void *ptr )
     obe_input_t *user_opts = &probe_ctx->user_opts;
 
     netmap_ctx_t netmap_ctx = {0};
+    ulist_init(&netmap_ctx.uchain_audio);
     netmap_ctx.uri = user_opts->netmap_uri;
     netmap_ctx.audio_uri = user_opts->netmap_audio;
     netmap_ctx.rfc4175 = user_opts->netmap_mode && !strcmp(user_opts->netmap_mode, "rfc4175");
