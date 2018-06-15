@@ -696,4 +696,6 @@ void sleep_input_clock( obe_t *h, int64_t i_delay );
 
 int get_non_display_location( int type );
 
+extern int encoder_id;
+
 #endif
