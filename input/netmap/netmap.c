@@ -510,6 +510,8 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
             raw_frame->release_frame( raw_frame );
         } else
             samples -= raw_frame->audio_frame.num_samples;
+
+        uref_free(uref_audio);
     }
 
     obe_raw_frame_t *raw_frame = NULL;
