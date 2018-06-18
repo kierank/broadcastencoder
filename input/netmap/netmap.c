@@ -159,6 +159,7 @@ typedef struct
     int stop;
 
     struct uchain uchain_audio;
+    size_t samples;
 
     obe_t *h;
 } netmap_ctx_t;
@@ -198,6 +199,7 @@ static void release_buffered_audio(netmap_ctx_t *ctx)
         uref_free(uref_from_uchain(uchain_uref));
         ulist_delete(uchain_uref);
     }
+    ctx->samples = 0;
 }
 
 static void no_video_timer(struct upump *upump)
@@ -322,69 +324,9 @@ static void setup_picture_on_signal_loss_timer(netmap_ctx_t *netmap_ctx)
 {
     stop_no_video_timer(netmap_ctx);
     netmap_ctx->no_video_upump = upump_alloc_timer(netmap_ctx->upump_mgr,
-            no_video_timer, netmap_ctx, NULL, UCLOCK_FREQ/4, netmap_ctx->video_freq);
+            no_video_timer, netmap_ctx, NULL, UCLOCK_FREQ/4, UCLOCK_FREQ/4);
     assert(netmap_ctx->no_video_upump != NULL);
     upump_start(netmap_ctx->no_video_upump);
-}
-
-static obe_raw_frame_t *frame_from_uref_audio(netmap_ctx_t *ctx, struct uref *uref)
-{
-    obe_raw_frame_t *raw_frame = NULL;
-    obe_t *h = ctx->h;
-    const int32_t *src;
-
-    size_t size = 0;
-    uint8_t sample_size = 0;
-    uref_sound_size(uref, &size, &sample_size);
-
-    raw_frame = new_raw_frame();
-    if( !raw_frame )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return NULL;
-    }
-
-    raw_frame->audio_frame.num_samples = size;
-    raw_frame->audio_frame.num_channels = ctx->channels;
-    raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
-    raw_frame->release_frame = obe_release_frame;
-
-    if( av_samples_alloc( raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.linesize, raw_frame->audio_frame.num_channels,
-                          raw_frame->audio_frame.num_samples, raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        raw_frame->release_frame( raw_frame );
-        return NULL;
-    }
-
-    uref_sound_read_int32_t(uref, 0, -1, &src, 1);
-
-    for( int i = 0; i < size; i++)
-        for( int j = 0; j < ctx->channels; j++ )
-        {
-            int32_t *audio = (int32_t*)raw_frame->audio_frame.audio_data[j];
-            audio[i] = src[ctx->channels*i + j];
-        }
-
-    uref_sound_unmap(uref, 0, -1, 1);
-
-    raw_frame->pts = av_rescale_q( ctx->a_counter, ctx->a_timebase, (AVRational){1, OBE_CLOCK} );
-#if 0
-    if( 0 ) // FIXME
-    {
-        raw_frame->video_pts = pts;
-        raw_frame->video_duration = av_rescale_q( 1, ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
-    }
-#endif
-    ctx->a_counter += raw_frame->audio_frame.num_samples;
-    raw_frame->release_data = obe_release_audio_data;
-    for( int i = 0; i < h->device.num_input_streams; i++ )
-    {
-        if( h->device.streams[i]->stream_format == AUDIO_PCM )
-            raw_frame->input_stream_id = h->device.streams[i]->input_stream_id;
-    }
-
-    return raw_frame;
 }
 
 static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
@@ -466,6 +408,14 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         return UBASE_ERR_NONE;
     }
 
+    const unsigned samples = 1920; // XXX : NTSC
+
+
+    if (netmap_ctx->samples < samples) {
+        fprintf(stderr, "Waiting next frame, only %zu samples\n", netmap_ctx->samples);
+        return UBASE_ERR_NONE;
+    }
+
     uint64_t cr_sys = 0, pts_orig = 0;
     uref_clock_get_cr_sys(uref, &cr_sys);
     uref_clock_get_pts_orig(uref, &pts_orig);
@@ -481,37 +431,94 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     struct uchain *uchain_uref = NULL, *uchain_tmp;
     ulist_delete_foreach(&netmap_ctx->uchain_audio, uchain_uref, uchain_tmp) {
         struct uref *uref_buf = uref_from_uchain(uchain_uref);
-        uint64_t pts;
+        uint64_t pts = 0;
         uref_clock_get_pts_prog(uref_buf, &pts);
-        if (pts >= vpts)
+        if (pts >= vpts) {
+            int64_t pdiff = pts - vpts;
+            if (0) fprintf(stderr, "break, apts %" PRIu64 " vpts %" PRIu64 " diff %" PRId64 "\n",
+                    pts, vpts, pdiff);
             break;
+        }
 
         fprintf(stderr, "dropping audio\n");
+        size_t size = 0;
+        uint8_t sample_size = 0;
+        uref_sound_size(uref_buf, &size, &sample_size);
+        netmap_ctx->samples -= size;
         uref_free(uref_buf);
         ulist_delete(uchain_uref);
     }
 
     obe_t *h = netmap_ctx->h;
 
-    unsigned samples = 1920;
-    while (samples) {
-        struct uchain *uchain = ulist_pop(&netmap_ctx->uchain_audio);
-        if (!uchain) {
-            fprintf(stderr, "Missing %u samples\n", samples);
-            break;
+    {
+        obe_raw_frame_t *raw_frame = new_raw_frame();
+        if( !raw_frame )
+        {
+            syslog( LOG_ERR, "Malloc failed\n" );
+            return UBASE_ERR_NONE;
         }
-        assert(uchain);
-        struct uref *uref_audio = uref_from_uchain(uchain);
 
-        obe_raw_frame_t *raw_frame = frame_from_uref_audio(netmap_ctx, uref_audio);
-        assert(raw_frame);
+        raw_frame->audio_frame.num_samples = samples;
+        raw_frame->audio_frame.num_channels = netmap_ctx->channels;
+        raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
+        raw_frame->release_frame = obe_release_frame;
+
+        if( av_samples_alloc( raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.linesize, raw_frame->audio_frame.num_channels,
+                    raw_frame->audio_frame.num_samples, raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
+        {
+            syslog( LOG_ERR, "Malloc failed\n" );
+            raw_frame->release_frame( raw_frame );
+            return UBASE_ERR_NONE;
+        }
+
+        // XXX: newt loop has 48 samples, need to buffer
+        for (unsigned s = 0; s < samples; ) {
+            struct uchain *uchain = ulist_pop(&netmap_ctx->uchain_audio);
+            if (!uchain) {
+                fprintf(stderr, "Missing %u samples\n", samples);
+                break;
+            }
+            assert(uchain);
+            struct uref *uref_audio = uref_from_uchain(uchain);
+
+            size_t size = 0;
+            uint8_t sample_size = 0;
+            uref_sound_size(uref_audio, &size, &sample_size);
+            const int32_t *src;
+
+            uref_sound_read_int32_t(uref_audio, 0, -1, &src, 1);
+
+            for( int i = 0; i < size; i++)
+                for( int j = 0; j < netmap_ctx->channels; j++ )
+                {
+                    int32_t *audio = (int32_t*)raw_frame->audio_frame.audio_data[j];
+                    audio[s + i] = src[netmap_ctx->channels*i + j];
+                }
+
+            uref_sound_unmap(uref_audio, 0, -1, 1);
+
+            uref_free(uref_audio);
+            s += size;
+        }
+    //
+
+        raw_frame->pts = av_rescale_q( netmap_ctx->a_counter, netmap_ctx->a_timebase, (AVRational){1, OBE_CLOCK} );
+
+        netmap_ctx->a_counter += raw_frame->audio_frame.num_samples;
+        raw_frame->release_data = obe_release_audio_data;
+
+        for( int i = 0; i < h->device.num_input_streams; i++ )
+        {
+            if( h->device.streams[i]->stream_format == AUDIO_PCM )
+                raw_frame->input_stream_id = h->device.streams[i]->input_stream_id;
+        }
+
+        netmap_ctx->samples -= raw_frame->audio_frame.num_samples;
         if( add_to_filter_queue( h, raw_frame ) < 0 ) {
             raw_frame->release_data( raw_frame );
             raw_frame->release_frame( raw_frame );
-        } else
-            samples -= raw_frame->audio_frame.num_samples;
-
-        uref_free(uref_audio);
+        }
     }
 
     obe_raw_frame_t *raw_frame = NULL;
@@ -677,6 +684,7 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     size_t size = 0;
     uint8_t sample_size = 0;
     uref_sound_size(uref, &size, &sample_size);
+    netmap_ctx->samples += size;
     ulist_add(&netmap_ctx->uchain_audio, uref_to_uchain(uref));
 
     return UBASE_ERR_NONE;
@@ -766,6 +774,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     netmap_ctx->input_chroma_map[3] = NULL;
 
     ulist_init(&netmap_ctx->uchain_audio);
+    netmap_ctx->samples = 0;
 
     /* upump manager for the main thread */
     struct upump_mgr *main_upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
