@@ -1126,7 +1126,6 @@ static void *probe_input( void *ptr )
     obe_input_t *user_opts = &probe_ctx->user_opts;
 
     netmap_ctx_t netmap_ctx = {0};
-    ulist_init(&netmap_ctx.uchain_audio);
     netmap_ctx.uri = user_opts->netmap_uri;
     netmap_ctx.audio_uri = user_opts->netmap_audio;
     netmap_ctx.rfc4175 = user_opts->netmap_mode && !strcmp(user_opts->netmap_mode, "rfc4175");
