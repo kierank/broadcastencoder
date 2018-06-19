@@ -663,7 +663,104 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
+static obe_raw_frame_t *frame_from_uref_audio(netmap_ctx_t *ctx, struct uref *uref)
+{
+    obe_raw_frame_t *raw_frame = NULL;
+    obe_t *h = ctx->h;
+    const int32_t *src;
+
+    size_t size = 0;
+    uint8_t sample_size = 0;
+    uref_sound_size(uref, &size, &sample_size);
+
+    raw_frame = new_raw_frame();
+    if( !raw_frame )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return NULL;
+    }
+
+    raw_frame->audio_frame.num_samples = size;
+    raw_frame->audio_frame.num_channels = ctx->channels;
+    raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
+    raw_frame->release_frame = obe_release_frame;
+
+    if( av_samples_alloc( raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.linesize, raw_frame->audio_frame.num_channels,
+                          raw_frame->audio_frame.num_samples, raw_frame->audio_frame.sample_fmt, 0 ) < 0 )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        raw_frame->release_frame( raw_frame );
+        return NULL;
+    }
+
+    uref_sound_read_int32_t(uref, 0, -1, &src, 1);
+
+    for( int i = 0; i < size; i++)
+        for( int j = 0; j < ctx->channels; j++ )
+        {
+            int32_t *audio = (int32_t*)raw_frame->audio_frame.audio_data[j];
+            audio[i] = src[ctx->channels*i + j];
+        }
+
+    uref_sound_unmap(uref, 0, -1, 1);
+
+    raw_frame->pts = av_rescale_q( ctx->a_counter, ctx->a_timebase, (AVRational){1, OBE_CLOCK} );
+#if 0
+    if( 0 ) // FIXME
+    {
+        raw_frame->video_pts = pts;
+        raw_frame->video_duration = av_rescale_q( 1, ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+    }
+#endif
+    ctx->a_counter += raw_frame->audio_frame.num_samples;
+    raw_frame->release_data = obe_release_audio_data;
+    for( int i = 0; i < h->device.num_input_streams; i++ )
+    {
+        if( h->device.streams[i]->stream_format == AUDIO_PCM )
+            raw_frame->input_stream_id = h->device.streams[i]->input_stream_id;
+    }
+
+    return raw_frame;
+}
+
+static int catch_audio_hbrmt(struct uprobe *uprobe, struct upipe *upipe,
+                       int event, va_list args)
+{
+    struct uref *flow_def;
+    const char *def;
+    struct uprobe_obe *uprobe_obe = uprobe_obe_from_uprobe(uprobe);
+    netmap_ctx_t *ctx = uprobe_obe->data;
+    netmap_opts_t *netmap_opts = &ctx->netmap_opts;
+
+    if (ctx->stop)
+        return UBASE_ERR_NONE;
+
+    if (event != UPROBE_PROBE_UREF) {
+        if (!uprobe_plumber(event, args, &flow_def, &def))
+            return uprobe_throw_next(uprobe, upipe, event, args);
+
+        return UBASE_ERR_NONE;
+    }
+
+    UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
+    struct uref *uref = va_arg(args, struct uref *);
+    va_arg(args, struct upump **);
+    bool *drop = va_arg(args, bool *);
+    *drop = true;
+
+    if (netmap_opts->probe || !ctx->video_good)
+        return UBASE_ERR_NONE;
+
+    obe_raw_frame_t *raw_frame = frame_from_uref_audio(ctx, uref);
+    if( raw_frame && add_to_filter_queue( ctx->h, raw_frame ) < 0 ) {
+        raw_frame->release_data( raw_frame );
+        raw_frame->release_frame( raw_frame );
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+static int catch_audio_2110(struct uprobe *uprobe, struct upipe *upipe,
                        int event, va_list args)
 {
     struct uref *flow_def;
@@ -974,10 +1071,9 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 
         /* audio callback */
         netmap_ctx->channels = 16;
-        // FIXME
         struct upipe *probe_uref_audio = upipe_void_alloc_output(audio,
                 upipe_probe_uref_mgr,
-                uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_audio, netmap_ctx),
+                uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_audio_hbrmt, netmap_ctx),
                     loglevel, "audio probe_uref"));
         upipe_release(probe_uref_audio);
 
@@ -1077,7 +1173,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
             struct upipe *probe_uref_audio = upipe_void_alloc_output(pcm_unpack,
                     upipe_probe_uref_mgr,
                     uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_main),
-                            catch_audio, &netmap_ctx->audio[i++]),
+                            catch_audio_2110, &netmap_ctx->audio[i++]),
                         loglevel, "audio probe_uref"));
             upipe_release(probe_uref_audio);
             audio = next;
