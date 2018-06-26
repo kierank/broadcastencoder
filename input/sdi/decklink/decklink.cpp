@@ -733,7 +733,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
                 memcpy( raw_frame->alloc_img.stride, decklink_ctx->frame->linesize, sizeof(raw_frame->alloc_img.stride) );
                 memcpy( raw_frame->alloc_img.plane, decklink_ctx->frame->data, sizeof(raw_frame->alloc_img.plane) );
-                raw_frame->alloc_img.csp = (int)decklink_ctx->codec->pix_fmt;
+                raw_frame->alloc_img.csp = decklink_ctx->codec->pix_fmt;
             }
 
             raw_frame->release_data = obe_release_bufref;
