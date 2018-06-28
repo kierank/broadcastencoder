@@ -949,10 +949,9 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         intf = NULL;
     assert(intf);
 #else
-    char *intf = strdup("p1p1");
+    const char *intf[2] = { "p1p1", NULL };
 #endif
     struct uclock *uclock = uclock_ptp_alloc(uprobe_main, intf);
-    free(intf);
     assert(uclock);
     uprobe_main = uprobe_uclock_alloc(uprobe_main, uclock);
     uclock_release(uclock);
