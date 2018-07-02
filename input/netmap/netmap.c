@@ -21,13 +21,14 @@
  *
  *****************************************************************************/
 
-
+#define _GNU_SOURCE
 #include "common/common.h"
 #include "input/input.h"
 #include "input/sdi/sdi.h"
 #include "input/bars/bars_common.h"
 
 #include <stdlib.h>
+#include <sched.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -770,6 +771,14 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     int ret = pthread_attr_setschedparam(&thread_attribs, &params);
     if (ret < 0)
         perror("setschedparam");
+
+    cpu_set_t cs;
+    CPU_ZERO(&cs);
+    CPU_SET(encoder_id + 1, &cs);
+
+    if (pthread_attr_setaffinity_np(&thread_attribs, sizeof(cs), &cs)) {
+        perror("pthread_attr_setaffinity_np");
+    }
 
     struct upipe_mgr *xfer_mgr =  upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
             XFER_POOL, uprobe_use(uprobe_main_pthread), upump_ev_mgr_alloc_loop,

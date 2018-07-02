@@ -73,7 +73,7 @@ static char *line_read = NULL;
 
 static int running = 0;
 static int system_type_value = OBE_SYSTEM_TYPE_GENERIC;
-static int encoder_id = 0;
+int encoder_id = 0;
 static int64_t auth_time;
 static int auth;
 
