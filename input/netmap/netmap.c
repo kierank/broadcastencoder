@@ -898,7 +898,7 @@ static void upipe_event_timer(struct upump *upump)
     }
 }
 
-static void setup_rfc_audio_channel(netmap_ctx_t *netmap_ctx, char *uri,
+static void setup_rfc_audio_channel(netmap_ctx_t *netmap_ctx, char *uri, char *uri2,
         netmap_audio_t *a, struct uprobe *uprobe_main, const int loglevel,
         struct uref *flow_def)
 {
@@ -961,6 +961,10 @@ static int setup_rfc_audio(netmap_ctx_t *netmap_ctx, struct uref_mgr *uref_mgr,
         if (next)
             *next++ = '\0';
 
+        char *path2 = strchr(audio, '|');
+        if (path2)
+            *path2++ = '\0';
+
         unsigned channels = get_channels_from_uri(audio);
         if (!channels) {
             printf("audio URI missing channels\n");
@@ -974,8 +978,8 @@ static int setup_rfc_audio(netmap_ctx_t *netmap_ctx, struct uref_mgr *uref_mgr,
         a->idx = netmap_ctx->channels/2;
         a->channels = channels;
 
-        setup_rfc_audio_channel(netmap_ctx, audio, a, uprobe_main, loglevel,
-                flow_def);
+        setup_rfc_audio_channel(netmap_ctx, audio, path2, a, uprobe_main,
+                loglevel, flow_def);
 
         audio = next;
         netmap_ctx->channels += channels;
