@@ -909,6 +909,8 @@ static void setup_rfc_audio_channel(netmap_ctx_t *netmap_ctx, char *uri, char *u
     assert(rtpr);
     upipe_mgr_release(rtpr_mgr);
 
+    upipe_rtpr_set_delay(rtpr, UCLOCK_FREQ/10); /* arbitrary 100ms */
+
     for (int i = 0; i < 2; i++) {
         char *u = i ? uri2 : uri;
         if (!u)
