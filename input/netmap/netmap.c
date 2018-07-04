@@ -709,7 +709,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     if (!netmap_ctx->video_upump) {
         netmap_ctx->video_upump = upump_alloc_timer(netmap_ctx->upump_mgr,
                 video_timer, netmap_ctx, NULL, RFC_LATENCY,
-                UCLOCK_FREQ * netmap_opts->timebase_den / netmap_opts->timebase_num);
+                UCLOCK_FREQ * netmap_opts->timebase_num / netmap_opts->timebase_den);
         assert(netmap_ctx->video_upump != NULL);
         upump_start(netmap_ctx->video_upump);
     }
