@@ -92,6 +92,8 @@
 #define XFER_QUEUE              255
 #define XFER_POOL               20
 
+#define RFC_LATENCY (UCLOCK_FREQ/10)
+
 typedef struct
 {
     int probe;
@@ -160,6 +162,8 @@ typedef struct
 
     netmap_audio_t  audio[16];
 
+    struct uchain uchain_video;
+
     int64_t last_frame_time;
 
     netmap_opts_t netmap_opts;
@@ -168,6 +172,8 @@ typedef struct
     struct upump_mgr *upump_mgr;
 
     struct upump *no_video_upump;
+
+    struct upump *video_upump;
 
     int stop;
 
@@ -201,6 +207,17 @@ static void uprobe_obe_clean(struct uprobe_obe *probe_obe)
 UPROBE_HELPER_ALLOC(uprobe_obe)
 #undef ARGS
 #undef ARGS_DECL
+
+static void release_buffered_video(netmap_ctx_t *ctx)
+{
+    printf("%s()\n", __func__);
+    struct uchain *uchain_uref = NULL, *uchain_tmp;
+    ulist_delete_foreach(&ctx->uchain_video, uchain_uref, uchain_tmp) {
+        struct uref *uref = uref_from_uchain(uchain_uref);
+        ulist_delete(uchain_uref);
+        uref_free(uref);
+    }
+}
 
 static void release_buffered_audio(netmap_ctx_t *ctx)
 {
@@ -590,6 +607,21 @@ static int send_frame(netmap_ctx_t *netmap_ctx, struct uref *uref)
     return UBASE_ERR_NONE;
 }
 
+static void video_timer(struct upump *upump)
+{
+    netmap_ctx_t *netmap_ctx = upump_get_opaque(upump, netmap_ctx_t *);
+
+    struct uchain *uchain = ulist_pop(&netmap_ctx->uchain_video);
+    if (!uchain) {
+        fprintf(stderr, "No video frame\n");
+        return;
+    }
+    assert(uchain);
+    struct uref *uref= uref_from_uchain(uchain);
+
+    send_frame(netmap_ctx, uref);
+}
+
 static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                        int event, va_list args)
 {
@@ -642,6 +674,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         {
             netmap_ctx->video_good = 0;
             release_buffered_audio(netmap_ctx);
+            release_buffered_video(netmap_ctx);
         }
 
         return UBASE_ERR_NONE;
@@ -668,7 +701,19 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         return UBASE_ERR_NONE;
     }
 
-    return send_frame(netmap_ctx, uref);
+    if (!netmap_ctx->rfc4175)
+        return send_frame(netmap_ctx, uref);
+
+    ulist_add(&netmap_ctx->uchain_video, uref_to_uchain(uref));
+
+    if (!netmap_ctx->video_upump) {
+        netmap_ctx->video_upump = upump_alloc_timer(netmap_ctx->upump_mgr,
+                video_timer, netmap_ctx, NULL, RFC_LATENCY,
+                UCLOCK_FREQ * netmap_opts->timebase_den / netmap_opts->timebase_num);
+        assert(netmap_ctx->video_upump != NULL);
+        upump_start(netmap_ctx->video_upump);
+    }
+    return UBASE_ERR_NONE;
 }
 
 static obe_raw_frame_t *frame_from_uref_audio(netmap_ctx_t *ctx, struct uref *uref)
@@ -879,6 +924,8 @@ static void upipe_event_timer(struct upump *upump)
             upump_stop(upump);
             upump_free(upump);
 
+            upump_stop(netmap_ctx->video_upump);
+            upump_free(netmap_ctx->video_upump);
             stop_no_video_timer(netmap_ctx);
 
             if( netmap_ctx->raw_frames )
@@ -909,7 +956,7 @@ static void setup_rfc_audio_channel(netmap_ctx_t *netmap_ctx, char *uri, char *u
     assert(rtpr);
     upipe_mgr_release(rtpr_mgr);
 
-    upipe_rtpr_set_delay(rtpr, UCLOCK_FREQ/10); /* arbitrary 100ms */
+    upipe_rtpr_set_delay(rtpr, RFC_LATENCY);
 
     for (int i = 0; i < 2; i++) {
         char *u = i ? uri2 : uri;
@@ -1024,6 +1071,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     netmap_ctx->input_chroma_map[2] = "v10l";
     netmap_ctx->input_chroma_map[3] = NULL;
 
+    ulist_init(&netmap_ctx->uchain_video);
     for (int i = 0; i < 16; i++) {
         netmap_audio_t *audio = &netmap_ctx->audio[i];
         ulist_init(&audio->uchain_audio);
@@ -1035,6 +1083,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     assert(main_upump_mgr);
     netmap_ctx->upump_mgr = main_upump_mgr;
     netmap_ctx->no_video_upump = NULL;
+    netmap_ctx->video_upump = NULL;
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
@@ -1254,6 +1303,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     upump_mgr_run(main_upump_mgr, NULL);
 
     release_buffered_audio(netmap_ctx);
+    release_buffered_video(netmap_ctx);
 
     /* Wait on all upumps */
     upump_mgr_release(main_upump_mgr);
