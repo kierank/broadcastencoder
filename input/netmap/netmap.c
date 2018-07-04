@@ -66,6 +66,7 @@
 #include <upipe-modules/upipe_transfer.h>
 #include <upipe-modules/upipe_setflowdef.h>
 #include <upipe-modules/upipe_rtp_source.h>
+#include <upipe-modules/upipe_rtp_reorder.h>
 #include <upipe-modules/upipe_rtp_pcm_unpack.h>
 #include <upipe-modules/upipe_htons.h>
 #include <upipe-modules/upipe_worker_source.h>
@@ -902,19 +903,33 @@ static void setup_rfc_audio_channel(netmap_ctx_t *netmap_ctx, char *uri, char *u
         netmap_audio_t *a, struct uprobe *uprobe_main, const int loglevel,
         struct uref *flow_def)
 {
-    struct upipe_mgr *rtpsrc_mgr = upipe_rtpsrc_mgr_alloc();
+    struct upipe_mgr *rtpr_mgr = upipe_rtpr_mgr_alloc();
+    struct upipe *rtpr = upipe_void_alloc(rtpr_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_main), loglevel, "rtpr"));
+    assert(rtpr);
+    upipe_mgr_release(rtpr_mgr);
 
-    struct upipe *pcm_src = upipe_flow_alloc(rtpsrc_mgr,
-            uprobe_pfx_alloc(uprobe_use(uprobe_main), loglevel, "pcm src"), flow_def);
-    assert(pcm_src);
+    for (int i = 0; i < 2; i++) {
+        char *u = i ? uri2 : uri;
+        if (!u)
+            break;
+        struct upipe_mgr *rtpsrc_mgr = upipe_rtpsrc_mgr_alloc();
+        struct upipe *pcm_src = upipe_flow_alloc(rtpsrc_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe_main), loglevel, "pcm src"), flow_def);
+        assert(pcm_src);
+        upipe_mgr_release(rtpsrc_mgr);
 
-    upipe_mgr_release(rtpsrc_mgr);
+        ubase_assert(upipe_set_uri(pcm_src, u));
+        ubase_assert(upipe_attach_uclock(pcm_src));
 
-    ubase_assert(upipe_set_uri(pcm_src, uri));
-    ubase_assert(upipe_attach_uclock(pcm_src));
+        struct upipe *sub = upipe_void_alloc_output_sub(pcm_src, rtpr,
+                uprobe_pfx_alloc_va(uprobe_use(uprobe_main),
+                    loglevel, "rtpr sub"));
+        upipe_release(sub);
+    }
 
     struct upipe_mgr *setflowdef_mgr = upipe_setflowdef_mgr_alloc();
-    struct upipe *setflowdef = upipe_void_alloc_output(pcm_src,
+    struct upipe *setflowdef = upipe_void_alloc_output(rtpr,
             setflowdef_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main), loglevel, "pcm setflowdef"));
     assert(setflowdef);
