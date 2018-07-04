@@ -937,6 +937,18 @@ static void setup_rfc_audio_channel(netmap_ctx_t *netmap_ctx, char *uri,
     upipe_release(probe_uref_audio);
 }
 
+static int get_channels_from_uri(char *uri)
+{
+    char *slash = strrchr(uri, '/');
+    while (slash && (slash[1] < '0' || slash[1] > '9')) {
+        slash = strchr(&slash[1], '/');
+    }
+    if (!slash)
+        return 0;
+    *slash++ = '\0';
+    return atoi(slash);
+}
+
 static int setup_rfc_audio(netmap_ctx_t *netmap_ctx, struct uref_mgr *uref_mgr,
     struct uprobe *uprobe_main, const int loglevel, char *audio)
 {
@@ -949,17 +961,13 @@ static int setup_rfc_audio(netmap_ctx_t *netmap_ctx, struct uref_mgr *uref_mgr,
         if (next)
             *next++ = '\0';
 
-        char *slash = strrchr(audio, '/');
-        while (slash && (slash[1] < '0' || slash[1] > '9')) {
-            slash = strchr(&slash[1], '/');
-        }
-        if (!slash) {
+        unsigned channels = get_channels_from_uri(audio);
+        if (!channels) {
             printf("audio URI missing channels\n");
             uref_free(flow_def);
             return 1;
         }
-        *slash++ = '\0';
-        unsigned channels = atoi(slash);
+
         assert((channels & 1) == 0);
 
         netmap_audio_t *a = &netmap_ctx->audio[i++];
