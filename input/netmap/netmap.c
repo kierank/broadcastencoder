@@ -938,15 +938,6 @@ static int setup_rfc_audio(netmap_ctx_t *netmap_ctx, struct uref_mgr *uref_mgr,
         assert(setflowdef);
         upipe_mgr_release(setflowdef_mgr);
 
-        flow_def = uref_alloc(uref_mgr);
-        uref_flow_set_def(flow_def, "block.s24be.sound.");
-        uref_sound_flow_set_rate(flow_def, 48000);
-        uref_sound_flow_set_channels(flow_def, channels);
-        uref_sound_flow_set_planes(flow_def, 0);
-        uref_sound_flow_add_plane(flow_def, "all");
-        upipe_setflowdef_set_dict(setflowdef, flow_def);
-        uref_free(flow_def);
-
         struct upipe_mgr *pcm_unpack_mgr = upipe_rtp_pcm_unpack_mgr_alloc();
         struct upipe *pcm_unpack = upipe_void_chain_output(setflowdef,
                 pcm_unpack_mgr,
