@@ -935,6 +935,15 @@ static void setup_rfc_audio_channel(netmap_ctx_t *netmap_ctx, char *uri, char *u
             setflowdef_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main), loglevel, "pcm setflowdef"));
     assert(setflowdef);
+    flow_def = uref_dup(flow_def);
+    uref_flow_set_def(flow_def, "block.s24be.sound.");
+    uref_sound_flow_set_rate(flow_def, 48000);
+    uref_sound_flow_set_channels(flow_def, a->channels);
+    uref_sound_flow_set_planes(flow_def, 0);
+    uref_sound_flow_add_plane(flow_def, "all");
+    upipe_setflowdef_set_dict(setflowdef, flow_def);
+    uref_free(flow_def);
+
     upipe_mgr_release(setflowdef_mgr);
 
     struct upipe_mgr *pcm_unpack_mgr = upipe_rtp_pcm_unpack_mgr_alloc();
