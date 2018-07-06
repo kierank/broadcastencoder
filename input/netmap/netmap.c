@@ -924,8 +924,10 @@ static void upipe_event_timer(struct upump *upump)
             upump_stop(upump);
             upump_free(upump);
 
-            upump_stop(netmap_ctx->video_upump);
-            upump_free(netmap_ctx->video_upump);
+            if (netmap_ctx->video_upump) {
+                upump_stop(netmap_ctx->video_upump);
+                upump_free(netmap_ctx->video_upump);
+            }
             stop_no_video_timer(netmap_ctx);
 
             if( netmap_ctx->raw_frames )
