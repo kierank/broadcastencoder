@@ -227,8 +227,6 @@ static void release_buffered_audio(netmap_ctx_t *ctx)
     printf("%s()\n", __func__);
     for (int i = 0; i < 16; i++) {
         netmap_audio_t *audio = &ctx->audio[i];
-        if (audio->samples == 0)
-            break;
         struct uchain *uchain_uref = NULL, *uchain_tmp;
         ulist_delete_foreach(&audio->uchain_audio, uchain_uref, uchain_tmp) {
             struct uref *uref = uref_from_uchain(uchain_uref);
