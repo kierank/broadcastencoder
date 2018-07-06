@@ -393,6 +393,8 @@ static int add_stream( char *command, obecli_command_t *child )
 
     char *type     = obe_get_option( add_opts[0], opts );
 
+    obe_free_string_array( opts );
+
     FAIL_IF_ERROR( type && ( check_enum_value( type, addable_streams ) < 0 ),
                    "Stream type is not addable\n" )
 

@@ -1577,6 +1577,8 @@ static void *open_input( void *ptr )
 
     open_netmap( &netmap_ctx );
 
+    free(ptr);
+
     return NULL;
 }
 
