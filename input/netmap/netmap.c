@@ -1148,14 +1148,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     uprobe_pthread_upump_mgr_set(uprobe_main, main_upump_mgr);
 
     struct uprobe *uprobe_main_pthread = uprobe_main;
-#if 0
-    char *intf = NULL;
-    if (sscanf(uri, "netmap:%m[^]-]", &intf) != 1)
-        intf = NULL;
-    assert(intf);
-#else
-    const char *intf[2] = { "p1p1", NULL };
-#endif
+    const char *intf[2] = { "p1p1", "p1p2" }; // FIXME
     struct uclock *uclock = uclock_ptp_alloc(uprobe_main, intf);
     assert(uclock);
     uprobe_main = uprobe_uclock_alloc(uprobe_main, uclock);
