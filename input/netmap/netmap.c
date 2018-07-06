@@ -1174,7 +1174,6 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         uref_pic_flow_add_plane(uref, 2, 1, 2, "v10l");
         struct urational fps = {25, 1}; // XXX
         uref_pic_flow_set_fps(uref, fps);
-        // progressive
         netmap_ctx->upipe_main_src = upipe_flow_alloc(upipe_netmap_source_mgr,
                 uprobe_pfx_alloc(uprobe_use(uprobe_main),
                     loglevel, "netmap source"), uref);
