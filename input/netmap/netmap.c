@@ -619,6 +619,7 @@ static void video_timer(struct upump *upump)
     struct uref *uref= uref_from_uchain(uchain);
 
     send_frame(netmap_ctx, uref);
+    uref_free(uref);
 }
 
 static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
