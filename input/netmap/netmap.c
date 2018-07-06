@@ -564,8 +564,6 @@ static int send_frame(netmap_ctx_t *netmap_ctx, struct uref *uref)
     raw_frame->uref = uref;
     raw_frame->release_data = obe_release_video_uref;
 
-    setup_picture_on_signal_loss_timer(netmap_ctx);
-
     /* Make a copy of the frame for showing the last frame */
     if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
     {
@@ -701,6 +699,8 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     else if (!netmap_ctx->video_good) {
         return UBASE_ERR_NONE;
     }
+
+    setup_picture_on_signal_loss_timer(netmap_ctx);
 
     if (!netmap_ctx->rfc4175)
         return send_frame(netmap_ctx, uref);
