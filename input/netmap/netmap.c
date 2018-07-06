@@ -705,7 +705,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     if (!netmap_ctx->rfc4175)
         return send_frame(netmap_ctx, uref);
 
-    ulist_add(&netmap_ctx->uchain_video, uref_to_uchain(uref));
+    ulist_add(&netmap_ctx->uchain_video, uref_to_uchain(uref_dup(uref)));
 
     if (!netmap_ctx->video_upump) {
         netmap_ctx->video_upump = upump_alloc_timer(netmap_ctx->upump_mgr,
