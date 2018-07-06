@@ -360,7 +360,7 @@ static void setup_picture_on_signal_loss_timer(netmap_ctx_t *netmap_ctx)
 {
     stop_no_video_timer(netmap_ctx);
     netmap_ctx->no_video_upump = upump_alloc_timer(netmap_ctx->upump_mgr,
-            no_video_timer, netmap_ctx, NULL, UCLOCK_FREQ/4, UCLOCK_FREQ/4);
+            no_video_timer, netmap_ctx, NULL, UCLOCK_FREQ/4, netmap_ctx->video_freq);
     assert(netmap_ctx->no_video_upump != NULL);
     upump_start(netmap_ctx->no_video_upump);
 }
