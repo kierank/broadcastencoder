@@ -88,8 +88,6 @@
 #define XFER_QUEUE              255
 #define XFER_POOL               20
 
-static enum uprobe_log_level loglevel = UPROBE_LOG_WARNING;
-
 typedef struct
 {
     int probe;
@@ -142,6 +140,7 @@ typedef struct
     AVRational      a_timebase;
     const obe_audio_sample_pattern_t *sample_pattern;
     int64_t         a_errors;
+    uint8_t         channels;
 
     int64_t last_frame_time;
 
@@ -555,7 +554,7 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
             }
 
             raw_frame->audio_frame.num_samples = size;
-            raw_frame->audio_frame.num_channels = 16;
+            raw_frame->audio_frame.num_channels = netmap_ctx->channels;
             raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
 
             if( av_samples_alloc( raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.linesize, raw_frame->audio_frame.num_channels,
@@ -568,10 +567,10 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
             uref_sound_read_int32_t(uref, 0, -1, &src, 1);
 
             for( int i = 0; i < size; i++)
-                for( int j = 0; j < 16; j++ )
+                for( int j = 0; j < netmap_ctx->channels; j++ )
                 {
                     int32_t *audio = (int32_t*)raw_frame->audio_frame.audio_data[j];
-                    audio[i] = src[16*i + j];
+                    audio[i] = src[netmap_ctx->channels*i + j];
                 }
 
             uref_sound_unmap(uref, 0, -1, 1);
@@ -599,6 +598,13 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
 
 end:
         return UBASE_ERR_NONE;
+    } else if (event == UPROBE_NEW_FLOW_DEF) {
+        flow_def = va_arg(args, struct uref *);
+        uint8_t channels;
+        if (!ubase_check(uref_sound_flow_get_channels(flow_def, &netmap_ctx->channels))) {
+            netmap_ctx->channels = 0;
+        }
+
     }
 
     if (!uprobe_plumber(event, args, &flow_def, &def))
@@ -717,6 +723,8 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
     udict_mgr_release(udict_mgr);
+
+    enum uprobe_log_level loglevel = UPROBE_LOG_WARNING;
 
     /* probes */
     /* main (thread-safe) probe, whose first element is uprobe_pthread_upump_mgr */
