@@ -123,6 +123,9 @@ typedef struct
     struct uchain uchain_audio;
     size_t samples;
 
+    struct upipe *src[2];
+    struct upipe *rtpr;
+
 } netmap_audio_t;
 
 typedef struct
@@ -909,6 +912,14 @@ static void upipe_event_timer(struct upump *upump)
             upump_free(upump);
 
             upipe_release(netmap_ctx->upipe_main_src);
+            for (int i = 0; i < 16; i++) {
+                netmap_audio_t *audio = &netmap_ctx->audio[i];
+                if (audio->channels == 0)
+                    break;
+                upipe_release(audio->src[0]);
+                upipe_release(audio->src[1]);
+                upipe_release(audio->rtpr);
+            }
         }
     }
     else
@@ -919,8 +930,17 @@ static void upipe_event_timer(struct upump *upump)
 
         if( netmap_ctx->stop )
         {
-            for (int i = 0; i < 16; i++)
-                netmap_ctx->audio[i].channels = 0;
+            for (int i = 0; i < 16; i++) {
+                netmap_audio_t *audio = &netmap_ctx->audio[i];
+                if (audio->channels == 0)
+                    break;
+                printf("audio release %u\n", i);
+                upipe_release(audio->src[0]);
+                upipe_release(audio->src[1]);
+                upipe_release(audio->rtpr);
+                audio->channels = 0;
+            }
+
             upump_stop(upump);
             upump_free(upump);
 
@@ -957,6 +977,7 @@ static void setup_rfc_audio_channel(netmap_ctx_t *netmap_ctx, char *uri, char *u
             uprobe_pfx_alloc(uprobe_use(uprobe_main), loglevel, "rtpr"));
     assert(rtpr);
     upipe_mgr_release(rtpr_mgr);
+    a->rtpr = rtpr;
 
     upipe_rtpr_set_delay(rtpr, RFC_LATENCY);
 
@@ -977,6 +998,8 @@ static void setup_rfc_audio_channel(netmap_ctx_t *netmap_ctx, char *uri, char *u
                 uprobe_pfx_alloc_va(uprobe_use(uprobe_main),
                     loglevel, "rtpr sub"));
         upipe_release(sub);
+
+        a->src[i] = pcm_src;
     }
 
     struct upipe_mgr *setflowdef_mgr = upipe_setflowdef_mgr_alloc();
@@ -984,6 +1007,7 @@ static void setup_rfc_audio_channel(netmap_ctx_t *netmap_ctx, char *uri, char *u
             setflowdef_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main), loglevel, "pcm setflowdef"));
     assert(setflowdef);
+
     flow_def = uref_dup(flow_def);
     uref_flow_set_def(flow_def, "block.s24be.sound.");
     uref_sound_flow_set_rate(flow_def, 48000);
@@ -1003,7 +1027,7 @@ static void setup_rfc_audio_channel(netmap_ctx_t *netmap_ctx, char *uri, char *u
     upipe_mgr_release(pcm_unpack_mgr);
 
     struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
-    struct upipe *probe_uref_audio = upipe_void_alloc_output(pcm_unpack,
+    struct upipe *probe_uref_audio = upipe_void_chain_output(pcm_unpack,
             upipe_probe_uref_mgr,
             uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_main),
                     catch_audio_2110, a),
