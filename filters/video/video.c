@@ -171,19 +171,6 @@ static int set_sar( obe_raw_frame_t *raw_frame, int is_wide )
     return -1;
 }
 
-#if 0
-static void scale_plane_c( uint16_t *src, int stride, int width, int height, int lshift, int rshift )
-{
-    for( int i = 0; i < height; i++ )
-    {
-        for( int j = 0; j < width; j++ )
-            src[j] = (src[j] << lshift);
-
-        src += stride / 2;
-    }
-}
-#endif
-
 static void dither_plane_10_to_8_c( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height )
 {
     const int scale = 511;
@@ -267,19 +254,6 @@ static void init_filter( obe_t *h, obe_vid_filter_ctx_t *vfilt )
 {
     vfilt->filter_bit_depth = h->filter_bit_depth;
     vfilt->avutil_cpu = av_get_cpu_flags();
-
-#if 0
-    vfilt->scale_plane = scale_plane_c;
-
-    if( vfilt->avutil_cpu & AV_CPU_FLAG_MMX2 )
-        vfilt->scale_plane = obe_scale_plane_mmxext;
-
-    if( vfilt->avutil_cpu & AV_CPU_FLAG_SSE2 )
-        vfilt->scale_plane = obe_scale_plane_sse2;
-
-    if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX )
-        vfilt->scale_plane = obe_scale_plane_avx;
-#endif
 
     /* dither */
     vfilt->dither_plane_10_to_8 = dither_plane_10_to_8_c;
@@ -481,6 +455,11 @@ end:
     return ret;
 }
 
+static int csp_num_interleaved( int csp, int plane )
+{
+    return ( csp == AV_PIX_FMT_NV12 && plane == 1 ) ? 2 : 1;
+}
+
 static void blank_line( uint16_t *y, uint16_t *u, uint16_t *v, int width )
 {
     for( int i = 0; i < width; i++ )
@@ -506,6 +485,53 @@ static void blank_lines( obe_raw_frame_t *raw_frame )
     blank_line( y, u, v, raw_frame->img.width / 2 );
 }
 
+static int scale_frame( obe_raw_frame_t *raw_frame )
+{
+    obe_image_t *img = &raw_frame->img;
+    obe_image_t tmp_image = {0};
+    obe_image_t *out = &tmp_image;
+    uint8_t *src;
+    uint16_t *dst;
+
+    tmp_image.csp    = AV_PIX_FMT_YUV422P10;
+    tmp_image.width  = raw_frame->img.width;
+    tmp_image.height = raw_frame->img.height;
+    tmp_image.planes = av_pix_fmt_count_planes( raw_frame->img.csp );
+    tmp_image.format = raw_frame->img.format;
+
+    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
+                        tmp_image.csp, 32 ) < 0 )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+
+    for( int i = 0; i < tmp_image.planes; i++ )
+    {
+        int num_interleaved = csp_num_interleaved( img->csp, i );
+        int height = obe_cli_csps[out->csp].height[i] * img->height;
+        int width = obe_cli_csps[out->csp].width[i] * img->width / num_interleaved;
+
+        src = img->plane[i];
+        dst = (uint16_t*)tmp_image.plane[i];
+
+        for( int j = 0; j < height; j++ )
+        {
+            for( int k = 0; k < width; k++ )
+                dst[k] = src[k] << 2;
+
+            src += img->stride[i];
+            dst += out->stride[i] / 2;
+        }
+
+    }
+
+    raw_frame->release_data( raw_frame );
+    raw_frame->release_data = obe_release_video_data;
+    memcpy( &raw_frame->alloc_img, out, sizeof(obe_image_t) );
+    memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
+}
+
 static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
     AVFrame *frame = vfilt->frame;
@@ -516,7 +542,7 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     frame->format = raw_frame->img.csp;
     frame->width = raw_frame->img.width;
     frame->height = raw_frame->img.height;
-    
+
     if( av_buffersrc_add_frame( vfilt->buffersrc_ctx, vfilt->frame ) < 0 )
     {
         fprintf( stderr, "Could not write frame to buffer source \n" );
@@ -561,10 +587,7 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     return 0;
 }
 
-static int csp_num_interleaved( int csp, int plane )
-{
-    return ( csp == AV_PIX_FMT_NV12 && plane == 1 ) ? 2 : 1;
-}
+
 
 #if 0
 
@@ -940,12 +963,14 @@ static void *start_filter( void *ptr )
         raw_frame = obe_raw_frame_t_from_uchain( ulist_pop( &filter->queue.ulist ) );
         pthread_mutex_unlock( &filter->queue.mutex );
 
-        /* TODO: scale 8-bit to 10-bit */
-
         if( 1 )
         {
             const AVPixFmtDescriptor *pfd = av_pix_fmt_desc_get( raw_frame->img.csp );
             const AVComponentDescriptor *c = &pfd->comp[0];
+
+            if( raw_frame->img.csp == AV_PIX_FMT_YUV422P && X264_BIT_DEPTH == 10 )
+                scale_frame( raw_frame );
+
             if( raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL && c->depth == 10 )
                 blank_lines( raw_frame );
 
