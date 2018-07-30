@@ -63,7 +63,7 @@ static void *start_filter( void *ptr )
     obe_t *h = filter_params->h;
     obe_filter_t *filter = filter_params->filter;
     obe_output_stream_t *output_stream;
-    int num_channels, got_pkt, num_samples;
+    int num_channels, got_pkt, num_samples, mono_channel;
     AVCodecContext *codec = NULL;
     AVPacket pkt;
     AVFrame *frame = NULL;
@@ -245,6 +245,7 @@ static void *start_filter( void *ptr )
         {
             output_stream = get_output_stream( h, h->encoders[i]->output_stream_id );
             num_channels = av_get_channel_layout_nb_channels( output_stream->channel_layout );
+            mono_channel = num_channels == 1 ? output_stream->mono_channel : 0;
 
             if( output_stream->stream_format == AUDIO_S302M )
             {
@@ -321,7 +322,7 @@ static void *start_filter( void *ptr )
                 }
 
                 av_samples_copy( split_raw_frame->audio_frame.audio_data,
-                                 &raw_frame->audio_frame.audio_data[((output_stream->sdi_audio_pair-1)<<1)+output_stream->mono_channel], 0, 0,
+                                 &raw_frame->audio_frame.audio_data[((output_stream->sdi_audio_pair-1)<<1)+mono_channel], 0, 0,
                                  split_raw_frame->audio_frame.num_samples, num_channels, split_raw_frame->audio_frame.sample_fmt );
 
                 split_raw_frame->release_data = obe_release_audio_data;
