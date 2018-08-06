@@ -28,7 +28,7 @@
 struct file_status
 {
     obe_output_t *output;
-    FILE **fp;
+    FILE *fp;
     struct uchain *queue;
 };
 
@@ -36,7 +36,7 @@ static void close_output( void *handle )
 {
     struct file_status *status = handle;
 
-    fclose( *status->fp );
+    fclose( status->fp );
 
     if( status->output->output_dest.target  )
         free( status->output->output_dest.target );
@@ -49,16 +49,14 @@ static void *open_output( void *ptr )
     obe_output_t *output = ptr;
     obe_output_dest_t *output_dest = &output->output_dest;
     struct file_status status;
-    FILE *fp = NULL;
     int num_buf_refs = 0;
     obe_buf_ref_t **buf_refs;
 
     status.output = output;
-    status.fp = &fp;
     pthread_cleanup_push( close_output, (void*)&status );
 
-    fp = fopen( output_dest->target, "wb" );
-    if( !fp )
+    status.fp = fopen( output_dest->target, "wb" );
+    if( !status.fp )
     {
         fprintf( stderr, "[file] Could not open file" );
         return NULL;
@@ -96,7 +94,7 @@ static void *open_output( void *ptr )
         {
             obe_buf_ref_t *buf_ref = buf_refs[i];
             AVBufferRef *data_buf_ref = buf_ref->data_buf_ref;
-            fwrite( &data_buf_ref->data[7*sizeof(int64_t)], 1, TS_PACKETS_SIZE, fp );
+            fwrite( &data_buf_ref->data[7*sizeof(int64_t)], 1, TS_PACKETS_SIZE, status.fp );
 
             av_buffer_unref( &data_buf_ref );
             av_buffer_unref( &buf_ref->self_buf_ref );

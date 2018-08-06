@@ -23,39 +23,25 @@
  *****************************************************************************/
 
 #include "common/common.h"
-#include "common/network/network.h"
 #include "output/output.h"
 #include "udp.h"
 
-typedef struct
-{
-    char hostname[1024];
-    int port;
-    int ttl;
-    int tos;
-    int miface;
-    int buffer_size;
-    int reuse_socket;
-    int is_connected;
+#include <netinet/in.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
 
-    int udp_fd;
-    int is_multicast;
-    int local_port;
-    struct sockaddr_storage dest_addr;
-    int dest_addr_len;
+#include <libavformat/avformat.h>
+#include <libavutil/parseutils.h>
 
-    int bind_iface;
-    char iface[10];
-} obe_udp_ctx;
-
-static int udp_set_multicast_opts( int sockfd, obe_udp_ctx *s )
+static int udp_set_multicast_opts( int sockfd, obe_udp_ctx *s, int ttl )
 {
     struct sockaddr *addr = (struct sockaddr *)&s->dest_addr;
 
     if( addr->sa_family == AF_INET )
     {
 #ifdef IP_MULTICAST_TTL
-        if( setsockopt( sockfd, IPPROTO_IP, IP_MULTICAST_TTL, &s->ttl, sizeof(s->ttl) ) < 0 )
+        if( setsockopt( sockfd, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl) ) < 0 )
         {
             fprintf( stderr, "[udp] Could not setup IPv4 multicast\n" );
             return -1;
@@ -67,7 +53,7 @@ static int udp_set_multicast_opts( int sockfd, obe_udp_ctx *s )
     if( addr->sa_family == AF_INET6 )
     {
 #ifdef IPV6_MULTICAST_HOPS
-        if( setsockopt( sockfd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &s->ttl, sizeof(s->ttl) ) < 0 )
+        if( setsockopt( sockfd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &ttl, sizeof(ttl) ) < 0 )
         {
             fprintf( stderr, "[udp] Could not setup IPv6 multicast\n" );
             return -1;
@@ -78,13 +64,15 @@ static int udp_set_multicast_opts( int sockfd, obe_udp_ctx *s )
     return 0;
 }
 
-static int udp_set_tos_opts( int sockfd, obe_udp_ctx *s )
+static int udp_set_tos_opts( int sockfd, obe_udp_ctx *s, int tos )
 {
     struct sockaddr *addr = (struct sockaddr *)&s->dest_addr;
+    if (!tos)
+        return 0;
 
     if( addr->sa_family == AF_INET )
     {
-        if( setsockopt( sockfd, IPPROTO_IP, IP_TOS, &s->tos, sizeof(s->tos) ) < 0 )
+        if( setsockopt( sockfd, IPPROTO_IP, IP_TOS, &tos, sizeof(tos) ) < 0 )
         {
             fprintf( stderr, "[udp] Could not setup IPv4 TOS\n" );
             return -1;
@@ -137,7 +125,7 @@ static int udp_set_url( struct sockaddr_storage *addr, const char *hostname, int
     return addr_len;
 }
 
-static int udp_socket_create( obe_udp_ctx *s, struct sockaddr_storage *addr, int *addr_len )
+static int udp_socket_create( obe_udp_ctx *s, struct sockaddr_storage *addr, int *addr_len, int local_port )
 {
     int udp_fd = -1;
     struct addrinfo *res0 = NULL, *res = NULL;
@@ -145,7 +133,7 @@ static int udp_socket_create( obe_udp_ctx *s, struct sockaddr_storage *addr, int
 
     if( ((struct sockaddr *) &s->dest_addr)->sa_family )
         family = ((struct sockaddr *) &s->dest_addr)->sa_family;
-    res0 = udp_resolve_host( 0, s->local_port, SOCK_DGRAM, family, AI_PASSIVE );
+    res0 = udp_resolve_host( 0, local_port, SOCK_DGRAM, family, AI_PASSIVE );
     if( res0 == 0 )
         goto fail;
     for( res = res0; res; res=res->ai_next )
@@ -187,29 +175,24 @@ static int udp_port( struct sockaddr_storage *addr, int addr_len )
     return strtol( sbuf, NULL, 10 );
 }
 
-/**
- * If no filename is given to av_open_input_file because you want to
- * get the local port first, then you must call this function to set
- * the remote server address.
- *
- * url syntax: udp://host:port[?option=val...]
- * option: 'ttl=n'       : set the ttl value (for multicast only)
- *         'localport=n' : set the local port
- *         'pkt_size=n'  : set max packet size
- *         'reuse=1'     : enable reusing the socket
- *
- * @param h media file context
- * @param uri of the remote server
- * @return zero if no error.
- */
-static int udp_set_remote_url( obe_udp_ctx *s )
+static inline int is_multicast_address( struct sockaddr *addr )
 {
-    /* set the destination address */
-    s->dest_addr_len = udp_set_url( &s->dest_addr, s->hostname, s->port );
-    if( s->dest_addr_len < 0 )
-        return -1;
-
-    s->is_multicast = is_multicast_address( (struct sockaddr*) &s->dest_addr );
+    if( addr->sa_family == AF_INET )
+    {
+#ifndef IN_MULTICAST
+#define IN_MULTICAST(a) ((((uint32_t)(a)) & 0xf0000000) == 0xe0000000)
+#endif
+        return IN_MULTICAST( ntohl( ((struct sockaddr_in *)addr)->sin_addr.s_addr ) );
+    }
+#if HAVE_STRUCT_SOCKADDR_IN6
+    if( addr->sa_family == AF_INET6 )
+    {
+#ifndef IN6_IS_ADDR_MULTICAST
+#define IN6_IS_ADDR_MULTICAST(a) (((uint8_t *) (a))[0] == 0xff)
+#endif
+        return IN6_IS_ADDR_MULTICAST( &((struct sockaddr_in6 *)addr)->sin6_addr );
+    }
+#endif
 
     return 0;
 }
@@ -240,9 +223,6 @@ void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri )
         if( av_find_info_tag( buf, sizeof(buf), "localport", p ) )
             udp_opts->local_port = strtol( buf, NULL, 10 );
 
-        if( av_find_info_tag( buf, sizeof(buf), "buffer_size", p ) )
-            udp_opts->buffer_size = strtol( buf, NULL, 10 );
-
         if( av_find_info_tag( buf, sizeof(buf), "iface", p ) )
         {
             udp_opts->bind_iface = 1;
@@ -254,7 +234,7 @@ void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri )
     av_url_split( NULL, 0, NULL, 0, udp_opts->hostname, sizeof(udp_opts->hostname), &udp_opts->port, NULL, 0, uri );
 }
 
-int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
+int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, int fd )
 {
     int udp_fd = -1, bind_ret = -1;
     struct sockaddr_storage my_addr;
@@ -265,54 +245,51 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
     if( !s )
         return -1;
 
-    strncpy( s->hostname, udp_opts->hostname, sizeof(s->hostname) );
-    s->port = udp_opts->port;
-    s->local_port = udp_opts->local_port;
-    s->reuse_socket = udp_opts->reuse_socket;
-    s->ttl = udp_opts->ttl;
-    s->tos = udp_opts->tos;
-    s->buffer_size = udp_opts->buffer_size;
-    s->bind_iface = udp_opts->bind_iface;
-    strncpy( s->iface, udp_opts->iface, sizeof(s->iface) - 1 );
-
-    if( udp_set_remote_url( s ) < 0 )
+    s->dest_addr_len = udp_set_url( &s->dest_addr, udp_opts->hostname,
+            udp_opts->port );
+    if( s->dest_addr_len < 0 )
         goto fail;
 
-    udp_fd = udp_socket_create( s, &my_addr, &len );
-    if( udp_fd < 0 )
-        goto fail;
-
-    s->reuse_socket = 1;
-    if( setsockopt( udp_fd, SOL_SOCKET, SO_REUSEADDR, &(s->reuse_socket), sizeof(s->reuse_socket) ) != 0)
-        goto fail;
-
-    if( s->bind_iface )
+    if (fd == -1)
     {
-        if( setsockopt( udp_fd, SOL_SOCKET, SO_BINDTODEVICE, s->iface, strlen(s->iface ) ) )
+        udp_fd = udp_socket_create( s, &my_addr, &len, udp_opts->local_port );
+        if( udp_fd < 0 )
             goto fail;
-    }
-    else
+
+        udp_opts->reuse_socket = 1;
+        if( setsockopt( udp_fd, SOL_SOCKET, SO_REUSEADDR, &(udp_opts->reuse_socket), sizeof(udp_opts->reuse_socket) ) != 0)
+            goto fail;
+
+        if( udp_opts->bind_iface )
+        {
+            if( setsockopt( udp_fd, SOL_SOCKET, SO_BINDTODEVICE, udp_opts->iface, strlen(udp_opts->iface ) ) )
+                goto fail;
+        }
+        else
+        {
+            /* bind to the local address if not multicast or if the multicast
+             * bind failed */
+            if( bind_ret < 0 && bind( udp_fd, (struct sockaddr *)&my_addr, len ) < 0 )
+                goto fail;
+        }
+
+        /* set output multicast ttl */
+
+        bool is_multicast = is_multicast_address( (struct sockaddr*) &s->dest_addr );
+        if( is_multicast && udp_set_multicast_opts( udp_fd, s, udp_opts->ttl) < 0 )
+            goto fail;
+
+        /* set tos/diffserv */
+        if( udp_set_tos_opts( udp_fd, s, udp_opts->tos) < 0 )
+            goto fail;
+    } else
     {
-        /* bind to the local address if not multicast or if the multicast
-         * bind failed */
-        if( bind_ret < 0 && bind( udp_fd, (struct sockaddr *)&my_addr, len ) < 0 )
-            goto fail;
+        udp_fd = dup(fd);
     }
 
     len = sizeof(my_addr);
     getsockname( udp_fd, (struct sockaddr *)&my_addr, (socklen_t *) &len );
-    s->local_port = udp_port( &my_addr, len );
-
-    /* set output multicast ttl */
-    if( s->is_multicast && udp_set_multicast_opts( udp_fd, s ) < 0 )
-        goto fail;
-
-    /* set tos/diffserv */
-    if( s->tos && udp_set_tos_opts( udp_fd, s ) < 0 )
-        goto fail;
-
-    if( s->is_connected && connect( udp_fd, (struct sockaddr *)&s->dest_addr, s->dest_addr_len ) )
-        goto fail;
+    udp_opts->local_port = udp_port( &my_addr, len );
 
     s->udp_fd = udp_fd;
     *p_handle = s;
@@ -329,20 +306,8 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts )
 int udp_write( hnd_t handle, uint8_t *buf, int size )
 {
     obe_udp_ctx *s = handle;
-    int ret;
 
-    if( !s->is_connected )
-        ret = sendto( s->udp_fd, buf, size, 0, (struct sockaddr *)&s->dest_addr, s->dest_addr_len );
-    else
-        ret = send( s->udp_fd, buf, size, 0 );
-
-    if( ret < 0 )
-    {
-        syslog( LOG_WARNING, "outputCantWrite: UDP packet failed to send \n" );
-        return -1;
-    }
-
-    return size;
+    return sendto( s->udp_fd, buf, size, 0, (struct sockaddr *)&s->dest_addr, s->dest_addr_len );
 }
 
 void udp_close( hnd_t handle )
