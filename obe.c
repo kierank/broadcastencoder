@@ -1582,11 +1582,7 @@ void obe_close( obe_t *h )
         pthread_cond_signal( &h->outputs[i]->queue.in_cv );
         pthread_mutex_unlock( &h->outputs[i]->queue.mutex );
         if (h->outputs[i]->thread_running)
-        {
-            /* could be blocking on OS so have to cancel thread too */
-            pthread_cancel( h->outputs[i]->output_thread );
             pthread_join( h->outputs[i]->output_thread, &ret_ptr );
-        }
     }
 
     fprintf( stderr, "output thread cancelled \n" );
