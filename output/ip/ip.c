@@ -534,8 +534,8 @@ static void *open_output( void *ptr )
     while(1)
     {
         bool end;
-        pthread_cleanup_push( clean_mutex, &output->queue.mutex);
         pthread_mutex_lock( &output->queue.mutex );
+        pthread_cleanup_push( clean_mutex, &output->queue.mutex);
         while( ulist_empty( &output->queue.ulist ) && !output->cancel_thread )
         {
             /* Often this cond_wait is not because of an underflow */
