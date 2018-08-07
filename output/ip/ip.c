@@ -464,10 +464,8 @@ end:
     return ret;
 }
 
-static void close_output( void *handle )
+static void close_output(struct ip_status *status)
 {
-    struct ip_status *status = handle;
-
     if( *status->ip_handle ) {
         if( status->output->output_dest.type == OUTPUT_RTP )
             rtp_close( *status->ip_handle );
@@ -476,11 +474,6 @@ static void close_output( void *handle )
     }
 
     free( status->output->output_dest.target );
-}
-
-static void clean_mutex(void *mutex)
-{
-    pthread_mutex_unlock((pthread_mutex_t*)mutex);
 }
 
 static void *open_output( void *ptr )
@@ -530,11 +523,9 @@ static void *open_output( void *ptr )
         }
     }
 
-    pthread_cleanup_push( close_output, (void*)&status );
     while(1)
     {
         bool end;
-        pthread_cleanup_push( clean_mutex, &output->queue.mutex);
         pthread_mutex_lock( &output->queue.mutex );
         while( ulist_empty( &output->queue.ulist ) && !output->cancel_thread )
         {
@@ -549,7 +540,7 @@ static void *open_output( void *ptr )
         }
 
         end = output->cancel_thread;
-        pthread_cleanup_pop( 1 );
+        pthread_mutex_unlock(&output->queue.mutex);
 
         if (end)
             break;
@@ -578,7 +569,7 @@ static void *open_output( void *ptr )
         }
     }
 
-    pthread_cleanup_pop( 1 );
+    close_output(&status);
 
     return NULL;
 }
