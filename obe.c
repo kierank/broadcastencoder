@@ -200,9 +200,8 @@ void obe_init_queue( obe_queue_t *queue )
     ulist_init( &queue->ulist );
 }
 
-void obe_destroy_queue( obe_queue_t *queue )
+static void obe_destroy_queue( obe_queue_t *queue )
 {
-    pthread_mutex_unlock( &queue->mutex );
     pthread_mutex_destroy( &queue->mutex );
     pthread_cond_destroy( &queue->in_cv );
     pthread_cond_destroy( &queue->out_cv );
@@ -267,7 +266,6 @@ int add_to_filter_queue( obe_t *h, obe_raw_frame_t *raw_frame )
 static void destroy_filter( obe_filter_t *filter )
 {
     obe_raw_frame_t *raw_frame;
-    pthread_mutex_lock( &filter->queue.mutex );
     struct uchain *uchain, *uchain_tmp;
 
     ulist_delete_foreach( &filter->queue.ulist, uchain, uchain_tmp)
@@ -316,7 +314,6 @@ int add_to_encode_queue( obe_t *h, obe_raw_frame_t *raw_frame, int output_stream
 static void destroy_encoder( obe_encoder_t *encoder )
 {
     obe_raw_frame_t *raw_frame;
-    pthread_mutex_lock( &encoder->queue.mutex );
     struct uchain *uchain, *uchain_tmp;
 
     ulist_delete_foreach( &encoder->queue.ulist, uchain, uchain_tmp)
@@ -333,7 +330,6 @@ static void destroy_encoder( obe_encoder_t *encoder )
 
 static void destroy_enc_smoothing( obe_queue_t *queue )
 {
-    pthread_mutex_lock( &queue->mutex );
     struct uchain *uchain, *uchain_tmp;
 
     if( queue->ulist.prev || queue->ulist.next )
@@ -352,7 +348,6 @@ static void destroy_enc_smoothing( obe_queue_t *queue )
 
 static void destroy_mux( obe_t *h )
 {
-    pthread_mutex_lock( &h->mux_queue.mutex );
     struct uchain *uchain, *uchain_tmp;
 
     if( h->mux_queue.ulist.prev || h->mux_queue.ulist.next )
@@ -377,7 +372,6 @@ static void destroy_mux( obe_t *h )
 static void destroy_mux_smoothing( obe_queue_t *queue )
 {
 
-    pthread_mutex_lock( &queue->mutex );
     struct uchain *uchain, *uchain_tmp;
 
     if( queue->ulist.prev || queue->ulist.next )
@@ -413,7 +407,6 @@ int remove_early_frames( obe_t *h, int64_t pts )
 /* Output queue */
 static void destroy_output( obe_output_t *output )
 {
-    pthread_mutex_lock( &output->queue.mutex );
     struct uchain *uchain, *uchain_tmp;
 
     if( output->queue.ulist.prev || output->queue.ulist.next )
