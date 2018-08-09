@@ -111,7 +111,7 @@ static const char * stream_opts[] = { "action", "format",
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", "service-name", "provider-name", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
-static const char * output_opts[] = { "type", "target", "fec-columns", "fec-rows", "fec-type", "dup-delay", NULL };
+static const char * output_opts[] = { "type", "target", "fec-columns", "fec-rows", "fec-type", "dup-delay", "arq", "arq-pt", "arq-latency", NULL };
 static const char * update_stream_opts[]  = { "bitrate", "vbv-bufsize" };
 static const char * update_muxer_opts[]  = { "ts-muxrate" };
 
@@ -1026,6 +1026,9 @@ static int set_output( char *command, obecli_command_t *child )
         char *fec_rows = obe_get_option( output_opts[3], opts );
         char *fec_type = obe_get_option( output_opts[4], opts );
         char *dup_delay = obe_get_option( output_opts[5], opts );
+        char *arq = obe_get_option( output_opts[6], opts );
+        char *arq_pt = obe_get_option( output_opts[7], opts );
+        char *arq_latency = obe_get_option( output_opts[8], opts );
 
         FAIL_IF_ERROR( type && ( check_enum_value( type, output_modules ) < 0 ),
                       "Invalid Output Type\n" );
@@ -1052,6 +1055,12 @@ static int set_output( char *command, obecli_command_t *child )
             parse_enum_value( fec_type, fec_types, &cli.output.outputs[output_id].fec_type );
         if( dup_delay )
             cli.output.outputs[output_id].dup_delay = obe_otoi( dup_delay, cli.output.outputs[output_id].dup_delay );
+        if( arq )
+            cli.output.outputs[output_id].arq = obe_otob( arq, cli.output.outputs[output_id].arq );
+        if( arq_pt )
+            cli.output.outputs[output_id].arq_pt = obe_otoi( arq_pt, cli.output.outputs[output_id].arq_pt );
+        if( arq_latency )
+            cli.output.outputs[output_id].arq_latency = obe_otoi( arq_latency, cli.output.outputs[output_id].arq_latency );
         obe_free_string_array( opts );
     }
 

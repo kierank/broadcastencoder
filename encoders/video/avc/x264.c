@@ -281,8 +281,14 @@ static void *start_encoder( void *ptr )
      }
 
 end:
-    if( s )
+    if( s ) {
+        while ( x264_encoder_delayed_frames( s ) ) {
+            if (x264_encoder_encode( s, &nal, &i_nal, NULL, &pic_out ))
+                free(pic_out.opaque);
+        }
+
         x264_encoder_close( s );
+    }
     free( enc_params );
 
     return NULL;
