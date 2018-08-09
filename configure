@@ -201,7 +201,6 @@ upipe="auto"
 
 CFLAGS="$CFLAGS -Wall -I."
 CXXFLAGS="$CXXFLAGS -c -Wall -I."
-LDFLAGS="$LDFLAGS -ljemalloc"
 LDFLAGSCLI="$LDFLAGSCLI"
 ASFLAGS="$ASFLAGS"
 cross_prefix=""
@@ -540,6 +539,12 @@ if [ "$libx264" = "auto" ] ; then
             die "libx264 is too old"
         fi
     fi
+fi
+
+if cc_check "stdlib.h" -ljemalloc "malloc(1);" ; then
+    LDFLAGS="$LDFLAGS -ljemalloc"
+else
+    die "no libjemalloc"
 fi
 
 if [ "$libx264" = "no" ] ; then
