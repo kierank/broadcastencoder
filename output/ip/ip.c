@@ -149,7 +149,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
     p_rtp->ssrc = av_get_random_seed();
 
     p_rtp->dup_delay = output_dest->dup_delay;
-    p_rtp->arq = output_dest->arq;
+    p_rtp->arq = output_dest->type == OUTPUT_ARQ;
     p_rtp->arq_pt = output_dest->arq_pt;
     if (!p_rtp->arq_pt)
         p_rtp->arq_pt = 96;
@@ -467,7 +467,8 @@ end:
 static void close_output(struct ip_status *status)
 {
     if( *status->ip_handle ) {
-        if( status->output->output_dest.type == OUTPUT_RTP )
+        if( status->output->output_dest.type == OUTPUT_RTP ||
+                status->output->output_dest.type == OUTPUT_ARQ)
             rtp_close( *status->ip_handle );
         else
             udp_close( *status->ip_handle );
@@ -497,7 +498,8 @@ static void *open_output( void *ptr )
 
     udp_populate_opts( &udp_opts, output_dest->target );
 
-    if( output_dest->type == OUTPUT_RTP )
+    if( output_dest->type == OUTPUT_RTP ||
+            output_dest->type == OUTPUT_ARQ )
     {
         if( rtp_open( &ip_handle, &udp_opts, output_dest ) < 0 )
             return NULL;
@@ -552,7 +554,8 @@ static void *open_output( void *ptr )
             obe_buf_ref_t *buf_ref = obe_buf_ref_t_from_uchain( uchain );
             AVBufferRef *data_buf_ref = buf_ref->data_buf_ref;
             uint8_t *data = &data_buf_ref->data[7*sizeof(int64_t)];
-            if( output_dest->type == OUTPUT_RTP )
+            if( output_dest->type == OUTPUT_RTP ||
+                    output_dest->type == OUTPUT_ARQ )
             {
                 if( write_rtp_pkt( ip_handle, data, TS_PACKETS_SIZE, AV_RN64( data_buf_ref->data ), output_dest->fec_type ) < 0 )
                     syslog( LOG_ERR, "[rtp] Failed to write RTP packet\n" );
