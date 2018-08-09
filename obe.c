@@ -1073,7 +1073,6 @@ int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts )
                 return -1;
             }
         }
-        h->outputs[i]->output_dest.arq = output_opts->outputs[i].arq;
         h->outputs[i]->output_dest.arq_pt = output_opts->outputs[i].arq_pt;
         h->outputs[i]->output_dest.arq_latency = output_opts->outputs[i].arq_latency;
         h->outputs[i]->output_dest.dup_delay = output_opts->outputs[i].dup_delay;
