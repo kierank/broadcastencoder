@@ -704,11 +704,12 @@ fi
 
 LDFLAGS="$LDFLAGS -lnacl"
 
+UPIPE_MODULES="libupump_ev libupipe_netmap libupipe_hbrmt libupipe_pthread libupipe_modules libupipe_filters libupipe"
 if [ "$upipe" = "auto" ] ; then
     upipe="no"
-    if ${cross_prefix}pkg-config --libs libupump_ev libupipe_netmap libupipe_hbrmt libupipe_pthread libupipe_modules libupipe 2>/dev/null; then
-        UPIPE_LIBS="$UPIPE_LIBS $(${cross_prefix}pkg-config --libs libupump_ev libupipe_netmap libupipe_hbrmt libupipe_pthread libupipe_modules libupipe)"
-        UPIPE_CFLAGS="$UPIPE_CFLAGS $(${cross_prefix}pkg-config --cflags libupump_ev libupipe_netmap libupipe_hbrmt libupipe_pthread libupipe_modules libupipe)"
+    if ${cross_prefix}pkg-config --libs ${UPIPE_MODULES} 2>/dev/null; then
+        UPIPE_LIBS="$UPIPE_LIBS $(${cross_prefix}pkg-config --libs ${UPIPE_MODULES})"
+        UPIPE_CFLAGS="$UPIPE_CFLAGS $(${cross_prefix}pkg-config --cflags ${UPIPE_MODULES})"
         upipe="yes"
     fi
 fi

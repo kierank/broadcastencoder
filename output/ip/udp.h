@@ -24,6 +24,15 @@
 #ifndef OBE_COMMON_UDP_H
 #define OBE_COMMON_UDP_H
 
+#include <netinet/in.h>
+
+typedef struct
+{
+    int udp_fd;
+    struct sockaddr_storage dest_addr;
+    int dest_addr_len;
+} obe_udp_ctx;
+
 typedef struct obe_udp_opts_t
 {
     char hostname[1024];
@@ -32,13 +41,12 @@ typedef struct obe_udp_opts_t
     int  reuse_socket;
     int  ttl;
     int  tos;
-    int  buffer_size;
     int  bind_iface;
     char iface[10];
 } obe_udp_opts_t;
 
 void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri );
-int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts );
+int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, int fd );
 int udp_write( hnd_t p_handle, uint8_t *buf, int size );
 void udp_close( hnd_t handle );
 
