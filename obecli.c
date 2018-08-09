@@ -79,7 +79,7 @@ static const char * const aac_encapsulations[]       = { "adts", "latm", 0 };
 static const char * const mp2_modes[]                = { "auto", "stereo", "joint-stereo", "dual-channel", 0 };
 static const char * const channel_maps[]             = { "", "mono", "stereo", "5.0", "5.1", 0 };
 static const char * const mono_channels[]            = { "left", "right", 0 };
-static const char * const output_modules[]           = { "udp", "rtp", "file", 0 };
+static const char * const output_modules[]           = { "udp", "rtp", "arq", "file", 0 };
 static const char * const addable_streams[]          = { "audio", "ttx", 0};
 static const char * const filter_bit_depths[]        = { "10", "8", 0 };
 static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned", "ldpc-staircase", 0 };
@@ -111,7 +111,7 @@ static const char * stream_opts[] = { "action", "format",
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", "service-name", "provider-name", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
-static const char * output_opts[] = { "type", "target", "fec-columns", "fec-rows", "fec-type", "dup-delay", "arq", "arq-pt", "arq-latency", NULL };
+static const char * output_opts[] = { "type", "target", "fec-columns", "fec-rows", "fec-type", "dup-delay", "arq-pt", "arq-latency", NULL };
 static const char * update_stream_opts[]  = { "bitrate", "vbv-bufsize" };
 static const char * update_muxer_opts[]  = { "ts-muxrate" };
 
@@ -1026,9 +1026,8 @@ static int set_output( char *command, obecli_command_t *child )
         char *fec_rows = obe_get_option( output_opts[3], opts );
         char *fec_type = obe_get_option( output_opts[4], opts );
         char *dup_delay = obe_get_option( output_opts[5], opts );
-        char *arq = obe_get_option( output_opts[6], opts );
-        char *arq_pt = obe_get_option( output_opts[7], opts );
-        char *arq_latency = obe_get_option( output_opts[8], opts );
+        char *arq_pt = obe_get_option( output_opts[6], opts );
+        char *arq_latency = obe_get_option( output_opts[7], opts );
 
         FAIL_IF_ERROR( type && ( check_enum_value( type, output_modules ) < 0 ),
                       "Invalid Output Type\n" );
@@ -1055,8 +1054,7 @@ static int set_output( char *command, obecli_command_t *child )
             parse_enum_value( fec_type, fec_types, &cli.output.outputs[output_id].fec_type );
         if( dup_delay )
             cli.output.outputs[output_id].dup_delay = obe_otoi( dup_delay, cli.output.outputs[output_id].dup_delay );
-        if( arq )
-            cli.output.outputs[output_id].arq = obe_otob( arq, cli.output.outputs[output_id].arq );
+        cli.output.outputs[output_id].arq_pt = 96; /* default */
         if( arq_pt )
             cli.output.outputs[output_id].arq_pt = obe_otoi( arq_pt, cli.output.outputs[output_id].arq_pt );
         if( arq_latency )
@@ -1497,7 +1495,9 @@ static int start_encode( char *command, obecli_command_t *child )
     FAIL_IF_ERROR( !cli.output.num_outputs, "No outputs selected\n" );
     for( int i = 0; i < cli.output.num_outputs; i++ )
     {
-        if( ( cli.output.outputs[i].type == OUTPUT_UDP || cli.output.outputs[i].type == OUTPUT_RTP ) &&
+        if( ( cli.output.outputs[i].type == OUTPUT_UDP ||
+                    cli.output.outputs[i].type == OUTPUT_RTP ||
+                    cli.output.outputs[i].type == OUTPUT_ARQ) &&
              !cli.output.outputs[i].target )
         {
             fprintf( stderr, "No output target chosen. Output-ID %d\n", i );

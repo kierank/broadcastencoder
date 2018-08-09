@@ -536,6 +536,7 @@ enum output_e
 {
     OUTPUT_UDP, /* MPEG-TS in UDP */
     OUTPUT_RTP, /* MPEG-TS in RTP in UDP */
+    OUTPUT_ARQ, /* MPEG-TS in RTP in UDP, with retransmission */
     OUTPUT_FILE, /* File output */
 //    OUTPUT_LINSYS_ASI,
 //    OUTPUT_LINSYS_SMPTE_310M,
@@ -565,7 +566,6 @@ typedef struct
 
     int dup_delay;
 
-    bool arq;
     uint8_t arq_pt;
     unsigned arq_latency;
 } obe_output_dest_t;

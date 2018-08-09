@@ -69,17 +69,13 @@ obed_ctx_t d;
 
 /* Ctrl-C handler */
 static volatile int b_ctrl_c = 0;
-static char *line_read = NULL;
 
 static int running = 0;
-static int system_type_value = OBE_SYSTEM_TYPE_GENERIC;
 int encoder_id = 0;
 static int64_t auth_time;
 static int auth;
 
 /* Video */
-static const char * const avc_profiles[] = { "main", "high", "high422" };
-
 const static uint64_t channel_layouts[] =
 {
     AV_CH_LAYOUT_MONO,
@@ -512,6 +508,9 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                     snprintf( tmp2, sizeof(tmp2), "tos=%i&", output_opts_in->tos );
                     strcat( tmp, tmp2 );
                 }
+
+                if (output_opts_in->has_arq_buffer)
+                    output_dst->arq_latency = output_opts_in->arq_buffer;
 
                 output_dst->target = strdup( tmp );
                 if( !output_dst->target )
