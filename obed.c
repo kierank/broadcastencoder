@@ -509,6 +509,9 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                     strcat( tmp, tmp2 );
                 }
 
+                if (output_opts_in->has_arq_buffer)
+                    output_dst->arq_latency = output_opts_in->arq_buffer;
+
                 output_dst->target = strdup( tmp );
                 if( !output_dst->target )
                     goto fail;
