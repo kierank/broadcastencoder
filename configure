@@ -705,6 +705,11 @@ fi
 if [ "$protobuf" = "yes" ] ; then
     define HAVE_PROTOBUF
     LDFLAGS="$LDFLAGS $PROTOBUF_LIBS"
+    if pkg-config --exists libprotobuf-c-rpc
+    then
+        CFLAGS="$CFLAGS -DPROTOBUF_C_1_0 `pkg-config --cflags libprotobuf-c-rpc`"
+        LDFLAGS="$LDFLAGS `pkg-config --libs libprotobuf-c-rpc`"
+    fi
 fi
 
 LDFLAGS="$LDFLAGS -lnacl"

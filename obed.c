@@ -39,6 +39,20 @@
 
 #include "obe.h"
 #include <google/protobuf-c/protobuf-c-rpc.h>
+#ifdef PROTOBUF_C_1_0
+# define protobuf_c_dispatch_run protobuf_c_rpc_dispatch_run
+# define protobuf_c_dispatch_default protobuf_c_rpc_dispatch_default
+# define protobuf_c_dispatch_add_idle protobuf_c_rpc_dispatch_add_idle
+# define protobuf_c_dispatch_destroy_default protobuf_c_rpc_dispatch_destroy_default
+# define protobuf_c_dispatch_dispatch protobuf_c_rpc_dispatch_dispatch
+
+# define ProtobufCDispatch ProtobufCRPCDispatch
+# define ProtobufC_FDNotify ProtobufC_RPC_FDNotify
+
+# define PROTOBUF_C_EVENT_WRITABLE PROTOBUF_C_RPC_EVENT_WRITABLE
+# define PROTOBUF_C_EVENT_READABLE PROTOBUF_C_RPC_EVENT_READABLE
+#endif
+
 #include "proto/obed.pb-c.h"
 
 #define OBE_CONTROL_VERSION 1
