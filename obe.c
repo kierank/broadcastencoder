@@ -1165,7 +1165,9 @@ int obe_start( obe_t *h )
     for( int i = 0; i < h->num_outputs; i++ )
     {
         obe_init_queue( &h->outputs[i]->queue );
-        if( h->outputs[i]->output_dest.type == OUTPUT_UDP || h->outputs[i]->output_dest.type == OUTPUT_RTP )
+        if( h->outputs[i]->output_dest.type == OUTPUT_UDP ||
+                h->outputs[i]->output_dest.type == OUTPUT_RTP ||
+                h->outputs[i]->output_dest.type == OUTPUT_ARQ)
             output = ip_output;
         else if( h->outputs[i]->output_dest.type == OUTPUT_FILE )
             output = file_output;
