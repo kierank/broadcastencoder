@@ -201,7 +201,6 @@ upipe="auto"
 
 CFLAGS="$CFLAGS -Wall -I."
 CXXFLAGS="$CXXFLAGS -c -Wall -I."
-LDFLAGS="$LDFLAGS -ljemalloc"
 LDFLAGSCLI="$LDFLAGSCLI"
 ASFLAGS="$ASFLAGS"
 cross_prefix=""
@@ -542,6 +541,12 @@ if [ "$libx264" = "auto" ] ; then
     fi
 fi
 
+if cc_check "stdlib.h" -ljemalloc "malloc(1);" ; then
+    LDFLAGS="$LDFLAGS -ljemalloc"
+else
+    die "no libjemalloc"
+fi
+
 if [ "$libx264" = "no" ] ; then
     die "libx264 is a mandatory component"
 fi
@@ -700,6 +705,11 @@ fi
 if [ "$protobuf" = "yes" ] ; then
     define HAVE_PROTOBUF
     LDFLAGS="$LDFLAGS $PROTOBUF_LIBS"
+    if pkg-config --exists libprotobuf-c-rpc
+    then
+        CFLAGS="$CFLAGS -DPROTOBUF_C_1_0 `pkg-config --cflags libprotobuf-c-rpc`"
+        LDFLAGS="$LDFLAGS `pkg-config --libs libprotobuf-c-rpc`"
+    fi
 fi
 
 LDFLAGS="$LDFLAGS -lnacl"
