@@ -193,7 +193,7 @@ swscale="auto"
 pic="no"
 avresample="auto"
 lavf="auto"
-decklink="auto"
+decklink="yes"
 lzvbi="auto"
 lopenfec="auto"
 protobuf="auto"
@@ -650,14 +650,6 @@ if [ "$lmpegts" = "yes" ] ; then
     LDFLAGS="$LDFLAGS $LMPEGTS_LIBS"
 else
     die "libmpegts is a mandatory component"
-fi
-
-if [ "$decklink" = "auto" ] ; then
-    decklink="no"
-    decklinkflags="-lDeckLinkAPI"
-    if cc_check "" "$decklinkflags" "" ; then
-        decklink="yes"
-    fi
 fi
 
 DECKLINK_CXXFLAGS="-lavformat -lavcodec -lswscale -lavutil $libpthread -ldl "
