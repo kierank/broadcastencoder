@@ -81,7 +81,7 @@ obed$(EXE): $(OBJD) $(OBJO) libobe.a
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $<
 
-.depend: config.mak
+.depend: config.mak $(SRCCLI)
 	@rm -f .depend
 	@$(foreach SRC, $(SRCS) $(SRCCLI) $(SRCSO), $(CC) $(CFLAGS) $(SRC) -MT $(SRC:%.c=%.o) -MM -g0 1>> .depend;)
 	@$(foreach SRC, $(SRCCXX), $(CXX) $(CXXFLAGS) $(SRC) -MT $(SRCCXX:%.cpp=%.o) -MM -g0 1>> .depend;)
