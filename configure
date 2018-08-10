@@ -542,7 +542,7 @@ if [ "$libx264" = "auto" ] ; then
 fi
 
 if cc_check "stdlib.h" -ljemalloc "malloc(1);" ; then
-    LDFLAGS="$LDFLAGS -ljemalloc"
+    LDFLAGS="$LDFLAGS -ljemalloc -lpthread"
 else
     die "no libjemalloc"
 fi
