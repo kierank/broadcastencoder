@@ -140,7 +140,7 @@ void obe_release_video_uref( void *ptr )
         uref_pic_plane_unmap(raw_frame->uref, "y10l", 0, 0, -1, -1);
         uref_pic_plane_unmap(raw_frame->uref, "u10l", 0, 0, -1, -1);
         uref_pic_plane_unmap(raw_frame->uref, "v10l", 0, 0, -1, -1);
-    } 
+    }
 
     /* Clear video */
     memset( &raw_frame->alloc_img, 0, sizeof(raw_frame->alloc_img) );
@@ -288,7 +288,7 @@ static void destroy_passthrough( obe_passthrough_t *passthrough )
 {
     av_fifo_free( passthrough->in_fifo );
     av_fifo_free( passthrough->out_fifo );
-    
+
     free( passthrough );
 }
 
@@ -338,12 +338,12 @@ static void destroy_enc_smoothing( obe_queue_t *queue )
         ulist_delete_foreach( &queue->ulist, uchain, uchain_tmp)
         {
             obe_coded_frame_t *coded_frame = obe_coded_frame_t_from_uchain( uchain );
-            
+
             ulist_delete(uchain);
             destroy_coded_frame( coded_frame );
         }
     }
-    
+
     obe_destroy_queue( queue );
 }
 
@@ -356,12 +356,12 @@ static void destroy_mux( obe_t *h )
         ulist_delete_foreach( &h->mux_queue.ulist, uchain, uchain_tmp)
         {
             obe_coded_frame_t *coded_frame = obe_coded_frame_t_from_uchain( uchain );
-            
+
             ulist_delete( uchain );
             destroy_coded_frame( coded_frame );
         }
     }
-    
+
     obe_destroy_queue( &h->mux_queue );
 
     if( h->mux_opts.service_name )
@@ -384,7 +384,7 @@ static void destroy_mux_smoothing( obe_queue_t *queue )
             destroy_muxed_data( muxed_data );
         }
     }
-    
+
     obe_destroy_queue( queue );
 }
 
@@ -421,7 +421,7 @@ static void destroy_output( obe_output_t *output )
             av_buffer_unref( &buf_ref->self_buf_ref );
         }
     }
-    
+
     obe_destroy_queue( &output->queue );
     free( output );
 }
@@ -1150,7 +1150,7 @@ int obe_start( obe_t *h )
     else if( h->device.device_type == INPUT_DEVICE_LINSYS_SDI )
         input = linsys_sdi_input;
     else if( h->device.device_type == INPUT_DEVICE_BARS )
-        input = bars_input;   
+        input = bars_input;
     else if( h->device.device_type == INPUT_DEVICE_NETMAP )
     {
         input = netmap_input;
@@ -1167,7 +1167,7 @@ int obe_start( obe_t *h )
         obe_init_queue( &h->outputs[i]->queue );
         if( h->outputs[i]->output_dest.type == OUTPUT_UDP ||
                 h->outputs[i]->output_dest.type == OUTPUT_RTP ||
-                h->outputs[i]->output_dest.type == OUTPUT_ARQ)
+                h->outputs[i]->output_dest.type == OUTPUT_ARQ )
             output = ip_output;
         else if( h->outputs[i]->output_dest.type == OUTPUT_FILE )
             output = file_output;
@@ -1470,7 +1470,7 @@ int obe_start( obe_t *h )
     }
     else
         h->device.thread_running = true;
-    
+
     h->is_active = 1;
     h->start_time = obe_mdate();
 
@@ -1508,7 +1508,7 @@ void obe_close( obe_t *h )
         ts.tv_sec = sleep_time / 1000000;
         ts.tv_nsec = sleep_time % 1000000;
 
-        fprintf( stderr, "closed too quickly - sleeping for %"PRIi64" us \n", sleep_time - cur_time ); 
+        fprintf( stderr, "closed too quickly - sleeping for %"PRIi64" us \n", sleep_time - cur_time );
 
         clock_nanosleep( CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, &ts );
     }
@@ -1616,7 +1616,7 @@ void obe_close( obe_t *h )
     /* Destroy passthrough */
     for( int i = 0; i < h->num_passthrough; i++ )
         destroy_passthrough( h->passthrough[i] );
-    
+
     fprintf( stderr, "passthrough destroyed \n" );
 
     /* Destroy encoders */
