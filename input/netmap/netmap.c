@@ -668,7 +668,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     netmap_ctx->input_chroma_map[3] = NULL;
 
     /* upump manager for the main thread */
-    struct upump_mgr *main_upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL, UPUMP_BLOCKER_POOL);
+    struct upump_mgr *main_upump_mgr = upump_ev_mgr_alloc_loop(UPUMP_POOL, UPUMP_BLOCKER_POOL);
     assert(main_upump_mgr);
     netmap_ctx->upump_mgr = main_upump_mgr;
     netmap_ctx->no_video_upump = NULL;
