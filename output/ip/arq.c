@@ -89,6 +89,7 @@
 static void catch_event(struct upump *upump)
 {
     struct arq_ctx *ctx = upump->opaque;
+    ueventfd_read(ctx->event);
     pthread_mutex_lock(&ctx->mutex);
     bool end = ctx->end;
     pthread_mutex_unlock(&ctx->mutex);
