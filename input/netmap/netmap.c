@@ -195,6 +195,7 @@ static void no_video_timer(struct upump *upump)
     if (!video_stream)
         return;
 
+    syslog( LOG_ERR, "inputDropped: No input signal detected" );
     if (!netmap_opts->picture_on_loss)
         return;
 
