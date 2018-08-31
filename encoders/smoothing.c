@@ -53,7 +53,7 @@ static void *start_smoothing( void *ptr )
         }
     }
 
-    //int64_t send_delta = 0;
+    int64_t send_delta = 0;
 
     while( 1 )
     {
@@ -120,11 +120,22 @@ static void *start_smoothing( void *ptr )
 
         add_to_queue( &h->mux_queue, &coded_frame->uchain );
 
-        //printf("\n send_delta %"PRIi64" \n", get_input_clock_in_mpeg_ticks( h ) - send_delta );
-        //send_delta = get_input_clock_in_mpeg_ticks( h );
+#if 0
+        pthread_mutex_lock( &h->obe_clock_mutex );
+        int64_t last_wallclock =  h->obe_clock_last_wallclock;
+        int64_t last_pts = h->obe_clock_last_pts;
+        pthread_mutex_unlock( &h->obe_clock_mutex );
+        int64_t wallclock = get_wallclock_in_mpeg_ticks();
+        int64_t ticks = last_pts + (wallclock - last_wallclock);
+        printf("\n send_delta %"PRIi64" last_wallclock %" PRIi64 " last_pts %" PRIi64 " wallclock %" PRIi64 " \n", ticks - send_delta, last_wallclock, last_pts, wallclock );
+        send_delta = ticks;
+#else
+        (void)send_delta;
+        int64_t ticks = get_input_clock_in_mpeg_ticks(h);
+#endif
 
         pthread_mutex_lock( &h->enc_smoothing_queue.mutex );
-        h->enc_smoothing_last_exit_time = get_input_clock_in_mpeg_ticks( h );
+        h->enc_smoothing_last_exit_time = ticks;
         pthread_cond_signal( &h->enc_smoothing_queue.out_cv );
         pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
         num_enc_smoothing_frames = 0;
