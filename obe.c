@@ -1462,7 +1462,20 @@ int obe_start( obe_t *h )
     input_params->output_streams = h->output_streams;
     input_params->audio_samples = num_samples;
 
-    if( pthread_create( &h->device.device_thread, NULL, input.open_input, (void*)input_params ) < 0 )
+    pthread_attr_t attrs;
+    struct sched_param params;
+
+    pthread_attr_init(&attrs);
+    pthread_attr_setschedpolicy(&attrs, SCHED_FIFO);
+    pthread_attr_setinheritsched(&attrs, PTHREAD_EXPLICIT_SCHED);
+
+    pthread_attr_getschedparam (&attrs, &params);
+    params.sched_priority = 50;
+    int ret = pthread_attr_setschedparam(&attrs, &params);
+    if (ret < 0)
+        perror("setschedparam");
+
+    if( pthread_create( &h->device.device_thread, &attrs, input.open_input, (void*)input_params ) < 0 )
     {
         fprintf( stderr, "Couldn't create input thread \n" );
         h->device.thread_running = false;
