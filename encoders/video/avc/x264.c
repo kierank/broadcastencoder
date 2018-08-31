@@ -25,6 +25,8 @@
 #include "encoders/video/video.h"
 #include <libavutil/mathematics.h>
 
+#define MAX_UNDERFLOW (7)
+
 static void x264_logger( void *p_unused, int i_level, const char *psz_fmt, va_list arg )
 {
     if( i_level <= X264_LOG_INFO )
@@ -106,7 +108,7 @@ static void *start_encoder( void *ptr )
     x264_t *s = NULL;
     x264_picture_t pic, pic_out;
     x264_nal_t *nal;
-    int i_nal, frame_size = 0;
+    int i_nal, frame_size = 0, underflow_count = 0;
     int64_t pts = 0, arrival_time = 0, frame_duration, buffer_duration;
     int64_t *pts2;
     float buffer_fill;
@@ -229,6 +231,20 @@ static void *start_encoder( void *ptr )
                 }
                 else
                     buffer_fill = (float)(-1 * last_frame_delta)/buffer_duration;
+
+                if( buffer_fill < 0 )
+                    underflow_count++;
+                else
+                    underflow_count = 0;
+
+                if( underflow_count >= MAX_UNDERFLOW )
+                {
+                    syslog( LOG_ERR, "Too many speedcontrol underflows, resetting\n" );
+                    pthread_mutex_lock( &h->drop_mutex );
+                    h->encoder_drop = h->mux_drop = 1;
+                    pthread_mutex_unlock( &h->drop_mutex );
+                    underflow_count = 0;
+                }
 
                 x264_speedcontrol_sync( s, buffer_fill, param->sc.i_buffer_size, 1 );
             }
