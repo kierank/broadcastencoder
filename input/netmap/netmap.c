@@ -406,19 +406,21 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
             obe_raw_frame_t *raw_frame = NULL;
             int64_t pts = -1;
 
+            if( discontinuity )
+            {
+                pthread_mutex_lock( &h->drop_mutex );
+                h->encoder_drop = h->mux_drop = 1;
+                pthread_mutex_unlock( &h->drop_mutex );
+
+                goto end;
+            }
+
             pts = av_rescale_q( netmap_ctx->v_counter++, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
             /* use SDI ticks as clock source */
             obe_clock_tick( h, pts );
 
             if( netmap_ctx->last_frame_time == -1 )
                 netmap_ctx->last_frame_time = obe_mdate();
-
-            if( discontinuity )
-            {
-                pthread_mutex_lock( &h->drop_mutex );
-                h->encoder_drop = h->mux_drop = 1;
-                pthread_mutex_unlock( &h->drop_mutex );
-            }
 
             raw_frame = new_raw_frame();
             if( !raw_frame )
@@ -542,6 +544,10 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
             obe_raw_frame_t *raw_frame = NULL;
             obe_t *h = netmap_ctx->h;
             const int32_t *src;
+
+            bool discontinuity = ubase_check(uref_flow_get_discontinuity(uref));
+            if (discontinuity)
+                goto end;
 
             size_t size = 0;
             uint8_t sample_size = 0;
