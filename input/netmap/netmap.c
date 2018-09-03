@@ -405,7 +405,6 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         else if(netmap_ctx->video_good) {
             obe_raw_frame_t *raw_frame = NULL;
             int64_t pts = -1;
-            uref = uref_dup(uref);
 
             pts = av_rescale_q( netmap_ctx->v_counter++, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
             /* use SDI ticks as clock source */
@@ -430,6 +429,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
             raw_frame->pts = pts;
 
+            uref = uref_dup(uref);
             for (int i = 0; i < 3 && netmap_ctx->input_chroma_map[i] != NULL; i++)
             {
                 const uint8_t *data;
