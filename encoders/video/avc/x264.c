@@ -25,7 +25,7 @@
 #include "encoders/video/video.h"
 #include <libavutil/mathematics.h>
 
-#define MAX_UNDERFLOW (25)
+#define MAX_UNDERFLOW (17)
 
 static void x264_logger( void *p_unused, int i_level, const char *psz_fmt, va_list arg )
 {
