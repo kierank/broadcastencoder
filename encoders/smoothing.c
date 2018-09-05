@@ -31,7 +31,7 @@ static void *start_smoothing( void *ptr )
     obe_coded_frame_t *coded_frame = NULL;
 
     struct sched_param param = {0};
-    param.sched_priority = 99;
+    param.sched_priority = 50;
     pthread_setschedparam( pthread_self(), SCHED_FIFO, &param );
 
     /* FIXME: when we have soft pulldown this will need changing */
