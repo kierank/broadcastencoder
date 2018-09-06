@@ -607,7 +607,6 @@ end:
         return UBASE_ERR_NONE;
     } else if (event == UPROBE_NEW_FLOW_DEF) {
         flow_def = va_arg(args, struct uref *);
-        uint8_t channels;
         if (!ubase_check(uref_sound_flow_get_channels(flow_def, &netmap_ctx->channels))) {
             netmap_ctx->channels = 0;
         }
