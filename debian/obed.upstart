@@ -7,6 +7,6 @@ console log
 
 pre-start script
     for i in `seq 0 7`; do
-        start obed-worker id=$i || true
+        start obed-worker id=$i cpu=$(($i & 1)) || true
     done
 end script
