@@ -104,6 +104,7 @@ distclean: clean
 install: obed$(EXE) $(SONAME)
 	install -d $(DESTDIR)$(bindir)
 	install obed$(EXE) $(DESTDIR)$(bindir)
+	install obed.sh $(DESTDIR)$(bindir)
 	install -d $(DESTDIR)/etc/init
 	install obed-worker.conf $(DESTDIR)/etc/init
 	install -d $(DESTDIR)/usr/lib
