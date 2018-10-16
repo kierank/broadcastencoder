@@ -44,3 +44,6 @@ dataDec.txt
 log.dec
 
 obecli
+obed
+obed-worker.conf
+debian/obed.upstart

@@ -1,5 +1,11 @@
 #!/bin/bash
 
+ver=200
+if [ "$C100" = "1" ]
+then
+    ver=100
+fi
+
 if test x"$1" = x"-h" -o x"$1" = x"--help" ; then
 
 echo "Usage: ./configure [options]"
@@ -176,7 +182,7 @@ SRCPATH="$(cd $(dirname $0); pwd)"
 [ -n "$(echo $SRCPATH | grep ' ')" ] && die "Out of tree builds are impossible with whitespace in source path."
 [ -e "$SRCPATH/config.h" -o -e "$SRCPATH/x264_config.h" ] && die "Out of tree builds are impossible with config.h/x264_config.h in source dir."
 
-prefix='/opt/obe-c100'
+prefix="/opt/obe-c${ver}"
 exec_prefix='${prefix}'
 bindir='${exec_prefix}/bin'
 libdir='${exec_prefix}/lib'
@@ -796,6 +802,10 @@ AS=$AS
 ASFLAGS=$ASFLAGS
 EXE=$EXE
 EOF
+
+[ $ver = "100" ] && echo CFLAGS += -DC100 >> config.mak
+sed s/@@/$ver/g obed-worker.conf.in > obed-worker.conf
+sed s/@@/$ver/g debian/obed.upstart.in > debian/obed.upstart
 
 # FIXME
 #./version.sh >> config.h

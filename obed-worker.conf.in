@@ -1,0 +1,12 @@
+description "OBE C-@@ Encoder Workers"
+
+stop on stopping obed
+
+console log
+respawn
+
+instance $id
+
+chdir /opt/obe-c@@/
+
+exec /opt/obe-c@@/bin/obed.sh $id
