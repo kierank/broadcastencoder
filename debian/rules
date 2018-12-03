@@ -13,4 +13,4 @@
 	dh $@ 
 
 override_dh_auto_configure:
-	dh_auto_configure -- --enable-pic
+	dh_auto_configure -- --enable-pic --prefix=/opt/obe-c100
