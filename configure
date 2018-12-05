@@ -695,7 +695,7 @@ fi
 PROTOBUF_LIBS="-lprotobuf-c"
 if [ "$protobuf" = "auto" ] ; then
     protobuf="no"
-    if cc_check google/protobuf-c/protobuf-c-rpc.h "$PROTOBUF_LIBS" ; then
+    if cc_check google/protobuf-c/protobuf-c.h "$PROTOBUF_LIBS" ; then
         protobuf="yes"
     fi
 fi
