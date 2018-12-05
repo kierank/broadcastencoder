@@ -112,6 +112,8 @@ install: obed$(EXE) $(SONAME)
 	install -d $(DESTDIR)/etc/init
 	install obed-worker.conf $(DESTDIR)/etc/init
 	install -d $(DESTDIR)/usr/lib
+	install -d $(DESTDIR)/lib/systemd/system
+	install obed@.service $(DESTDIR)/lib/systemd/system
 
 uninstall:
 	rm -f $(DESTDIR)$(bindir)/obed$(EXE)
