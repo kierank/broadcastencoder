@@ -60,7 +60,6 @@ typedef struct
     int dup_delay;
 
     bool arq;
-    uint8_t arq_pt;
     unsigned arq_latency;
 
     /* COP3 FEC */
@@ -150,9 +149,6 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
 
     p_rtp->dup_delay = output_dest->dup_delay;
     p_rtp->arq = output_dest->type == OUTPUT_ARQ;
-    p_rtp->arq_pt = output_dest->arq_pt;
-    if (!p_rtp->arq_pt)
-        p_rtp->arq_pt = 96;
     p_rtp->arq_latency = output_dest->arq_latency;
     if (!p_rtp->arq_latency)
         p_rtp->arq_latency = 100;
@@ -508,7 +504,7 @@ static void *open_output( void *ptr )
         if (p_rtp->arq) {
             obe_udp_ctx *p_udp = p_rtp->udp_handle;
             p_rtp->arq_ctx = open_arq(p_udp, p_rtp->row_handle,
-                    p_rtp->column_handle,  p_rtp->arq_latency, p_rtp->arq_pt);
+                    p_rtp->column_handle,  p_rtp->arq_latency);
             if (!p_rtp->arq_ctx) {
                 rtp_close(p_rtp);
                 fprintf( stderr, "[rtp] Could not create arq output" );

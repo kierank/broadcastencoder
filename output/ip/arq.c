@@ -403,7 +403,6 @@ static void *arq_thread(void *arg)
     struct upipe_mgr *upipe_rtcpfb_mgr = upipe_rtcpfb_mgr_alloc();
     struct upipe *upipe_rtcpfb = upipe_void_alloc_output(upipe_setflowdef, upipe_rtcpfb_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), loglevel, "rtcp fb"));
-    upipe_rtcpfb_set_rtx_pt(upipe_rtcpfb, ctx->rtx_pt);
     upipe_mgr_release(upipe_rtcpfb_mgr);
 
     char slatency[20];
@@ -537,7 +536,7 @@ static void *arq_thread(void *arg)
 }
 
 struct arq_ctx *open_arq(obe_udp_ctx *p_udp, obe_udp_ctx *p_row,
-        obe_udp_ctx *p_col, unsigned latency, uint8_t rtx_pt)
+        obe_udp_ctx *p_col, unsigned latency)
 {
     struct arq_ctx *ctx = calloc(1, sizeof(*ctx));
     if (!ctx)
@@ -557,7 +556,6 @@ struct arq_ctx *open_arq(obe_udp_ctx *p_udp, obe_udp_ctx *p_row,
         ctx->col_dest_addr_len = p_col->dest_addr_len;
     }
     ctx->latency = latency;
-    ctx->rtx_pt = rtx_pt;
     ctx->end = false;
     ctx->queue = malloc(sizeof(*ctx->queue));
     if (!ctx->queue) {
