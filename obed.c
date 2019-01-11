@@ -149,10 +149,17 @@ static void stop_server( int a )
 }
 
 /* Authentication options */
+#ifdef C100
 static const unsigned char pk[] = { 0x7c, 0x59, 0x1a, 0xb3, 0xb9, 0xe2, 0x9d, 0xfc,
                                     0xdb, 0x54, 0x7f, 0xf4, 0x09, 0xc9, 0xc6, 0x46,
                                     0xaa, 0x92, 0xcf, 0xe2, 0xde, 0x6e, 0x70, 0xc6,
                                     0x09, 0x61, 0x8f, 0x86, 0x6d, 0x22, 0x7b, 0x74 };
+#else
+static const unsigned char pk[] = { 0x99, 0x29, 0xfc, 0x17, 0x90, 0x96, 0xb3, 0xe1,
+                                    0xb2, 0xe1, 0x93, 0x93, 0x76, 0x7e, 0x65, 0x30,
+                                    0xda, 0xa,  0x49, 0x92, 0xe8, 0xc9, 0x7e, 0x54,
+                                    0xd0, 0xe4, 0x81, 0x3a, 0x46, 0xc3,  0xc, 0xb7 };
+#endif
 
 static void stop_encode( void )
 {
@@ -351,12 +358,15 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 video_stream->avc_param.i_height = 576;
             }
 
+#ifdef C100
             if( video_opts_in->latency == 0 )
             {
                 /* Reduce CPU usage in C-100 */
                 video_stream->avc_param.sc.max_preset = 1;
             }
-            else if( video_opts_in->latency == 1 || video_opts_in->latency == 2 ||
+            else
+#endif
+            if( video_opts_in->latency == 1 || video_opts_in->latency == 2 ||
                      video_opts_in->latency == 3 )
             {
                 if( video_opts_in->latency == 1 || video_opts_in->latency == 2 )
@@ -423,8 +433,15 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 }
                 else if( audio_opts_in->format == 2 )
                     audio_stream->stream_format = AUDIO_OPUS;
-                else
+                else if( audio_opts_in->format == 3 )
                     audio_stream->stream_format = AUDIO_S302M;
+#ifndef C100
+                else
+                {
+                    audio_stream->stream_format = AUDIO_AC_3;
+                    audio_stream->stream_action = STREAM_PASSTHROUGH;
+                }
+#endif
                 audio_stream->ts_opts.pid = audio_opts_in->pid;
 
                 audio_stream->channel_layout = channel_layouts[audio_opts_in->channel_map];
