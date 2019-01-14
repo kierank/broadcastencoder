@@ -13,4 +13,4 @@
 	dh $@ --with systemd
 
 override_dh_auto_configure:
-	dh_auto_configure -- --enable-pic --prefix=/opt/obe-c100
+	dh_auto_configure -- --enable-pic --prefix=/opt/obe-c$(ver)
