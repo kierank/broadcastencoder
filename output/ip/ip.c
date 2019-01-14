@@ -60,12 +60,14 @@ typedef struct
     int dup_delay;
 
     bool arq;
-    uint8_t arq_pt;
     unsigned arq_latency;
 
     /* COP3 FEC */
     hnd_t column_handle;
     hnd_t row_handle;
+
+    /* RTCP */
+    hnd_t rtcp_handle;
 
     int fec_type;
     int fec_columns;
@@ -124,6 +126,8 @@ static void rtp_close( hnd_t handle )
         udp_close( p_rtp->column_handle );
     if( p_rtp->row_handle )
         udp_close( p_rtp->row_handle );
+    if( p_rtp->rtcp_handle )
+        udp_close( p_rtp->rtcp_handle );
 
     free( p_rtp );
 }
@@ -150,14 +154,16 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
 
     p_rtp->dup_delay = output_dest->dup_delay;
     p_rtp->arq = output_dest->type == OUTPUT_ARQ;
-    p_rtp->arq_pt = output_dest->arq_pt;
-    if (!p_rtp->arq_pt)
-        p_rtp->arq_pt = 96;
     p_rtp->arq_latency = output_dest->arq_latency;
     if (!p_rtp->arq_latency)
         p_rtp->arq_latency = 100;
     p_rtp->fec_columns = output_dest->fec_columns;
     p_rtp->fec_rows = output_dest->fec_rows;
+
+    obe_udp_ctx *s = p_rtp->udp_handle;
+    int fd = s->udp_fd;
+
+    int rtcp_port = udp_opts->port + 1;
 
     if( p_rtp->fec_columns && p_rtp->fec_rows )
     {
@@ -170,9 +176,6 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
             goto error;
         }
 
-        obe_udp_ctx *s = p_rtp->udp_handle;
-        int fd = s->udp_fd;
-
         udp_opts->port += 2;
         if( udp_open( &p_rtp->column_handle, udp_opts, fd ) < 0 )
         {
@@ -184,6 +187,17 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         if( udp_open( &p_rtp->row_handle, udp_opts, fd ) < 0 )
         {
             fprintf( stderr, "[rtp] Could not create FEC row output \n" );
+            goto error;
+        }
+    }
+
+    if (p_rtp->arq) {
+        p_rtp->ssrc &= ~1;
+
+        udp_opts->local_port = udp_opts->port = rtcp_port;
+        if( udp_open( &p_rtp->rtcp_handle, udp_opts, -1) < 0 )
+        {
+            fprintf( stderr, "[rtp] Could not create RTCP output \n" );
             goto error;
         }
     }
@@ -508,7 +522,7 @@ static void *open_output( void *ptr )
         if (p_rtp->arq) {
             obe_udp_ctx *p_udp = p_rtp->udp_handle;
             p_rtp->arq_ctx = open_arq(p_udp, p_rtp->row_handle,
-                    p_rtp->column_handle,  p_rtp->arq_latency, p_rtp->arq_pt);
+                    p_rtp->column_handle,  p_rtp->rtcp_handle, p_rtp->arq_latency);
             if (!p_rtp->arq_ctx) {
                 rtp_close(p_rtp);
                 fprintf( stderr, "[rtp] Could not create arq output" );
