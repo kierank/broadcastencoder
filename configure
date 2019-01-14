@@ -4,6 +4,7 @@ ver=200
 if [ "$C100" = "1" ]
 then
     ver=100
+fi
 if test "${ver}" != "100" -a "${ver}" != "200"
 then
     echo "You need to choose version before running configure."
