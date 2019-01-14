@@ -401,8 +401,12 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
         if(netmap_opts->probe) {
             netmap_opts->probe_success = 1;
-        }
-        else if(netmap_ctx->video_good) {
+        } else if(netmap_ctx->video_good == 1) {
+            /* drop first video frame,
+             * we already dropped first audio frame because video flow def was not yet set
+             */
+            netmap_ctx->video_good = 2;
+        } else if(netmap_ctx->video_good) {
             obe_raw_frame_t *raw_frame = NULL;
             int64_t pts = -1;
 
