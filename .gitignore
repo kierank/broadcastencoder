@@ -48,3 +48,6 @@ obed
 obed-worker.conf
 debian/obed.upstart
 debian/control
+debian/obed.substvars
+debian/files
+debian/.debhelper/
