@@ -1,11 +1,11 @@
 [Unit]
-Description=OBE C-100 Encoder Master %i
+Description=OBE C-@@ Encoder Master %i
 After=obe-agent.service
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/obe-c100
-ExecStart=/opt/obe-c100/bin/obed %i
+WorkingDirectory=/opt/obe-c@@
+ExecStart=/opt/obe-c@@/bin/obed %i
 Restart=always
 
 [Install]

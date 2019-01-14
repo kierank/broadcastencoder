@@ -47,3 +47,8 @@ obecli
 obed
 obed-worker.conf
 debian/obed.upstart
+obed@.service
+debian/control
+debian/obed.substvars
+debian/files
+debian/.debhelper/

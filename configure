@@ -4,6 +4,10 @@ ver=200
 if [ "$C100" = "1" ]
 then
     ver=100
+if test "${ver}" != "100" -a "${ver}" != "200"
+then
+    echo "You need to choose version before running configure."
+    exit 1
 fi
 
 if test x"$1" = x"-h" -o x"$1" = x"--help" ; then
@@ -806,6 +810,10 @@ EOF
 [ $ver = "100" ] && echo CFLAGS += -DC100 >> config.mak
 sed s/@@/$ver/g obed-worker.conf.in > obed-worker.conf
 sed s/@@/$ver/g debian/obed.upstart.in > debian/obed.upstart
+<<<<<<< HEAD
+=======
+sed s/@@/$ver/g obed@.service.in > obed@.service
+>>>>>>> 87d80dc8609bc4e8c6b4da7dfdc54ca2da2a60d2
 
 # FIXME
 #./version.sh >> config.h
