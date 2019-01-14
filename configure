@@ -810,10 +810,7 @@ EOF
 [ $ver = "100" ] && echo CFLAGS += -DC100 >> config.mak
 sed s/@@/$ver/g obed-worker.conf.in > obed-worker.conf
 sed s/@@/$ver/g debian/obed.upstart.in > debian/obed.upstart
-<<<<<<< HEAD
-=======
 sed s/@@/$ver/g obed@.service.in > obed@.service
->>>>>>> 87d80dc8609bc4e8c6b4da7dfdc54ca2da2a60d2
 
 # FIXME
 #./version.sh >> config.h
