@@ -1,9 +1,9 @@
 #!/bin/bash
 
-ver=200
-if [ "$C100" = "1" ]
+if test "${ver}" != "100" -a "${ver}" != "200"
 then
-    ver=100
+    echo "You need to choose version before running configure."
+    exit 1
 fi
 
 if test x"$1" = x"-h" -o x"$1" = x"--help" ; then

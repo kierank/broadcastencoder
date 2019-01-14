@@ -47,3 +47,4 @@ obecli
 obed
 obed-worker.conf
 debian/obed.upstart
+debian/control

@@ -11,4 +11,4 @@ Homepage: <insert the upstream URL, if relevant>
 Package: obed
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, libtwolame0, libzvbi0, fonts-droid, numactl
-Description: OBE C-100 daemon
+Description: OBE C-@@ daemon
