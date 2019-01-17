@@ -1206,7 +1206,6 @@ static void *probe_stream( void *ptr )
     free( device );
 
 finish:
-    free( probe_ctx );
 
     return NULL;
 }

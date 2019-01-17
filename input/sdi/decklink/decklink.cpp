@@ -1496,10 +1496,7 @@ static void *probe_stream( void *ptr )
     free( device );
 
 finish:
-    if( decklink_opts )
-        free( decklink_opts );
-
-    free( probe_ctx );
+    free( decklink_opts );
 
     return NULL;
 }

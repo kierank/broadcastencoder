@@ -1060,7 +1060,6 @@ static void *probe_input( void *ptr )
     free( device );
 
 finish:
-    free( probe_ctx );
 
     return NULL;
 }

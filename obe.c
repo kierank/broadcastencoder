@@ -632,7 +632,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     void *ret_ptr;
     obe_int_input_stream_t *stream_in;
     obe_input_stream_t *stream_out;
-    obe_input_probe_t *args = NULL;
+    obe_input_probe_t args;
 
     obe_input_func_t  input;
 
@@ -677,20 +677,13 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
         return -1;
     }
 
-    args = malloc( sizeof(*args) );
-    if( !args )
-    {
-        fprintf( stderr, "Malloc failed \n" );
-        return -1;
-    }
-
-    args->h = h;
-    memcpy( &args->user_opts, input_device, sizeof(*input_device) );
+    args.h = h;
+    memcpy( &args.user_opts, input_device, sizeof(*input_device) );
 
     if( obe_validate_input_params( input_device ) < 0 )
         goto fail;
 
-    if( pthread_create( &thread, NULL, input.probe_input, (void*)args ) < 0 )
+    if( pthread_create( &thread, NULL, input.probe_input, &args ) < 0 )
     {
         fprintf( stderr, "Couldn't create probe thread \n" );
         goto fail;
@@ -767,8 +760,6 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     return 0;
 
 fail:
-    if( args )
-        free( args );
 
     return -1;
 }
