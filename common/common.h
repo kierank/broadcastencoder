@@ -232,6 +232,8 @@ typedef struct
     pthread_t device_thread;
     bool thread_running;
 
+    obe_input_status_t input_status;
+
     int num_input_streams;
     obe_int_input_stream_t *streams[MAX_STREAMS];
 
@@ -699,5 +701,7 @@ int64_t get_input_clock_in_mpeg_ticks( obe_t *h );
 void sleep_input_clock( obe_t *h, int64_t i_delay );
 
 int get_non_display_location( int type );
+
+extern int encoder_id;
 
 #endif

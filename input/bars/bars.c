@@ -162,6 +162,11 @@ static void *open_input( void *ptr )
         return NULL;
     } 
 
+    pthread_mutex_lock( &h->device.device_mutex );
+    h->device.input_status.active = 1;
+    h->device.input_status.detected_video_format = obe_bars_opts.video_format;
+    pthread_mutex_unlock( &h->device.device_mutex );
+
     int64_t start_time = 0;
 
     while( 1 )

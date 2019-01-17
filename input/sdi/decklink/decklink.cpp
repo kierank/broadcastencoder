@@ -418,10 +418,15 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         pts = av_rescale_q( decklink_ctx->v_counter, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
         if( videoframe->GetFlags() & bmdFrameHasNoInputSource )
         {
-            syslog( LOG_ERR, "Decklink card index %i: No input signal detected", decklink_opts_->card_idx );
+            syslog( LOG_ERR, "inputDropped: Decklink card index %i: No input signal detected", decklink_opts_->card_idx );
+            if( !decklink_opts_->probe )
+            {
+                pthread_mutex_lock( &h->device.device_mutex );
+                h->device.input_status.active = 0;
+                pthread_mutex_unlock( &h->device.device_mutex );
+            }
             decklink_ctx->drop_count++;
 
-            /* Only output our picture on loss if we've had valid frames before */
             if( !decklink_opts_->probe && decklink_opts_->picture_on_loss && decklink_ctx->drop_count > DROP_MIN )
             {
                 obe_raw_frame_t *video_frame = NULL, *audio_frame = NULL;
@@ -500,17 +505,26 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 /* Increase video PTS at the end so it can be used in NTSC sample size generation */
                 decklink_ctx->v_counter++;
             }
-
             return S_OK;
         }
         else if( decklink_opts_->probe )
             decklink_opts_->probe_success = 1;
 
+        if( !decklink_opts_->probe )
+        {
+            pthread_mutex_lock( &h->device.device_mutex );
+            h->device.input_status.active = 1;
+            pthread_mutex_unlock( &h->device.device_mutex );
+        }
+
         /* use SDI ticks as clock source */
         obe_clock_tick( h, pts );
 
         if( decklink_ctx->last_frame_time == -1 )
+        {
             decklink_ctx->last_frame_time = obe_mdate();
+            syslog( LOG_INFO, "inputActivate: Decklink input active" );
+        }
 
         if( !decklink_opts_->probe && decklink_ctx->drop_count )
         {
