@@ -1191,19 +1191,12 @@ static void *probe_stream( void *ptr )
     if( non_display_parser->num_frame_data )
         free( non_display_parser->frame_data );
 
-    device = new_device();
+    init_device(&h->device);
 
-    if( !device )
-        goto finish;
-
-    device->num_input_streams = num_streams;
-    memcpy( device->streams, streams, num_streams * sizeof(obe_int_input_stream_t**) );
-    device->device_type = INPUT_DEVICE_LINSYS_SDI;
-    memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
-
-    /* add device */
-    memcpy( &h->device, device, sizeof(*device) );
-    free( device );
+    h->device.num_input_streams = num_streams;
+    memcpy( h->device.streams, streams, num_streams * sizeof(obe_int_input_stream_t**) );
+    h->device.device_type = INPUT_DEVICE_LINSYS_SDI;
+    memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );
 
 finish:
 

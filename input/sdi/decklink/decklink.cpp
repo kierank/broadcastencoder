@@ -1480,20 +1480,12 @@ static void *probe_stream( void *ptr )
     if( non_display_parser->num_frame_data )
         free( non_display_parser->frame_data );
 
-    device = new_device();
-
-    if( !device )
-        goto finish;
-
-    device->num_input_streams = cur_stream;
-    memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
-    device->device_type = INPUT_DEVICE_DECKLINK;
-    memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
+    init_device(&h->device);
+    h->device.num_input_streams = cur_stream;
+    memcpy( h->device.streams, streams, h->device.num_input_streams * sizeof(obe_int_input_stream_t**) );
+    h->device.device_type = INPUT_DEVICE_DECKLINK;
+    memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );
     // FIXME destroy mutex
-
-    /* add device */
-    memcpy( &h->device, device, sizeof(*device) );
-    free( device );
 
 finish:
     free( decklink_opts );
@@ -1561,19 +1553,11 @@ static void *autoconf_input( void *ptr )
         }
     }
 
-    device = new_device();
-
-    if( !device )
-        return NULL;
-
-    device->num_input_streams = 3;
-    memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
-    device->device_type = INPUT_DEVICE_DECKLINK;
-    memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
-
-    /* add device */
-    memcpy( &h->device, device, sizeof(*device) );
-    free( device );
+    init_device(&h->device);
+    h->device.num_input_streams = 3;
+    memcpy( h->device.streams, streams, h->device.num_input_streams * sizeof(obe_int_input_stream_t**) );
+    h->device.device_type = INPUT_DEVICE_DECKLINK;
+    memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );
 
     return NULL;
 }

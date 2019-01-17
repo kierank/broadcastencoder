@@ -918,7 +918,6 @@ static void *autoconf_input( void *ptr )
     obe_input_probe_t *probe_ctx = (obe_input_probe_t*)ptr;
     obe_t *h = probe_ctx->h;
     obe_input_t *user_opts = &probe_ctx->user_opts;
-    obe_device_t *device;
     int cur_input_stream_id = 0;
 
     for( int i = 0; i < 2; i++ )
@@ -967,20 +966,11 @@ static void *autoconf_input( void *ptr )
         }
     }
 
-    device = new_device();
-
-    if( !device )
-        return NULL;
-
-    device->num_input_streams = 2;
-    memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
-    device->device_type = INPUT_DEVICE_NETMAP;
-    memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
+    h->device.num_input_streams = 2;
+    memcpy( h->device.streams, streams, h->device.num_input_streams * sizeof(obe_int_input_stream_t**) );
+    h->device.device_type = INPUT_DEVICE_NETMAP;
+    memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );
     pthread_mutex_destroy( &h->device.device_mutex );
-
-    /* add device */
-    memcpy( &h->device, device, sizeof(*device) );
-    free( device );
 
     return NULL;
 }
@@ -999,7 +989,6 @@ static void *probe_input( void *ptr )
 
     open_netmap( &netmap_ctx );
 
-    obe_device_t *device;
     obe_int_input_stream_t *streams[MAX_STREAMS];
     int cur_stream = 2, cur_input_stream_id = 0;
 
@@ -1044,20 +1033,12 @@ static void *probe_input( void *ptr )
 
     /* TODO: VBI/VANC */
 
-    device = new_device();
-
-    if( !device )
-        goto finish;
-
-    device->num_input_streams = cur_stream;
-    memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
-    device->device_type = INPUT_DEVICE_NETMAP;
-    memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
+    init_device(&h->device);
+    h->device.num_input_streams = cur_stream;
+    memcpy( h->device.streams, streams, h->device.num_input_streams * sizeof(obe_int_input_stream_t**) );
+    h->device.device_type = INPUT_DEVICE_NETMAP;
+    memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );
     pthread_mutex_destroy( &h->device.device_mutex );
-
-    /* add device */
-    memcpy( &h->device, device, sizeof(*device) );
-    free( device );
 
 finish:
 

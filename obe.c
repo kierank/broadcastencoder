@@ -44,18 +44,10 @@ int64_t obe_mdate( void )
 
 /** Create/Destroy **/
 /* Input device */
-obe_device_t *new_device( void )
+void init_device( obe_device_t *device )
 {
-    obe_device_t *device = calloc( 1, sizeof(obe_device_t) );
-
-    if( !device )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return NULL;
-    }
+    memset(device, 0, sizeof(*device));
     pthread_mutex_init( &device->device_mutex, NULL );
-
-    return device;
 }
 
 void destroy_device( obe_device_t *device )

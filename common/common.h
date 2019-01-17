@@ -661,7 +661,7 @@ extern const obe_smoothing_func_t mux_smoothing;
 
 int64_t obe_mdate( void );
 
-obe_device_t *new_device( void );
+void init_device( obe_device_t *device );
 void destroy_device( obe_device_t *device );
 obe_raw_frame_t *new_raw_frame( void );
 obe_coded_frame_t *new_coded_frame( int stream_id, int len );
