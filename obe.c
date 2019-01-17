@@ -516,6 +516,7 @@ obe_t *obe_setup( const char *ident )
     avcodec_register_all();
 
     pthread_mutex_init( &h->device_mutex, NULL );
+    pthread_mutex_init( &h->drop_mutex, NULL );
 
     return h;
 }
@@ -1110,7 +1111,6 @@ int obe_start( obe_t *h )
     /* TODO: decide upon thread priorities */
 
     /* Setup mutexes and cond vars */
-    pthread_mutex_init( &h->drop_mutex, NULL );
     obe_init_queue( &h->enc_smoothing_queue );
     obe_init_queue( &h->mux_queue );
     obe_init_queue( &h->mux_smoothing_queue );
@@ -1633,6 +1633,8 @@ void obe_close( obe_t *h )
     /* Destroy output */
     for( int i = 0; i < h->num_outputs; i++ )
         destroy_output( h->outputs[i] );
+
+    pthread_mutex_destroy( &h->drop_mutex);
 
     free( h->outputs );
 
