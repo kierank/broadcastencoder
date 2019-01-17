@@ -1230,7 +1230,6 @@ static void *open_input( void *ptr )
 
     status.input = input;
     status.linsys_opts = linsys_opts;
-    pthread_cleanup_push( close_thread, (void*)&status );
 
     linsys_opts->num_channels = 8;
     linsys_opts->card_idx = user_opts->card_idx;
@@ -1256,7 +1255,7 @@ static void *open_input( void *ptr )
         pthread_mutex_unlock( &h->device.device_mutex);
     }
 
-    pthread_cleanup_pop( 1 );
+    close_thread(&status);
 
     return NULL;
 }

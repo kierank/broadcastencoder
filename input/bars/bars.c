@@ -154,7 +154,6 @@ static void *open_input( void *ptr )
     status.input = input;
     status.bars_handle = &bars_handle;
     status.raw_frames = raw_frames;
-    pthread_cleanup_push( close_thread, (void*)&status );
 
     if( open_bars( &bars_handle, &obe_bars_opts ) < 0 )
     {
@@ -203,7 +202,7 @@ static void *open_input( void *ptr )
         raw_frames[1] = NULL;
     }
 
-    pthread_cleanup_pop( 1 );
+    close_thread(&status);
 
     return NULL;
 }
