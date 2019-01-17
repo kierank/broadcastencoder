@@ -421,9 +421,9 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             syslog( LOG_ERR, "inputDropped: Decklink card index %i: No input signal detected", decklink_opts_->card_idx );
             if( !decklink_opts_->probe )
             {
-                pthread_mutex_lock( &h->device.device_mutex );
+                pthread_mutex_lock( &h->device_mutex );
                 h->device.input_status.active = 0;
-                pthread_mutex_unlock( &h->device.device_mutex );
+                pthread_mutex_unlock( &h->device_mutex );
             }
             decklink_ctx->drop_count++;
 
@@ -512,9 +512,9 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
         if( !decklink_opts_->probe )
         {
-            pthread_mutex_lock( &h->device.device_mutex );
+            pthread_mutex_lock( &h->device_mutex );
             h->device.input_status.active = 1;
-            pthread_mutex_unlock( &h->device.device_mutex );
+            pthread_mutex_unlock( &h->device_mutex );
         }
 
         /* use SDI ticks as clock source */
@@ -1612,9 +1612,9 @@ static void *open_input( void *ptr )
     bool stop = false;
     while (!stop) {
         sleep(1);
-        pthread_mutex_lock( &h->device.device_mutex );
+        pthread_mutex_lock( &h->device_mutex );
         stop = h->device.stop;
-        pthread_mutex_unlock( &h->device.device_mutex);
+        pthread_mutex_unlock( &h->device_mutex);
     }
 
     close_thread(&status);

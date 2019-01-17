@@ -376,9 +376,9 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
             if( netmap_ctx->detected_video_format != detected_video_format )
             {
-                pthread_mutex_lock( &h->device.device_mutex );
+                pthread_mutex_lock( &h->device_mutex );
                 h->device.input_status.detected_video_format = detected_video_format;
-                pthread_mutex_unlock( &h->device.device_mutex );
+                pthread_mutex_unlock( &h->device_mutex );
                 netmap_ctx->detected_video_format = detected_video_format;
             }
         }
@@ -393,9 +393,9 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
         bool discontinuity = ubase_check(uref_flow_get_discontinuity(uref));
 
-        pthread_mutex_lock( &h->device.device_mutex );
+        pthread_mutex_lock( &h->device_mutex );
         h->device.input_status.active = 1;
-        pthread_mutex_unlock( &h->device.device_mutex );
+        pthread_mutex_unlock( &h->device_mutex );
 
         netmap_ctx->last_frame_time = obe_mdate();
 
@@ -670,18 +670,18 @@ static void upipe_event_timer(struct upump *upump)
     {
         int active;
 
-        pthread_mutex_lock( &h->device.device_mutex );
+        pthread_mutex_lock( &h->device_mutex );
         netmap_ctx->stop = h->device.stop;
         active = h->device.input_status.active;
-        pthread_mutex_unlock( &h->device.device_mutex);
+        pthread_mutex_unlock( &h->device_mutex);
 
         /* Note obe_mdate() is in microseconds */
         if ( netmap_ctx->last_frame_time > 0 && (obe_mdate() - netmap_ctx->last_frame_time) >= 1500000 &&
              active )
         {
-            pthread_mutex_lock( &h->device.device_mutex );
+            pthread_mutex_lock( &h->device_mutex );
             h->device.input_status.active = 0;
-            pthread_mutex_unlock( &h->device.device_mutex);
+            pthread_mutex_unlock( &h->device_mutex);
         }
 
         if( netmap_ctx->stop )
@@ -970,7 +970,6 @@ static void *autoconf_input( void *ptr )
     memcpy( h->device.streams, streams, h->device.num_input_streams * sizeof(obe_int_input_stream_t**) );
     h->device.device_type = INPUT_DEVICE_NETMAP;
     memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );
-    pthread_mutex_destroy( &h->device.device_mutex );
 
     return NULL;
 }
@@ -1038,7 +1037,6 @@ static void *probe_input( void *ptr )
     memcpy( h->device.streams, streams, h->device.num_input_streams * sizeof(obe_int_input_stream_t**) );
     h->device.device_type = INPUT_DEVICE_NETMAP;
     memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );
-    pthread_mutex_destroy( &h->device.device_mutex );
 
 finish:
 

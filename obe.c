@@ -47,7 +47,6 @@ int64_t obe_mdate( void )
 void init_device( obe_device_t *device )
 {
     memset(device, 0, sizeof(*device));
-    pthread_mutex_init( &device->device_mutex, NULL );
 }
 
 void destroy_device( obe_device_t *device )
@@ -56,7 +55,6 @@ void destroy_device( obe_device_t *device )
         free( device->streams[i] );
     if( device->probed_streams )
         free( device->probed_streams );
-    pthread_mutex_destroy( &device->device_mutex );
 }
 
 /* Raw frame */
@@ -517,7 +515,7 @@ obe_t *obe_setup( const char *ident )
     avfilter_register_all();
     avcodec_register_all();
 
-    pthread_mutex_init( &h->device.device_mutex, NULL );
+    pthread_mutex_init( &h->device_mutex, NULL );
 
     return h;
 }
@@ -645,7 +643,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
 
     destroy_device( &h->device );
     memset( &h->device, 0, sizeof(h->device) );
-    pthread_mutex_init( &h->device.device_mutex, NULL );
+    pthread_mutex_init( &h->device_mutex, NULL );
 
     if( input_device->input_type == INPUT_URL )
     {
@@ -1483,9 +1481,9 @@ int obe_input_status( obe_t *h, obe_input_status_t *input_status )
     int ret = 0;
     if( h )
     {
-        pthread_mutex_lock( &h->device.device_mutex );
+        pthread_mutex_lock( &h->device_mutex );
         memcpy( input_status, &h->device.input_status, sizeof(h->device.input_status) );
-        pthread_mutex_unlock( &h->device.device_mutex );
+        pthread_mutex_unlock( &h->device_mutex );
     }
 
     return ret;
@@ -1509,15 +1507,16 @@ void obe_close( obe_t *h )
     }
 
     fprintf( stderr, "closing obe \n" );
-    pthread_mutex_lock( &h->device.device_mutex );
+    pthread_mutex_lock( &h->device_mutex );
     h->device.stop = 1;
-    pthread_mutex_unlock( &h->device.device_mutex);
+    pthread_mutex_unlock( &h->device_mutex);
     /* Cancel input thread */
     if (h->device.thread_running)
     {
         // FIXME: use condition to signal device stopping
         pthread_join( h->device.device_thread, &ret_ptr );
     }
+    pthread_mutex_destroy( &h->device_mutex);
 
     fprintf( stderr, "input cancelled \n" );
 

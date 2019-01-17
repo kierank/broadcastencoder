@@ -228,7 +228,6 @@ typedef struct
     int pcr_pid;
 
     int stop;
-    pthread_mutex_t device_mutex;
     pthread_t device_thread;
     bool thread_running;
 
@@ -588,6 +587,7 @@ struct obe_t
 
     /* Devices */
     obe_device_t device;
+    pthread_mutex_t device_mutex;
 
     /* Frame drop flags
      * TODO: make this work for multiple inputs and outputs */

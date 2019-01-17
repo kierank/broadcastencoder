@@ -1242,9 +1242,9 @@ static void *open_input( void *ptr )
 
     bool stop = false;
     while (!stop && capture_data( linsys_opts ) >= 0) {
-        pthread_mutex_lock( &h->device.device_mutex );
+        pthread_mutex_lock( &h->device_mutex );
         stop = h->device.stop;
-        pthread_mutex_unlock( &h->device.device_mutex);
+        pthread_mutex_unlock( &h->device_mutex);
     }
 
     close_thread(&status);
