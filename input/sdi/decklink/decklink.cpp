@@ -1609,13 +1609,10 @@ static void *open_input( void *ptr )
     if( open_card( decklink_opts ) < 0 )
         return NULL;
 
-    bool stop = false;
-    while (!stop) {
-        sleep(1);
-        pthread_mutex_lock( &h->device_mutex );
-        stop = h->device.stop;
-        pthread_mutex_unlock( &h->device_mutex);
-    }
+    pthread_mutex_lock( &h->device_mutex );
+    while (!h->device.stop)
+        pthread_cond_wait(&h->device_cond, &h->device_mutex);
+    pthread_mutex_unlock( &h->device_mutex);
 
     close_thread(&status);
 

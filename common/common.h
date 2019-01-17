@@ -588,6 +588,7 @@ struct obe_t
     /* Devices */
     obe_device_t device;
     pthread_mutex_t device_mutex;
+    pthread_cond_t device_cond;
 
     /* Frame drop flags
      * TODO: make this work for multiple inputs and outputs */

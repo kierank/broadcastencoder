@@ -516,6 +516,7 @@ obe_t *obe_setup( const char *ident )
     avcodec_register_all();
 
     pthread_mutex_init( &h->device_mutex, NULL );
+    pthread_cond_init( &h->device_cond, NULL );
     pthread_mutex_init( &h->drop_mutex, NULL );
 
     return h;
@@ -1513,10 +1514,11 @@ void obe_close( obe_t *h )
     /* Cancel input thread */
     if (h->device.thread_running)
     {
-        // FIXME: use condition to signal device stopping
+        pthread_cond_signal( &h->device_cond );
         pthread_join( h->device.device_thread, &ret_ptr );
     }
     pthread_mutex_destroy( &h->device_mutex);
+    pthread_cond_destroy( &h->device_cond);
 
     fprintf( stderr, "input cancelled \n" );
 
