@@ -53,7 +53,6 @@ static void *open_output( void *ptr )
     obe_buf_ref_t **buf_refs;
 
     status.output = output;
-    pthread_cleanup_push( close_output, (void*)&status );
 
     status.fp = fopen( output_dest->target, "wb" );
     if( !status.fp )
@@ -104,7 +103,7 @@ static void *open_output( void *ptr )
         buf_refs = NULL;
     }
 
-    pthread_cleanup_pop( 1 );
+    close_output(&status);
 
     return NULL;
 }

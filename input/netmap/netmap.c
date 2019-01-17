@@ -21,13 +21,14 @@
  *
  *****************************************************************************/
 
-
+#define _GNU_SOURCE
 #include "common/common.h"
 #include "input/input.h"
 #include "input/sdi/sdi.h"
 #include "input/bars/bars_common.h"
 
 #include <stdlib.h>
+#include <sched.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -120,6 +121,7 @@ typedef struct
     int             video_good;
 
     /* Video */
+    int             detected_video_format;
     int64_t         v_counter;
     AVRational      v_timebase;
     int64_t         video_freq;
@@ -193,6 +195,7 @@ static void no_video_timer(struct upump *upump)
     if (!video_stream)
         return;
 
+    syslog( LOG_ERR, "inputDropped: No input signal detected" );
     if (!netmap_opts->picture_on_loss)
         return;
 
@@ -307,6 +310,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     struct uprobe_obe *uprobe_obe = uprobe_obe_from_uprobe(uprobe);
     netmap_ctx_t *netmap_ctx = uprobe_obe->data;
     netmap_opts_t *netmap_opts = &netmap_ctx->netmap_opts;
+    obe_t *h = netmap_ctx->h;
 
     if (netmap_ctx->stop)
         return UBASE_ERR_NONE;
@@ -332,7 +336,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         }
         else {
             /* check this matches the configured format */
-            int j = 0;
+            int j = 0, detected_video_format = -1;
             for( ; video_format_tab[j].obe_name != -1; j++ )
             {
                 if( netmap_opts->video_format == video_format_tab[j].obe_name )
@@ -346,14 +350,38 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                 video_format_tab[j].interlaced == netmap_opts->interlaced )
             {
                 netmap_ctx->video_good = 1;
+                detected_video_format = video_format_tab[j].obe_name;
             }
             else
             {
                 netmap_ctx->video_good = 0;
+
+                /* Find the actual format */
+                j = 0;
+                for( ; video_format_tab[j].obe_name != -1; j++ )
+                {
+                    if( video_format_tab[j].width == netmap_opts->width &&
+                        video_format_tab[j].height == netmap_opts->height &&
+                        video_format_tab[j].timebase_num == netmap_opts->timebase_num &&
+                        video_format_tab[j].timebase_den == netmap_opts->timebase_den &&
+                        video_format_tab[j].interlaced == netmap_opts->interlaced )
+                    {
+                        detected_video_format = video_format_tab[j].obe_name;
+                        break;
+                    }
+                }
+            }
+
+            printf("\n detected %i \n", detected_video_format);
+
+            if( netmap_ctx->detected_video_format != detected_video_format )
+            {
+                pthread_mutex_lock( &h->device_mutex );
+                h->device.input_status.detected_video_format = detected_video_format;
+                pthread_mutex_unlock( &h->device_mutex );
+                netmap_ctx->detected_video_format = detected_video_format;
             }
         }
-
-
     }
     else if (event == UPROBE_PROBE_UREF) {
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
@@ -365,6 +393,12 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
         bool discontinuity = ubase_check(uref_flow_get_discontinuity(uref));
 
+        pthread_mutex_lock( &h->device_mutex );
+        h->device.input_status.active = 1;
+        pthread_mutex_unlock( &h->device_mutex );
+
+        netmap_ctx->last_frame_time = obe_mdate();
+
         if(netmap_opts->probe) {
             netmap_opts->probe_success = 1;
         } else if(netmap_ctx->video_good == 1) {
@@ -375,8 +409,15 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         } else if(netmap_ctx->video_good) {
             obe_raw_frame_t *raw_frame = NULL;
             int64_t pts = -1;
-            obe_t *h = netmap_ctx->h;
-            uref = uref_dup(uref);
+
+            if( discontinuity )
+            {
+                pthread_mutex_lock( &h->drop_mutex );
+                h->encoder_drop = h->mux_drop = 1;
+                pthread_mutex_unlock( &h->drop_mutex );
+
+                goto end;
+            }
 
             pts = av_rescale_q( netmap_ctx->v_counter++, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
             /* use SDI ticks as clock source */
@@ -384,13 +425,6 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
             if( netmap_ctx->last_frame_time == -1 )
                 netmap_ctx->last_frame_time = obe_mdate();
-
-            if( discontinuity )
-            {
-                pthread_mutex_lock( &h->drop_mutex );
-                h->encoder_drop = h->mux_drop = 1;
-                pthread_mutex_unlock( &h->drop_mutex );
-            }
 
             raw_frame = new_raw_frame();
             if( !raw_frame )
@@ -401,6 +435,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
             raw_frame->pts = pts;
 
+            uref = uref_dup(uref);
             for (int i = 0; i < 3 && netmap_ctx->input_chroma_map[i] != NULL; i++)
             {
                 const uint8_t *data;
@@ -514,6 +549,10 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
             obe_t *h = netmap_ctx->h;
             const int32_t *src;
 
+            bool discontinuity = ubase_check(uref_flow_get_discontinuity(uref));
+            if (discontinuity)
+                goto end;
+
             size_t size = 0;
             uint8_t sample_size = 0;
             uref_sound_size(uref, &size, &sample_size);
@@ -572,7 +611,6 @@ end:
         return UBASE_ERR_NONE;
     } else if (event == UPROBE_NEW_FLOW_DEF) {
         flow_def = va_arg(args, struct uref *);
-        uint8_t channels;
         if (!ubase_check(uref_sound_flow_get_channels(flow_def, &netmap_ctx->channels))) {
             netmap_ctx->channels = 0;
         }
@@ -630,9 +668,21 @@ static void upipe_event_timer(struct upump *upump)
     }
     else
     {
-        pthread_mutex_lock( &h->device.device_mutex );
+        int active;
+
+        pthread_mutex_lock( &h->device_mutex );
         netmap_ctx->stop = h->device.stop;
-        pthread_mutex_unlock( &h->device.device_mutex);
+        active = h->device.input_status.active;
+        pthread_mutex_unlock( &h->device_mutex);
+
+        /* Note obe_mdate() is in microseconds */
+        if ( netmap_ctx->last_frame_time > 0 && (obe_mdate() - netmap_ctx->last_frame_time) >= 1500000 &&
+             active )
+        {
+            pthread_mutex_lock( &h->device_mutex );
+            h->device.input_status.active = 0;
+            pthread_mutex_unlock( &h->device_mutex);
+        }
 
         if( netmap_ctx->stop )
         {
@@ -666,6 +716,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 {
     char *uri = netmap_ctx->uri;
 
+    netmap_ctx->detected_video_format = -1;
     netmap_ctx->input_chroma_map[0] = "y10l";
     netmap_ctx->input_chroma_map[1] = "u10l";
     netmap_ctx->input_chroma_map[2] = "v10l";
@@ -683,7 +734,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
                                                    0);
     udict_mgr_release(udict_mgr);
 
-    enum uprobe_log_level loglevel = UPROBE_LOG_DEBUG;
+    enum uprobe_log_level loglevel = UPROBE_LOG_WARNING;
 
     /* probes */
     /* main (thread-safe) probe, whose first element is uprobe_pthread_upump_mgr */
@@ -738,6 +789,14 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     int ret = pthread_attr_setschedparam(&thread_attribs, &params);
     if (ret < 0)
         perror("setschedparam");
+
+    cpu_set_t cs;
+    CPU_ZERO(&cs);
+    CPU_SET(encoder_id + 1, &cs);
+
+    if (pthread_attr_setaffinity_np(&thread_attribs, sizeof(cs), &cs)) {
+        perror("pthread_attr_setaffinity_np");
+    }
 
     struct upipe_mgr *xfer_mgr =  upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
             XFER_POOL, uprobe_use(uprobe_main_pthread), upump_ev_mgr_alloc_loop,
@@ -859,7 +918,6 @@ static void *autoconf_input( void *ptr )
     obe_input_probe_t *probe_ctx = (obe_input_probe_t*)ptr;
     obe_t *h = probe_ctx->h;
     obe_input_t *user_opts = &probe_ctx->user_opts;
-    obe_device_t *device;
     int cur_input_stream_id = 0;
 
     for( int i = 0; i < 2; i++ )
@@ -908,20 +966,10 @@ static void *autoconf_input( void *ptr )
         }
     }
 
-    device = new_device();
-
-    if( !device )
-        return NULL;
-
-    device->num_input_streams = 2;
-    memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
-    device->device_type = INPUT_DEVICE_NETMAP;
-    memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
-    pthread_mutex_destroy( &h->device.device_mutex );
-
-    /* add device */
-    memcpy( &h->device, device, sizeof(*device) );
-    free( device );
+    h->device.num_input_streams = 2;
+    memcpy( h->device.streams, streams, h->device.num_input_streams * sizeof(obe_int_input_stream_t**) );
+    h->device.device_type = INPUT_DEVICE_NETMAP;
+    memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );
 
     return NULL;
 }
@@ -940,7 +988,6 @@ static void *probe_input( void *ptr )
 
     open_netmap( &netmap_ctx );
 
-    obe_device_t *device;
     obe_int_input_stream_t *streams[MAX_STREAMS];
     int cur_stream = 2, cur_input_stream_id = 0;
 
@@ -985,23 +1032,13 @@ static void *probe_input( void *ptr )
 
     /* TODO: VBI/VANC */
 
-    device = new_device();
-
-    if( !device )
-        goto finish;
-
-    device->num_input_streams = cur_stream;
-    memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
-    device->device_type = INPUT_DEVICE_NETMAP;
-    memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
-    pthread_mutex_destroy( &h->device.device_mutex );
-
-    /* add device */
-    memcpy( &h->device, device, sizeof(*device) );
-    free( device );
+    init_device(&h->device);
+    h->device.num_input_streams = cur_stream;
+    memcpy( h->device.streams, streams, h->device.num_input_streams * sizeof(obe_int_input_stream_t**) );
+    h->device.device_type = INPUT_DEVICE_NETMAP;
+    memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );
 
 finish:
-    free( probe_ctx );
 
     return NULL;
 }
@@ -1086,13 +1123,6 @@ static void *open_input( void *ptr )
     }
 
     open_netmap( &netmap_ctx );
-
-
-
-    //pthread_cleanup_push( close_thread, (void*)&status );
-
-
-    //pthread_cleanup_pop( 1 );
 
     return NULL;
 }

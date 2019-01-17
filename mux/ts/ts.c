@@ -111,7 +111,7 @@ void *open_muxer( void *ptr )
     char *provider_name = "Open Broadcast Encoder";
 
     struct sched_param param = {0};
-    param.sched_priority = 99;
+    param.sched_priority = 50;
     pthread_setschedparam( pthread_self(), SCHED_RR, &param );
 
     // TODO sanity check the options

@@ -503,7 +503,7 @@ static void *open_output( void *ptr )
     struct uchain *uchain, *uchain_tmp;
 
     struct sched_param param = {0};
-    param.sched_priority = 99;
+    param.sched_priority = 70;
     pthread_setschedparam( pthread_self(), SCHED_FIFO, &param );
 
     status.output = output;

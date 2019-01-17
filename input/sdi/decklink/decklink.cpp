@@ -418,10 +418,15 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         pts = av_rescale_q( decklink_ctx->v_counter, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
         if( videoframe->GetFlags() & bmdFrameHasNoInputSource )
         {
-            syslog( LOG_ERR, "Decklink card index %i: No input signal detected", decklink_opts_->card_idx );
+            syslog( LOG_ERR, "inputDropped: Decklink card index %i: No input signal detected", decklink_opts_->card_idx );
+            if( !decklink_opts_->probe )
+            {
+                pthread_mutex_lock( &h->device_mutex );
+                h->device.input_status.active = 0;
+                pthread_mutex_unlock( &h->device_mutex );
+            }
             decklink_ctx->drop_count++;
 
-            /* Only output our picture on loss if we've had valid frames before */
             if( !decklink_opts_->probe && decklink_opts_->picture_on_loss && decklink_ctx->drop_count > DROP_MIN )
             {
                 obe_raw_frame_t *video_frame = NULL, *audio_frame = NULL;
@@ -500,17 +505,26 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 /* Increase video PTS at the end so it can be used in NTSC sample size generation */
                 decklink_ctx->v_counter++;
             }
-
             return S_OK;
         }
         else if( decklink_opts_->probe )
             decklink_opts_->probe_success = 1;
 
+        if( !decklink_opts_->probe )
+        {
+            pthread_mutex_lock( &h->device_mutex );
+            h->device.input_status.active = 1;
+            pthread_mutex_unlock( &h->device_mutex );
+        }
+
         /* use SDI ticks as clock source */
         obe_clock_tick( h, pts );
 
         if( decklink_ctx->last_frame_time == -1 )
+        {
             decklink_ctx->last_frame_time = obe_mdate();
+            syslog( LOG_INFO, "inputActivate: Decklink input active" );
+        }
 
         if( !decklink_opts_->probe && decklink_ctx->drop_count )
         {
@@ -1466,26 +1480,15 @@ static void *probe_stream( void *ptr )
     if( non_display_parser->num_frame_data )
         free( non_display_parser->frame_data );
 
-    device = new_device();
-
-    if( !device )
-        goto finish;
-
-    device->num_input_streams = cur_stream;
-    memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
-    device->device_type = INPUT_DEVICE_DECKLINK;
-    memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
+    init_device(&h->device);
+    h->device.num_input_streams = cur_stream;
+    memcpy( h->device.streams, streams, h->device.num_input_streams * sizeof(obe_int_input_stream_t**) );
+    h->device.device_type = INPUT_DEVICE_DECKLINK;
+    memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );
     // FIXME destroy mutex
 
-    /* add device */
-    memcpy( &h->device, device, sizeof(*device) );
-    free( device );
-
 finish:
-    if( decklink_opts )
-        free( decklink_opts );
-
-    free( probe_ctx );
+    free( decklink_opts );
 
     return NULL;
 }
@@ -1550,19 +1553,11 @@ static void *autoconf_input( void *ptr )
         }
     }
 
-    device = new_device();
-
-    if( !device )
-        return NULL;
-
-    device->num_input_streams = 3;
-    memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
-    device->device_type = INPUT_DEVICE_DECKLINK;
-    memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
-
-    /* add device */
-    memcpy( &h->device, device, sizeof(*device) );
-    free( device );
+    init_device(&h->device);
+    h->device.num_input_streams = 3;
+    memcpy( h->device.streams, streams, h->device.num_input_streams * sizeof(obe_int_input_stream_t**) );
+    h->device.device_type = INPUT_DEVICE_DECKLINK;
+    memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );
 
     return NULL;
 }
@@ -1585,7 +1580,6 @@ static void *open_input( void *ptr )
 
     status.input = input;
     status.decklink_opts = decklink_opts;
-    pthread_cleanup_push( close_thread, (void*)&status );
 
     decklink_opts->num_channels = 16;
     decklink_opts->card_idx = user_opts->card_idx;
@@ -1615,9 +1609,12 @@ static void *open_input( void *ptr )
     if( open_card( decklink_opts ) < 0 )
         return NULL;
 
-    sleep( INT_MAX );
+    pthread_mutex_lock( &h->device_mutex );
+    while (!h->device.stop)
+        pthread_cond_wait(&h->device_cond, &h->device_mutex);
+    pthread_mutex_unlock( &h->device_mutex);
 
-    pthread_cleanup_pop( 1 );
+    close_thread(&status);
 
     return NULL;
 }

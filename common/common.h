@@ -228,9 +228,10 @@ typedef struct
     int pcr_pid;
 
     int stop;
-    pthread_mutex_t device_mutex;
     pthread_t device_thread;
     bool thread_running;
+
+    obe_input_status_t input_status;
 
     int num_input_streams;
     obe_int_input_stream_t *streams[MAX_STREAMS];
@@ -586,6 +587,8 @@ struct obe_t
 
     /* Devices */
     obe_device_t device;
+    pthread_mutex_t device_mutex;
+    pthread_cond_t device_cond;
 
     /* Frame drop flags
      * TODO: make this work for multiple inputs and outputs */
@@ -659,7 +662,7 @@ extern const obe_smoothing_func_t mux_smoothing;
 
 int64_t obe_mdate( void );
 
-obe_device_t *new_device( void );
+void init_device( obe_device_t *device );
 void destroy_device( obe_device_t *device );
 obe_raw_frame_t *new_raw_frame( void );
 obe_coded_frame_t *new_coded_frame( int stream_id, int len );
@@ -699,5 +702,7 @@ int64_t get_input_clock_in_mpeg_ticks( obe_t *h );
 void sleep_input_clock( obe_t *h, int64_t i_delay );
 
 int get_non_display_location( int type );
+
+extern int encoder_id;
 
 #endif

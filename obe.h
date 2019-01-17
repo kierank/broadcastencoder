@@ -36,7 +36,7 @@
 typedef struct obe_t obe_t;
 
 /**** Initialisation Function ****/
-obe_t *obe_setup( void );
+obe_t *obe_setup( const char *ident );
 
 /**** OBE configuration function */
 enum obe_system_type_e
@@ -108,6 +108,7 @@ enum input_type_e
 //    INPUT_DEVICE_V4L2,
 //    INPUT_DEVICE_ASI,
     INPUT_DEVICE_NETMAP,
+    INPUT_DEVICE_NETMAP_DASH_7,
 };
 
 enum picture_on_loss_e
@@ -577,7 +578,14 @@ typedef struct
 int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts );
 
 int obe_start( obe_t *h );
-int obe_stop( obe_t *h );
+
+typedef struct
+{
+    int active; /* 0 if inactive, 1 if active */    
+    int detected_video_format;
+} obe_input_status_t;
+
+int obe_input_status( obe_t *h, obe_input_status_t *input_status );
 
 void obe_close( obe_t *h );
 

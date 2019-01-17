@@ -38,7 +38,7 @@ static void *start_smoothing( void *ptr )
     AVBufferPool *buffer_pool = NULL;
 
     struct sched_param param = {0};
-    param.sched_priority = 99;
+    param.sched_priority = 50;
     pthread_setschedparam( pthread_self(), SCHED_FIFO, &param );
 
     /* This thread buffers one VBV worth of frames */
@@ -196,7 +196,7 @@ static void *start_smoothing( void *ptr )
                 obe_buf_ref->data_buf_ref = i == 0 ? data_buf_ref : av_buffer_ref( data_buf_ref );
 
                 output_buffers[i] = obe_buf_ref;
-              
+
                 if( !output_buffers[i] )
                 {
                     syslog( LOG_ERR, "Malloc failed\n" );
