@@ -1629,7 +1629,13 @@ static void *open_input( void *ptr )
     if( open_card( decklink_opts ) < 0 )
         return NULL;
 
-    sleep( INT_MAX );
+    bool stop = false;
+    while (!stop) {
+        sleep(1);
+        pthread_mutex_lock( &h->device.device_mutex );
+        stop = h->device.stop;
+        pthread_mutex_unlock( &h->device.device_mutex);
+    }
 
     pthread_cleanup_pop( 1 );
 

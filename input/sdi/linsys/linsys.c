@@ -1249,10 +1249,11 @@ static void *open_input( void *ptr )
     if( open_card( linsys_opts ) < 0 )
         return NULL;
 
-    while( 1 )
-    {
-        if( capture_data( linsys_opts ) < 0 )
-            break;
+    bool stop = false;
+    while (!stop && capture_data( linsys_opts ) >= 0) {
+        pthread_mutex_lock( &h->device.device_mutex );
+        stop = h->device.stop;
+        pthread_mutex_unlock( &h->device.device_mutex);
     }
 
     pthread_cleanup_pop( 1 );

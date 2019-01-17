@@ -1532,7 +1532,7 @@ void obe_close( obe_t *h )
     /* Cancel input thread */
     if (h->device.thread_running)
     {
-        //pthread_cancel( h->device.device_thread );
+        // FIXME: use condition to signal device stopping
         pthread_join( h->device.device_thread, &ret_ptr );
     }
 
