@@ -267,10 +267,20 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, int fd )
         }
         else
         {
+            bool localhost = false;
+            if (s->dest_addr.ss_family == AF_INET) {
+                struct sockaddr_in *in = (struct sockaddr_in*)&s->dest_addr;
+                localhost = in->sin_addr.s_addr == htonl(INADDR_LOOPBACK);
+            } else if (s->dest_addr.ss_family == AF_INET6) {
+                struct sockaddr_in6 *in6 = (struct sockaddr_in6*)&s->dest_addr;
+                localhost = !memcmp(&in6->sin6_addr, &in6addr_loopback, sizeof(in6addr_loopback));
+            }
+
             /* bind to the local address if not multicast or if the multicast
-             * bind failed */
-            if( bind_ret < 0 && bind( udp_fd, (struct sockaddr *)&my_addr, len ) < 0 )
-                goto fail;
+             * bind failed, unless we're sending to local adapter */
+            if (!localhost)
+                if( bind_ret < 0 && bind( udp_fd, (struct sockaddr *)&my_addr, len ) < 0 )
+                    goto fail;
         }
 
         /* set output multicast ttl */

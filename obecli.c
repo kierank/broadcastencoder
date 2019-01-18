@@ -55,6 +55,8 @@ typedef struct
 
 obecli_ctx_t cli;
 
+int encoder_id = 0;
+
 /* Ctrl-C handler */
 static volatile int b_ctrl_c = 0;
 static char *line_read = NULL;
@@ -1670,7 +1672,7 @@ int main( int argc, char **argv )
     sprintf( history_filename, "%s/.obecli_history", home_dir );
     read_history( history_filename );
 
-    cli.h = obe_setup();
+    cli.h = obe_setup("obe");
     if( !cli.h )
     {
         fprintf( stderr, "obe_setup failed\n" );
@@ -1711,7 +1713,7 @@ int main( int argc, char **argv )
 
             if( !cli.h )
             {
-                cli.h = obe_setup();
+                cli.h = obe_setup("obe");
                 if( !cli.h )
                 {
                     fprintf( stderr, "obe_setup failed\n" );
