@@ -753,6 +753,7 @@ fi
 
 if [ "$debug" = "yes" ]; then
     CFLAGS="-O1 -g $CFLAGS"
+    CXXFLAGS="-O1 -g $CXXFLAGS"
 elif [ $ARCH = ARM ]; then
     # arm-gcc-4.2 produces incorrect output with -ffast-math
     # and it doesn't save any speed anyway on 4.4, so disable it

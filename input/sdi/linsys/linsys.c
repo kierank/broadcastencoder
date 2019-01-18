@@ -1191,22 +1191,14 @@ static void *probe_stream( void *ptr )
     if( non_display_parser->num_frame_data )
         free( non_display_parser->frame_data );
 
-    device = new_device();
+    init_device(&h->device);
 
-    if( !device )
-        goto finish;
-
-    device->num_input_streams = num_streams;
-    memcpy( device->streams, streams, num_streams * sizeof(obe_int_input_stream_t**) );
-    device->device_type = INPUT_DEVICE_LINSYS_SDI;
-    memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
-
-    /* add device */
-    memcpy( &h->device, device, sizeof(*device) );
-    free( device );
+    h->device.num_input_streams = num_streams;
+    memcpy( h->device.streams, streams, num_streams * sizeof(obe_int_input_stream_t**) );
+    h->device.device_type = INPUT_DEVICE_LINSYS_SDI;
+    memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );
 
 finish:
-    free( probe_ctx );
 
     return NULL;
 }
@@ -1230,7 +1222,6 @@ static void *open_input( void *ptr )
 
     status.input = input;
     status.linsys_opts = linsys_opts;
-    pthread_cleanup_push( close_thread, (void*)&status );
 
     linsys_opts->num_channels = 8;
     linsys_opts->card_idx = user_opts->card_idx;
@@ -1249,13 +1240,14 @@ static void *open_input( void *ptr )
     if( open_card( linsys_opts ) < 0 )
         return NULL;
 
-    while( 1 )
-    {
-        if( capture_data( linsys_opts ) < 0 )
-            break;
+    bool stop = false;
+    while (!stop && capture_data( linsys_opts ) >= 0) {
+        pthread_mutex_lock( &h->device_mutex );
+        stop = h->device.stop;
+        pthread_mutex_unlock( &h->device_mutex);
     }
 
-    pthread_cleanup_pop( 1 );
+    close_thread(&status);
 
     return NULL;
 }
