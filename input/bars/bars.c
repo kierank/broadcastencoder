@@ -115,19 +115,11 @@ static void *autoconf_input( void *ptr )
         }
     }
 
-    device = new_device();
-
-    if( !device )
-        return NULL;
-
-    device->num_input_streams = 3;
-    memcpy( device->streams, streams, device->num_input_streams * sizeof(obe_int_input_stream_t**) );
-    device->device_type = INPUT_DEVICE_BARS;
-    memcpy( &device->user_opts, user_opts, sizeof(*user_opts) );
-
-    /* add device */
-    memcpy( &h->device, device, sizeof(*device) );
-    free( device );
+    init_device(&h->device);
+    h->device.num_input_streams = 3;
+    memcpy( h->device.streams, streams, h->device.num_input_streams * sizeof(obe_int_input_stream_t**) );
+    h->device.device_type = INPUT_DEVICE_BARS;
+    memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );
 
     return NULL;
 }
@@ -154,7 +146,6 @@ static void *open_input( void *ptr )
     status.input = input;
     status.bars_handle = &bars_handle;
     status.raw_frames = raw_frames;
-    pthread_cleanup_push( close_thread, (void*)&status );
 
     if( open_bars( &bars_handle, &obe_bars_opts ) < 0 )
     {
@@ -162,10 +153,10 @@ static void *open_input( void *ptr )
         return NULL;
     } 
 
-    pthread_mutex_lock( &h->device.device_mutex );
+    pthread_mutex_lock( &h->device_mutex );
     h->device.input_status.active = 1;
     h->device.input_status.detected_video_format = obe_bars_opts.video_format;
-    pthread_mutex_unlock( &h->device.device_mutex );
+    pthread_mutex_unlock( &h->device_mutex );
 
     int64_t start_time = 0;
 
@@ -173,9 +164,9 @@ static void *open_input( void *ptr )
     {
         int stop;
         
-        pthread_mutex_lock( &h->device.device_mutex );
+        pthread_mutex_lock( &h->device_mutex );
         stop = h->device.stop;
-        pthread_mutex_unlock( &h->device.device_mutex);
+        pthread_mutex_unlock( &h->device_mutex);
 
         if( stop )
             break;
@@ -203,7 +194,7 @@ static void *open_input( void *ptr )
         raw_frames[1] = NULL;
     }
 
-    pthread_cleanup_pop( 1 );
+    close_thread(&status);
 
     return NULL;
 }

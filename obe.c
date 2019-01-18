@@ -44,18 +44,9 @@ int64_t obe_mdate( void )
 
 /** Create/Destroy **/
 /* Input device */
-obe_device_t *new_device( void )
+void init_device( obe_device_t *device )
 {
-    obe_device_t *device = calloc( 1, sizeof(obe_device_t) );
-
-    if( !device )
-    {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return NULL;
-    }
-    pthread_mutex_init( &device->device_mutex, NULL );
-
-    return device;
+    memset(device, 0, sizeof(*device));
 }
 
 void destroy_device( obe_device_t *device )
@@ -64,7 +55,6 @@ void destroy_device( obe_device_t *device )
         free( device->streams[i] );
     if( device->probed_streams )
         free( device->probed_streams );
-    pthread_mutex_destroy( &device->device_mutex );
 }
 
 /* Raw frame */
@@ -525,7 +515,9 @@ obe_t *obe_setup( const char *ident )
     avfilter_register_all();
     avcodec_register_all();
 
-    pthread_mutex_init( &h->device.device_mutex, NULL );
+    pthread_mutex_init( &h->device_mutex, NULL );
+    pthread_cond_init( &h->device_cond, NULL );
+    pthread_mutex_init( &h->drop_mutex, NULL );
 
     return h;
 }
@@ -632,7 +624,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     void *ret_ptr;
     obe_int_input_stream_t *stream_in;
     obe_input_stream_t *stream_out;
-    obe_input_probe_t *args = NULL;
+    obe_input_probe_t args;
 
     obe_input_func_t  input;
 
@@ -653,7 +645,7 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
 
     destroy_device( &h->device );
     memset( &h->device, 0, sizeof(h->device) );
-    pthread_mutex_init( &h->device.device_mutex, NULL );
+    pthread_mutex_init( &h->device_mutex, NULL );
 
     if( input_device->input_type == INPUT_URL )
     {
@@ -677,20 +669,13 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
         return -1;
     }
 
-    args = malloc( sizeof(*args) );
-    if( !args )
-    {
-        fprintf( stderr, "Malloc failed \n" );
-        return -1;
-    }
-
-    args->h = h;
-    memcpy( &args->user_opts, input_device, sizeof(*input_device) );
+    args.h = h;
+    memcpy( &args.user_opts, input_device, sizeof(*input_device) );
 
     if( obe_validate_input_params( input_device ) < 0 )
         goto fail;
 
-    if( pthread_create( &thread, NULL, input.probe_input, (void*)args ) < 0 )
+    if( pthread_create( &thread, NULL, input.probe_input, &args ) < 0 )
     {
         fprintf( stderr, "Couldn't create probe thread \n" );
         goto fail;
@@ -767,8 +752,6 @@ int obe_probe_device( obe_t *h, obe_input_t *input_device, obe_input_program_t *
     return 0;
 
 fail:
-    if( args )
-        free( args );
 
     return -1;
 }
@@ -1129,7 +1112,6 @@ int obe_start( obe_t *h )
     /* TODO: decide upon thread priorities */
 
     /* Setup mutexes and cond vars */
-    pthread_mutex_init( &h->drop_mutex, NULL );
     obe_init_queue( &h->enc_smoothing_queue );
     obe_init_queue( &h->mux_queue );
     obe_init_queue( &h->mux_smoothing_queue );
@@ -1500,9 +1482,9 @@ int obe_input_status( obe_t *h, obe_input_status_t *input_status )
     int ret = 0;
     if( h )
     {
-        pthread_mutex_lock( &h->device.device_mutex );
+        pthread_mutex_lock( &h->device_mutex );
         memcpy( input_status, &h->device.input_status, sizeof(h->device.input_status) );
-        pthread_mutex_unlock( &h->device.device_mutex );
+        pthread_mutex_unlock( &h->device_mutex );
     }
 
     return ret;
@@ -1526,15 +1508,17 @@ void obe_close( obe_t *h )
     }
 
     fprintf( stderr, "closing obe \n" );
-    pthread_mutex_lock( &h->device.device_mutex );
+    pthread_mutex_lock( &h->device_mutex );
     h->device.stop = 1;
-    pthread_mutex_unlock( &h->device.device_mutex);
+    pthread_mutex_unlock( &h->device_mutex);
     /* Cancel input thread */
     if (h->device.thread_running)
     {
-        //pthread_cancel( h->device.device_thread );
+        pthread_cond_signal( &h->device_cond );
         pthread_join( h->device.device_thread, &ret_ptr );
     }
+    pthread_mutex_destroy( &h->device_mutex);
+    pthread_cond_destroy( &h->device_cond);
 
     fprintf( stderr, "input cancelled \n" );
 
@@ -1651,6 +1635,8 @@ void obe_close( obe_t *h )
     /* Destroy output */
     for( int i = 0; i < h->num_outputs; i++ )
         destroy_output( h->outputs[i] );
+
+    pthread_mutex_destroy( &h->drop_mutex);
 
     free( h->outputs );
 
