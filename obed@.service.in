@@ -5,7 +5,7 @@ After=obe-agent.service
 [Service]
 Type=simple
 WorkingDirectory=/opt/obe-c@@
-ExecStart=/opt/obe-c@@/bin/obed %i
+ExecStart=/opt/obe-c@@/bin/obed.sh %i
 Restart=always
 
 [Install]
