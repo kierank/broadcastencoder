@@ -81,10 +81,11 @@ static const char * const mp2_modes[]                = { "auto", "stereo", "join
 static const char * const channel_maps[]             = { "", "mono", "stereo", "5.0", "5.1", 0 };
 static const char * const mono_channels[]            = { "left", "right", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "linsys-asi", 0 };
-static const char * const addable_streams[]          = { "audio", "ttx" };
+static const char * const addable_streams[]          = { "audio", "ttx", 0 };
+static const char * const tc_sources[]               = { "none", "rp188", "vitc", 0};
 
 static const char * system_opts[] = { "system-type", NULL };
-static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", NULL };
+static const char * input_opts[]  = { "location", "card-idx", "video-format", "video-connection", "audio-connection", "tc-source", NULL };
 static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
@@ -518,6 +519,7 @@ static int set_input( char *command, obecli_command_t *child )
         char *video_format = obe_get_option( input_opts[2], opts );
         char *video_connection = obe_get_option( input_opts[3], opts );
         char *audio_connection = obe_get_option( input_opts[4], opts );
+        char *tc_source        = obe_get_option( input_opts[5], opts );
 
         FAIL_IF_ERROR( video_format && ( check_enum_value( video_format, input_video_formats ) < 0 ),
                        "Invalid video format\n" );
@@ -527,6 +529,9 @@ static int set_input( char *command, obecli_command_t *child )
 
         FAIL_IF_ERROR( audio_connection && ( check_enum_value( audio_connection, input_audio_connections ) < 0 ),
                        "Invalid audio connection\n" );
+
+        FAIL_IF_ERROR( tc_source && ( check_enum_value( tc_source, tc_sources ) < 0 ),
+                       "Invalid timecode source \n" );
 
         if( location )
         {
@@ -545,6 +550,8 @@ static int set_input( char *command, obecli_command_t *child )
             parse_enum_value( video_connection, input_video_connections, &cli.input.video_connection );
         if( audio_connection )
             parse_enum_value( audio_connection, input_audio_connections, &cli.input.audio_connection );
+        if( tc_source )
+            parse_enum_value( tc_source, tc_sources, &cli.input.tc_source );
 
         obe_free_string_array( opts );
     }

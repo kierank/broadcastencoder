@@ -147,6 +147,7 @@ typedef struct
     int video_format;
     int num_channels;
     int probe;
+    int tc_source;
 
     /* Output */
     int probe_success;
@@ -558,6 +559,20 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             {
                 if( decklink_ctx->device->streams[i]->stream_format == VIDEO_UNCOMPRESSED )
                     raw_frame->input_stream_id = decklink_ctx->device->streams[i]->input_stream_id;
+            }
+
+            if( decklink_opts_->tc_source )
+            {
+                IDeckLinkTimecode *timecode;
+                if( videoframe->GetTimecode( decklink_opts_->tc_source == TC_SOURCE_RP188 ? bmdTimecodeRP188Any : bmdTimecodeVITC,
+                                             &timecode ) == S_OK )
+                {
+                    raw_frame->valid_timecode = 1;
+                    timecode->GetComponents( &raw_frame->timecode.hours, &raw_frame->timecode.mins,
+                                             &raw_frame->timecode.seconds, &raw_frame->timecode.frames );
+                    raw_frame->timecode.drop_frame = !!(timecode->GetFlags() & bmdTimecodeIsDropFrame);
+                    timecode->Release();
+                }
             }
 
             if( add_to_filter_queue( h, raw_frame ) < 0 )
@@ -1005,6 +1020,7 @@ static void *probe_stream( void *ptr )
     decklink_opts->video_conn = user_opts->video_connection;
     decklink_opts->audio_conn = user_opts->audio_connection;
     decklink_opts->video_format = user_opts->video_format;
+    decklink_opts->tc_source = user_opts->tc_source;
 
     decklink_opts->probe = non_display_parser->probe = 1;
 
@@ -1152,6 +1168,7 @@ static void *open_input( void *ptr )
     decklink_opts->video_conn = user_opts->video_connection;
     decklink_opts->audio_conn = user_opts->audio_connection;
     decklink_opts->video_format = user_opts->video_format;
+    decklink_opts->tc_source = user_opts->tc_source;
 
     decklink_ctx = &decklink_opts->decklink_ctx;
 

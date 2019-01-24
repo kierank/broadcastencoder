@@ -306,11 +306,11 @@ typedef struct
 
 typedef struct
 {
-    int hours;
-    int mins;
-    int seconds;
-    int frames;
-    int drop_frame;
+    uint8_t hours;
+    uint8_t mins;
+    uint8_t seconds;
+    uint8_t frames;
+    uint8_t drop_frame;
 } obe_timecode_t;
 
 typedef struct
