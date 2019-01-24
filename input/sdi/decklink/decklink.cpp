@@ -174,6 +174,7 @@ typedef struct
     int picture_on_loss;
     int downscale;
     obe_bars_opts_t obe_bars_opts;
+    int tc_source;
 
     /* Output */
     int probe_success;
@@ -797,6 +798,20 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 decklink_ctx->stored_video_frame.user_data = NULL;
             }
 
+            if( decklink_opts_->tc_source )
+            {
+                IDeckLinkTimecode *timecode;
+                if( videoframe->GetTimecode( decklink_opts_->tc_source == TC_SOURCE_RP188 ? bmdTimecodeRP188Any : bmdTimecodeVITC,
+                                             &timecode ) == S_OK )
+                {
+                    raw_frame->valid_timecode = 1;
+                    timecode->GetComponents( &raw_frame->timecode.hours, &raw_frame->timecode.mins,
+                                             &raw_frame->timecode.seconds, &raw_frame->timecode.frames );
+                    raw_frame->timecode.drop_frame = !!(timecode->GetFlags() & bmdTimecodeIsDropFrame);
+                    timecode->Release();
+                }
+            }
+
             if( add_to_filter_queue( h, raw_frame ) < 0 )
                 goto fail;
 
@@ -1402,6 +1417,7 @@ static void *probe_stream( void *ptr )
     decklink_opts->audio_conn = user_opts->audio_connection;
     decklink_opts->video_format = user_opts->video_format;
     decklink_opts->downscale = user_opts->downscale;
+    decklink_opts->tc_source = user_opts->tc_source;
 
     decklink_opts->probe = non_display_parser->probe = 1;
 
@@ -1622,6 +1638,7 @@ static void *open_input( void *ptr )
     decklink_opts->obe_bars_opts.bars_beep = user_opts->bars_beep;
     decklink_opts->obe_bars_opts.bars_beep_interval = user_opts->bars_beep_interval;
     decklink_opts->obe_bars_opts.no_signal = 1;
+    decklink_opts->tc_source = user_opts->tc_source;
 
     decklink_ctx = &decklink_opts->decklink_ctx;
 

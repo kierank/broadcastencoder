@@ -90,7 +90,9 @@ static const char * const flip_types[]               = { "", "horizontal" };
 
 static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
 static const char * input_opts[]  = { "netmap-uri", "card-idx", "video-format", "video-connection", "audio-connection",
-                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", "netmap-mode", "netmap-audio", "netmap-audio-channels", "ptp-nic", "bars-beep", "bars-beep-interval", NULL };
+                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", "netmap-mode", "netmap-audio", "netmap-audio-channels", "ptp-nic", "bars-beep", "bars-beep-interval", "tc-source", NULL };
+static const char * const tc_sources[]               = { "none", "rp188", "vitc", 0};
+
 static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
@@ -549,6 +551,7 @@ static int set_input( char *command, obecli_command_t *child )
         char *ptp_nic = obe_get_option( input_opts[13], opts );
         char *bars_beep = obe_get_option( input_opts[14], opts );
         char *bars_beep_interval = obe_get_option( input_opts[15], opts );
+        char *tc_source        = obe_get_option( input_opts[16], opts );
 
         FAIL_IF_ERROR( video_format && ( check_enum_value( video_format, input_video_formats ) < 0 ),
                        "Invalid video format\n" );
@@ -561,6 +564,9 @@ static int set_input( char *command, obecli_command_t *child )
 
         FAIL_IF_ERROR( picture_on_loss && ( check_enum_value( picture_on_loss, picture_on_losses ) < 0 ),
                        "Invalid picture on loss\n" );
+
+        FAIL_IF_ERROR( tc_source && ( check_enum_value( tc_source, tc_sources ) < 0 ),
+                       "Invalid timecode source \n" );
 
         if( netmap_uri )
             strncpy(cli.input.netmap_uri, netmap_uri, sizeof(cli.input.netmap_uri));
@@ -591,6 +597,8 @@ static int set_input( char *command, obecli_command_t *child )
             parse_enum_value( picture_on_loss, picture_on_losses, &cli.input.picture_on_loss );
         cli.input.bars_beep = obe_otob( bars_beep, cli.input.bars_beep );
         cli.input.bars_beep_interval = obe_otoi( bars_beep_interval, cli.input.bars_beep_interval );
+        if( tc_source )
+            parse_enum_value( tc_source, tc_sources, &cli.input.tc_source );
 
         obe_free_string_array( opts );
     }

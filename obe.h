@@ -121,6 +121,13 @@ enum picture_on_loss_e
 
 /* video_format should be set to -1 for auto detection */
 
+enum tc_source_e
+{
+    TC_SOURCE_NONE,
+    TC_SOURCE_RP188,
+    TC_SOURCE_VITC,
+};
+
 typedef struct
 {
     int input_type;
@@ -146,6 +153,7 @@ typedef struct
 
     int picture_on_loss;
     int downscale;
+    int tc_source;
 } obe_input_t;
 
 /**** Stream Formats ****/
