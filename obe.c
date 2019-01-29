@@ -1448,12 +1448,14 @@ int obe_start( obe_t *h )
 
     pthread_attr_init(&attrs);
     pthread_attr_setschedpolicy(&attrs, SCHED_FIFO);
-    pthread_attr_setinheritsched(&attrs, PTHREAD_EXPLICIT_SCHED);
+    if (getuid() == 0) /* on 18.04, pthread_create() succeeds but thread exits immediately */
+        pthread_attr_setinheritsched(&attrs, PTHREAD_EXPLICIT_SCHED);
+    else
+        fprintf(stderr, "input thread not high priority\n");
 
     pthread_attr_getschedparam (&attrs, &params);
     params.sched_priority = 50;
-    int ret = pthread_attr_setschedparam(&attrs, &params);
-    if (ret < 0)
+    if (pthread_attr_setschedparam(&attrs, &params) < 0)
         perror("setschedparam");
 
     if( pthread_create( &h->device.device_thread, &attrs, input.open_input, (void*)input_params ) < 0 )
