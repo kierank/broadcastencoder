@@ -104,7 +104,7 @@ static int convert_obe_to_x264_pic( x264_picture_t *pic, obe_raw_frame_t *raw_fr
         pic->timecode[0].i_frame = raw_frame->timecode.frames;
         pic->timecode[0].b_drop = raw_frame->timecode.drop_frame;
         pic->timecode[0].b_sync = pic->timecode[0].b_discontinuity = pic->timecode[0].i_counting_type = 0;
-        pic->timecode[0].i_type = TIMECODE_FULL;
+        pic->timecode[0].i_type = X264_TIMECODE_FULL;
     }
 
     return 0;
