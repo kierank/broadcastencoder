@@ -537,6 +537,7 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     AVFrame *frame = vfilt->frame;
     /* Setup AVFrame */
     memcpy( frame->buf, raw_frame->buf_ref, sizeof(frame->buf) );
+    memset(raw_frame->buf_ref, 0, sizeof(raw_frame->buf_ref));
     memcpy( frame->linesize, raw_frame->img.stride, sizeof(raw_frame->img.stride) );
     memcpy( frame->data, raw_frame->img.plane, sizeof(raw_frame->img.plane) );
     frame->format = raw_frame->img.csp;
@@ -567,6 +568,8 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
             break;
         }
     }
+
+    raw_frame->release_data(raw_frame);
 
     raw_frame->alloc_img.width = frame->width;
     raw_frame->alloc_img.height = frame->height;
