@@ -813,6 +813,7 @@ EOF
 sed s/@@/$ver/g obed-worker.conf.in > obed-worker.conf
 sed s/@@/$ver/g debian/obed.upstart.in > debian/obed.upstart
 sed s/@@/$ver/g obed-worker@.service.in > obed-worker@.service
+sed s/@@/$ver/g obed.service.in > obed.service
 
 # FIXME
 #./version.sh >> config.h
