@@ -713,7 +713,7 @@ fi
 
 if [ "$protobuf" = "yes" ] ; then
     define HAVE_PROTOBUF
-    LDFLAGS="$LDFLAGS $PROTOBUF_LIBS"
+    LDFLAGS="$LDFLAGS -Wl,-Bstatic $PROTOBUF_LIBS -Wl,-Bdynamic"
     if pkg-config --exists libprotobuf-c-rpc
     then
         CFLAGS="$CFLAGS -DPROTOBUF_C_1_0 `pkg-config --cflags libprotobuf-c-rpc`"
@@ -812,7 +812,8 @@ EOF
 [ $ver = "100" ] && echo CFLAGS += -DC100 >> config.mak
 sed s/@@/$ver/g obed-worker.conf.in > obed-worker.conf
 sed s/@@/$ver/g debian/obed.upstart.in > debian/obed.upstart
-sed s/@@/$ver/g obed@.service.in > obed@.service
+sed s/@@/$ver/g obed-worker@.service.in > obed-worker@.service
+sed s/@@/$ver/g obed.service.in > obed.service
 
 # FIXME
 #./version.sh >> config.h

@@ -1,0 +1,12 @@
+[Unit]
+Description=OBE C-@@ Encoder
+After=obe-agent.service
+Requires=obed-worker@0.service obed-worker@1.service obed-worker@2.service obed-worker@3.service obed-worker@4.service obed-worker@5.service obed-worker@6.service obed-worker@7.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/obe-c@@
+ExecStart=/bin/true
+
+[Install]
+WantedBy=multi-user.target
