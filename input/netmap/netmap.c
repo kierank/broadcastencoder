@@ -153,6 +153,10 @@ typedef struct
 
     int stop;
 
+    obe_sdi_non_display_data_t non_display_parser;
+
+    uint16_t cc_ctr;
+
     obe_t *h;
 } netmap_ctx_t;
 
@@ -301,6 +305,97 @@ static void setup_picture_on_signal_loss_timer(netmap_ctx_t *netmap_ctx)
     upump_start(netmap_ctx->no_video_upump);
 }
 
+static void extract_cc(netmap_ctx_t *netmap_ctx, struct uref *uref, obe_raw_frame_t *raw_frame)
+{
+    obe_t *h = netmap_ctx->h;
+    const uint8_t *pic_data = NULL;
+    size_t pic_data_size = 0;
+    uref_pic_get_cea_708(uref, &pic_data, &pic_data_size);
+    if (!pic_data_size)
+        return;
+
+    obe_sdi_non_display_data_t *non_display_data = &netmap_ctx->non_display_parser;
+
+    if( non_display_data->probe )
+    {
+        if( check_probed_non_display_data( non_display_data, CAPTIONS_CEA_708 ) )
+            return;
+
+        obe_int_frame_data_t *tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+1) * sizeof(*non_display_data->frame_data) );
+        if( !tmp )
+            goto fail;
+
+        non_display_data->frame_data = tmp;
+
+        obe_int_frame_data_t *frame_data = &non_display_data->frame_data[non_display_data->num_frame_data++];
+        frame_data->type = CAPTIONS_CEA_708;
+        frame_data->source = VANC_GENERIC;
+        frame_data->num_lines = 0;
+        frame_data->lines[frame_data->num_lines++] = 1;
+        frame_data->location = USER_DATA_LOCATION_FRAME;
+
+        non_display_data->has_probed = 1;
+
+        return;
+    }
+
+    /* Return if user didn't select CEA-708 */
+    if( !check_user_selected_non_display_data( h, CAPTIONS_CEA_708, USER_DATA_LOCATION_FRAME ) ) {
+        return;
+    }
+
+    /* Return if there is already CEA-708 data in the frame */
+    if( check_active_non_display_data( raw_frame, USER_DATA_CEA_708_CDP ) ) {
+        return;
+    }
+
+    obe_user_data_t *tmp2 = realloc( raw_frame->user_data, (raw_frame->num_user_data+1) * sizeof(*raw_frame->user_data) );
+    if( !tmp2 )
+        goto fail;
+
+    raw_frame->user_data = tmp2;
+    obe_user_data_t *user_data = &raw_frame->user_data[raw_frame->num_user_data++];
+    user_data->len = 9 + pic_data_size + 4;
+    user_data->type = USER_DATA_CEA_708_CDP;
+    user_data->source = VANC_GENERIC;
+    user_data->data = malloc( user_data->len);
+
+    if( user_data->data ) {
+        const uint16_t hdr_sequence_cntr = netmap_ctx->cc_ctr++;
+        netmap_opts_t *netmap_opts = &netmap_ctx->netmap_opts;
+        const uint8_t fps = (netmap_opts->timebase_den == 1001) ? 0x4 : 0x7;
+
+        user_data->data[0] = 0x96;
+        user_data->data[1] = 0x69;
+        user_data->data[2] = user_data->len;
+        user_data->data[3] = (fps << 4) | 0xf;
+        user_data->data[4] = (1 << 6) | (1 << 1) | 1; // ccdata_present | caption_service_active | Reserved
+        user_data->data[5] = hdr_sequence_cntr >> 8;
+        user_data->data[6] = hdr_sequence_cntr & 0xff;
+        user_data->data[7] = 0x72;
+        user_data->data[8] = (0x7 << 5) | (pic_data_size / 3);
+
+        user_data->data[9 + pic_data_size] = 0x74;
+        user_data->data[9 + pic_data_size+1] = user_data->data[5];
+        user_data->data[9 + pic_data_size+2] = user_data->data[6];
+
+        for( int i = 0; i < pic_data_size; i++ )
+            user_data->data[9+i] = pic_data[i];
+
+        uint8_t checksum = 0;
+        for (int i = 0; i < user_data->len - 1; i++) // don't include checksum
+            checksum += user_data->data[i];
+
+        user_data->data[9 + pic_data_size+3] = checksum ? 256 - checksum : 0;
+
+    }
+
+    return;
+
+fail:
+    syslog( LOG_ERR, "Malloc failed\n" );
+}
+
 static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                        int event, va_list args)
 {
@@ -400,6 +495,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         netmap_ctx->last_frame_time = obe_mdate();
 
         if(netmap_opts->probe) {
+            extract_cc(netmap_ctx, uref, NULL);
             netmap_opts->probe_success = 1;
         } else if(netmap_ctx->video_good == 1) {
             /* drop first video frame,
@@ -436,6 +532,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
             raw_frame->pts = pts;
 
             uref = uref_dup(uref);
+            extract_cc(netmap_ctx, uref, raw_frame);
             for (int i = 0; i < 3 && netmap_ctx->input_chroma_map[i] != NULL; i++)
             {
                 const uint8_t *data;
@@ -984,7 +1081,7 @@ static void *probe_input( void *ptr )
     netmap_ctx.uri = user_opts->netmap_uri;
     netmap_ctx.h = h;
     netmap_opts_t *netmap_opts = &netmap_ctx.netmap_opts;
-    netmap_opts->probe = 1;
+    netmap_opts->probe = netmap_ctx.non_display_parser.probe = 1;
 
     open_netmap( &netmap_ctx );
 
@@ -1018,6 +1115,8 @@ static void *probe_input( void *ptr )
             streams[i]->interlaced = netmap_opts->interlaced;
             streams[i]->tff = 1; /* NTSC is bff in baseband but coded as tff */
             streams[i]->sar_num = streams[i]->sar_den = 1; /* The user can choose this when encoding */
+
+            add_non_display_services( &netmap_ctx.non_display_parser, streams[i], USER_DATA_LOCATION_FRAME );
         }
         else if( i == 1 )
         {
