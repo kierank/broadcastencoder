@@ -305,6 +305,103 @@ static void setup_picture_on_signal_loss_timer(netmap_ctx_t *netmap_ctx)
     upump_start(netmap_ctx->no_video_upump);
 }
 
+
+static void extract_afd_bar_data(netmap_ctx_t *netmap_ctx, struct uref *uref, obe_raw_frame_t *raw_frame)
+{
+    obe_t *h = netmap_ctx->h;
+    obe_sdi_non_display_data_t *non_display_data = &netmap_ctx->non_display_parser;
+
+    uint8_t afd = 0;
+    if (!ubase_check(uref_pic_get_afd(uref, &afd)))
+		return;
+
+    const uint8_t *bar_data = NULL;
+    size_t bar_data_size = 0;
+    uref_pic_get_bar_data(uref, &bar_data, &bar_data_size);
+    if (bar_data_size < 5)
+        return;
+
+    /* TODO: make Bar Data optional */
+
+    /* AFD is duplicated on the second field so skip it if we've already detected it */
+    if( non_display_data->probe )
+    {
+        /* TODO: mention existence of second line of AFD? */
+        if( check_probed_non_display_data( non_display_data, MISC_AFD ) )
+            return;
+
+		obe_int_frame_data_t *tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+2) * sizeof(*non_display_data->frame_data) );
+        if( !tmp )
+            goto fail;
+
+        non_display_data->frame_data = tmp;
+
+		obe_int_frame_data_t *frame_data = &non_display_data->frame_data[non_display_data->num_frame_data];
+        non_display_data->num_frame_data += 2;
+
+        /* AFD */
+        frame_data->type = MISC_AFD;
+        frame_data->source = VANC_GENERIC;
+        frame_data->num_lines = 0;
+        frame_data->lines[frame_data->num_lines++] = 1;
+        frame_data->location = USER_DATA_LOCATION_FRAME;
+
+        /* Bar data */
+        frame_data++;
+        frame_data->type = MISC_BAR_DATA;
+        frame_data->source = VANC_GENERIC;
+        frame_data->num_lines = 0;
+        frame_data->lines[frame_data->num_lines++] = 1;
+        frame_data->location = USER_DATA_LOCATION_FRAME;
+
+        return;
+    }
+
+    /* Return if user didn't select AFD */
+    if( !check_user_selected_non_display_data( h, MISC_AFD, USER_DATA_LOCATION_FRAME ) )
+        return;
+
+    /* Return if AFD already exists in frame */
+    if( check_active_non_display_data( raw_frame, USER_DATA_AFD ) )
+        return;
+
+    obe_user_data_t *tmp2 = realloc( raw_frame->user_data, (raw_frame->num_user_data+2) * sizeof(*raw_frame->user_data) );
+    if( !tmp2 )
+        goto fail;
+
+    raw_frame->user_data = tmp2;
+    obe_user_data_t *user_data = &raw_frame->user_data[raw_frame->num_user_data];
+    raw_frame->num_user_data += 2;
+
+    /* Read AFD */
+    user_data->len = 1;
+    user_data->type = USER_DATA_AFD;
+    user_data->source = VANC_GENERIC;
+    user_data->data = malloc( user_data->len );
+    if( !user_data->data )
+        goto fail;
+
+    user_data->data[0] = afd;
+
+    user_data++;
+
+    /* Read Bar Data */
+    user_data->len = 5;
+    user_data->type = USER_DATA_BAR_DATA;
+    user_data->source = VANC_GENERIC;
+    user_data->data = malloc( user_data->len );
+    if( !user_data->data )
+        goto fail;
+
+    memcpy(user_data->data, bar_data, 5);
+
+    return;
+
+fail:
+    syslog( LOG_ERR, "Malloc failed\n" );
+    return;
+}
+
 static void extract_cc(netmap_ctx_t *netmap_ctx, struct uref *uref, obe_raw_frame_t *raw_frame)
 {
     obe_t *h = netmap_ctx->h;
@@ -496,6 +593,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
         if(netmap_opts->probe) {
             extract_cc(netmap_ctx, uref, NULL);
+            extract_afd_bar_data(netmap_ctx, uref, NULL);
             netmap_opts->probe_success = 1;
         } else if(netmap_ctx->video_good == 1) {
             /* drop first video frame,
@@ -533,6 +631,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
             uref = uref_dup(uref);
             extract_cc(netmap_ctx, uref, raw_frame);
+            extract_afd_bar_data(netmap_ctx, uref, raw_frame);
             for (int i = 0; i < 3 && netmap_ctx->input_chroma_map[i] != NULL; i++)
             {
                 const uint8_t *data;
