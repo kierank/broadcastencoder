@@ -414,7 +414,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             if( video_opts_in->has_filler && video_opts_in->filler )
             {
                 video_stream->avc_param.i_nal_hrd = X264_NAL_HRD_FAKE_CBR;
-                video_stream->avc_param.rc.b_filler = 1;
+                video_stream->avc_param.rc.b_filler = 0; // FIXME, turning this on causes mux issues but does it matter?
             }
 
             /* Setup audio streams */
