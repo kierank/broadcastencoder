@@ -25,6 +25,7 @@
 #include "common/common.h"
 #include "input/input.h"
 #include "input/sdi/sdi.h"
+#include "input/sdi/vbi.h"
 #include "input/bars/bars_common.h"
 
 #include <stdlib.h>
@@ -54,6 +55,7 @@
 #include <upipe/uref_sound.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_block_flow.h>
+#include <upipe/uref_block.h>
 #include <upipe/ubuf.h>
 #include <upipe/uclock.h>
 #include <upipe/uclock_std.h>
@@ -72,11 +74,14 @@
 #include <upipe-modules/upipe_probe_uref.h>
 #include <upipe-hbrmt/upipe_sdi_dec.h>
 #include <upipe-netmap/upipe_netmap_source.h>
+#include <upipe-filters/upipe_filter_vanc.h>
 #include <upipe/uref_dump.h>
 
 #include <libavutil/opt.h>
 #include <libavutil/frame.h>
 #include <libavutil/samplefmt.h>
+
+#include <bitstream/dvb/vbi.h>
 
 #define UMEM_POOL               512
 #define UDICT_POOL_DEPTH        500
@@ -402,6 +407,80 @@ fail:
     return;
 }
 
+
+static void extract_op47(netmap_ctx_t *netmap_ctx, struct uref *uref)
+{
+    obe_sdi_non_display_data_t *non_display_data = &netmap_ctx->non_display_parser;
+    obe_t *h = netmap_ctx->h;
+
+    non_display_data->has_ttx_frame = 1;
+
+    if( non_display_data->probe )
+    {
+        if( check_probed_non_display_data( non_display_data, MISC_TELETEXT ) )
+            return;
+
+        obe_int_frame_data_t *tmp = realloc( non_display_data->frame_data, (non_display_data->num_frame_data+1) * sizeof(*non_display_data->frame_data) );
+        if( !tmp )
+            return;
+
+        non_display_data->frame_data = tmp;
+
+        obe_int_frame_data_t *frame_data = &non_display_data->frame_data[non_display_data->num_frame_data++];
+        frame_data->type = MISC_TELETEXT;
+        frame_data->source = VANC_OP47_SDP;
+        frame_data->num_lines = 0;
+        frame_data->lines[frame_data->num_lines++] = 12;
+        frame_data->location = USER_DATA_LOCATION_DVB_STREAM;
+
+        return;
+    }
+
+    if( !get_output_stream_by_format( h, MISC_TELETEXT ) )
+        return;
+
+    int s = -1;
+    const uint8_t *buf;
+    if (!ubase_check(uref_block_read(uref, 0, &s, &buf)))
+        return;
+
+    buf++; // skip DVBVBI_DATA_IDENTIFIER
+    s--;
+    for( int i = 0; i < 5; i++ ) {
+        if (s < DVBVBI_UNIT_HEADER_SIZE + DVBVBI_LENGTH)
+            break;
+
+        if (buf[0] != DVBVBI_ID_TTX_SUB && buf[0] != DVBVBI_ID_TTX_NONSUB)
+            goto skip;
+
+        if (buf[1] != DVBVBI_LENGTH)
+            goto skip;
+
+        vbi_sliced *vbi_slice = &non_display_data->vbi_slices[non_display_data->num_vbi++];
+        vbi_slice->id = VBI_SLICED_TELETEXT_B;
+
+        int line_smpte = 0;
+        int field = dvbvbittx_get_field(&buf[DVBVBI_UNIT_HEADER_SIZE]) ? 1 : 2;
+        int line_analogue = dvbvbittx_get_line(&buf[DVBVBI_UNIT_HEADER_SIZE]);
+
+        obe_convert_analogue_to_smpte( INPUT_VIDEO_FORMAT_PAL, line_analogue, field, &line_smpte );
+
+        vbi_slice->line = line_smpte;
+
+        for( int j = 0; j < 40+2; j++ ) // MRAG x2 + data_block
+            vbi_slice->data[j] = REVERSE(buf[4+j]);
+
+skip:
+        buf += DVBVBI_UNIT_HEADER_SIZE;
+        s -= DVBVBI_UNIT_HEADER_SIZE;
+
+        buf += DVBVBI_LENGTH;
+        s -= DVBVBI_LENGTH;
+    }
+
+    uref_block_unmap(uref, 0);
+}
+
 static void extract_cc(netmap_ctx_t *netmap_ctx, struct uref *uref, obe_raw_frame_t *raw_frame)
 {
     obe_t *h = netmap_ctx->h;
@@ -594,6 +673,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         if(netmap_opts->probe) {
             extract_cc(netmap_ctx, uref, NULL);
             extract_afd_bar_data(netmap_ctx, uref, NULL);
+            extract_op47(netmap_ctx, NULL);
             netmap_opts->probe_success = 1;
         } else if(netmap_ctx->video_good == 1) {
             /* drop first video frame,
@@ -706,6 +786,12 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
             if( add_to_filter_queue( h, raw_frame ) < 0 )
                 goto end;
+
+            if( send_vbi_and_ttx( h, &netmap_ctx->non_display_parser, pts ) < 0 )
+                goto end;
+
+            netmap_ctx->non_display_parser.num_vbi = 0;
+            netmap_ctx->non_display_parser.num_anc_vbi = 0;
         }
 
 end:
@@ -819,20 +905,22 @@ end:
     return UBASE_ERR_NONE;
 }
 
-static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
+static int catch_ttx(struct uprobe *uprobe, struct upipe *upipe,
                        int event, va_list args)
 {
+    struct uprobe_obe *uprobe_obe = uprobe_obe_from_uprobe(uprobe);
+    netmap_ctx_t *netmap_ctx = uprobe_obe->data;
     struct uref *flow_def;
     const char *def;
 
     if (event == UPROBE_PROBE_UREF) {
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
-        va_arg(args, struct uref *);
+        struct uref *uref = va_arg(args, struct uref *);
         va_arg(args, struct upump **);
         bool *drop = va_arg(args, bool *);
-
-        /* FIXME handle VANC */
         *drop = true;
+
+        extract_op47(netmap_ctx, uref);
 
         return UBASE_ERR_NONE;
     }
@@ -840,6 +928,32 @@ static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
 
     if (!uprobe_plumber(event, args, &flow_def, &def))
         return uprobe_throw_next(uprobe, upipe, event, args);
+
+    struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
+    struct upipe *probe_uref_ttx = upipe_void_alloc_output(upipe,
+            upipe_probe_uref_mgr,
+            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe), catch_ttx, netmap_ctx),
+            UPROBE_LOG_DEBUG, "probe_uref_ttx"));
+    upipe_mgr_release(upipe_probe_uref_mgr);
+    upipe_release(probe_uref_ttx);
+
+    return UBASE_ERR_NONE;
+}
+
+static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
+                       int event, va_list args)
+{
+    struct uref *flow_def;
+    const char *def;
+
+    if (!uprobe_plumber(event, args, &flow_def, &def))
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    struct upipe_mgr *null_mgr = upipe_null_mgr_alloc();
+    struct upipe *pipe = upipe_void_alloc_output(upipe, null_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_DEBUG, "null"));
+    upipe_release(pipe);
+
 
     return UBASE_ERR_NONE;
 }
@@ -1058,6 +1172,8 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
             loglevel, "audio probe_uref"));
     upipe_release(probe_uref_audio);
 
+    upipe_mgr_release(upipe_probe_uref_mgr);
+
     /* vanc */
     struct upipe *vanc = NULL;
     if (!ubase_check(upipe_sdi_dec_get_vanc_sub(sdi_dec, &vanc))) {
@@ -1068,14 +1184,21 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         upipe_release(vanc);
     }
 
-    /* vanc callback */
-    struct upipe *probe_uref_vanc = upipe_void_alloc_output(vanc,
-            upipe_probe_uref_mgr,
+    /* vanc filter */
+    struct upipe_mgr *upipe_filter_vanc_mgr = upipe_vanc_mgr_alloc();
+    struct upipe *probe_vanc = upipe_vanc_alloc_output(vanc,
+            upipe_filter_vanc_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "vanc filter"),
             uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_vanc, netmap_ctx),
-            loglevel, "vanc probe_uref"));
-    upipe_release(probe_uref_vanc);
-
-    upipe_mgr_release(upipe_probe_uref_mgr);
+               UPROBE_LOG_DEBUG, "afd"),
+            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_vanc, netmap_ctx),
+               UPROBE_LOG_DEBUG, "scte104"),
+            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_ttx, netmap_ctx),
+               UPROBE_LOG_DEBUG, "op47"),
+            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_vanc, netmap_ctx),
+                UPROBE_LOG_DEBUG, "cea708"));
+    upipe_release(probe_vanc);
+    upipe_mgr_release(upipe_filter_vanc_mgr);
 
     /* vbi */
     struct upipe *vbi = NULL;
@@ -1228,7 +1351,22 @@ static void *probe_input( void *ptr )
         }
     }
 
-    /* TODO: VBI/VANC */
+    if( netmap_ctx.non_display_parser.has_ttx_frame )
+    {
+        streams[cur_stream] = (obe_int_input_stream_t*)calloc( 1, sizeof(*streams[cur_stream]) );
+        if( !streams[cur_stream] )
+            goto finish;
+
+        streams[cur_stream]->input_stream_id = cur_input_stream_id++;
+
+        streams[cur_stream]->stream_type = STREAM_TYPE_MISC;
+        streams[cur_stream]->stream_format = MISC_TELETEXT;
+        if( add_teletext_service( &netmap_ctx.non_display_parser, streams[cur_stream] ) < 0 )
+            goto finish;
+        cur_stream++;
+    }
+
+    free( netmap_ctx.non_display_parser.frame_data );
 
     init_device(&h->device);
     h->device.num_input_streams = cur_stream;
