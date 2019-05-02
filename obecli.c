@@ -1352,6 +1352,10 @@ static int show_input_streams( char *command, obecli_command_t *child )
             printf( "Input-stream-id: %d - DVB Subtitles: Language: %s DDS: %s \n", stream->input_stream_id, stream->lang_code,
                     stream->dvb_has_dds ? "yes" : "no" );
         }
+        else if( stream->stream_format == ANC_RAW )
+        {
+            printf( "Input-stream-id: %d - Raw ancillary\n", stream->input_stream_id );
+        }
         else if( stream->stream_format == MISC_TELETEXT )
         {
             printf( "Input-stream-id: %d - Teletext: \n", stream->input_stream_id );
@@ -1392,6 +1396,8 @@ static int show_output_streams( char *command, obecli_command_t *child )
             printf( "DVB-Teletext\n" );
         else if( output_stream->stream_format == VBI_RAW )
             printf( "DVB-VBI\n" );
+        else if( output_stream->stream_format == ANC_RAW )
+            printf( "ST2038 ANC\n" );
         else if( input_stream->stream_type == STREAM_TYPE_VIDEO )
         {
             printf( "Video: AVC \n" );
@@ -1583,6 +1589,10 @@ static int set_defaults( void )
             else if( cli.program.streams[i].stream_format == MISC_TELETEXT )
             {
                 cli.output_streams[i].stream_format = MISC_TELETEXT;
+            }
+            else if( cli.program.streams[i].stream_format == ANC_RAW )
+            {
+                cli.output_streams[i].stream_format = ANC_RAW;
             }
         }
     }

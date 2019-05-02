@@ -163,6 +163,8 @@ typedef struct
 
     obe_sdi_non_display_data_t non_display_parser;
 
+    obe_coded_frame_t *anc_frame;
+
     uint16_t cc_ctr;
 
     obe_t *h;
@@ -793,6 +795,18 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
             if( send_vbi_and_ttx( h, &netmap_ctx->non_display_parser, pts ) < 0 )
                 goto end;
 
+            if (netmap_ctx->anc_frame) {
+                obe_coded_frame_t *anc_frame = netmap_ctx->anc_frame;
+                anc_frame->pts = pts;
+
+                if (add_to_queue(&h->mux_queue, &anc_frame->uchain) < 0) {
+                    destroy_coded_frame(anc_frame);
+                }
+
+                netmap_ctx->anc_frame = NULL;
+            }
+
+
             netmap_ctx->non_display_parser.num_vbi = 0;
             netmap_ctx->non_display_parser.num_anc_vbi = 0;
         }
@@ -970,11 +984,42 @@ static int catch_sdi_dec(struct uprobe *uprobe, struct upipe *upipe,
     uint16_t sdid = packet[gap*4];
     uint16_t dc = packet[gap*5];
 
-    for (int i = 0; i < (dc & 0xff) + 1 /* CS */; i++) {
-        packet[gap*(6+i)];
+    obe_t *h = netmap_ctx->h;
+    obe_output_stream_t *output_stream = get_output_stream_by_format(h, ANC_RAW);
+    if (!output_stream)
+        return UBASE_ERR_INVALID;
+
+    obe_coded_frame_t *anc_frame = netmap_ctx->anc_frame;
+    if (!anc_frame) {
+        netmap_ctx->anc_frame = anc_frame = new_coded_frame(output_stream->output_stream_id, 65536);
+        if (!anc_frame)
+            return UBASE_ERR_ALLOC;
+
+        anc_frame->len = 0;
     }
 
-    // TODO
+    bs_t s;
+    bs_init(&s, &anc_frame->data[anc_frame->len], 65536 - anc_frame->len);
+
+    bs_write(&s, 6, 0);
+    bs_write(&s, 1, c_not_y);
+    bs_write(&s, 11, line);
+    bs_write(&s, 12, horiz_offset);
+    bs_write(&s, 10, did);
+    bs_write(&s, 10, sdid);
+    bs_write(&s, 10, dc);
+
+    for (int i = 0; i < (dc & 0xff) + 1 /* CS */; i++) {
+        bs_write(&s, 10, packet[gap*(6+i)]);
+    }
+
+    int pos = bs_pos(&s) & 7;
+    if (pos)
+        bs_write(&s, 8 - pos, 1);
+
+    bs_flush(&s);
+
+    anc_frame->len += bs_pos(&s) / 8;
 
     return UBASE_ERR_NONE;
 }
@@ -1291,6 +1336,9 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     uprobe_release(uprobe_main);
     uprobe_release(uprobe_dejitter);
 
+    if (netmap_ctx->anc_frame)
+        destroy_coded_frame(netmap_ctx->anc_frame);
+
     return 0;
 
 }
@@ -1429,6 +1477,16 @@ static void *probe_input( void *ptr )
             goto finish;
         cur_stream++;
     }
+
+    streams[cur_stream] = (obe_int_input_stream_t*)calloc( 1, sizeof(*streams[cur_stream]) );
+    if( !streams[cur_stream] )
+        goto finish;
+
+    streams[cur_stream]->input_stream_id = cur_input_stream_id++;
+
+    streams[cur_stream]->stream_type = STREAM_TYPE_MISC;
+    streams[cur_stream]->stream_format = ANC_RAW;
+    cur_stream++;
 
     free( netmap_ctx.non_display_parser.frame_data );
 
