@@ -77,6 +77,7 @@
 #include <upipe-pciesdi/upipe_pciesdi_source.h>
 #include <upipe-hbrmt/upipe_pciesdi_source_framer.h>
 #include <upipe-filters/upipe_filter_vanc.h>
+#include <upipe-filters/upipe_filter_vbi.h>
 #include <upipe/uref_dump.h>
 
 #include <libavutil/opt.h>
@@ -1223,6 +1224,18 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     else {
         upipe_release(vbi);
     }
+
+    /* vbi filter */
+    struct upipe_mgr *upipe_filter_vbi_mgr = upipe_vbi_mgr_alloc();
+    struct upipe *probe_vbi = upipe_vbi_alloc_output(vbi,
+            upipe_filter_vbi_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "vbi filter"),
+            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_ttx, netmap_ctx),
+               UPROBE_LOG_DEBUG, "op47"),
+            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_vanc, netmap_ctx),
+                UPROBE_LOG_DEBUG, "cea708"));
+    upipe_release(probe_vbi);
+    upipe_mgr_release(upipe_filter_vbi_mgr);
 
     static struct upump *event_upump;
     /* stop timer */
