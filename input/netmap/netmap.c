@@ -943,6 +943,42 @@ static int catch_ttx(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+static int catch_sdi_dec(struct uprobe *uprobe, struct upipe *upipe,
+                       int event, va_list args)
+{
+    struct uprobe_obe *uprobe_obe = uprobe_obe_from_uprobe(uprobe);
+    netmap_ctx_t *netmap_ctx = uprobe_obe->data;
+    netmap_opts_t *netmap_opts = &netmap_ctx->netmap_opts;
+
+    if (event != UPROBE_SDI_DEC_HANC_PACKET)
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    UBASE_SIGNATURE_CHECK(args, UPIPE_SDI_DEC_SIGNATURE);
+
+    unsigned line = va_arg(args, unsigned);
+    unsigned horiz_offset = va_arg(args, unsigned);
+    const uint16_t *packet = va_arg(args, const uint16_t *);
+
+    bool c_not_y = false;
+    const unsigned gap = IS_SD(netmap_opts->video_format) ? 1 : 2;
+    if (gap == 2) {
+        c_not_y = horiz_offset & 1;
+        horiz_offset /= 2;
+    }
+
+    uint16_t did = packet[gap*3];
+    uint16_t sdid = packet[gap*4];
+    uint16_t dc = packet[gap*5];
+
+    for (int i = 0; i < (dc & 0xff) + 1 /* CS */; i++) {
+        packet[gap*(6+i)];
+    }
+
+    // TODO
+
+    return UBASE_ERR_NONE;
+}
+
 static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
                        int event, va_list args)
 {
@@ -1153,7 +1189,8 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 
     struct upipe *sdi_dec = upipe_sdi_dec_alloc_output(netmap_ctx->upipe_main_src,
         upipe_sdi_dec_mgr,
-        uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "sdi_dec"),
+        uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_sdi_dec, netmap_ctx),
+            UPROBE_LOG_DEBUG, "sdi_dec"),
         uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "sdi_dec vanc"),
         uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "sdi_dec vbi"),
         uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "sdi_dec audio"),
