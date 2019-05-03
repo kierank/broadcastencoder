@@ -85,6 +85,7 @@
 #include <libavutil/samplefmt.h>
 
 #include <bitstream/dvb/vbi.h>
+#include <bitstream/smpte/291.h>
 
 #define UMEM_POOL               512
 #define UDICT_POOL_DEPTH        500
@@ -1023,7 +1024,180 @@ static int catch_sdi_dec(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+struct sdi_line_range {
+    uint16_t start;
+    uint16_t end;
+};
+
+struct sdi_picture_fmt {
+    bool interlaced;
+    uint16_t active_height;
+
+    /* Field 1 (interlaced) or Frame (progressive) line ranges */
+    struct sdi_line_range vbi_f1_part1;
+    struct sdi_line_range active_f1;
+    struct sdi_line_range vbi_f1_part2;
+
+    /* Field 2 (interlaced)  */
+    struct sdi_line_range vbi_f2_part1;
+    struct sdi_line_range active_f2;
+    struct sdi_line_range vbi_f2_part2;
+};
+
+static const struct sdi_picture_fmt pict_fmts[] = {
+    /* 1125 Interlaced (1080 active) lines */
+    {true, 1080, {1, 20}, {21, 560}, {561, 563}, {564, 583}, {584, 1123}, {1124, 1125}},
+    /* 1125 Progressive (1080 active) lines */
+    {false, 1080, {1, 41}, {42, 1121}, {1122, 1125}, {0, 0}, {0, 0}, {0, 0}},
+    /* 750 Progressive (720 active) lines */
+    {false, 720, {1, 25}, {26, 745}, {746, 750}, {0, 0}, {0, 0}, {0, 0}},
+
+    /* PAL */
+    {true, 576, {1, 22}, {23, 310}, {311, 312}, {313, 335}, {336, 623}, {624, 625}},
+    /* NTSC */
+    {true, 486, {4, 19}, {20, 263}, {264, 265}, {266, 282}, {283, 525}, {1, 3}},
+};
+
+static int vanc_line_number(const struct sdi_picture_fmt *fmt, int line)
+{
+    line += fmt->vbi_f1_part1.start;
+
+    if (line >= fmt->vbi_f1_part1.start && line <= fmt->vbi_f1_part1.end)
+        return line;
+
+    line += fmt->active_f1.end - fmt->active_f1.start + 1;
+
+    if (line >= fmt->vbi_f1_part2.start && line <= fmt->vbi_f1_part2.end)
+        return line;
+
+    if (line >= fmt->vbi_f2_part1.start && line <= fmt->vbi_f2_part1.end)
+        return line;
+
+    line += fmt->active_f2.end - fmt->active_f2.start + 1;
+
+    if (line >= fmt->vbi_f2_part2.start && line <= fmt->vbi_f2_part2.end)
+        return line;
+
+    line -= fmt->vbi_f2_part2.end; /* NTSC */
+    return line;
+}
+
 static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
+                       int event, va_list args)
+{
+    struct uprobe_obe *uprobe_obe = uprobe_obe_from_uprobe(uprobe);
+    netmap_ctx_t *netmap_ctx = uprobe_obe->data;
+    netmap_opts_t *netmap_opts = &netmap_ctx->netmap_opts;
+    obe_t *h = netmap_ctx->h;
+
+    if (event != UPROBE_PROBE_UREF)
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    obe_output_stream_t *output_stream = get_output_stream_by_format(h, ANC_RAW);
+    if (!output_stream)
+        return UBASE_ERR_INVALID;
+
+    UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
+    struct uref *uref = va_arg(args, struct uref *);
+    va_arg(args, struct upump **);
+    va_arg(args, bool *);
+
+    const struct sdi_picture_fmt *fmt = NULL;
+    for (int i = 0; i < sizeof(pict_fmts) / sizeof(*pict_fmts); i++) {
+        if (pict_fmts[i].interlaced != netmap_opts->interlaced)
+            continue;
+        if (pict_fmts[i].active_height != netmap_opts->height)
+            continue;
+        fmt = &pict_fmts[i];
+        break;
+    }
+
+    if (!fmt) {
+        upipe_err(upipe, "Unknown format");
+        return UBASE_ERR_INVALID;
+    }
+
+    size_t hsize, vsize, stride;
+    const uint8_t *r;
+    if (unlikely(!ubase_check(uref_pic_size(uref, &hsize, &vsize, NULL)) ||
+                 !ubase_check(uref_pic_plane_size(uref, "x10", &stride,
+                                                  NULL, NULL, NULL)) ||
+                 !ubase_check(uref_pic_plane_read(uref, "x10", 0, 0, -1, -1,
+                                                  &r)))) {
+        upipe_throw_error(upipe, UBASE_ERR_INVALID);
+        return UBASE_ERR_INVALID;
+    }
+
+    for (unsigned int i = 0; i < vsize; i++) {
+        r += stride;
+
+        const uint16_t *x = (const uint16_t*)r;
+
+        size_t h_left = hsize;
+        while (h_left > S291_HEADER_SIZE + S291_FOOTER_SIZE) {
+            if (x[0] != S291_ADF1 || x[1] != S291_ADF2 || x[2] != S291_ADF3) {
+                break;
+            }
+
+            uint8_t did = s291_get_did(x);
+            uint8_t sdid = s291_get_sdid(x);
+            uint8_t dc = s291_get_dc(x);
+            if (S291_HEADER_SIZE + dc + S291_FOOTER_SIZE > h_left) {
+                upipe_dbg_va(upipe, "ancillary too large (%"PRIu8" > %zu) for 0x%"PRIx8"/0x%"PRIx8,
+                        dc, h_left, did, sdid);
+                break;
+            }
+
+            if (!s291_check_cs(x)) {
+                upipe_dbg_va(upipe, "invalid CRC for 0x%"PRIx8"/0x%"PRIx8,
+                        did, sdid);
+                x += 3;
+                h_left -= 3;
+                continue;
+            }
+
+            obe_coded_frame_t *anc_frame = netmap_ctx->anc_frame;
+            if (!anc_frame) {
+                netmap_ctx->anc_frame = anc_frame = new_coded_frame(output_stream->output_stream_id, 65536);
+                if (!anc_frame)
+                    return UBASE_ERR_ALLOC;
+
+                anc_frame->len = 0;
+            }
+
+            bool c_not_y = false;
+
+            bs_t s;
+            bs_init(&s, &anc_frame->data[anc_frame->len], 65536 - anc_frame->len);
+
+            bs_write(&s, 6, 0);
+            bs_write(&s, 1, c_not_y);
+            bs_write(&s, 11, vanc_line_number(fmt, i));
+            bs_write(&s, 12, hsize - h_left);
+
+            for (int j = 3; j < S291_HEADER_SIZE + (dc & 0xff) + 1 /* CS */; j++) {
+                bs_write(&s, 10, x[j]);
+            }
+
+            int pos = bs_pos(&s) & 7;
+            if (pos)
+                bs_write(&s, 8 - pos, 1);
+
+            bs_flush(&s);
+
+            anc_frame->len += bs_pos(&s) / 8;
+
+            x += S291_HEADER_SIZE + dc + 1;
+            h_left -= S291_HEADER_SIZE + dc + 1;
+        }
+    }
+
+    uref_pic_plane_unmap(uref, "x10", 0, 0, -1, -1);
+
+    return UBASE_ERR_NONE;
+}
+
+static int catch_null(struct uprobe *uprobe, struct upipe *upipe,
                        int event, va_list args)
 {
     struct uref *flow_def;
@@ -1282,16 +1456,24 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 
     /* vanc filter */
     struct upipe_mgr *upipe_filter_vanc_mgr = upipe_vanc_mgr_alloc();
-    struct upipe *probe_vanc = upipe_vanc_alloc_output(vanc,
+
+    struct upipe_mgr *probe_uref_mgr = upipe_probe_uref_mgr_alloc();
+    struct upipe *probe_vanc = upipe_void_alloc_output(vanc,
+            probe_uref_mgr,
+            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_vanc, netmap_ctx),
+            UPROBE_LOG_DEBUG, "probe_uref_ttx"));
+    upipe_mgr_release(probe_uref_mgr);
+
+    probe_vanc = upipe_vanc_chain_output(probe_vanc,
             upipe_filter_vanc_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "vanc filter"),
-            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_vanc, netmap_ctx),
+            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
                UPROBE_LOG_DEBUG, "afd"),
-            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_vanc, netmap_ctx),
+            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
                UPROBE_LOG_DEBUG, "scte104"),
             uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_ttx, netmap_ctx),
                UPROBE_LOG_DEBUG, "op47"),
-            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_vanc, netmap_ctx),
+            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
                 UPROBE_LOG_DEBUG, "cea708"));
     upipe_release(probe_vanc);
     upipe_mgr_release(upipe_filter_vanc_mgr);
@@ -1313,7 +1495,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
             uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "vbi filter"),
             uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_ttx, netmap_ctx),
                UPROBE_LOG_DEBUG, "op47"),
-            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_vanc, netmap_ctx),
+            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
                 UPROBE_LOG_DEBUG, "cea708"));
     upipe_release(probe_vbi);
     upipe_mgr_release(upipe_filter_vbi_mgr);
