@@ -957,6 +957,12 @@ static int catch_ttx(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+static bool send_did_sdid(netmap_ctx_t *netmap_ctx, uint8_t did, uint8_t sdid)
+{
+    // TODO
+    return false;
+}
+
 static int catch_sdi_dec(struct uprobe *uprobe, struct upipe *upipe,
                        int event, va_list args)
 {
@@ -983,6 +989,9 @@ static int catch_sdi_dec(struct uprobe *uprobe, struct upipe *upipe,
     uint16_t did = packet[gap*3];
     uint16_t sdid = packet[gap*4];
     uint16_t dc = packet[gap*5];
+
+    if (!send_did_sdid(netmap_ctx, did & 0xff, sdid & 0xff))
+        return UBASE_ERR_NONE;
 
     obe_t *h = netmap_ctx->h;
     obe_output_stream_t *output_stream = get_output_stream_by_format(h, ANC_RAW);
@@ -1200,6 +1209,12 @@ static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
             if (!s291_check_cs(x)) {
                 upipe_dbg_va(upipe, "invalid CRC for 0x%"PRIx8"/0x%"PRIx8,
                         did, sdid);
+                x += 3;
+                h_left -= 3;
+                continue;
+            }
+
+            if (!send_did_sdid(netmap_ctx, did, sdid)) {
                 x += 3;
                 h_left -= 3;
                 continue;
