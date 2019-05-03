@@ -107,7 +107,6 @@ typedef struct
     int probe_success;
 
     int width;
-    int coded_height;
     int height;
 
     int timebase_num;
@@ -600,7 +599,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         uref_pic_flow_get_fps(flow_def, &fps);
 
         netmap_opts->width = hsize;
-        netmap_opts->height = netmap_opts->coded_height = vsize;
+        netmap_opts->height = vsize;
         netmap_opts->timebase_num = fps.den;
         netmap_opts->timebase_den = fps.num;
         netmap_opts->interlaced = !ubase_check(uref_pic_get_progressive(flow_def));
