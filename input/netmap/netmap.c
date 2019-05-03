@@ -1082,6 +1082,55 @@ static int vanc_line_number(const struct sdi_picture_fmt *fmt, int line)
     return line;
 }
 
+struct sdi_offsets_fmt {
+    uint16_t active_height;
+
+    /* Number of samples (pairs) between EAV and start of active data */
+    uint16_t active_offset;
+
+    struct urational fps;
+};
+
+static const struct sdi_offsets_fmt fmts_data[] = {
+    { 1080, 720, { 25, 1} },
+    { 1080, 720, { 50, 1} },
+
+    { 1080, 280, { 30000, 1001 } },
+    { 1080, 280, { 60000, 1001 } },
+    { 1080, 280, { 60, 1 } },
+
+    { 1080, 830, { 24000, 1001 } },
+    { 1080, 830, { 24, 1 } },
+
+    { 720, 700, { 50, 1} },
+    { 720, 370, { 60000, 1001 } },
+    { 720, 370, { 60, 1 } },
+
+    { 576, 144, { 25, 1} },
+    { 486, 138, { 30000, 1001 } },
+};
+
+static int get_vanc_offset(netmap_ctx_t *netmap_ctx)
+{
+    netmap_opts_t *netmap_opts = &netmap_ctx->netmap_opts;
+
+    for (size_t i = 0; i < sizeof(fmts_data)/sizeof(*fmts_data); i++) {
+        const struct sdi_offsets_fmt *fmt = &fmts_data[i];
+        if (netmap_opts->height != fmt->active_height)
+            continue;
+
+        if (netmap_opts->timebase_num != fmt->fps.den)
+            continue;
+        if (netmap_opts->timebase_den != fmt->fps.num)
+            continue;
+
+        return fmt->active_offset - 4 /* sav length */;
+    }
+
+    return 0;
+}
+
+
 static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
                        int event, va_list args)
 {
@@ -1173,7 +1222,7 @@ static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
             bs_write(&s, 6, 0);
             bs_write(&s, 1, c_not_y);
             bs_write(&s, 11, vanc_line_number(fmt, i));
-            bs_write(&s, 12, hsize - h_left);
+            bs_write(&s, 12, hsize - h_left + get_vanc_offset(netmap_ctx));
 
             for (int j = 3; j < S291_HEADER_SIZE + (dc & 0xff) + 1 /* CS */; j++) {
                 bs_write(&s, 10, x[j]);
