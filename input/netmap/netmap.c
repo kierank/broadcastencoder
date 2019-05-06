@@ -1024,7 +1024,7 @@ static int catch_sdi_dec(struct uprobe *uprobe, struct upipe *upipe,
 
     int pos = bs_pos(&s) & 7;
     if (pos)
-        bs_write(&s, 8 - pos, 1);
+        bs_write(&s, 8 - pos, 0xff);
 
     bs_flush(&s);
 
@@ -1245,7 +1245,7 @@ static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
 
             int pos = bs_pos(&s) & 7;
             if (pos)
-                bs_write(&s, 8 - pos, 1);
+                bs_write(&s, 8 - pos, 0xff);
 
             bs_flush(&s);
 
