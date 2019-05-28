@@ -1013,7 +1013,7 @@ static int catch_sdi_dec(struct uprobe *uprobe, struct upipe *upipe,
     bs_write(&s, 6, 0);
     bs_write(&s, 1, c_not_y);
     bs_write(&s, 11, line);
-    bs_write(&s, 12, horiz_offset);
+    bs_write(&s, 12, 0xffe); /* as defined in rfc8331 */
     bs_write(&s, 10, did);
     bs_write(&s, 10, sdid);
     bs_write(&s, 10, dc);
@@ -1119,7 +1119,7 @@ static const struct sdi_offsets_fmt fmts_data[] = {
     { 486, 138, { 30000, 1001 } },
 };
 
-static int get_vanc_offset(netmap_ctx_t *netmap_ctx)
+static int get_sav_offset(netmap_ctx_t *netmap_ctx)
 {
     netmap_opts_t *netmap_opts = &netmap_ctx->netmap_opts;
 
@@ -1133,7 +1133,7 @@ static int get_vanc_offset(netmap_ctx_t *netmap_ctx)
         if (netmap_opts->timebase_den != fmt->fps.num)
             continue;
 
-        return fmt->active_offset - 4 /* sav length */;
+        return fmt->active_offset;
     }
 
     return 0;
@@ -1234,10 +1234,17 @@ static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
             bs_t s;
             bs_init(&s, &anc_frame->data[anc_frame->len], 65536 - anc_frame->len);
 
+            int sav_offset = get_sav_offset(netmap_ctx);
+            uint16_t horiz_offset = hsize - h_left;
+            if (horiz_offset >= sav_offset)
+                horiz_offset -= sav_offset;
+            else
+                horiz_offset = 0xffe; /* HANC, as defined in rfc8331 */
+
             bs_write(&s, 6, 0);
             bs_write(&s, 1, c_not_y);
             bs_write(&s, 11, vanc_line_number(fmt, i));
-            bs_write(&s, 12, hsize - h_left + get_vanc_offset(netmap_ctx));
+            bs_write(&s, 12, horiz_offset);
 
             for (int j = 3; j < S291_HEADER_SIZE + (dc & 0xff) + 1 /* CS */; j++) {
                 bs_write(&s, 10, x[j]);
