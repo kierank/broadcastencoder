@@ -530,12 +530,18 @@ fi
 
 if [ "$libx264" = "auto" ] ; then
     libx264="no"
-    libx264flags="-lx264"
-    if cc_check "x264.h" "$libpthread $libx264flags" "x264_encoder_close(0);" ; then
-        if cpp_check x264.h "$libpthread $libx264flags" "X264_BUILD >= 99" ; then
+    if ${cross_prefix}pkg-config --exists x264 2>/dev/null; then
+        X264_LIBS="$X264_LIBS $(${cross_prefix}pkg-config --libs x264)"
+        X264_CFLAGS="$X264_CFLAGS $(${cross_prefix}pkg-config --cflags x264)"
+    else
+        X264_LIBS=-lx264
+    fi
+    if cc_check "x264.h" "$X264_CFLAGS $libpthread $X264_LIBS" "x264_encoder_close(0);" ; then
+        if cpp_check x264.h "$X264_CFLAGS $libpthread $X264_LIBS" "X264_BUILD >= 99" ; then
             libx264="yes"
             define HAVE_LIBX264
-            LDFLAGS="$LDFLAGS $libx264flags"
+            LDFLAGS="$X264_LIBS $LDFLAGS"
+            CFLAGS="$CFLAGS $X264_CFLAGS"
         else
             die "libx264 is too old"
         fi
@@ -712,7 +718,7 @@ fi
 UPIPE_MODULES="libupump_ev libupipe_netmap libupipe_hbrmt libupipe_pthread libupipe_modules libupipe_filters libupipe"
 if [ "$upipe" = "auto" ] ; then
     upipe="no"
-    if ${cross_prefix}pkg-config --libs ${UPIPE_MODULES} 2>/dev/null; then
+    if ${cross_prefix}pkg-config --exists ${UPIPE_MODULES} 2>/dev/null; then
         UPIPE_LIBS="$UPIPE_LIBS $(${cross_prefix}pkg-config --libs ${UPIPE_MODULES})"
         UPIPE_CFLAGS="$UPIPE_CFLAGS $(${cross_prefix}pkg-config --cflags ${UPIPE_MODULES})"
         upipe="yes"
