@@ -1565,9 +1565,9 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
             upipe_filter_vbi_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "vbi filter"),
             uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_ttx, netmap_ctx),
-               UPROBE_LOG_DEBUG, "op47"),
+               UPROBE_LOG_DEBUG, "vbi_ttx"),
             uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
-                UPROBE_LOG_DEBUG, "cea708"));
+                UPROBE_LOG_DEBUG, "vbi_cea708"));
     upipe_release(probe_vbi);
     upipe_mgr_release(upipe_filter_vbi_mgr);
 
