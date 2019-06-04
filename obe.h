@@ -199,6 +199,9 @@ enum stream_formats_e
     VANC_DTV_DATA_BROADCAST,
     VANC_SMPTE_VBI,
     VANC_SCTE_104,
+
+    /* Vertical or Horizontal Ancillary */
+    ANC_RAW,
 };
 
 enum mp2_mode_e
