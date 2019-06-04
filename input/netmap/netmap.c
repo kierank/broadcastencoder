@@ -1239,7 +1239,7 @@ static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
             if (horiz_offset >= sav_offset)
                 horiz_offset -= sav_offset;
             else
-                horiz_offset = 0xffe; /* HANC, as defined in rfc8331 */
+                goto next; /* HANC is handled somewhere else */
 
             bs_write(&s, 6, 0);
             bs_write(&s, 1, c_not_y);
@@ -1258,6 +1258,7 @@ static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
 
             anc_frame->len += bs_pos(&s) / 8;
 
+next:
             x += S291_HEADER_SIZE + dc + 1;
             h_left -= S291_HEADER_SIZE + dc + 1;
         }
