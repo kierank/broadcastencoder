@@ -1234,12 +1234,7 @@ static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
             bs_t s;
             bs_init(&s, &anc_frame->data[anc_frame->len], 65536 - anc_frame->len);
 
-            int sav_offset = get_sav_offset(netmap_ctx);
             uint16_t horiz_offset = hsize - h_left;
-            if (horiz_offset >= sav_offset)
-                horiz_offset -= sav_offset;
-            else
-                goto next; /* HANC is handled somewhere else */
 
             bs_write(&s, 6, 0);
             bs_write(&s, 1, c_not_y);
