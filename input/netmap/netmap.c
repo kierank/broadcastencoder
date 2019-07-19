@@ -1744,7 +1744,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 
     struct uprobe *uprobe_main_pthread = uprobe_main;
     const char *intf[2] = { NULL, NULL };
-    char *next = strchr( ptp_nic, ';' );
+    char *next = strchr( ptp_nic, '|' );
     if( next )
     {
         *next++ = '\0';
