@@ -132,6 +132,9 @@ typedef struct
     int audio_connection;
 
     char netmap_uri[150];
+    char netmap_mode[10];
+    char netmap_audio[400];
+    char ptp_nic[100];
 
     char bars_line1[30];
     char bars_line2[30];
@@ -584,7 +587,7 @@ int obe_start( obe_t *h );
 
 typedef struct
 {
-    int active; /* 0 if inactive, 1 if active */    
+    int active; /* 0 if inactive, 1 if active */
     int detected_video_format;
 } obe_input_status_t;
 

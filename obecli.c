@@ -89,7 +89,7 @@ static const char * const downscale_types[]          = { "", "fast" };
 
 static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
 static const char * input_opts[]  = { "netmap-uri", "card-idx", "video-format", "video-connection", "audio-connection",
-                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", NULL };
+                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", "netmap-mode", "netmap-audio", "ptp-nic", NULL };
 static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
@@ -395,6 +395,8 @@ static int add_stream( char *command, obecli_command_t *child )
 
     char *type     = obe_get_option( add_opts[0], opts );
 
+    obe_free_string_array( opts );
+
     FAIL_IF_ERROR( type && ( check_enum_value( type, addable_streams ) < 0 ),
                    "Stream type is not addable\n" )
 
@@ -532,6 +534,9 @@ static int set_input( char *command, obecli_command_t *child )
         char *bars_line3 = obe_get_option( input_opts[7], opts );
         char *bars_line4 = obe_get_option( input_opts[8], opts );
         char *picture_on_loss = obe_get_option( input_opts[9], opts );
+        char *netmap_mode = obe_get_option( input_opts[10], opts );
+        char *netmap_audio = obe_get_option( input_opts[11], opts );
+        char *ptp_nic = obe_get_option( input_opts[12], opts );
 
         FAIL_IF_ERROR( video_format && ( check_enum_value( video_format, input_video_formats ) < 0 ),
                        "Invalid video format\n" );
@@ -547,6 +552,12 @@ static int set_input( char *command, obecli_command_t *child )
 
         if( netmap_uri )
             strncpy(cli.input.netmap_uri, netmap_uri, sizeof(cli.input.netmap_uri));
+        if( netmap_mode )
+            strncpy(cli.input.netmap_mode, netmap_mode, sizeof(cli.input.netmap_mode));
+        if( netmap_audio )
+            strncpy(cli.input.netmap_audio, netmap_audio, sizeof(cli.input.netmap_audio));
+        if( ptp_nic )
+            strncpy(cli.input.ptp_nic, ptp_nic, sizeof(cli.input.ptp_nic));
         cli.input.card_idx = obe_otoi( card_idx, cli.input.card_idx );
         if( video_format )
             parse_enum_value( video_format, input_video_formats, &cli.input.video_format );
@@ -670,7 +681,7 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 FAIL_IF_ERROR( frame_packing && ( check_enum_value( frame_packing, frame_packing_modes ) < 0 ),
                                "Invalid frame packing mode\n" )
-    
+
                 FAIL_IF_ERROR( downscale && ( check_enum_value( downscale, downscale_types ) < 0 ),
                                "Invalid downscale type\n" )
 
