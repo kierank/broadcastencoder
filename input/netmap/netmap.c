@@ -1678,7 +1678,7 @@ static int setup_rfc_audio(netmap_ctx_t *netmap_ctx, struct uref_mgr *uref_mgr,
         if (path2)
             *path2++ = '\0';
 
-        unsigned channels = get_channels_from_uri(audio);
+        unsigned channels = 16; //FIXME
         if (!channels) {
             printf("audio URI missing channels\n");
             uref_free(flow_def);
@@ -1725,7 +1725,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
                                                    0);
     udict_mgr_release(udict_mgr);
 
-    enum uprobe_log_level loglevel = UPROBE_LOG_VERBOSE;
+    enum uprobe_log_level loglevel = UPROBE_LOG_WARNING;
 
     /* probes */
     /* main (thread-safe) probe, whose first element is uprobe_pthread_upump_mgr */
@@ -1973,7 +1973,6 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     }
     else
     {
-        netmap_ctx->channels = 16;
         char *audio = netmap_ctx->audio_uri;
         if (!audio) {
             printf("Missing audio URI\n");
