@@ -1725,7 +1725,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
                                                    0);
     udict_mgr_release(udict_mgr);
 
-    enum uprobe_log_level loglevel = UPROBE_LOG_VERBOSE;
+    enum uprobe_log_level loglevel = UPROBE_LOG_WARNING;
 
     /* probes */
     /* main (thread-safe) probe, whose first element is uprobe_pthread_upump_mgr */
