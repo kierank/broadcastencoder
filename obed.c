@@ -30,6 +30,13 @@
 #include <syslog.h>
 #include <sys/time.h>
 
+#include <netinet/in.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <linux/if.h>
+#include <ifaddrs.h>
+#include <arpa/inet.h> /* htonl */
+
 #include <nacl/crypto_sign.h>
 
 #include "config.h"
@@ -132,13 +139,62 @@ static int get_return_format( int video_format )
     return i;
 }
 
-
 const static int s302m_bit_depths[] =
 {
     16,
     20,
     24
 };
+
+enum obed_input_type_e
+{
+    OBED_INPUT_DECKLINK = 1,
+    OBED_INPUT_LINSYS, /* unused */
+    OBED_INPUT_BARS,
+    OBED_INPUT_2022_6,
+    OBED_INPUT_2022_7,
+    OBED_INPUT_2110,
+    OBED_INPUT_2110_DASH_7,
+};
+
+static int is_2110( int input_device )
+{
+    return input_device == OBED_INPUT_2110   ||
+           input_device == OBED_INPUT_2110_DASH_7;
+}
+
+static int is_uncompressed( int input_device )
+{
+    return input_device == OBED_INPUT_2022_6 ||
+           input_device == OBED_INPUT_2022_7 ||
+           is_2110( input_device );
+}
+
+static struct in_addr intf_addr(const char *intf)
+{
+    struct in_addr addr = {0};
+
+    struct ifaddrs *ifa = NULL;
+    if (getifaddrs(&ifa) < 0) {
+        perror("getifaddrs");
+        return addr;
+    }
+
+    for (struct ifaddrs *ifap = ifa; ifap; ifap = ifap->ifa_next) {
+        if (!strncmp(ifap->ifa_name, intf, IFNAMSIZ)) {
+            printf("iface %s iface %s \n", ifap->ifa_name, intf);
+            if (ifap->ifa_addr->sa_family == AF_INET) {
+                struct sockaddr_in *sin = (struct sockaddr_in *)ifap->ifa_addr;
+                addr = sin->sin_addr;
+                break;
+            }
+        }
+    }
+
+    freeifaddrs(ifa);
+
+    return addr;
+}
 
 /* server options */
 static volatile int keep_running;
@@ -244,10 +300,38 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             if( !d.h )
                 goto fail;
 
-            if( input_opts_in->input_device == INPUT_DEVICE_NETMAP || input_opts_in->input_device == INPUT_DEVICE_NETMAP_DASH_7 )
+            if( is_uncompressed( input_opts_in->input_device ) )
             {
                 input_opts_out->input_type = INPUT_DEVICE_NETMAP;
                 snprintf( input_opts_out->netmap_uri, sizeof(input_opts_out->netmap_uri), "netmap:obe" "%u" "_path1}0+netmap:obe" "%u" "_path2}0", encoder_id, encoder_id );
+                if( is_2110( input_opts_in->input_device ) )
+                {
+                    if( input_opts_in->path1_ptp_nic )
+                        snprintf( input_opts_out->ptp_nic, sizeof(input_opts_out->ptp_nic), "%s|%s", input_opts_in->path1_ptp_nic, input_opts_in->path2_ptp_nic ? input_opts_in->path2_ptp_nic : "" );
+                    strncpy( input_opts_out->netmap_mode, "rfc4175", sizeof(input_opts_out->netmap_mode) );
+
+                    /* TODO: multiple streams */
+                    if( encoder_control->n_audio_input_opts )
+                    {
+                        Obed__AudioInputOpts *audio_input_opts = encoder_control->audio_input_opts[0];
+                        struct in_addr path1_addr = intf_addr(input_opts_in->path1_ptp_nic);
+                        struct in_addr path2_addr = intf_addr(input_opts_in->path2_ptp_nic);
+                        char tmp[17], tmp2[17];
+
+                        /* inet_ntoa writes to a static buffer so can't use it twice */
+                        strncpy(tmp, inet_ntoa(path1_addr), sizeof(tmp));
+                        strncpy(tmp2, inet_ntoa(path2_addr), sizeof(tmp));
+                        snprintf( input_opts_out->netmap_audio, sizeof(input_opts_out->netmap_audio), "%s@%s:%u/ifaddr=%s|%s@%s:%u/ifaddr=%s",
+                                  audio_input_opts->path1_source_ip_address ? audio_input_opts->path1_source_ip_address : "",
+                                  audio_input_opts->path1_ip_address ? audio_input_opts->path1_ip_address : "",
+                                  audio_input_opts->path1_port,
+                                  tmp,
+                                  audio_input_opts->path2_source_ip_address ? audio_input_opts->path2_source_ip_address : "",
+                                  audio_input_opts->path2_ip_address ? audio_input_opts->path2_ip_address : "",
+                                  audio_input_opts->path2_port,
+                                  tmp2 );
+                    }
+                }
             }
             else
                 input_opts_out->input_type = input_opts_in->input_device;
