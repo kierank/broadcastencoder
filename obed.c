@@ -182,7 +182,6 @@ static struct in_addr intf_addr(const char *intf)
 
     for (struct ifaddrs *ifap = ifa; ifap; ifap = ifap->ifa_next) {
         if (!strncmp(ifap->ifa_name, intf, IFNAMSIZ)) {
-            printf("iface %s iface %s \n", ifap->ifa_name, intf);
             if (ifap->ifa_addr->sa_family == AF_INET) {
                 struct sockaddr_in *sin = (struct sockaddr_in *)ifap->ifa_addr;
                 addr = sin->sin_addr;
