@@ -1271,12 +1271,8 @@ static int restamp_audio_2110(struct uprobe *uprobe, struct upipe *upipe,
         return UBASE_ERR_NONE;
     }
 
-    if (event != UPROBE_PROBE_UREF) {
-        if (!uprobe_plumber(event, args, &flow_def, &def))
+    if (event != UPROBE_PROBE_UREF)
             return uprobe_throw_next(uprobe, upipe, event, args);
-
-        return UBASE_ERR_NONE;
-    }
 
     UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
     struct uref *uref = va_arg(args, struct uref *);
@@ -1449,12 +1445,17 @@ static int catch_null(struct uprobe *uprobe, struct upipe *upipe,
 static int restamp_rfc4175_video(struct uprobe *uprobe, struct upipe *upipe,
                                int event, va_list args)
 {
+    struct uref *flow_def;
+    const char *def;
+    struct uprobe_obe *uprobe_obe = uprobe_obe_from_uprobe(uprobe);
+    if (event != UPROBE_PROBE_UREF)
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
     UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
     struct uref *uref = va_arg(args, struct uref *);
     va_arg(args, struct upump **);
     bool *drop = va_arg(args, bool *);
 
-    if (event == UPROBE_PROBE_UREF) {
         uint64_t cr_sys = 0, pts_orig = 0;
         uref_clock_get_cr_sys(uref, &cr_sys);
         uref_clock_get_pts_orig(uref, &pts_orig);
@@ -1472,7 +1473,6 @@ static int restamp_rfc4175_video(struct uprobe *uprobe, struct upipe *upipe,
         /* Work in the 90kHz domain to avoid timestamp jitter */
         uint64_t vpts = (ptp_rtp - diff) * 300;
         uref_clock_set_pts_sys(uref, vpts);
-    }
 
     return UBASE_ERR_NONE;
 }
@@ -1553,7 +1553,7 @@ static void upipe_event_timer(struct upump *upump)
                 netmap_ctx->stored_audio_frame.release_data( &netmap_ctx->stored_audio_frame );
 
             upipe_release(netmap_ctx->upipe_main_src);
-            upipe_release(netmap_ctx->avsync);
+            //upipe_release(netmap_ctx->avsync);
         }
     }
 }
@@ -1777,8 +1777,12 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         uref_pic_flow_add_plane(uref, 1, 1, 2, "y10l");
         uref_pic_flow_add_plane(uref, 2, 1, 2, "u10l");
         uref_pic_flow_add_plane(uref, 2, 1, 2, "v10l");
-        struct urational fps = {25, 1}; // XXX
+
+        struct urational fps = {netmap_ctx->v_timebase.den, netmap_ctx->v_timebase.num};
         uref_pic_flow_set_fps(uref, fps);
+        if (!video_stream->interlaced)
+            uref_pic_set_progressive(uref);
+
         netmap_ctx->upipe_main_src = upipe_flow_alloc(src_mgr,
                 uprobe_pfx_alloc(uprobe_use(uprobe_main),
                     loglevel, "netmap source"), uref);
@@ -1879,7 +1883,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
                 loglevel, "probe_uref_rfc4175_video"));
 
         struct upipe_mgr *upipe_sync_mgr = upipe_sync_mgr_alloc();
-        netmap_ctx->avsync = upipe_void_alloc_output(sdi_dec,
+        netmap_ctx->avsync = upipe_void_chain_output(sdi_dec,
                 upipe_sync_mgr,
                 uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "avsync"));
         assert(netmap_ctx->avsync);
@@ -1891,10 +1895,9 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     /* video callback */
     struct upipe *probe_uref_video = upipe_void_chain_output(sdi_dec,
             upipe_probe_uref_mgr,
-            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_video, netmap_ctx),
+            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_main), catch_video, netmap_ctx),
             loglevel, "probe_uref_video"));
     upipe_release(probe_uref_video);
-    upipe_mgr_release(upipe_probe_uref_mgr);
 
     if (!netmap_ctx->rfc4175) {
         /* audio */
@@ -1928,12 +1931,10 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         /* vanc filter */
         struct upipe_mgr *upipe_filter_vanc_mgr = upipe_vanc_mgr_alloc();
 
-        struct upipe_mgr *probe_uref_mgr = upipe_probe_uref_mgr_alloc();
         struct upipe *probe_vanc = upipe_void_alloc_output(vanc,
-                probe_uref_mgr,
+                upipe_probe_uref_mgr,
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_vanc, netmap_ctx),
                 UPROBE_LOG_DEBUG, "probe_uref_ttx"));
-        upipe_mgr_release(probe_uref_mgr);
 
         probe_vanc = upipe_vanc_chain_output(probe_vanc,
                 upipe_filter_vanc_mgr,
@@ -1982,6 +1983,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         if (setup_rfc_audio(netmap_ctx, uref_mgr, uprobe_main, loglevel, audio))
             return 1;
     }
+    upipe_mgr_release(upipe_probe_uref_mgr);
 
     static struct upump *event_upump;
     /* stop timer */
