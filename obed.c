@@ -406,6 +406,9 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 }
             }
 
+            /* Add SCTE-35 PID */
+            d.num_output_streams += encoder_control->ancillary_opts->has_scte35_enabled && encoder_control->ancillary_opts->scte35_enabled;
+
             d.output_streams = calloc( d.num_output_streams, sizeof(*d.output_streams) );
             if( !d.output_streams )
                 goto fail;
