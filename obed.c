@@ -437,8 +437,16 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
 
             if( input_opts_in->has_sd_downscale && input_opts_in->sd_downscale )
             {
+                if( input_opts_out->video_format == INPUT_VIDEO_FORMAT_1080P_50 )
+                {
+                    video_stream->avc_param.i_width = 1280;
+                    video_stream->avc_param.i_height = 720;
+                }
+                else
+            {
                 video_stream->avc_param.i_width = 720;
                 video_stream->avc_param.i_height = 576;
+            }
             }
 
 #ifdef C100
