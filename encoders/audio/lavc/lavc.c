@@ -88,6 +88,7 @@ static void *start_encoder( void *ptr )
     uint8_t *audio_planes[8] = { NULL };
     uint8_t *avio_buf = NULL;
     uint8_t tmp2[1000];
+    int first = 1;
 
     av_register_all();
     avcodec_register_all();
@@ -276,6 +277,15 @@ static void *start_encoder( void *ptr )
             av_frame_unref( frame );
             frame->nb_samples = codec->frame_size;
             memcpy( frame->data, audio_planes, sizeof(frame->data) );
+
+            /* The encoder will add padding, read data such that sample N remains in position N */
+            if( first )
+            {
+                avresample_read( avr, frame->data, codec->initial_padding );
+                first = 0;
+                continue;
+            }
+
             avresample_read( avr, frame->data, codec->frame_size );
 
             av_init_packet( &pkt );
