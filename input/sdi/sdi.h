@@ -54,6 +54,7 @@ typedef struct
     /* Decoding */
     obe_coded_frame_t *dvb_vbi_frame;
     obe_coded_frame_t *dvb_ttx_frame;
+    obe_coded_frame_t *scte35_frame;
 
     /* VBI */
     int ntsc;
@@ -95,7 +96,7 @@ const static obe_line_number_t first_active_line[] =
     { INPUT_VIDEO_FORMAT_1080P_24,   42 },
     { INPUT_VIDEO_FORMAT_1080P_25,   42 },
     { INPUT_VIDEO_FORMAT_1080P_2997, 42 },
-    { INPUT_VIDEO_FORMAT_1080P_30,   42 },    
+    { INPUT_VIDEO_FORMAT_1080P_30,   42 },
     { INPUT_VIDEO_FORMAT_1080P_50,   42 },
     { INPUT_VIDEO_FORMAT_1080P_5994, 42 },
     { INPUT_VIDEO_FORMAT_1080P_60,   42 },

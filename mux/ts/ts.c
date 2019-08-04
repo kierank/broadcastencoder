@@ -24,6 +24,7 @@
 #include "common/common.h"
 #include "mux/mux.h"
 #include <libmpegts.h>
+#include <bitstream/scte/35.h>
 
 #define MIN_PID 0x30
 #define MAX_PID 0x1fff
@@ -43,6 +44,7 @@ static const int mpegts_stream_info[][3] =
     { MISC_TELETEXT, LIBMPEGTS_DVB_TELETEXT, LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { VBI_RAW,       LIBMPEGTS_DVB_VBI,      LIBMPEGTS_STREAM_ID_PRIVATE_1 },
     { ANC_RAW,     LIBMPEGTS_ANCILLARY_2038, LIBMPEGTS_STREAM_ID_PRIVATE_1 },
+    { MISC_SCTE35, LIBMPEGTS_DATA_SCTE35,    0 },
     { -1, -1, -1 },
 };
 
@@ -422,7 +424,7 @@ void *open_muxer( void *ptr )
             goto end;
         }
 
-        //printf("\n START - queuelen %i \n", h->mux_queue.size);
+        //printf("\n START - queuelen %i \n", mux_queue_size);
 
         num_frames = 0;
         ulist_delete_foreach( &h->mux_queue.ulist, uchain, uchain_tmp )
@@ -433,8 +435,6 @@ void *open_muxer( void *ptr )
             int64_t rescaled_dts = coded_frame->pts - first_video_pts + first_video_real_pts;
             if( coded_frame->is_video )
                 rescaled_dts = coded_frame->real_dts;
-
-            //printf("\n stream-id %i ours: %"PRIi64" \n", coded_frame->output_stream_id, coded_frame->pts );
 
             if( rescaled_dts <= video_dts )
             {
@@ -459,11 +459,25 @@ void *open_muxer( void *ptr )
                 frames[num_frames].dts /= 300;
                 frames[num_frames].pts /= 300;
 
+                if( output_stream->stream_format == MISC_SCTE35 && scte35_get_command_type( frames[num_frames].data ) == SCTE35_INSERT_COMMAND )
+                {
+                    /* The splice time is relative to the PTS in the mux */
+                    uint8_t *splice_time = scte35_insert_get_splice_time( frames[num_frames].data );
+                    if( scte35_splice_time_has_time_specified( splice_time ) )
+                    {
+                        int64_t mod = (int64_t)1 << 33;
+                        uint64_t pts = scte35_splice_time_get_pts_time( splice_time );
+                        pts += frames[num_frames].pts;
+                        pts %= mod;
+                        scte35_splice_time_set_pts_time( splice_time, pts );
+                    }
+                }
+
                 //printf("\n pid: %i ours: %"PRIi64" \n", frames[num_frames].pid, frames[num_frames].dts );
                 frames[num_frames].random_access = coded_frame->random_access;
                 frames[num_frames].priority = coded_frame->priority;
                 num_frames++;
-                ulist_delete(uchain);
+                ulist_delete( uchain );
             }
         }
 

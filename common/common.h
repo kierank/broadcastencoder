@@ -319,6 +319,7 @@ const static obe_non_display_data_location_t non_display_data_locations[] =
     { VBI_NABTS,        USER_DATA_LOCATION_DVB_STREAM },
     { VBI_TVG2X,        USER_DATA_LOCATION_DVB_STREAM },
     { VBI_CP,           USER_DATA_LOCATION_DVB_STREAM },
+    { MISC_SCTE35,      USER_DATA_LOCATION_DVB_STREAM },
     /* Does VITC go in the codec or in the VBI? */
     { -1, -1 },
 };
@@ -425,7 +426,7 @@ typedef struct
 typedef struct
 {
     struct uchain uchain;
-    
+
     int input_stream_id;
     int64_t pts;
 
@@ -525,7 +526,7 @@ typedef struct
 typedef struct
 {
     struct uchain uchain;
-    
+
     int output_stream_id;
     int is_video;
 
@@ -540,7 +541,7 @@ typedef struct
     int priority;
     int64_t arrival_time;
 
-    /* 302M audio */
+    /* 302M audio and SCTE-35 */
     int64_t duration;
 
     int len;
