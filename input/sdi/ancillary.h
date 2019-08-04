@@ -71,4 +71,5 @@ const static obe_anc_identifier_t vanc_identifiers[] =
 
 int parse_vanc_line( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame,
                      uint16_t *line, int width, int line_number );
+int send_scte35( obe_t *h, obe_sdi_non_display_data_t *non_display_parser, int64_t pts, int64_t duration );
 #endif

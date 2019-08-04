@@ -82,7 +82,7 @@ static const char * const mp2_modes[]                = { "auto", "stereo", "join
 static const char * const channel_maps[]             = { "", "mono", "stereo", "5.0", "5.1", 0 };
 static const char * const mono_channels[]            = { "left", "right", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "arq", "file", 0 };
-static const char * const addable_streams[]          = { "audio", "ttx", 0};
+static const char * const addable_streams[]          = { "audio", "ttx", "scte35", 0};
 static const char * const filter_bit_depths[]        = { "10", "8", 0 };
 static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned", "ldpc-staircase", 0 };
 static const char * const downscale_types[]          = { "", "fast" };
@@ -395,8 +395,6 @@ static int add_stream( char *command, obecli_command_t *child )
 
     char *type     = obe_get_option( add_opts[0], opts );
 
-    obe_free_string_array( opts );
-
     FAIL_IF_ERROR( type && ( check_enum_value( type, addable_streams ) < 0 ),
                    "Stream type is not addable\n" )
 
@@ -431,11 +429,19 @@ static int add_stream( char *command, obecli_command_t *child )
         cli.output_streams[output_stream_id].input_stream_id = -1;
         cli.output_streams[output_stream_id].stream_format = stream_format;
     }
+    else if( !strcasecmp( type, addable_streams[2] ) ) /* SCTE-35 */
+    {
+        cli.output_streams[output_stream_id].input_stream_id = 2;
+        cli.output_streams[output_stream_id].stream_format = MISC_SCTE35;
+        cli.output_streams[output_stream_id].stream_action = STREAM_PASSTHROUGH;
+    }
     cli.output_streams[output_stream_id].output_stream_id = output_stream_id;
 
     printf( "NOTE: output-stream-ids have CHANGED! \n" );
 
     show_output_streams( NULL, NULL );
+
+    obe_free_string_array( opts );
 
     return 0;
 }
@@ -1409,6 +1415,8 @@ static int show_output_streams( char *command, obecli_command_t *child )
             printf( "DVB-VBI\n" );
         else if( output_stream->stream_format == ANC_RAW )
             printf( "ST2038 ANC\n" );
+        else if( output_stream->stream_format == MISC_SCTE35 )
+            printf( "SCTE-35\n" );
         else if( input_stream->stream_type == STREAM_TYPE_VIDEO )
         {
             printf( "Video: AVC \n" );

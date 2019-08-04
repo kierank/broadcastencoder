@@ -206,6 +206,7 @@ static const obecli_format_name_t format_names[] =
     { MISC_BAR_DATA,    "BAR-DATA", "Bar Data",                      "N/A",            "N/A" },
     { MISC_PAN_SCAN,    "PAN-SCAN", "Pan-Scan Data",                 "N/A",            "N/A" },
     { VBI_RAW,          "VBI",      "Vertical Blanking Information", "N/A",            "N/A" },
+    { MISC_SCTE35,      "SCTE35",   "SCTE35 Cue Data",               "N/A",            "N/A" },
     { 0, 0, 0, 0, 0 },
 };
 
