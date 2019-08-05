@@ -276,7 +276,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                                   void                            *closure_data )
 {
     Obed__EncoderResponse result = OBED__ENCODER_RESPONSE__INIT;
-    int has_dvb_vbi = 0;
+    int has_dvb_vbi = 0, has_dvb_ttx = 0;
     int i = 0;
 
     if( encoder_control->control_version == OBE_CONTROL_VERSION )
@@ -579,7 +579,8 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 i++;
             }
 
-            if( encoder_control->ancillary_opts->dvb_ttx_enabled )
+            has_dvb_ttx = encoder_control->ancillary_opts->dvb_ttx_enabled;
+            if( has_dvb_ttx )
             {
                 obe_output_stream_t *dvb_ttx_stream = &d.output_streams[i];
                 dvb_ttx_stream->stream_format = MISC_TELETEXT;
@@ -590,6 +591,17 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 /* Only one teletext supported */
                 if( add_teletext( dvb_ttx_stream, ancillary_opts_in ) < 0 )
                     goto fail;
+                i++;
+            }
+
+            if( encoder_control->ancillary_opts->has_scte35_enabled && encoder_control->ancillary_opts->scte35_enabled )
+            {
+                obe_output_stream_t *scte35_stream = &d.output_streams[i];
+                scte35_stream->stream_format = MISC_SCTE35;
+                scte35_stream->input_stream_id = 2+has_dvb_vbi+has_dvb_ttx;
+                scte35_stream->output_stream_id = i;
+
+                scte35_stream->ts_opts.pid = ancillary_opts_in->scte35_pid;
                 i++;
             }
 
