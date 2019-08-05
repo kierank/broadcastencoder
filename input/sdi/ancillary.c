@@ -492,6 +492,7 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
                         scte35_insert_set_avails_expected( scte35, avails_expected );
                     }
                 }
+                scte35_set_desclength( scte35, 0 );
                 psi_set_length( scte35, scte35_get_descl( scte35 ) + PSI_CRC_SIZE - scte35 - PSI_HEADER_SIZE );
                 psi_set_crc( scte35 );
                 non_display_data->scte35_frame->len = psi_get_length( scte35 ) + PSI_HEADER_SIZE;
