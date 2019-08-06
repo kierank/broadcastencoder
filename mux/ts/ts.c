@@ -470,6 +470,7 @@ void *open_muxer( void *ptr )
                         pts += frames[num_frames].pts;
                         pts %= mod;
                         scte35_splice_time_set_pts_time( splice_time, pts );
+                        psi_set_crc( frames[num_frames].data );
                     }
                 }
 
