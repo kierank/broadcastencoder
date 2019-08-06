@@ -467,7 +467,7 @@ void *open_muxer( void *ptr )
                     {
                         int64_t mod = (int64_t)1 << 33;
                         uint64_t pts = scte35_splice_time_get_pts_time( splice_time );
-                        pts += frames[num_frames].pts;
+                        pts += frames[num_frames].pts + 900000; /* mux starts at a clock of 10 seconds */
                         pts %= mod;
                         scte35_splice_time_set_pts_time( splice_time, pts );
                         psi_set_crc( frames[num_frames].data );
