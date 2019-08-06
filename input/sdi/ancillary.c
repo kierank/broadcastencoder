@@ -449,7 +449,7 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
                         size += SCTE35_INSERT_HEADER2_SIZE + SCTE35_INSERT_FOOTER_SIZE;
 
                         if( (insert_type == SCTE104SRD_START_NORMAL || insert_type == SCTE104SRD_END_NORMAL) &&
-                            scte104srd_get_pre_roll_time( op ) > 0 )
+                            pre_roll_time > 0 )
                         {
                             splice_immediate_flag = 0;
                             size += SCTE35_SPLICE_TIME_TIME_SIZE + SCTE35_SPLICE_TIME_HEADER_SIZE;
