@@ -82,14 +82,14 @@ static const char * const mp2_modes[]                = { "auto", "stereo", "join
 static const char * const channel_maps[]             = { "", "mono", "stereo", "5.0", "5.1", 0 };
 static const char * const mono_channels[]            = { "left", "right", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "arq", "file", 0 };
-static const char * const addable_streams[]          = { "audio", "ttx", 0};
+static const char * const addable_streams[]          = { "audio", "ttx", "scte35", 0};
 static const char * const filter_bit_depths[]        = { "10", "8", 0 };
 static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned", "ldpc-staircase", 0 };
 static const char * const downscale_types[]          = { "", "fast" };
 
 static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
 static const char * input_opts[]  = { "netmap-uri", "card-idx", "video-format", "video-connection", "audio-connection",
-                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", NULL };
+                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", "netmap-mode", "netmap-audio", "ptp-nic", NULL };
 static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
@@ -429,11 +429,19 @@ static int add_stream( char *command, obecli_command_t *child )
         cli.output_streams[output_stream_id].input_stream_id = -1;
         cli.output_streams[output_stream_id].stream_format = stream_format;
     }
+    else if( !strcasecmp( type, addable_streams[2] ) ) /* SCTE-35 */
+    {
+        cli.output_streams[output_stream_id].input_stream_id = 2;
+        cli.output_streams[output_stream_id].stream_format = MISC_SCTE35;
+        cli.output_streams[output_stream_id].stream_action = STREAM_PASSTHROUGH;
+    }
     cli.output_streams[output_stream_id].output_stream_id = output_stream_id;
 
     printf( "NOTE: output-stream-ids have CHANGED! \n" );
 
     show_output_streams( NULL, NULL );
+
+    obe_free_string_array( opts );
 
     return 0;
 }
@@ -532,6 +540,9 @@ static int set_input( char *command, obecli_command_t *child )
         char *bars_line3 = obe_get_option( input_opts[7], opts );
         char *bars_line4 = obe_get_option( input_opts[8], opts );
         char *picture_on_loss = obe_get_option( input_opts[9], opts );
+        char *netmap_mode = obe_get_option( input_opts[10], opts );
+        char *netmap_audio = obe_get_option( input_opts[11], opts );
+        char *ptp_nic = obe_get_option( input_opts[12], opts );
 
         FAIL_IF_ERROR( video_format && ( check_enum_value( video_format, input_video_formats ) < 0 ),
                        "Invalid video format\n" );
@@ -547,6 +558,12 @@ static int set_input( char *command, obecli_command_t *child )
 
         if( netmap_uri )
             strncpy(cli.input.netmap_uri, netmap_uri, sizeof(cli.input.netmap_uri));
+        if( netmap_mode )
+            strncpy(cli.input.netmap_mode, netmap_mode, sizeof(cli.input.netmap_mode));
+        if( netmap_audio )
+            strncpy(cli.input.netmap_audio, netmap_audio, sizeof(cli.input.netmap_audio));
+        if( ptp_nic )
+            strncpy(cli.input.ptp_nic, ptp_nic, sizeof(cli.input.ptp_nic));
         cli.input.card_idx = obe_otoi( card_idx, cli.input.card_idx );
         if( video_format )
             parse_enum_value( video_format, input_video_formats, &cli.input.video_format );
@@ -670,7 +687,7 @@ static int set_stream( char *command, obecli_command_t *child )
 
                 FAIL_IF_ERROR( frame_packing && ( check_enum_value( frame_packing, frame_packing_modes ) < 0 ),
                                "Invalid frame packing mode\n" )
-    
+
                 FAIL_IF_ERROR( downscale && ( check_enum_value( downscale, downscale_types ) < 0 ),
                                "Invalid downscale type\n" )
 
@@ -1352,6 +1369,10 @@ static int show_input_streams( char *command, obecli_command_t *child )
             printf( "Input-stream-id: %d - DVB Subtitles: Language: %s DDS: %s \n", stream->input_stream_id, stream->lang_code,
                     stream->dvb_has_dds ? "yes" : "no" );
         }
+        else if( stream->stream_format == ANC_RAW )
+        {
+            printf( "Input-stream-id: %d - Raw ancillary\n", stream->input_stream_id );
+        }
         else if( stream->stream_format == MISC_TELETEXT )
         {
             printf( "Input-stream-id: %d - Teletext: \n", stream->input_stream_id );
@@ -1392,6 +1413,10 @@ static int show_output_streams( char *command, obecli_command_t *child )
             printf( "DVB-Teletext\n" );
         else if( output_stream->stream_format == VBI_RAW )
             printf( "DVB-VBI\n" );
+        else if( output_stream->stream_format == ANC_RAW )
+            printf( "ST2038 ANC\n" );
+        else if( output_stream->stream_format == MISC_SCTE35 )
+            printf( "SCTE-35\n" );
         else if( input_stream->stream_type == STREAM_TYPE_VIDEO )
         {
             printf( "Video: AVC \n" );
@@ -1583,6 +1608,10 @@ static int set_defaults( void )
             else if( cli.program.streams[i].stream_format == MISC_TELETEXT )
             {
                 cli.output_streams[i].stream_format = MISC_TELETEXT;
+            }
+            else if( cli.program.streams[i].stream_format == ANC_RAW )
+            {
+                cli.output_streams[i].stream_format = ANC_RAW;
             }
         }
     }

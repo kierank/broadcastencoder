@@ -132,6 +132,9 @@ typedef struct
     int audio_connection;
 
     char netmap_uri[150];
+    char netmap_mode[10];
+    char netmap_audio[400];
+    char ptp_nic[100];
 
     char bars_line1[30];
     char bars_line2[30];
@@ -171,6 +174,7 @@ enum stream_formats_e
     MISC_TELETEXT_INVERTED,
     MISC_WSS,
     MISC_VPS,
+    MISC_SCTE35,
 
     /* Per-frame Streams/Data */
     CAPTIONS_CEA_608,
@@ -199,6 +203,9 @@ enum stream_formats_e
     VANC_DTV_DATA_BROADCAST,
     VANC_SMPTE_VBI,
     VANC_SCTE_104,
+
+    /* Vertical or Horizontal Ancillary */
+    ANC_RAW,
 };
 
 enum mp2_mode_e
@@ -581,7 +588,7 @@ int obe_start( obe_t *h );
 
 typedef struct
 {
-    int active; /* 0 if inactive, 1 if active */    
+    int active; /* 0 if inactive, 1 if active */
     int detected_video_format;
 } obe_input_status_t;
 

@@ -29,6 +29,7 @@
 #include <libavutil/opt.h>
 
 #define MP2_AUDIO_BUFFER_SIZE 50000
+#define MP2_INITIAL_PADDING (512 - 32 + 1)
 
 static void *start_encoder( void *ptr )
 {
@@ -38,6 +39,7 @@ static void *start_encoder( void *ptr )
     obe_output_stream_t *stream = enc_params->stream;
     obe_raw_frame_t *raw_frame;
     obe_coded_frame_t *coded_frame;
+    int first = 1;
 
     twolame_options *tl_opts = NULL;
     int output_size, frame_size, linesize; /* Linesize in libavresample terminology is the entire buffer size for packed formats */
@@ -148,6 +150,14 @@ static void *start_encoder( void *ptr )
 
         while( avresample_available( avr ) >= MP2_NUM_SAMPLES )
         {
+            /* The encoder will add padding, read data such that sample N remains in position N */
+            if( first )
+            {
+                avresample_read( avr, (uint8_t**)&audio_buf, MP2_INITIAL_PADDING );
+                first = 0;
+                continue;
+            }
+
             avresample_read( avr, (uint8_t**)&audio_buf, MP2_NUM_SAMPLES );
 
             output_size = twolame_encode_buffer_float32_interleaved( tl_opts, audio_buf, MP2_NUM_SAMPLES, output_buf, MP2_AUDIO_BUFFER_SIZE );

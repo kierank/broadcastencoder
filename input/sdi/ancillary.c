@@ -26,6 +26,9 @@
 #include "sdi.h"
 #include "vbi.h"
 
+#include <bitstream/scte/35.h>
+#include <bitstream/scte/104.h>
+
 #define SDP_IDENT1 0x51
 #define SDP_IDENT2 0x15
 #define SDP_DATA_WORDS 40
@@ -387,6 +390,120 @@ static int parse_op47_sdp( obe_t *h, obe_sdi_non_display_data_t *non_display_dat
     return 0;
 }
 
+static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame,
+                         uint16_t *line, int line_number, int len )
+{
+    uint8_t scte104[1920];
+    int dc, size = 0;
+    int64_t mod = (int64_t)1 << 33;
+
+    dc = READ_8( line[0] );
+    line++;
+
+    if( !get_output_stream_by_format( h, MISC_SCTE35 ) )
+        return 0;
+
+    /* Only single line VANC supported */
+    if( READ_8( line[0] ) == 0x8 )
+    {
+        line++;
+        for( int i = 0; i < dc; i++ )
+            scte104[i] = READ_8( line[i] );
+
+        if( scte104m_validate( scte104 ) && scte104_get_opid( scte104 ) == SCTE104_OPID_MULTIPLE )
+        {
+            uint8_t *op = scte104m_get_op( scte104, 0 );
+            uint8_t *scte35;
+
+            if( scte104o_get_opid( op ) == SCTE104_OPID_SPLICE_NULL || scte104o_get_opid( op ) == SCTE104_OPID_SPLICE )
+            {
+                non_display_data->scte35_frame = new_coded_frame( 0, PSI_MAX_SIZE + PSI_HEADER_SIZE );
+                if( !non_display_data->scte35_frame )
+                {
+                    syslog( LOG_ERR, "Malloc failed\n" );
+                    return -1;
+                }
+
+                scte35 = non_display_data->scte35_frame->data;
+
+                if( scte104o_get_opid( op ) == SCTE104_OPID_SPLICE_NULL )
+                {
+                    scte35_null_init( scte35 );
+                    scte35_set_pts_adjustment(scte35, 0);
+                }
+                else if( scte104o_get_opid( op ) == SCTE104_OPID_SPLICE )
+                {
+                    op = scte104o_get_data( op );
+                    uint8_t insert_type = scte104srd_get_insert_type( op );
+                    uint32_t event_id = scte104srd_get_event_id( op );
+                    uint16_t unique_program_id = scte104srd_get_unique_program_id( op );
+                    uint64_t pre_roll_time = scte104srd_get_pre_roll_time( op );
+                    uint64_t duration = scte104srd_get_break_duration( op );
+                    uint8_t avail_num = scte104srd_get_avail_num( op );
+                    uint8_t avails_expected = scte104srd_get_avails_expected( op );
+                    uint8_t auto_return = scte104srd_get_auto_return( op );
+                    uint8_t splice_immediate_flag = insert_type == SCTE104SRD_START_IMMEDIATE || insert_type == SCTE104SRD_END_IMMEDIATE;
+
+                    if( insert_type != SCTE104SRD_CANCEL )
+                    {
+                        size += SCTE35_INSERT_HEADER2_SIZE + SCTE35_INSERT_FOOTER_SIZE;
+
+                        if( (insert_type == SCTE104SRD_START_NORMAL || insert_type == SCTE104SRD_END_NORMAL) &&
+                            pre_roll_time > 0 )
+                        {
+                            splice_immediate_flag = 0;
+                            size += SCTE35_SPLICE_TIME_TIME_SIZE + SCTE35_SPLICE_TIME_HEADER_SIZE;
+                        }
+
+                        if( insert_type == SCTE104SRD_START_NORMAL || insert_type == SCTE104SRD_START_IMMEDIATE )
+                            size += SCTE35_BREAK_DURATION_HEADER_SIZE;
+                    }
+
+                    scte35_insert_init( scte35, size );
+                    scte35_set_pts_adjustment(scte35, 0);
+                    scte35_insert_set_cancel( scte35, insert_type == SCTE104SRD_CANCEL );
+                    scte35_insert_set_event_id( scte35, event_id );
+                    if( insert_type != SCTE104SRD_CANCEL )
+                    {
+                        scte35_insert_set_out_of_network( scte35, insert_type == SCTE104SRD_START_NORMAL || insert_type == SCTE104SRD_START_IMMEDIATE );
+                        scte35_insert_set_program_splice( scte35, 1 );
+                        scte35_insert_set_duration( scte35, duration != UINT64_MAX );
+                        scte35_insert_set_splice_immediate( scte35, splice_immediate_flag );
+
+                        if( !splice_immediate_flag )
+                        {
+                            uint8_t *splice_time = scte35_insert_get_splice_time( scte35 );
+
+                            scte35_splice_time_init( splice_time );
+                            scte35_splice_time_set_time_specified( splice_time, 1 );
+                            scte35_splice_time_set_pts_time( splice_time, (pre_roll_time * 90) % mod );
+                        }
+
+                        if( duration )
+                        {
+                            uint8_t *break_duration = scte35_insert_get_break_duration( scte35 );
+                            scte35_break_duration_init( break_duration );
+                            scte35_break_duration_set_auto_return( break_duration, auto_return );
+                            scte35_break_duration_set_duration( break_duration, (duration * 9000) % mod );
+                        }
+
+                        scte35_insert_set_unique_program_id( scte35, unique_program_id );
+                        scte35_insert_set_avail_num( scte35, avail_num );
+                        scte35_insert_set_avails_expected( scte35, avails_expected );
+                    }
+                }
+                scte35_set_desclength( scte35, 0 );
+                psi_set_length( scte35, scte35_get_descl( scte35 ) + PSI_CRC_SIZE - scte35 - PSI_HEADER_SIZE );
+                scte35_set_command_length( scte35, 0xfff );
+                psi_set_crc( scte35 );
+                non_display_data->scte35_frame->len = psi_get_length( scte35 ) + PSI_HEADER_SIZE;
+            }
+        }
+    }
+
+    return 0;
+}
+
 int parse_vanc_line( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame,
                      uint16_t *line, int width, int line_number )
 {
@@ -439,6 +556,9 @@ int parse_vanc_line( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe
                     case VANC_OP47_SDP:
                         parse_op47_sdp( h, non_display_data, raw_frame, &pkt_start[2], line_number, len );
                         break;
+                    case VANC_SCTE_104:
+                        parse_scte104( h, non_display_data, raw_frame, &pkt_start[2], line_number, len );
+                        break;
                     default:
                         break;
                 }
@@ -456,6 +576,33 @@ int parse_vanc_line( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe
     /* FIXME: should we probe more frames? */
     if( non_display_data->probe )
         non_display_data->has_probed = 1;
+
+    return 0;
+}
+
+int send_scte35( obe_t *h, obe_sdi_non_display_data_t *non_display_parser, int64_t pts, int64_t duration )
+{
+    obe_output_stream_t *output_stream;
+
+    if( non_display_parser->scte35_frame )
+    {
+        output_stream = get_output_stream_by_format( h, MISC_SCTE35 );
+
+        if( output_stream && output_stream->output_stream_id >= 0 )
+        {
+            non_display_parser->scte35_frame->output_stream_id = output_stream->output_stream_id;
+            non_display_parser->scte35_frame->pts = pts;
+            non_display_parser->scte35_frame->duration = duration;
+
+            if( add_to_queue( &h->mux_queue, &non_display_parser->scte35_frame->uchain ) < 0 )
+            {
+                destroy_coded_frame( non_display_parser->scte35_frame );
+                return -1;
+            }
+        }
+
+        non_display_parser->scte35_frame = NULL;
+    }
 
     return 0;
 }
