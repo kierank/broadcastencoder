@@ -59,6 +59,7 @@
 #include <upipe/uref_block.h>
 #include <upipe/ubuf.h>
 #include <upipe/uclock.h>
+#include <upipe/uclock_std.h>
 #include <upipe/uclock_ptp.h>
 #include <upipe/upipe.h>
 #include <upipe/upump.h>
