@@ -82,7 +82,6 @@
 #include <upipe-hbrmt/upipe_sdi_dec.h>
 #include <upipe-netmap/upipe_netmap_source.h>
 #include <upipe-pciesdi/upipe_pciesdi_source.h>
-#include <upipe-hbrmt/upipe_pciesdi_source_framer.h>
 #include <upipe-filters/upipe_filter_vanc.h>
 #include <upipe-filters/upipe_filter_vbi.h>
 #include <upipe/uref_dump.h>
@@ -1752,7 +1751,14 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     }
     intf[0] = ptp_nic;
 
-    struct uclock *uclock = uclock_ptp_alloc(uprobe_main, intf);
+    struct uclock *uclock;
+
+    /* Input clock only needed in 2110 */
+    if (netmap_ctx->rfc4175)
+        uclock = uclock_ptp_alloc(uprobe_main, intf);
+    else
+        uclock = uclock_std_alloc(0);
+
     assert(uclock);
     uprobe_main = uprobe_uclock_alloc(uprobe_main, uclock);
     uclock_release(uclock);
@@ -1798,15 +1804,6 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     upipe_attach_uclock(netmap_ctx->upipe_main_src);
     if (!ubase_check(upipe_set_uri(netmap_ctx->upipe_main_src, uri))) {
         return 2;
-    }
-
-    if (pciesdi) {
-        struct upipe_mgr *upipe_mgr = upipe_pciesdi_source_framer_mgr_alloc();
-        struct upipe *pipe = upipe_void_alloc_output(netmap_ctx->upipe_main_src, upipe_mgr,
-                uprobe_pfx_alloc(uprobe_use(uprobe_main), loglevel, "pciesdi_source_framer"));
-        assert(pipe);
-        upipe_mgr_release(upipe_mgr);
-        upipe_release(pipe);
     }
 
     uprobe_throw(uprobe_main, NULL, UPROBE_THAW_UPUMP_MGR);
