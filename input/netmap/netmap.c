@@ -1751,7 +1751,14 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     }
     intf[0] = ptp_nic;
 
-    struct uclock *uclock = uclock_ptp_alloc(uprobe_main, intf);
+    struct uclock *uclock;
+
+    /* Input clock only needed in 2110 */
+    if (netmap_ctx->rfc4175)
+        uclock = uclock_ptp_alloc(uprobe_main, intf);
+    else
+        uclock = uclock_std_alloc(0);
+
     assert(uclock);
     uprobe_main = uprobe_uclock_alloc(uprobe_main, uclock);
     uclock_release(uclock);
