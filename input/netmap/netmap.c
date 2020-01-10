@@ -2186,6 +2186,8 @@ static void *open_input( void *ptr )
     netmap_opts->obe_bars_opts.bars_line2 = user_opts->bars_line2;
     netmap_opts->obe_bars_opts.bars_line3 = user_opts->bars_line3;
     netmap_opts->obe_bars_opts.bars_line4 = user_opts->bars_line4;
+    netmap_opts->obe_bars_opts.bars_beep = user_opts->bars_beep;
+    netmap_opts->obe_bars_opts.bars_beep_interval = user_opts->bars_beep_interval;
     netmap_opts->obe_bars_opts.no_signal = 1;
 
     netmap_ctx.uri = user_opts->netmap_uri;

@@ -1598,6 +1598,8 @@ static void *open_input( void *ptr )
     decklink_opts->obe_bars_opts.bars_line2 = user_opts->bars_line2;
     decklink_opts->obe_bars_opts.bars_line3 = user_opts->bars_line3;
     decklink_opts->obe_bars_opts.bars_line4 = user_opts->bars_line4;
+    decklink_opts->obe_bars_opts.bars_beep = user_opts->bars_beep;
+    decklink_opts->obe_bars_opts.bars_beep_interval = user_opts->bars_beep_interval;
     decklink_opts->obe_bars_opts.no_signal = 1;
 
     decklink_ctx = &decklink_opts->decklink_ctx;

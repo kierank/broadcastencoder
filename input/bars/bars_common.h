@@ -32,6 +32,9 @@ typedef struct
     char *bars_line2;
     char *bars_line3;
     char *bars_line4;
+
+    int bars_beep;
+    int bars_beep_interval;
 } obe_bars_opts_t;
 
 int open_bars( hnd_t *p_handle, obe_bars_opts_t *obe_bars_opts );
