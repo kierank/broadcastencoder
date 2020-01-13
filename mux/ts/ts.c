@@ -459,19 +459,29 @@ void *open_muxer( void *ptr )
                 frames[num_frames].dts /= 300;
                 frames[num_frames].pts /= 300;
 
-                if( output_stream->stream_format == MISC_SCTE35 && scte35_get_command_type( frames[num_frames].data ) == SCTE35_INSERT_COMMAND )
+                if( output_stream->stream_format == MISC_SCTE35 )
                 {
-                    /* The splice time is relative to the PTS in the mux */
-                    uint8_t *splice_time = scte35_insert_get_splice_time( frames[num_frames].data );
-                    if( scte35_splice_time_has_time_specified( splice_time ) )
+                    uint8_t *splice_time = NULL;
+                    uint8_t scte_command = scte35_get_command_type( frames[num_frames].data );
+
+                    /* The splice times are relative to the PTS in the mux */
+                    if( scte_command == SCTE35_INSERT_COMMAND || scte_command == SCTE35_TIME_SIGNAL_COMMAND )
                     {
-                        int64_t mod = (int64_t)1 << 33;
-                        uint64_t pts = scte35_splice_time_get_pts_time( splice_time );
-                        pts += frames[num_frames].pts + 900000; /* mux starts at a clock of 10 seconds */
-                        pts %= mod;
-                        scte35_splice_time_set_pts_time( splice_time, pts );
-                        psi_set_crc( frames[num_frames].data );
+                        splice_time = scte_command == SCTE35_INSERT_COMMAND ?
+                                      scte35_insert_get_splice_time( frames[num_frames].data ) :
+                                      scte35_time_signal_get_splice_time( frames[num_frames].data );
+
+                        if( scte35_splice_time_has_time_specified( splice_time ) )
+                        {
+                            int64_t mod = (int64_t)1 << 33;
+                            uint64_t pts = scte35_splice_time_get_pts_time( splice_time );
+                            pts += frames[num_frames].pts + 900000; /* mux starts at a clock of 10 seconds */
+                            pts %= mod;
+                            scte35_splice_time_set_pts_time( splice_time, pts );
+                        }
                     }
+
+                    psi_set_crc( frames[num_frames].data );
                 }
 
                 //printf("\n pid: %i ours: %"PRIi64" \n", frames[num_frames].pid, frames[num_frames].dts );
