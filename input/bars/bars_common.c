@@ -28,6 +28,11 @@
 
 #define TONE_PEAK 0xCCCD
 #define FREQ 1000
+#define X_OFFSET 100
+#define Y_OFFSET 100
+#define X_WIDTH 200
+#define Y_WIDTH 200
+#define DEFAULT_PERIOD 2
 
 typedef struct
 {
@@ -38,6 +43,8 @@ typedef struct
     AVFilterGraph *v_filter_graph;
     AVFilterContext *v_buffersink_ctx;
     AVFrame *frame;
+    int beep;
+    int beep_frame_period;
 
     const obe_audio_sample_pattern_t *sample_pattern;
     int64_t audio_samples;
@@ -432,6 +439,11 @@ int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
         goto end;
     }
 
+    int frame_period = bars_ctx->format->timebase_den;
+    if( frame_period > 1000 )
+        frame_period /= 1000;
+    bars_ctx->beep_frame_period = frame_period * (bars_opts->bars_beep_interval ? bars_opts->bars_beep_interval : DEFAULT_PERIOD);
+
     *p_handle = bars_ctx;
 
 end:
@@ -445,6 +457,7 @@ int get_bars( hnd_t ptr, obe_raw_frame_t **raw_frames )
     int ret = 0;
     obe_raw_frame_t *raw_frame;
     const obe_video_config_t *format = bars_ctx->format;
+    int beep_now = bars_ctx->bars_opts->bars_beep && !(bars_ctx->v_pts % bars_ctx->beep_frame_period);
 
     while( 1 )
     {
@@ -492,6 +505,14 @@ int get_bars( hnd_t ptr, obe_raw_frame_t **raw_frames )
                                    (AVRational){format->timebase_num, format->timebase_den},
                                    (AVRational){1, OBE_CLOCK} );
 
+    if( beep_now )
+    {
+        for( int i = 0; i < Y_WIDTH; i++ )
+        {
+            memset( raw_frame->alloc_img.plane[0] + (Y_OFFSET + i)*raw_frame->alloc_img.stride[0] + X_OFFSET, 0x10, X_WIDTH );
+        }
+    }
+
     raw_frames[0] = raw_frame;
 
     raw_frame = new_raw_frame();
@@ -515,8 +536,16 @@ int get_bars( hnd_t ptr, obe_raw_frame_t **raw_frames )
     }
 
     int32_t *audio = (int32_t*)raw_frame->audio_frame.audio_data[0];
-    for( int i = 0; i < raw_frame->audio_frame.num_samples; i++ )
-        audio[i] = (int32_t)(TONE_PEAK * sin (2 * M_PI * (bars_ctx->audio_samples+i) * FREQ / 48000) + 0.5) << 12;
+    if( beep_now )
+    {
+        for( int i = 0; i < raw_frame->audio_frame.num_samples; i++ )
+            audio[i] = 0;
+    }
+    else
+    {
+        for( int i = 0; i < raw_frame->audio_frame.num_samples; i++ )
+            audio[i] = (int32_t)(TONE_PEAK * sin (2 * M_PI * (bars_ctx->audio_samples+i) * FREQ / 48000) + 0.5) << 12;
+    }
 
     for( int i = 1; i < MAX_CHANNELS; i++ )
         raw_frame->audio_frame.audio_data[i] = raw_frame->audio_frame.audio_data[0];

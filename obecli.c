@@ -89,7 +89,7 @@ static const char * const downscale_types[]          = { "", "fast" };
 
 static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
 static const char * input_opts[]  = { "netmap-uri", "card-idx", "video-format", "video-connection", "audio-connection",
-                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", "netmap-mode", "netmap-audio", "ptp-nic", NULL };
+                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", "netmap-mode", "netmap-audio", "ptp-nic", "bars-beep", "bars-beep-interval", NULL };
 static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
@@ -543,6 +543,8 @@ static int set_input( char *command, obecli_command_t *child )
         char *netmap_mode = obe_get_option( input_opts[10], opts );
         char *netmap_audio = obe_get_option( input_opts[11], opts );
         char *ptp_nic = obe_get_option( input_opts[12], opts );
+        char *bars_beep = obe_get_option( input_opts[13], opts );
+        char *bars_beep_interval = obe_get_option( input_opts[14], opts );
 
         FAIL_IF_ERROR( video_format && ( check_enum_value( video_format, input_video_formats ) < 0 ),
                        "Invalid video format\n" );
@@ -581,6 +583,8 @@ static int set_input( char *command, obecli_command_t *child )
             strncpy( cli.input.bars_line4, bars_line4, sizeof(cli.input.bars_line4) - 1 );
         if( picture_on_loss )
             parse_enum_value( picture_on_loss, picture_on_losses, &cli.input.picture_on_loss );
+        cli.input.bars_beep = obe_otob( bars_beep, cli.input.bars_beep );
+        cli.input.bars_beep_interval = obe_otoi( bars_beep_interval, cli.input.bars_beep_interval );
 
         obe_free_string_array( opts );
     }
