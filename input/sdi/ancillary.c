@@ -500,6 +500,7 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
                     scte35 = scte35_time_signal_get_splice_time( scte35 );
                     scte35_splice_time_init( scte35 );
                     scte35_splice_time_set_time_specified( scte35, 1 );
+                    scte35_splice_time_set_pts_time( scte35, (pre_roll_time * 90) % mod );
                 }
                 else if( scte104o_get_opid( op ) == SCTE104_OPID_INSERT_SD )
                 {
