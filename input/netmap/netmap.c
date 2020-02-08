@@ -1472,7 +1472,7 @@ static int restamp_rfc4175_video(struct uprobe *uprobe, struct upipe *upipe,
 
     /* Work in the 90kHz domain to avoid timestamp jitter */
     uint64_t vpts = (ptp_rtp - diff) * 300;
-    uref_clock_set_pts_sys(uref, vpts);
+    uref_clock_set_pts_sys(uref, vpts + RFC_LATENCY);
 
     return UBASE_ERR_NONE;
 }
