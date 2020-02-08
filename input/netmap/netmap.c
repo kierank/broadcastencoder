@@ -1318,7 +1318,8 @@ static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
     UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
     struct uref *uref = va_arg(args, struct uref *);
     va_arg(args, struct upump **);
-    va_arg(args, bool *);
+    bool *drop = va_arg(args, bool *);
+    *drop = true;
 
     const struct sdi_picture_fmt *fmt = NULL;
     for (int i = 0; i < sizeof(pict_fmts) / sizeof(*pict_fmts); i++) {
@@ -1932,19 +1933,19 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         struct upipe *probe_vanc = upipe_void_alloc_output(vanc,
                 upipe_probe_uref_mgr,
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_vanc, netmap_ctx),
-                UPROBE_LOG_DEBUG, "probe_uref_ttx"));
+                UPROBE_LOG_ERROR, "probe_uref_ttx"));
 
         probe_vanc = upipe_vanc_chain_output(probe_vanc,
                 upipe_filter_vanc_mgr,
-                uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "vanc filter"),
+                uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), UPROBE_LOG_ERROR, "vanc filter"),
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
-                UPROBE_LOG_DEBUG, "afd"),
+                UPROBE_LOG_ERROR, "afd"),
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
-                UPROBE_LOG_DEBUG, "scte104"),
+                UPROBE_LOG_ERROR, "scte104"),
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_ttx, netmap_ctx),
-                UPROBE_LOG_DEBUG, "op47"),
+                UPROBE_LOG_ERROR, "op47"),
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
-                    UPROBE_LOG_DEBUG, "cea708"));
+                    UPROBE_LOG_ERROR, "cea708"));
         upipe_release(probe_vanc);
         upipe_mgr_release(upipe_filter_vanc_mgr);
 

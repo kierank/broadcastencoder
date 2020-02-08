@@ -146,6 +146,7 @@ const static int s302m_bit_depths[] =
     24
 };
 
+/* Note: Agent avoids using Linsys card */
 enum obed_input_type_e
 {
     OBED_INPUT_DECKLINK = 1,
@@ -155,6 +156,7 @@ enum obed_input_type_e
     OBED_INPUT_2022_7,
     OBED_INPUT_2110,
     OBED_INPUT_2110_DASH_7,
+    OBED_INPUT_OBE_SDI
 };
 
 static int is_2110( int input_device )
@@ -163,11 +165,12 @@ static int is_2110( int input_device )
            input_device == OBED_INPUT_2110_DASH_7;
 }
 
-static int is_uncompressed( int input_device )
+static int is_netmap( int input_device )
 {
     return input_device == OBED_INPUT_2022_6 ||
            input_device == OBED_INPUT_2022_7 ||
-           is_2110( input_device );
+           is_2110( input_device ) ||
+           input_device == OBED_INPUT_OBE_SDI;
 }
 
 static struct in_addr intf_addr(const char *intf)
@@ -276,7 +279,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                                   void                            *closure_data )
 {
     Obed__EncoderResponse result = OBED__ENCODER_RESPONSE__INIT;
-    int has_dvb_vbi = 0;
+    int has_dvb_vbi = 0, has_dvb_ttx = 0;
     int i = 0;
 
     if( encoder_control->control_version == OBE_CONTROL_VERSION )
@@ -299,10 +302,18 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             if( !d.h )
                 goto fail;
 
-            if( is_uncompressed( input_opts_in->input_device ) )
+            if( is_netmap( input_opts_in->input_device ) )
             {
                 input_opts_out->input_type = INPUT_DEVICE_NETMAP;
-                snprintf( input_opts_out->netmap_uri, sizeof(input_opts_out->netmap_uri), "netmap:obe" "%u" "_path1}0+netmap:obe" "%u" "_path2}0", encoder_id, encoder_id );
+                if( input_opts_in->input_device == OBED_INPUT_OBE_SDI )
+                {
+                    snprintf( input_opts_out->netmap_uri, sizeof(input_opts_out->netmap_uri), "/dev/pcie_sdi%u", input_opts_in->card_idx );
+                }
+                else
+                {
+                    snprintf( input_opts_out->netmap_uri, sizeof(input_opts_out->netmap_uri), "netmap:obe" "%u" "_path1}0+netmap:obe" "%u" "_path2}0", encoder_id, encoder_id );
+                }
+
                 if( is_2110( input_opts_in->input_device ) )
                 {
                     if( input_opts_in->path1_ptp_nic )
@@ -405,6 +416,9 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                     }
                 }
             }
+
+            /* Add SCTE-35 PID */
+            d.num_output_streams += encoder_control->ancillary_opts->has_scte35_enabled && encoder_control->ancillary_opts->scte35_enabled;
 
             d.output_streams = calloc( d.num_output_streams, sizeof(*d.output_streams) );
             if( !d.output_streams )
@@ -579,7 +593,8 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 i++;
             }
 
-            if( encoder_control->ancillary_opts->dvb_ttx_enabled )
+            has_dvb_ttx = encoder_control->ancillary_opts->dvb_ttx_enabled;
+            if( has_dvb_ttx )
             {
                 obe_output_stream_t *dvb_ttx_stream = &d.output_streams[i];
                 dvb_ttx_stream->stream_format = MISC_TELETEXT;
@@ -590,6 +605,17 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 /* Only one teletext supported */
                 if( add_teletext( dvb_ttx_stream, ancillary_opts_in ) < 0 )
                     goto fail;
+                i++;
+            }
+
+            if( encoder_control->ancillary_opts->has_scte35_enabled && encoder_control->ancillary_opts->scte35_enabled )
+            {
+                obe_output_stream_t *scte35_stream = &d.output_streams[i];
+                scte35_stream->stream_format = MISC_SCTE35;
+                scte35_stream->input_stream_id = 2+has_dvb_vbi+has_dvb_ttx;
+                scte35_stream->output_stream_id = i;
+
+                scte35_stream->ts_opts.pid = ancillary_opts_in->scte35_pid;
                 i++;
             }
 
