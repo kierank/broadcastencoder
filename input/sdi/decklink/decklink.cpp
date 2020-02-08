@@ -406,7 +406,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     uint8_t *vbi_buf;
     int anc_lines[DECKLINK_VANC_LINES];
     IDeckLinkVideoFrameAncillary *ancillary;
-    int64_t pts = -1;
+    int64_t pts = -1, video_duration = 0;
 
     if( decklink_opts_->probe_success )
         return S_OK;
@@ -538,6 +538,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         const int width = videoframe->GetWidth();
         const int height = videoframe->GetHeight();
         const int stride = videoframe->GetRowBytes();
+        video_duration = av_rescale_q( 1, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
 
         videoframe->GetBytes( &frame_bytes );
 
@@ -738,7 +739,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
             raw_frame->release_data = obe_release_bufref;
             raw_frame->release_frame = obe_release_frame;
-            
+
             raw_frame->alloc_img.planes = av_pix_fmt_count_planes( (AVPixelFormat)raw_frame->alloc_img.csp );
             raw_frame->alloc_img.format = decklink_opts_->video_format;
 
@@ -792,6 +793,9 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 goto fail;
 
             if( send_vbi_and_ttx( h, &decklink_ctx->non_display_parser, pts ) < 0 )
+                goto fail;
+
+            if( send_scte35( h, &decklink_ctx->non_display_parser, pts, video_duration ) < 0 )
                 goto fail;
 
             decklink_ctx->non_display_parser.num_vbi = 0;
@@ -880,7 +884,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         if( pts != -1 )
         {
             raw_frame->video_pts = pts;
-            raw_frame->video_duration = av_rescale_q( 1, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+            raw_frame->video_duration = video_duration;
         }
         decklink_ctx->a_counter += raw_frame->audio_frame.num_samples;
         raw_frame->release_data = obe_release_audio_data;
@@ -1594,6 +1598,8 @@ static void *open_input( void *ptr )
     decklink_opts->obe_bars_opts.bars_line2 = user_opts->bars_line2;
     decklink_opts->obe_bars_opts.bars_line3 = user_opts->bars_line3;
     decklink_opts->obe_bars_opts.bars_line4 = user_opts->bars_line4;
+    decklink_opts->obe_bars_opts.bars_beep = user_opts->bars_beep;
+    decklink_opts->obe_bars_opts.bars_beep_interval = user_opts->bars_beep_interval;
     decklink_opts->obe_bars_opts.no_signal = 1;
 
     decklink_ctx = &decklink_opts->decklink_ctx;

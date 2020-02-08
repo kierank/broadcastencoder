@@ -140,6 +140,8 @@ typedef struct
     char bars_line2[30];
     char bars_line3[30];
     char bars_line4[30];
+    int  bars_beep;
+    int  bars_beep_interval;
 
     int picture_on_loss;
     int downscale;
@@ -174,6 +176,7 @@ enum stream_formats_e
     MISC_TELETEXT_INVERTED,
     MISC_WSS,
     MISC_VPS,
+    MISC_SCTE35,
 
     /* Per-frame Streams/Data */
     CAPTIONS_CEA_608,

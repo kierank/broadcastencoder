@@ -67,7 +67,7 @@ static int filter_bit_depth_value = OBE_BIT_DEPTH_10;
 
 static const char * const system_types[]             = { "generic", "lowestlatency", "lowlatency", 0 };
 static const char * const input_types[]              = { "url", "decklink", "linsys-sdi", "bars", "netmap", 0 };
-static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50", "720p59.94", "720p60", "1080i50", "1080i59.94", "1080p23.98", "1080p24", "1080p25", "1080p29.97", "1080p50", "1080p59.94", 0 };
+static const char * const input_video_formats[]      = { "pal", "ntsc", "720p50", "720p59.94", "720p60", "1080i50", "1080i59.94", "1080p23.98", "1080p24", "1080p25", "1080p29.97", "1080p30", "1080p50", "1080p59.94", "1080p60", 0 };
 static const char * const input_video_connections[]  = { "sdi", "hdmi", "optical-sdi", "component", "composite", "s-video", 0 };
 static const char * const input_audio_connections[]  = { "embedded", "aes-ebu", "analogue", 0 };
 static const char * const picture_on_losses[]        = { "", "bars", "lastframe", "black", 0 };
@@ -82,14 +82,14 @@ static const char * const mp2_modes[]                = { "auto", "stereo", "join
 static const char * const channel_maps[]             = { "", "mono", "stereo", "5.0", "5.1", 0 };
 static const char * const mono_channels[]            = { "left", "right", 0 };
 static const char * const output_modules[]           = { "udp", "rtp", "arq", "file", 0 };
-static const char * const addable_streams[]          = { "audio", "ttx", 0};
+static const char * const addable_streams[]          = { "audio", "ttx", "scte35", 0};
 static const char * const filter_bit_depths[]        = { "10", "8", 0 };
 static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned", "ldpc-staircase", 0 };
 static const char * const downscale_types[]          = { "", "fast" };
 
 static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
 static const char * input_opts[]  = { "netmap-uri", "card-idx", "video-format", "video-connection", "audio-connection",
-                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", "netmap-mode", "netmap-audio", "ptp-nic", NULL };
+                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", "netmap-mode", "netmap-audio", "ptp-nic", "bars-beep", "bars-beep-interval", NULL };
 static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
@@ -395,8 +395,6 @@ static int add_stream( char *command, obecli_command_t *child )
 
     char *type     = obe_get_option( add_opts[0], opts );
 
-    obe_free_string_array( opts );
-
     FAIL_IF_ERROR( type && ( check_enum_value( type, addable_streams ) < 0 ),
                    "Stream type is not addable\n" )
 
@@ -431,11 +429,19 @@ static int add_stream( char *command, obecli_command_t *child )
         cli.output_streams[output_stream_id].input_stream_id = -1;
         cli.output_streams[output_stream_id].stream_format = stream_format;
     }
+    else if( !strcasecmp( type, addable_streams[2] ) ) /* SCTE-35 */
+    {
+        cli.output_streams[output_stream_id].input_stream_id = 2;
+        cli.output_streams[output_stream_id].stream_format = MISC_SCTE35;
+        cli.output_streams[output_stream_id].stream_action = STREAM_PASSTHROUGH;
+    }
     cli.output_streams[output_stream_id].output_stream_id = output_stream_id;
 
     printf( "NOTE: output-stream-ids have CHANGED! \n" );
 
     show_output_streams( NULL, NULL );
+
+    obe_free_string_array( opts );
 
     return 0;
 }
@@ -537,6 +543,8 @@ static int set_input( char *command, obecli_command_t *child )
         char *netmap_mode = obe_get_option( input_opts[10], opts );
         char *netmap_audio = obe_get_option( input_opts[11], opts );
         char *ptp_nic = obe_get_option( input_opts[12], opts );
+        char *bars_beep = obe_get_option( input_opts[13], opts );
+        char *bars_beep_interval = obe_get_option( input_opts[14], opts );
 
         FAIL_IF_ERROR( video_format && ( check_enum_value( video_format, input_video_formats ) < 0 ),
                        "Invalid video format\n" );
@@ -575,6 +583,8 @@ static int set_input( char *command, obecli_command_t *child )
             strncpy( cli.input.bars_line4, bars_line4, sizeof(cli.input.bars_line4) - 1 );
         if( picture_on_loss )
             parse_enum_value( picture_on_loss, picture_on_losses, &cli.input.picture_on_loss );
+        cli.input.bars_beep = obe_otob( bars_beep, cli.input.bars_beep );
+        cli.input.bars_beep_interval = obe_otoi( bars_beep_interval, cli.input.bars_beep_interval );
 
         obe_free_string_array( opts );
     }
@@ -1409,6 +1419,8 @@ static int show_output_streams( char *command, obecli_command_t *child )
             printf( "DVB-VBI\n" );
         else if( output_stream->stream_format == ANC_RAW )
             printf( "ST2038 ANC\n" );
+        else if( output_stream->stream_format == MISC_SCTE35 )
+            printf( "SCTE-35\n" );
         else if( input_stream->stream_type == STREAM_TYPE_VIDEO )
         {
             printf( "Video: AVC \n" );

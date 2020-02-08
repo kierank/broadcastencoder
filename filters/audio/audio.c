@@ -35,7 +35,7 @@ static int check_send_packet( obe_t *h, obe_output_stream_t *output_stream, obe_
     if( passthrough->num_out_frames == output_stream->ts_opts.frames_per_pes )
     {
         int data_size = av_fifo_size( passthrough->out_fifo );
-        
+
         obe_coded_frame_t *coded_frame = new_coded_frame( passthrough->output_stream_id, data_size );
         if( !coded_frame )
         {
@@ -129,7 +129,8 @@ static void *start_filter( void *ptr )
         for( int i = 0; i < h->num_output_streams; i++ )
         {
             output_stream = &h->output_streams[i];
-            if( output_stream->stream_action == STREAM_PASSTHROUGH && output_stream->stream_format != MISC_TELETEXT )
+            if( output_stream->stream_action == STREAM_PASSTHROUGH && output_stream->stream_format != MISC_TELETEXT &&
+                output_stream->stream_format != MISC_SCTE35 )
             {
                 obe_passthrough_t *passthrough = get_passthrough( h, output_stream->output_stream_id );
                 if( !passthrough )
@@ -222,7 +223,7 @@ static void *start_filter( void *ptr )
                                 else
                                 {
                                     /* set the end position to the beginning of the burst */
-                                    last_end_pos = j; 
+                                    last_end_pos = j;
                                     break;
                                 }
                             }

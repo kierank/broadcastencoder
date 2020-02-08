@@ -52,7 +52,7 @@ static void close_thread( void *handle )
         status->raw_frames[1]->release_data(status->raw_frames[1]);
         status->raw_frames[1]->release_frame(status->raw_frames[1]);
     }
-    
+
 }
 
 static void *autoconf_input( void *ptr )
@@ -142,6 +142,8 @@ static void *open_input( void *ptr )
     obe_bars_opts.bars_line2 = user_opts->bars_line2;
     obe_bars_opts.bars_line3 = user_opts->bars_line3;
     obe_bars_opts.bars_line4 = user_opts->bars_line4;
+    obe_bars_opts.bars_beep = user_opts->bars_beep;
+    obe_bars_opts.bars_beep_interval = user_opts->bars_beep_interval;
 
     status.input = input;
     status.bars_handle = &bars_handle;
@@ -151,7 +153,7 @@ static void *open_input( void *ptr )
     {
         fprintf( stderr, "Could not open bars \n" );
         return NULL;
-    } 
+    }
 
     pthread_mutex_lock( &h->device_mutex );
     h->device.input_status.active = 1;
@@ -163,7 +165,7 @@ static void *open_input( void *ptr )
     while( 1 )
     {
         int stop;
-        
+
         pthread_mutex_lock( &h->device_mutex );
         stop = h->device.stop;
         pthread_mutex_unlock( &h->device_mutex);
