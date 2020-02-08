@@ -1456,23 +1456,23 @@ static int restamp_rfc4175_video(struct uprobe *uprobe, struct upipe *upipe,
     va_arg(args, struct upump **);
     bool *drop = va_arg(args, bool *);
 
-        uint64_t cr_sys = 0, pts_orig = 0;
-        uref_clock_get_cr_sys(uref, &cr_sys);
-        uref_clock_get_pts_orig(uref, &pts_orig);
-        pts_orig = pts_orig / 300;
+    uint64_t cr_sys = 0, pts_orig = 0;
+    uref_clock_get_cr_sys(uref, &cr_sys);
+    uref_clock_get_pts_orig(uref, &pts_orig);
+    pts_orig = pts_orig / 300;
 
-        uint64_t ptp_rtp = cr_sys / 300;
-        uint32_t timestamp = pts_orig;
-        uint32_t expected_timestamp = ptp_rtp;
+    uint64_t ptp_rtp = cr_sys / 300;
+    uint32_t timestamp = pts_orig;
+    uint32_t expected_timestamp = ptp_rtp;
 
-        /* expected_timestamp > timestamp assuming timestamp is time of transmission
-           FIXME: check timestamp goes forward */
-        uint32_t diff = (UINT32_MAX + expected_timestamp -
-                        (timestamp % UINT32_MAX)) % UINT32_MAX;
+    /* expected_timestamp > timestamp assuming timestamp is time of transmission
+        FIXME: check timestamp goes forward */
+    uint32_t diff = (UINT32_MAX + expected_timestamp -
+                    (timestamp % UINT32_MAX)) % UINT32_MAX;
 
-        /* Work in the 90kHz domain to avoid timestamp jitter */
-        uint64_t vpts = (ptp_rtp - diff) * 300;
-        uref_clock_set_pts_sys(uref, vpts);
+    /* Work in the 90kHz domain to avoid timestamp jitter */
+    uint64_t vpts = (ptp_rtp - diff) * 300;
+    uref_clock_set_pts_sys(uref, vpts + RFC_LATENCY);
 
     return UBASE_ERR_NONE;
 }
