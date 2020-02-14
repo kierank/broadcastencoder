@@ -443,6 +443,9 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
                     uint8_t auto_return = scte104srd_get_auto_return( op );
                     uint8_t splice_immediate_flag = insert_type == SCTE104SRD_START_IMMEDIATE || insert_type == SCTE104SRD_END_IMMEDIATE;
 
+                    if( insert_type == SCTE104SRD_RESERVED )
+                        continue;
+
                     if( insert_type != SCTE104SRD_CANCEL )
                     {
                         size += SCTE35_INSERT_HEADER2_SIZE + SCTE35_INSERT_FOOTER_SIZE;
