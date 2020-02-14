@@ -456,6 +456,8 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
 
                         if( insert_type == SCTE104SRD_START_NORMAL || insert_type == SCTE104SRD_START_IMMEDIATE )
                             size += SCTE35_BREAK_DURATION_HEADER_SIZE;
+                        else
+                            duration = 0;
                     }
 
                     scte35_insert_init( scte35, size );
@@ -466,7 +468,7 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
                     {
                         scte35_insert_set_out_of_network( scte35, insert_type == SCTE104SRD_START_NORMAL || insert_type == SCTE104SRD_START_IMMEDIATE );
                         scte35_insert_set_program_splice( scte35, 1 );
-                        scte35_insert_set_duration( scte35, duration != UINT64_MAX );
+                        scte35_insert_set_duration( scte35, !!duration );
                         scte35_insert_set_splice_immediate( scte35, splice_immediate_flag );
 
                         if( !splice_immediate_flag )
