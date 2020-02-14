@@ -429,8 +429,12 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
             {
                 uint8_t *op = scte104m_get_op( scte104, i );
 
-                /* Ignore splice null */
-                if( scte104o_get_opid( op ) == SCTE104_OPID_SPLICE )
+                if( scte104o_get_opid( op ) == SCTE104_OPID_SPLICE_NULL )
+                {
+                    scte35_null_init( scte35 );
+                    scte35_set_pts_adjustment(scte35, 0);
+                }
+                else if( scte104o_get_opid( op ) == SCTE104_OPID_SPLICE )
                 {
                     op = scte104o_get_data( op );
                     uint8_t insert_type = scte104srd_get_insert_type( op );
