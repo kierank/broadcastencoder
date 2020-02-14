@@ -570,7 +570,7 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
                         scte35sd_set_segments_expected( scte35_desc, segments_expected );
                         scte35_desc += 3;
 
-                        if( insert_sub_segment_info && ( segment_type_id == SCTE35_SD_SEGMENTATION_TYPE_PROV_START || segment_type_id == SCTE35_SD_SEGMENTATION_TYPE_DIST_START ) )
+                        if( insert_sub_segment_info )
                         {
                             scte35sd_set_sub_segment_num( scte35_desc, sub_segment_num );
                             scte35sd_set_sub_segments_expected( scte35_desc, sub_segments_expected );
