@@ -429,8 +429,12 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
             {
                 uint8_t *op = scte104m_get_op( scte104, i );
 
-                /* Ignore splice null */
-                if( scte104o_get_opid( op ) == SCTE104_OPID_SPLICE )
+                if( scte104o_get_opid( op ) == SCTE104_OPID_SPLICE_NULL )
+                {
+                    scte35_null_init( scte35 );
+                    scte35_set_pts_adjustment(scte35, 0);
+                }
+                else if( scte104o_get_opid( op ) == SCTE104_OPID_SPLICE )
                 {
                     op = scte104o_get_data( op );
                     uint8_t insert_type = scte104srd_get_insert_type( op );
@@ -442,6 +446,9 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
                     uint8_t avails_expected = scte104srd_get_avails_expected( op );
                     uint8_t auto_return = scte104srd_get_auto_return( op );
                     uint8_t splice_immediate_flag = insert_type == SCTE104SRD_START_IMMEDIATE || insert_type == SCTE104SRD_END_IMMEDIATE;
+
+                    if( insert_type == SCTE104SRD_RESERVED )
+                        continue;
 
                     if( insert_type != SCTE104SRD_CANCEL )
                     {
@@ -456,6 +463,8 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
 
                         if( insert_type == SCTE104SRD_START_NORMAL || insert_type == SCTE104SRD_START_IMMEDIATE )
                             size += SCTE35_BREAK_DURATION_HEADER_SIZE;
+                        else
+                            duration = 0;
                     }
 
                     scte35_insert_init( scte35, size );
@@ -466,7 +475,7 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
                     {
                         scte35_insert_set_out_of_network( scte35, insert_type == SCTE104SRD_START_NORMAL || insert_type == SCTE104SRD_START_IMMEDIATE );
                         scte35_insert_set_program_splice( scte35, 1 );
-                        scte35_insert_set_duration( scte35, duration != UINT64_MAX );
+                        scte35_insert_set_duration( scte35, !!duration );
                         scte35_insert_set_splice_immediate( scte35, splice_immediate_flag );
 
                         if( !splice_immediate_flag )
@@ -568,7 +577,7 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
                         scte35sd_set_segments_expected( scte35_desc, segments_expected );
                         scte35_desc += 3;
 
-                        if( insert_sub_segment_info && ( segment_type_id == SCTE35_SD_SEGMENTATION_TYPE_PROV_START || segment_type_id == SCTE35_SD_SEGMENTATION_TYPE_DIST_START ) )
+                        if( insert_sub_segment_info )
                         {
                             scte35sd_set_sub_segment_num( scte35_desc, sub_segment_num );
                             scte35sd_set_sub_segments_expected( scte35_desc, sub_segments_expected );
