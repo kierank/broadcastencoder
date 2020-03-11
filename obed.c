@@ -358,6 +358,10 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 strncpy( input_opts_out->bars_line4, input_opts_in->bars_line4, sizeof(input_opts_out->bars_line4) );
             input_opts_out->picture_on_loss = input_opts_in->picture_on_signal_loss;
             input_opts_out->downscale = input_opts_in->has_sd_downscale && input_opts_in->sd_downscale;
+            if( input_opts_in->has_bars_clapper )
+                input_opts_out->bars_beep = input_opts_in->bars_clapper;
+            if( input_opts_in->has_bars_clapper_interval )
+                input_opts_out->bars_beep_interval = input_opts_in->bars_clapper_interval;
 
             int bit_depth = OBE_BIT_DEPTH_10;
             if( input_opts_in->has_sd_downscale && input_opts_in->sd_downscale )
