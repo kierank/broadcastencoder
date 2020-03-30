@@ -378,6 +378,13 @@ enum frame_packing_arrangement_e
     FRAME_PACKING_TEMPORAL,
 };
 
+/**** Video Flip ****/
+enum video_flip_e
+{
+    VIDEO_FLIP_NONE,
+    VIDEO_FLIP_HORIZONTAL,
+};
+
 /**** AC-3 Encoding ****/
 /* Options:
  *
@@ -455,6 +462,7 @@ typedef struct
     int is_wide;
     obe_frame_anc_opts_t video_anc;
     int downscale;
+    int flip;
 
     /* AVC */
     x264_param_t avc_param;
