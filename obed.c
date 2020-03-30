@@ -526,6 +526,9 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 video_stream->avc_param.rc.b_filler = 0; // FIXME, turning this on causes mux issues but does it matter?
             }
 
+            if( video_opts_in->has_flip )
+                video_stream->flip = video_opts_in->flip;
+
             /* Setup audio streams */
             for( i = 1; i <= encoder_control->n_audio_opts; i++ )
             {
