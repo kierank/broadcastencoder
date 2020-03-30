@@ -54,6 +54,7 @@ typedef struct
     AVFilterContext *buffersrc_ctx;
     AVFilterContext *resize_ctx;
     AVFilterContext *format_ctx;
+    AVFilterContext *flip_ctx;
     AVFilterContext *buffersink_ctx;
     AVFrame *frame;
 
@@ -64,6 +65,8 @@ typedef struct
     /* dither */
     void (*dither_plane_10_to_8)( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height );
     int16_t *error_buf;
+
+    int flip_ready;
 } obe_vid_filter_ctx_t;
 
 typedef struct
@@ -292,6 +295,7 @@ static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt,
     char tmp[1024];
     int ret = 0;
     int interlaced = 0;
+    AVFilterContext *penultimate = NULL;
 
     if( vfilt->resize_filter_graph )
     {
@@ -406,6 +410,17 @@ static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt,
         goto end;
     }
 
+    if( output_stream->flip == VIDEO_FLIP_HORIZONTAL )
+    {
+        vfilt->flip_ctx = avfilter_graph_alloc_filter( vfilt->resize_filter_graph, avfilter_get_by_name( "hflip" ), "hflip" );
+        if( !vfilt->flip_ctx )
+        {
+            syslog( LOG_ERR, "Failed to create flip\n" );
+            ret = -1;
+            goto end;
+        }
+    }
+
     vfilt->buffersink_ctx = avfilter_graph_alloc_filter( vfilt->resize_filter_graph, avfilter_get_by_name( "buffersink" ), "sink" );
     if( !vfilt->buffersink_ctx )
     {
@@ -435,7 +450,20 @@ static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt,
         goto end;
     }
 
-    ret = avfilter_link( vfilt->format_ctx, 0, vfilt->buffersink_ctx, 0 );
+    penultimate = vfilt->format_ctx;
+    if( output_stream->flip == VIDEO_FLIP_HORIZONTAL )
+    {
+        ret = avfilter_link( penultimate, 0, vfilt->flip_ctx, 0 );
+        if( ret < 0 )
+        {
+            syslog( LOG_ERR, "Failed to link filter chain\n" );
+            goto end;
+        }
+        penultimate = vfilt->flip_ctx;
+        vfilt->flip_ready = 1;
+    }
+
+    ret = avfilter_link( penultimate, 0, vfilt->buffersink_ctx, 0 );
     if( ret < 0 )
     {
         syslog( LOG_ERR, "Failed to link filter chain\n" );
@@ -979,11 +1007,12 @@ static void *start_filter( void *ptr )
 
             /* Resize if wrong pixel format or wrong resolution */
             if( !( raw_frame->img.csp == AV_PIX_FMT_YUV422P   || raw_frame->img.csp == AV_PIX_FMT_YUV422P10 )
-                || vfilt->dst_width   != raw_frame->img.width || vfilt->dst_height != raw_frame->img.height )
+                || vfilt->dst_width   != raw_frame->img.width || vfilt->dst_height != raw_frame->img.height
+                || output_stream->flip )
             {
                 /* Reset the filter if it has been setup incorrectly or not setup at all */
                 if( vfilt->src_csp    != raw_frame->img.csp || vfilt->src_width != raw_frame->img.width ||
-                    vfilt->src_height != raw_frame->img.height )
+                    vfilt->src_height != raw_frame->img.height || ( output_stream->flip && !vfilt->flip_ready) )
                 {
                     init_libavfilter( h, vfilt, output_stream, raw_frame );
                 }
