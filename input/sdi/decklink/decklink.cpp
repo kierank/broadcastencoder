@@ -1506,7 +1506,7 @@ static void *autoconf_input( void *ptr )
     obe_device_t *device;
     int cur_input_stream_id = 0;
 
-    for( int i = 0; i < 3; i++ )
+    for( int i = 0; i < 4; i++ )
     {
         streams[i] = (obe_int_input_stream_t*)calloc( 1, sizeof(*streams[i]) );
         if( !streams[i] )
@@ -1555,10 +1555,15 @@ static void *autoconf_input( void *ptr )
             streams[i]->stream_type = STREAM_TYPE_MISC;
             streams[i]->stream_format = MISC_TELETEXT;
         }
+        else if( i == 3 )
+        {
+            streams[i]->stream_type = STREAM_TYPE_MISC;
+            streams[i]->stream_format = MISC_SCTE35;
+        }
     }
 
     init_device(&h->device);
-    h->device.num_input_streams = 3;
+    h->device.num_input_streams = 4;
     memcpy( h->device.streams, streams, h->device.num_input_streams * sizeof(obe_int_input_stream_t**) );
     h->device.device_type = INPUT_DEVICE_DECKLINK;
     memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );
