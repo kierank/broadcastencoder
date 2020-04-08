@@ -605,7 +605,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             {
                 obe_output_stream_t *dvb_ttx_stream = &d.output_streams[i];
                 dvb_ttx_stream->stream_format = MISC_TELETEXT;
-                dvb_ttx_stream->input_stream_id = 2+has_dvb_vbi;
+                dvb_ttx_stream->input_stream_id = 3;
                 dvb_ttx_stream->output_stream_id = i;
 
                 dvb_ttx_stream->ts_opts.pid = ancillary_opts_in->dvb_ttx_pid;
@@ -619,7 +619,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             {
                 obe_output_stream_t *scte35_stream = &d.output_streams[i];
                 scte35_stream->stream_format = MISC_SCTE35;
-                scte35_stream->input_stream_id = 2+has_dvb_vbi+has_dvb_ttx;
+                scte35_stream->input_stream_id = 4;
                 scte35_stream->output_stream_id = i;
 
                 scte35_stream->ts_opts.pid = ancillary_opts_in->scte35_pid;
