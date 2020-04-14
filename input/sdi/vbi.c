@@ -578,13 +578,16 @@ int encapsulate_dvb_ttx( obe_t *h, obe_sdi_non_display_data_t *non_display_data 
 
     if( non_display_data->num_anc_vbi )
     {
-        /* Only handle one message for now */
-        obe_anc_vbi_t *anc_vbi = &non_display_data->anc_vbi[0];
-        // PES_data_field
-        bs_write( &s, 8, anc_vbi->identifier );
-        bs_write( &s, 8, anc_vbi->unit_id );
-        bs_write( &s, 8, anc_vbi->len );
-        write_bytes( &s, anc_vbi->data, anc_vbi->len );
+        for( int i = 0; i < non_display_data->num_anc_vbi; i++ )
+        {
+            obe_anc_vbi_t *anc_vbi = &non_display_data->anc_vbi[i];
+            // PES_data_field
+            bs_write( &s, 8, anc_vbi->identifier );
+            bs_write( &s, 8, anc_vbi->unit_id );
+            bs_write( &s, 8, anc_vbi->len );
+            write_bytes( &s, anc_vbi->data, anc_vbi->len );
+            free( anc_vbi->data );
+        }
     }
     else
     {

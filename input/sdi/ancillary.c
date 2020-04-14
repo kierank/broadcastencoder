@@ -197,6 +197,9 @@ static int parse_dvb_scte_vbi( obe_t *h, obe_sdi_non_display_data_t *non_display
 
     non_display_data->has_ttx_frame = !!get_output_stream_by_format( h, MISC_TELETEXT );
 
+    if( !non_display_data->has_ttx_frame )
+        return 0;
+
     /* TODO: verify line number of VBI */
     anc_vbi = &non_display_data->anc_vbi[non_display_data->num_anc_vbi++];
     anc_vbi->identifier = READ_8( line[0] );
