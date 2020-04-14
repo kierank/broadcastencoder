@@ -886,10 +886,10 @@ static int set_stream( char *command, obecli_command_t *child )
                      output_stream->stream_format == VBI_RAW )
             {
                 /* NB: remap these if more encoding options are added - TODO: split them up */
-                char *ttx_lang = obe_get_option( stream_opts[38], opts );
-                char *ttx_type = obe_get_option( stream_opts[39], opts );
-                char *ttx_mag  = obe_get_option( stream_opts[40], opts );
-                char *ttx_page = obe_get_option( stream_opts[41], opts );
+                char *ttx_lang = obe_get_option( stream_opts[39], opts );
+                char *ttx_type = obe_get_option( stream_opts[40], opts );
+                char *ttx_mag  = obe_get_option( stream_opts[41], opts );
+                char *ttx_page = obe_get_option( stream_opts[42], opts );
 
                 FAIL_IF_ERROR( ttx_type && ( check_enum_value( ttx_type, teletext_types ) < 0 ),
                                "Invalid Teletext type\n" );

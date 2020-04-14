@@ -160,10 +160,6 @@ static int parse_dvb_scte_vbi( obe_t *h, obe_sdi_non_display_data_t *non_display
 
     data_unit_id = READ_8( line[1] );
 
-    /* TODO: decide what we should do with these rare cases. Do we place in DVB-VBI or put in user-data? */
-    if( data_unit_id == DATA_UNIT_ID_CEA_608 || data_unit_id == DATA_UNIT_ID_VITC )
-        return 0;
-
     for( i = 0; data_indentifier_table[i][0] != -1; i++ )
     {
         if( data_unit_id == data_indentifier_table[i][0] )
@@ -173,9 +169,6 @@ static int parse_dvb_scte_vbi( obe_t *h, obe_sdi_non_display_data_t *non_display
     /* TODO: allow user-defined modes */
     if( data_indentifier_table[i][0] == -1 )
         return 0;
-
-    /* FIXME: disabled for the time being */
-    return 0;
 
     if( non_display_data->probe )
     {
@@ -197,20 +190,23 @@ static int parse_dvb_scte_vbi( obe_t *h, obe_sdi_non_display_data_t *non_display
         frame_data->lines[frame_data->num_lines++] = line_number;
         frame_data->location = USER_DATA_LOCATION_DVB_STREAM;
 
+        non_display_data->has_ttx_frame = 1;
+
         return 0;
     }
 
-    /* TODO: verify line number of VBI */
+    non_display_data->has_ttx_frame = !!get_output_stream_by_format( h, MISC_TELETEXT );
 
+    /* TODO: verify line number of VBI */
     anc_vbi = &non_display_data->anc_vbi[non_display_data->num_anc_vbi++];
     anc_vbi->identifier = READ_8( line[0] );
     anc_vbi->unit_id = data_unit_id;
-    anc_vbi->len = READ_8( line[1] );
+    anc_vbi->len = READ_8( line[2] );
     anc_vbi->data = malloc( anc_vbi->len );
     if( !anc_vbi->data )
         goto fail;
 
-    line += 2;
+    line += 3;
 
     for( i = 0; i < anc_vbi->len; i++ )
         anc_vbi->data[i] = READ_8( line[i] );

@@ -563,7 +563,7 @@ static int encapsulate_dvb_vbi( obe_t *h, obe_sdi_non_display_data_t *non_displa
     return 0;
 }
 
-static int encapsulate_dvb_ttx( obe_t *h, obe_sdi_non_display_data_t *non_display_data )
+int encapsulate_dvb_ttx( obe_t *h, obe_sdi_non_display_data_t *non_display_data )
 {
     bs_t s;
 
@@ -576,19 +576,32 @@ static int encapsulate_dvb_ttx( obe_t *h, obe_sdi_non_display_data_t *non_displa
 
     bs_init( &s, non_display_data->dvb_ttx_frame->data, DVB_VBI_MAXIMUM_SIZE );
 
-    // PES_data_field
-    bs_write( &s, 8, DVB_VBI_DATA_IDENTIFIER ); // data_identifier (FIXME let user choose or passthrough from vanc)
-
-    for( int i = 0; i < non_display_data->num_vbi; i++ )
+    if( non_display_data->num_anc_vbi )
     {
-        /* Teletext B is the only kind of Teletext allowed in a DVB-TTX stream */
-        if( non_display_data->vbi_slices[i].id & VBI_SLICED_TELETEXT_B )
+        /* Only handle one message for now */
+        obe_anc_vbi_t *anc_vbi = &non_display_data->anc_vbi[0];
+        // PES_data_field
+        bs_write( &s, 8, anc_vbi->identifier );
+        bs_write( &s, 8, anc_vbi->unit_id );
+        bs_write( &s, 8, anc_vbi->len );
+        write_bytes( &s, anc_vbi->data, anc_vbi->len );
+    }
+    else
+    {
+        // PES_data_field
+        bs_write( &s, 8, DVB_VBI_DATA_IDENTIFIER ); // data_identifier (FIXME let user choose)
+
+        for( int i = 0; i < non_display_data->num_vbi; i++ )
         {
-            /* TODO: allow user to choose SUB or NON-SUB teletext */
-            bs_write( &s, 8, DATA_UNIT_ID_EBU_TTX_SUB ); // data_unit_id
-            bs_write( &s, 8, DVB_VBI_UNIT_SIZE ); // data_unit_length
-            write_header_byte( &s, non_display_data->vbi_slices[i].line, non_display_data->vbi_decoder.scanning == 525 );
-            write_ttx_field( &s, non_display_data->vbi_slices[i].data, MISC_TELETEXT );
+            /* Teletext B is the only kind of Teletext allowed in a DVB-TTX stream */
+            if( non_display_data->vbi_slices[i].id & VBI_SLICED_TELETEXT_B )
+            {
+                /* TODO: allow user to choose SUB or NON-SUB teletext */
+                bs_write( &s, 8, DATA_UNIT_ID_EBU_TTX_SUB ); // data_unit_id
+                bs_write( &s, 8, DVB_VBI_UNIT_SIZE ); // data_unit_length
+                write_header_byte( &s, non_display_data->vbi_slices[i].line, non_display_data->vbi_decoder.scanning == 525 );
+                write_ttx_field( &s, non_display_data->vbi_slices[i].data, MISC_TELETEXT );
+            }
         }
     }
 
