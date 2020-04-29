@@ -1932,19 +1932,19 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         struct upipe *probe_vanc = upipe_void_alloc_output(vanc,
                 upipe_probe_uref_mgr,
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_vanc, netmap_ctx),
-                UPROBE_LOG_DEBUG, "probe_uref_ttx"));
+                loglevel, "probe_uref_ttx"));
 
         probe_vanc = upipe_vanc_chain_output(probe_vanc,
                 upipe_filter_vanc_mgr,
                 uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "vanc filter"),
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
-                UPROBE_LOG_DEBUG, "afd"),
+                loglevel, "afd"),
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
-                UPROBE_LOG_DEBUG, "scte104"),
+                loglevel, "scte104"),
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_ttx, netmap_ctx),
-                UPROBE_LOG_DEBUG, "op47"),
+                loglevel, "op47"),
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
-                    UPROBE_LOG_DEBUG, "cea708"));
+                    loglevel, "cea708"));
         upipe_release(probe_vanc);
         upipe_mgr_release(upipe_filter_vanc_mgr);
 
@@ -1964,9 +1964,9 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
                 upipe_filter_vbi_mgr,
                 uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "vbi filter"),
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_ttx, netmap_ctx),
-                UPROBE_LOG_DEBUG, "vbi_ttx"),
+                loglevel, "vbi_ttx"),
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
-                    UPROBE_LOG_DEBUG, "vbi_cea708"));
+                    loglevel, "vbi_cea708"));
         upipe_release(probe_vbi);
         upipe_mgr_release(upipe_filter_vbi_mgr);
     }
