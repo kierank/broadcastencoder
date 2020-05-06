@@ -600,6 +600,8 @@ struct arq_ctx *open_arq(obe_udp_ctx *p_udp, obe_udp_ctx *p_row,
 
 error:
     free(ctx->event);
+    if(ctx->queue_extra)
+        uqueue_clean(ctx->queue);
     free(ctx->queue);
     free(ctx->queue_extra);
     free(ctx);
@@ -618,6 +620,7 @@ void close_arq(struct arq_ctx *ctx)
     ueventfd_clean(ctx->event);
     pthread_mutex_destroy(&ctx->mutex);
     free(ctx->event);
+    uqueue_clean(ctx->queue);
     free(ctx->queue);
     free(ctx->queue_extra);
     free(ctx);
