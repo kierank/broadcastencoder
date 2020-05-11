@@ -61,16 +61,6 @@ const static int data_indentifier_table[][2] =
 {
     { DATA_UNIT_ID_EBU_TTX_NON_SUB, MISC_TELETEXT },
     { DATA_UNIT_ID_EBU_TTX_SUB,     MISC_TELETEXT },
-    { DATA_UNIT_ID_TTX_INVERTED,    MISC_TELETEXT_INVERTED },
-    { DATA_UNIT_ID_VPS,             MISC_VPS },
-    { DATA_UNIT_ID_WSS,             MISC_WSS },
-    { DATA_UNIT_ID_CEA_608,         CAPTIONS_CEA_608 },
-    { DATA_UNIT_ID_AMOL_48,         VBI_AMOL_48 },
-    { DATA_UNIT_ID_AMOL_96,         VBI_AMOL_96 },
-    { DATA_UNIT_ID_NABTS,           VBI_NABTS },
-    { DATA_UNIT_ID_TVG2X,           VBI_TVG2X },
-    { DATA_UNIT_ID_CP,              VBI_CP },
-    { DATA_UNIT_ID_VITC,            VBI_VITC },
     { -1, -1 },
 };
 
@@ -101,5 +91,6 @@ int decode_vbi( obe_t *h, obe_sdi_non_display_data_t *non_display_data, uint8_t 
 int decode_video_index_information( obe_t *h, obe_sdi_non_display_data_t *non_display_data, uint16_t *line, obe_raw_frame_t *raw_frame, int line_number );
 int send_vbi_and_ttx( obe_t *h, obe_sdi_non_display_data_t *non_display_parser, int64_t pts );
 void write_dvb_stuffing( bs_t *s );
+int encapsulate_dvb_ttx( obe_t *h, obe_sdi_non_display_data_t *non_display_data );
 
 #endif

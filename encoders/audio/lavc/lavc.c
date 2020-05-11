@@ -388,7 +388,7 @@ finish:
     if( avr )
         avresample_free( &avr );
 
-    if( codec )
+    if( codec && !fmt )
         avcodec_free_context( &codec );
 
     if( fmt )

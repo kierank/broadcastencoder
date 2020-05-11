@@ -358,6 +358,10 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 strncpy( input_opts_out->bars_line4, input_opts_in->bars_line4, sizeof(input_opts_out->bars_line4) );
             input_opts_out->picture_on_loss = input_opts_in->picture_on_signal_loss;
             input_opts_out->downscale = input_opts_in->has_sd_downscale && input_opts_in->sd_downscale;
+            if( input_opts_in->has_bars_clapper )
+                input_opts_out->bars_beep = input_opts_in->bars_clapper;
+            if( input_opts_in->has_bars_clapper_interval )
+                input_opts_out->bars_beep_interval = input_opts_in->bars_clapper_interval;
 
             int bit_depth = OBE_BIT_DEPTH_10;
             if( input_opts_in->has_sd_downscale && input_opts_in->sd_downscale )
@@ -522,6 +526,9 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 video_stream->avc_param.rc.b_filler = 0; // FIXME, turning this on causes mux issues but does it matter?
             }
 
+            if( video_opts_in->has_flip )
+                video_stream->flip = video_opts_in->flip;
+
             /* Setup audio streams */
             for( i = 1; i <= encoder_control->n_audio_opts; i++ )
             {
@@ -598,7 +605,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             {
                 obe_output_stream_t *dvb_ttx_stream = &d.output_streams[i];
                 dvb_ttx_stream->stream_format = MISC_TELETEXT;
-                dvb_ttx_stream->input_stream_id = 2+has_dvb_vbi;
+                dvb_ttx_stream->input_stream_id = 2;
                 dvb_ttx_stream->output_stream_id = i;
 
                 dvb_ttx_stream->ts_opts.pid = ancillary_opts_in->dvb_ttx_pid;
@@ -612,7 +619,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             {
                 obe_output_stream_t *scte35_stream = &d.output_streams[i];
                 scte35_stream->stream_format = MISC_SCTE35;
-                scte35_stream->input_stream_id = 2+has_dvb_vbi+has_dvb_ttx;
+                scte35_stream->input_stream_id = 3;
                 scte35_stream->output_stream_id = i;
 
                 scte35_stream->ts_opts.pid = ancillary_opts_in->scte35_pid;
