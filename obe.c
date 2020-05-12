@@ -1466,6 +1466,7 @@ int obe_start( obe_t *h )
     }
     else
         h->device.thread_running = true;
+    pthread_attr_destroy(&attrs);
 
     h->is_active = 1;
     h->start_time = obe_mdate();
