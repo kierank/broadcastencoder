@@ -1809,11 +1809,9 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 
     uprobe_throw(uprobe_main, NULL, UPROBE_THAW_UPUMP_MGR);
 
-    pthread_attr_t *thread_attribs_ptr = NULL;
     pthread_attr_t thread_attribs;
     struct sched_param params;
 
-    thread_attribs_ptr = &thread_attribs;
     pthread_attr_init(&thread_attribs);
     pthread_attr_setschedpolicy(&thread_attribs, SCHED_FIFO);
     pthread_attr_setinheritsched(&thread_attribs, PTHREAD_EXPLICIT_SCHED);
@@ -1834,8 +1832,9 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 
     struct upipe_mgr *xfer_mgr =  upipe_pthread_xfer_mgr_alloc(XFER_QUEUE,
             XFER_POOL, uprobe_use(uprobe_main_pthread), upump_ev_mgr_alloc_loop,
-            UPUMP_POOL, UPUMP_BLOCKER_POOL, NULL, NULL, thread_attribs_ptr);
+            UPUMP_POOL, UPUMP_BLOCKER_POOL, NULL, NULL, &thread_attribs);
     assert(xfer_mgr != NULL);
+    pthread_attr_destroy(&thread_attribs);
 
     struct upipe_mgr *wsrc_mgr = upipe_wsrc_mgr_alloc(xfer_mgr);
     upipe_mgr_release(xfer_mgr);
