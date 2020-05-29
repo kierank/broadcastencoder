@@ -472,7 +472,8 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
                     scte35_insert_set_event_id( scte35, event_id );
                     if( insert_type != SCTE104SRD_CANCEL )
                     {
-                        scte35_insert_set_out_of_network( scte35, insert_type == SCTE104SRD_START_NORMAL || insert_type == SCTE104SRD_START_IMMEDIATE );
+                        const int oon = insert_type == SCTE104SRD_START_NORMAL || insert_type == SCTE104SRD_START_IMMEDIATE;
+                        scte35_insert_set_out_of_network( scte35, oon );
                         scte35_insert_set_program_splice( scte35, 1 );
                         scte35_insert_set_duration( scte35, !!duration );
                         scte35_insert_set_splice_immediate( scte35, splice_immediate_flag );
@@ -497,6 +498,8 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
                         scte35_insert_set_unique_program_id( scte35, unique_program_id );
                         scte35_insert_set_avail_num( scte35, avail_num );
                         scte35_insert_set_avails_expected( scte35, avails_expected );
+
+                        syslog(LOG_WARNING, "[SCTE-104] Splice Insert. %s, Preroll (90kHz) %"PRIu64" Duration (90kHz) %"PRIu64"", oon ? "Out" : "In", (pre_roll_time * 90) % mod, (duration * 9000) % mod);
                     }
                 }
                 else if( scte104o_get_opid( op ) == SCTE104_OPID_TIME_SIGNAL )
@@ -509,6 +512,7 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
                     scte35_splice_time_init( scte35 );
                     scte35_splice_time_set_time_specified( scte35, 1 );
                     scte35_splice_time_set_pts_time( scte35, (pre_roll_time * 90) % mod );
+                    syslog(LOG_WARNING, "[SCTE-104] Time signal. Pre Roll %"PRIu64" (90kHz)", (pre_roll_time * 90) % mod);
                 }
                 else if( scte104o_get_opid( op ) == SCTE104_OPID_INSERT_SD )
                 {
@@ -582,6 +586,8 @@ static int parse_scte104( obe_t *h, obe_sdi_non_display_data_t *non_display_data
                             scte35sd_set_sub_segments_expected( scte35_desc, sub_segments_expected );
                             scte35_desc += 2;
                         }
+
+                        syslog(LOG_WARNING, "[SCTE-104] Insert Segmentation Descriptor. Duration %u (90kHz)", duration * 90000 + duration_extension_frames * 3003);
                     }
                     scte35sd_set_descriptor_length( scte35_desc_start, scte35_desc - scte35_desc_start - 2 );
 
