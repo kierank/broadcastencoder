@@ -918,10 +918,10 @@ static int set_stream( char *command, obecli_command_t *child )
                 if( output_stream->stream_format == VBI_RAW )
                 {
                     obe_dvb_vbi_opts_t *vbi_opts = &cli.output_streams[output_stream_id].dvb_vbi_opts;
-                    char *vbi_ttx = obe_get_option( stream_opts[40], opts );
-                    char *vbi_inv_ttx = obe_get_option( stream_opts[41], opts );
-                    char *vbi_vps  = obe_get_option( stream_opts[42], opts );
-                    char *vbi_wss = obe_get_option( stream_opts[43], opts );
+                    char *vbi_ttx = obe_get_option( stream_opts[43], opts );
+                    char *vbi_inv_ttx = obe_get_option( stream_opts[44], opts );
+                    char *vbi_vps  = obe_get_option( stream_opts[45], opts );
+                    char *vbi_wss = obe_get_option( stream_opts[46], opts );
 
                     vbi_opts->ttx = obe_otob( vbi_ttx, vbi_opts->ttx );
                     vbi_opts->inverted_ttx = obe_otob( vbi_inv_ttx, vbi_opts->inverted_ttx );
