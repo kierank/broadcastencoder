@@ -110,6 +110,8 @@ static const char * stream_opts[] = { "action", "format",
                                       "pid", "lang", "audio-type", "num-ttx", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page",
                                       /* VBI options */
                                       "vbi-ttx", "vbi-inv-ttx", "vbi-vps", "vbi-wss",
+                                      /* SCTE-35 Options */
+                                      "scte-tcp-address",
                                       NULL };
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", "service-name", "provider-name", NULL };
@@ -918,16 +920,23 @@ static int set_stream( char *command, obecli_command_t *child )
                 if( output_stream->stream_format == VBI_RAW )
                 {
                     obe_dvb_vbi_opts_t *vbi_opts = &cli.output_streams[output_stream_id].dvb_vbi_opts;
-                    char *vbi_ttx = obe_get_option( stream_opts[40], opts );
-                    char *vbi_inv_ttx = obe_get_option( stream_opts[41], opts );
-                    char *vbi_vps  = obe_get_option( stream_opts[42], opts );
-                    char *vbi_wss = obe_get_option( stream_opts[43], opts );
+                    char *vbi_ttx = obe_get_option( stream_opts[43], opts );
+                    char *vbi_inv_ttx = obe_get_option( stream_opts[44], opts );
+                    char *vbi_vps  = obe_get_option( stream_opts[45], opts );
+                    char *vbi_wss = obe_get_option( stream_opts[46], opts );
 
                     vbi_opts->ttx = obe_otob( vbi_ttx, vbi_opts->ttx );
                     vbi_opts->inverted_ttx = obe_otob( vbi_inv_ttx, vbi_opts->inverted_ttx );
                     vbi_opts->vps = obe_otob( vbi_vps, vbi_opts->vps );
                     vbi_opts->wss = obe_otob( vbi_wss, vbi_opts->wss );
                 }
+            }
+            else if( output_stream->stream_format == MISC_SCTE35 )
+            {
+                char *scte_tcp_address = obe_get_option( stream_opts[47], opts );
+                if( scte_tcp_address )
+                    strncpy(cli.output_streams[output_stream_id].scte_tcp_address, scte_tcp_address,
+                            sizeof(cli.output_streams[output_stream_id].scte_tcp_address));
             }
 
             cli.output_streams[output_stream_id].ts_opts.pid = obe_otoi( pid, cli.output_streams[output_stream_id].ts_opts.pid );
