@@ -981,7 +981,7 @@ int obe_setup_streams( obe_t *h, obe_output_stream_t *output_streams, int num_st
     // TODO sanity check the inputs
 
     h->num_output_streams = num_streams;
-    h->output_streams = malloc( num_streams * sizeof(*h->output_streams) );
+    h->output_streams = calloc( 1, num_streams * sizeof(*h->output_streams) );
     if( !h->output_streams )
     {
         fprintf( stderr, "Malloc failed \n" );

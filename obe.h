@@ -490,6 +490,9 @@ typedef struct
     /* DVB-VBI */
     obe_dvb_vbi_opts_t dvb_vbi_opts;
 
+    /* SCTE-35 from 104 TCP */
+    char scte_tcp_address[100];
+
     /** Mux options **/
     /* MPEG-TS */
     obe_ts_stream_opts_t ts_opts;
