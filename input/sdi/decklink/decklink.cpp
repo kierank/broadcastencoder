@@ -523,6 +523,10 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         if( decklink_ctx->last_frame_time == -1 )
         {
             decklink_ctx->last_frame_time = obe_mdate();
+            decklink_ctx->p_input->StopStreams();
+            decklink_ctx->p_input->FlushStreams();
+            decklink_ctx->p_input->StartStreams();
+
             syslog( LOG_INFO, "inputActivate: Decklink input active" );
         }
 
