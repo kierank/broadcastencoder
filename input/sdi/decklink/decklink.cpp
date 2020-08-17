@@ -532,6 +532,10 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
         if( !decklink_opts_->probe && decklink_ctx->drop_count )
         {
+            decklink_ctx->p_input->StopStreams();
+            decklink_ctx->p_input->FlushStreams();
+            decklink_ctx->p_input->StartStreams();
+
             pthread_mutex_lock( &h->drop_mutex );
             h->encoder_drop = h->mux_drop = 1;
             pthread_mutex_unlock( &h->drop_mutex );
