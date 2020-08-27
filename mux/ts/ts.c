@@ -220,7 +220,7 @@ void *open_muxer( void *ptr )
     program.sdt.provider_name = mux_opts->provider_name ? mux_opts->provider_name : provider_name;
 
     if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY && !high_latency )
-        params.lowlatency = 1;        
+        params.lowlatency = 1;
 
     if( ts_setup_transport_stream( w, &params ) < 0 )
     {
