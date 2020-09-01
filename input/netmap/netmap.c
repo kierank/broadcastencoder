@@ -913,13 +913,9 @@ static int catch_audio_hbrmt(struct uprobe *uprobe, struct upipe *upipe,
             uref_sound_unmap(uref, 0, -1, 1);
 
             raw_frame->pts = av_rescale_q( netmap_ctx->a_counter, netmap_ctx->a_timebase, (AVRational){1, OBE_CLOCK} );
-#if 0
-            if( 0 ) // FIXME
-            {
-                raw_frame->video_pts = pts;
-                raw_frame->video_duration = av_rescale_q( 1, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
-            }
-#endif
+            raw_frame->video_pts = av_rescale_q( netmap_ctx->v_counter, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+            raw_frame->video_duration = av_rescale_q( 1, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+
             netmap_ctx->a_counter += raw_frame->audio_frame.num_samples;
             raw_frame->release_data = obe_release_audio_data;
             raw_frame->release_frame = obe_release_frame;
