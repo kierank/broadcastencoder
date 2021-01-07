@@ -104,7 +104,7 @@
 #define XFER_QUEUE              255
 #define XFER_POOL               20
 
-#define RFC_LATENCY (UCLOCK_FREQ/100)
+#define RFC_LATENCY (UCLOCK_FREQ/500)
 
 typedef struct
 {
