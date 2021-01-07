@@ -134,6 +134,7 @@ typedef struct
     char netmap_uri[150];
     char netmap_mode[10];
     char netmap_audio[400];
+    uint8_t netmap_audio_channels;
     char ptp_nic[100];
 
     char bars_line1[30];
