@@ -1877,6 +1877,9 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
                 uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "avsync"));
         assert(netmap_ctx->avsync);
         upipe_attach_uclock(netmap_ctx->avsync);
+        if (!ubase_check(upipe_set_option(netmap_ctx->avsync, "frame-sync", "0"))) {
+            return 1;
+        }
         upipe_mgr_release(upipe_sync_mgr);
         sdi_dec = netmap_ctx->avsync;
     }
