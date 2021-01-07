@@ -174,7 +174,7 @@ typedef struct
     AVRational      a_timebase;
     const obe_audio_sample_pattern_t *sample_pattern;
     int64_t         a_errors;
-    uint8_t         channels;
+    uint8_t         output_channels;
 
     netmap_audio_t  audio[16];
 
@@ -891,7 +891,7 @@ static int catch_audio_hbrmt(struct uprobe *uprobe, struct upipe *upipe,
             }
 
             raw_frame->audio_frame.num_samples = size;
-            raw_frame->audio_frame.num_channels = netmap_ctx->channels;
+            raw_frame->audio_frame.num_channels = netmap_ctx->output_channels;
             raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
 
             if( av_samples_alloc( raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.linesize, raw_frame->audio_frame.num_channels,
@@ -904,10 +904,10 @@ static int catch_audio_hbrmt(struct uprobe *uprobe, struct upipe *upipe,
             uref_sound_read_int32_t(uref, 0, -1, &src, 1);
 
             for( int i = 0; i < size; i++)
-                for( int j = 0; j < netmap_ctx->channels; j++ )
+                for( int j = 0; j < netmap_ctx->output_channels; j++ )
                 {
                     int32_t *audio = (int32_t*)raw_frame->audio_frame.audio_data[j];
-                    audio[i] = src[netmap_ctx->channels*i + j];
+                    audio[i] = src[netmap_ctx->output_channels*i + j];
                 }
 
             uref_sound_unmap(uref, 0, -1, 1);
@@ -933,10 +933,9 @@ end:
         return UBASE_ERR_NONE;
     } else if (event == UPROBE_NEW_FLOW_DEF) {
         flow_def = va_arg(args, struct uref *);
-        if (!ubase_check(uref_sound_flow_get_channels(flow_def, &netmap_ctx->channels))) {
-            netmap_ctx->channels = 0;
+        if (!ubase_check(uref_sound_flow_get_channels(flow_def, &netmap_ctx->output_channels))) {
+            netmap_ctx->output_channels = 0;
         }
-
     }
 
     if (!uprobe_plumber(event, args, &flow_def, &def))
@@ -984,7 +983,7 @@ static int catch_audio_2110(struct uprobe *uprobe, struct upipe *upipe,
             }
 
             raw_frame->audio_frame.num_samples = size;
-            raw_frame->audio_frame.num_channels = netmap_ctx->channels;
+            raw_frame->audio_frame.num_channels = netmap_ctx->output_channels;
             raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
 
             if( av_samples_alloc( raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.linesize, raw_frame->audio_frame.num_channels,
@@ -997,10 +996,10 @@ static int catch_audio_2110(struct uprobe *uprobe, struct upipe *upipe,
             uref_sound_read_int32_t(uref, 0, -1, &src, 1);
 
             for( int i = 0; i < size; i++)
-                for( int j = 0; j < netmap_ctx->channels; j++ )
+                for( int j = 0; j < netmap_ctx->output_channels; j++ )
                 {
                     int32_t *audio = (int32_t*)raw_frame->audio_frame.audio_data[j];
-                    audio[i] = src[netmap_ctx->channels*i + j];
+                    audio[i] = src[netmap_ctx->output_channels*i + j];
                 }
 
             uref_sound_unmap(uref, 0, -1, 1);
@@ -1680,14 +1679,14 @@ static int setup_rfc_audio(netmap_ctx_t *netmap_ctx, struct uref_mgr *uref_mgr,
         assert((channels & 1) == 0);
 
         netmap_audio_t *a = &netmap_ctx->audio[i++];
-        a->idx = netmap_ctx->channels/2;
+        a->idx = netmap_ctx->output_channels/2; // FIXME what does this do
         a->channels = channels;
 
         setup_rfc_audio_channel(netmap_ctx, audio, path2, a, uprobe_main,
                 loglevel, flow_def);
 
         audio = next;
-        netmap_ctx->channels += channels;
+        netmap_ctx->output_channels += channels;
     }
     uref_free(flow_def);
 
@@ -1900,7 +1899,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         }
 
         /* audio callback */
-        netmap_ctx->channels = 16;
+        netmap_ctx->output_channels = 16;
         struct upipe *probe_uref_audio = upipe_void_alloc_output(audio,
                 upipe_probe_uref_mgr,
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_audio_hbrmt, netmap_ctx),
