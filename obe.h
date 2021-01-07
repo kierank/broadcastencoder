@@ -134,6 +134,7 @@ typedef struct
     char netmap_uri[150];
     char netmap_mode[10];
     char netmap_audio[400];
+    uint8_t netmap_audio_channels;
     char ptp_nic[100];
 
     char bars_line1[30];
@@ -489,6 +490,9 @@ typedef struct
 
     /* DVB-VBI */
     obe_dvb_vbi_opts_t dvb_vbi_opts;
+
+    /* SCTE-35 from 104 TCP */
+    char scte_tcp_address[100];
 
     /** Mux options **/
     /* MPEG-TS */

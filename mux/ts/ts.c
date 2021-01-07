@@ -94,7 +94,7 @@ void *open_muxer( void *ptr )
     obe_mux_opts_t *mux_opts = &h->mux_opts;
     int cur_pid = MIN_PID;
     int stream_format, video_pid = 0, video_found = 0, width = 0,
-    height = 0, has_dds = 0, len = 0, num_frames = 0;
+    height = 0, has_dds = 0, len = 0, num_frames = 0, high_latency = 0;
     uint8_t *output;
     int64_t first_video_pts = -1, video_dts, first_video_real_pts = -1;
     int64_t *pcr_list;
@@ -189,17 +189,27 @@ void *open_muxer( void *ptr )
             video_pid = stream->pid;
         }
         else if( stream_format == AUDIO_MP2 )
+        {
             stream->audio_frame_size = (double)MP2_NUM_SAMPLES * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
+            high_latency = 1;
+        }
         else if( stream_format == AUDIO_AC_3 )
+        {
             stream->audio_frame_size = (double)AC3_NUM_SAMPLES * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
+            high_latency = 1;
+        }
         else if( stream_format == AUDIO_E_AC_3 || stream_format == AUDIO_AAC )
         {
             encoder_wait( h, output_stream->output_stream_id );
             encoder = get_encoder( h, output_stream->output_stream_id );
             stream->audio_frame_size = (double)encoder->num_samples * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
+            high_latency = 1;
         }
         else if( stream_format == AUDIO_OPUS )
+        {
             stream->audio_frame_size = (double)OPUS_NUM_SAMPLES * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
+            high_latency = 1;
+        }
     }
 
     /* Video stream isn't guaranteed to be first so populate program parameters here */
@@ -208,6 +218,9 @@ void *open_muxer( void *ptr )
     program.sdt.service_type = height >= 720 ? DVB_SERVICE_TYPE_ADVANCED_CODEC_HD : DVB_SERVICE_TYPE_ADVANCED_CODEC_SD;
     program.sdt.service_name = mux_opts->service_name ? mux_opts->service_name : service_name;
     program.sdt.provider_name = mux_opts->provider_name ? mux_opts->provider_name : provider_name;
+
+    if( h->obe_system == OBE_SYSTEM_TYPE_LOWEST_LATENCY && !high_latency )
+        params.lowlatency = 1;
 
     if( ts_setup_transport_stream( w, &params ) < 0 )
     {
@@ -478,6 +491,7 @@ void *open_muxer( void *ptr )
                             pts += frames[num_frames].pts + 900000; /* mux starts at a clock of 10 seconds */
                             pts %= mod;
                             scte35_splice_time_set_pts_time( splice_time, pts );
+                            syslog(LOG_WARNING, "[SCTE-35] Splice Frame PTS %"PRIu64" (90kHz) Splice PTS %"PRIu64" (90kHz - 10 second offset)", frames[num_frames].pts, pts);
                         }
                     }
 

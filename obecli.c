@@ -90,7 +90,7 @@ static const char * const flip_types[]               = { "", "horizontal" };
 
 static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
 static const char * input_opts[]  = { "netmap-uri", "card-idx", "video-format", "video-connection", "audio-connection",
-                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", "netmap-mode", "netmap-audio", "ptp-nic", "bars-beep", "bars-beep-interval", NULL };
+                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", "netmap-mode", "netmap-audio", "netmap-audio-channels", "ptp-nic", "bars-beep", "bars-beep-interval", NULL };
 static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
@@ -110,6 +110,8 @@ static const char * stream_opts[] = { "action", "format",
                                       "pid", "lang", "audio-type", "num-ttx", "ttx-lang", "ttx-type", "ttx-mag", "ttx-page",
                                       /* VBI options */
                                       "vbi-ttx", "vbi-inv-ttx", "vbi-vps", "vbi-wss",
+                                      /* SCTE-35 Options */
+                                      "scte-tcp-address",
                                       NULL };
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", "service-name", "provider-name", NULL };
@@ -543,9 +545,10 @@ static int set_input( char *command, obecli_command_t *child )
         char *picture_on_loss = obe_get_option( input_opts[9], opts );
         char *netmap_mode = obe_get_option( input_opts[10], opts );
         char *netmap_audio = obe_get_option( input_opts[11], opts );
-        char *ptp_nic = obe_get_option( input_opts[12], opts );
-        char *bars_beep = obe_get_option( input_opts[13], opts );
-        char *bars_beep_interval = obe_get_option( input_opts[14], opts );
+        char *netmap_audio_channels = obe_get_option( input_opts[12], opts );
+        char *ptp_nic = obe_get_option( input_opts[13], opts );
+        char *bars_beep = obe_get_option( input_opts[14], opts );
+        char *bars_beep_interval = obe_get_option( input_opts[15], opts );
 
         FAIL_IF_ERROR( video_format && ( check_enum_value( video_format, input_video_formats ) < 0 ),
                        "Invalid video format\n" );
@@ -565,6 +568,8 @@ static int set_input( char *command, obecli_command_t *child )
             strncpy(cli.input.netmap_mode, netmap_mode, sizeof(cli.input.netmap_mode));
         if( netmap_audio )
             strncpy(cli.input.netmap_audio, netmap_audio, sizeof(cli.input.netmap_audio));
+        if( netmap_audio_channels )
+            cli.input.netmap_audio_channels = obe_otoi( netmap_audio_channels, cli.input.netmap_audio_channels );
         if( ptp_nic )
             strncpy(cli.input.ptp_nic, ptp_nic, sizeof(cli.input.ptp_nic));
         cli.input.card_idx = obe_otoi( card_idx, cli.input.card_idx );
@@ -918,16 +923,23 @@ static int set_stream( char *command, obecli_command_t *child )
                 if( output_stream->stream_format == VBI_RAW )
                 {
                     obe_dvb_vbi_opts_t *vbi_opts = &cli.output_streams[output_stream_id].dvb_vbi_opts;
-                    char *vbi_ttx = obe_get_option( stream_opts[40], opts );
-                    char *vbi_inv_ttx = obe_get_option( stream_opts[41], opts );
-                    char *vbi_vps  = obe_get_option( stream_opts[42], opts );
-                    char *vbi_wss = obe_get_option( stream_opts[43], opts );
+                    char *vbi_ttx = obe_get_option( stream_opts[43], opts );
+                    char *vbi_inv_ttx = obe_get_option( stream_opts[44], opts );
+                    char *vbi_vps  = obe_get_option( stream_opts[45], opts );
+                    char *vbi_wss = obe_get_option( stream_opts[46], opts );
 
                     vbi_opts->ttx = obe_otob( vbi_ttx, vbi_opts->ttx );
                     vbi_opts->inverted_ttx = obe_otob( vbi_inv_ttx, vbi_opts->inverted_ttx );
                     vbi_opts->vps = obe_otob( vbi_vps, vbi_opts->vps );
                     vbi_opts->wss = obe_otob( vbi_wss, vbi_opts->wss );
                 }
+            }
+            else if( output_stream->stream_format == MISC_SCTE35 )
+            {
+                char *scte_tcp_address = obe_get_option( stream_opts[47], opts );
+                if( scte_tcp_address )
+                    strncpy(cli.output_streams[output_stream_id].scte_tcp_address, scte_tcp_address,
+                            sizeof(cli.output_streams[output_stream_id].scte_tcp_address));
             }
 
             cli.output_streams[output_stream_id].ts_opts.pid = obe_otoi( pid, cli.output_streams[output_stream_id].ts_opts.pid );

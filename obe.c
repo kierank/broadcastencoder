@@ -981,7 +981,7 @@ int obe_setup_streams( obe_t *h, obe_output_stream_t *output_streams, int num_st
     // TODO sanity check the inputs
 
     h->num_output_streams = num_streams;
-    h->output_streams = malloc( num_streams * sizeof(*h->output_streams) );
+    h->output_streams = calloc( 1, num_streams * sizeof(*h->output_streams) );
     if( !h->output_streams )
     {
         fprintf( stderr, "Malloc failed \n" );
@@ -1318,17 +1318,14 @@ int obe_start( obe_t *h )
         }
     }
 
-    if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
+    /* Open Encoder Smoothing Thread */
+    if( pthread_create( &h->enc_smoothing_thread, NULL, enc_smoothing.start_smoothing, (void*)h ) < 0 )
     {
-        /* Open Encoder Smoothing Thread */
-        if( pthread_create( &h->enc_smoothing_thread, NULL, enc_smoothing.start_smoothing, (void*)h ) < 0 )
-        {
-            fprintf( stderr, "Couldn't create encoder smoothing thread \n" );
-            h->enc_smoothing_thread_running = false;
-            goto fail;
-        }
-            h->enc_smoothing_thread_running = true;
+        fprintf( stderr, "Couldn't create encoder smoothing thread \n" );
+        h->enc_smoothing_thread_running = false;
+        goto fail;
     }
+        h->enc_smoothing_thread_running = true;
 
     /* Open Mux Smoothing Thread */
     if( pthread_create( &h->mux_smoothing_thread, NULL, mux_smoothing.start_smoothing, (void*)h ) < 0 )
@@ -1552,19 +1549,16 @@ void obe_close( obe_t *h )
     fprintf( stderr, "encoders cancelled \n" );
 
     /* Cancel encoder smoothing thread */
-    if ( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
-    {
-        pthread_mutex_lock( &h->enc_smoothing_queue.mutex );
-        h->cancel_enc_smoothing_thread = 1;
-        pthread_cond_signal( &h->enc_smoothing_queue.in_cv );
-        pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
-        /* send a clock tick in case smoothing is waiting for one */
-        pthread_mutex_lock( &h->obe_clock_mutex );
-        pthread_cond_broadcast( &h->obe_clock_cv );
-        pthread_mutex_unlock( &h->obe_clock_mutex );
-        if (h->enc_smoothing_thread_running)
-            pthread_join( h->enc_smoothing_thread, &ret_ptr );
-    }
+    pthread_mutex_lock( &h->enc_smoothing_queue.mutex );
+    h->cancel_enc_smoothing_thread = 1;
+    pthread_cond_signal( &h->enc_smoothing_queue.in_cv );
+    pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
+    /* send a clock tick in case smoothing is waiting for one */
+    pthread_mutex_lock( &h->obe_clock_mutex );
+    pthread_cond_broadcast( &h->obe_clock_cv );
+    pthread_mutex_unlock( &h->obe_clock_mutex );
+    if (h->enc_smoothing_thread_running)
+        pthread_join( h->enc_smoothing_thread, &ret_ptr );
 
     fprintf( stderr, "encoder smoothing cancelled \n" );
 

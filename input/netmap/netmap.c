@@ -174,7 +174,8 @@ typedef struct
     AVRational      a_timebase;
     const obe_audio_sample_pattern_t *sample_pattern;
     int64_t         a_errors;
-    uint8_t         channels;
+    uint8_t         input_channels;
+    uint8_t         output_channels;
 
     netmap_audio_t  audio[16];
 
@@ -891,7 +892,7 @@ static int catch_audio_hbrmt(struct uprobe *uprobe, struct upipe *upipe,
             }
 
             raw_frame->audio_frame.num_samples = size;
-            raw_frame->audio_frame.num_channels = netmap_ctx->channels;
+            raw_frame->audio_frame.num_channels = netmap_ctx->output_channels;
             raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
 
             if( av_samples_alloc( raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.linesize, raw_frame->audio_frame.num_channels,
@@ -904,22 +905,18 @@ static int catch_audio_hbrmt(struct uprobe *uprobe, struct upipe *upipe,
             uref_sound_read_int32_t(uref, 0, -1, &src, 1);
 
             for( int i = 0; i < size; i++)
-                for( int j = 0; j < netmap_ctx->channels; j++ )
+                for( int j = 0; j < netmap_ctx->output_channels; j++ )
                 {
                     int32_t *audio = (int32_t*)raw_frame->audio_frame.audio_data[j];
-                    audio[i] = src[netmap_ctx->channels*i + j];
+                    audio[i] = src[netmap_ctx->output_channels*i + j];
                 }
 
             uref_sound_unmap(uref, 0, -1, 1);
 
             raw_frame->pts = av_rescale_q( netmap_ctx->a_counter, netmap_ctx->a_timebase, (AVRational){1, OBE_CLOCK} );
-#if 0
-            if( 0 ) // FIXME
-            {
-                raw_frame->video_pts = pts;
-                raw_frame->video_duration = av_rescale_q( 1, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
-            }
-#endif
+            raw_frame->video_pts = av_rescale_q( netmap_ctx->v_counter, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+            raw_frame->video_duration = av_rescale_q( 1, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+
             netmap_ctx->a_counter += raw_frame->audio_frame.num_samples;
             raw_frame->release_data = obe_release_audio_data;
             raw_frame->release_frame = obe_release_frame;
@@ -937,10 +934,9 @@ end:
         return UBASE_ERR_NONE;
     } else if (event == UPROBE_NEW_FLOW_DEF) {
         flow_def = va_arg(args, struct uref *);
-        if (!ubase_check(uref_sound_flow_get_channels(flow_def, &netmap_ctx->channels))) {
-            netmap_ctx->channels = 0;
+        if (!ubase_check(uref_sound_flow_get_channels(flow_def, &netmap_ctx->output_channels))) {
+            netmap_ctx->output_channels = 0;
         }
-
     }
 
     if (!uprobe_plumber(event, args, &flow_def, &def))
@@ -988,7 +984,7 @@ static int catch_audio_2110(struct uprobe *uprobe, struct upipe *upipe,
             }
 
             raw_frame->audio_frame.num_samples = size;
-            raw_frame->audio_frame.num_channels = netmap_ctx->channels;
+            raw_frame->audio_frame.num_channels = netmap_ctx->output_channels;
             raw_frame->audio_frame.sample_fmt = AV_SAMPLE_FMT_S32P;
 
             if( av_samples_alloc( raw_frame->audio_frame.audio_data, &raw_frame->audio_frame.linesize, raw_frame->audio_frame.num_channels,
@@ -1001,22 +997,18 @@ static int catch_audio_2110(struct uprobe *uprobe, struct upipe *upipe,
             uref_sound_read_int32_t(uref, 0, -1, &src, 1);
 
             for( int i = 0; i < size; i++)
-                for( int j = 0; j < netmap_ctx->channels; j++ )
+                for( int j = 0; j < netmap_ctx->output_channels; j++ )
                 {
                     int32_t *audio = (int32_t*)raw_frame->audio_frame.audio_data[j];
-                    audio[i] = src[netmap_ctx->channels*i + j];
+                    audio[i] = src[netmap_ctx->output_channels*i + j];
                 }
 
             uref_sound_unmap(uref, 0, -1, 1);
 
             raw_frame->pts = av_rescale_q( netmap_ctx->a_counter, netmap_ctx->a_timebase, (AVRational){1, OBE_CLOCK} );
-#if 0
-            if( 0 ) // FIXME
-            {
-                raw_frame->video_pts = pts;
-                raw_frame->video_duration = av_rescale_q( 1, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
-            }
-#endif
+            raw_frame->video_pts = av_rescale_q( netmap_ctx->v_counter, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+            raw_frame->video_duration = av_rescale_q( 1, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+
             netmap_ctx->a_counter += raw_frame->audio_frame.num_samples;
             raw_frame->release_data = obe_release_audio_data;
             raw_frame->release_frame = obe_release_frame;
@@ -1494,7 +1486,7 @@ static void upipe_event_timer(struct upump *upump)
             upump_free(upump);
 
             upipe_release(netmap_ctx->upipe_main_src);
-            for (int i = 0; i < 16; i++) {
+            for (int i = 0; i < 8; i++) {
                 netmap_audio_t *audio = &netmap_ctx->audio[i];
                 if (audio->channels == 0)
                     break;
@@ -1524,7 +1516,7 @@ static void upipe_event_timer(struct upump *upump)
 
         if( netmap_ctx->stop )
         {
-            for (int i = 0; i < 16; i++) {
+            for (int i = 0; i < 8; i++) {
                 netmap_audio_t *audio = &netmap_ctx->audio[i];
                 if (audio->channels == 0)
                     break;
@@ -1679,7 +1671,7 @@ static int setup_rfc_audio(netmap_ctx_t *netmap_ctx, struct uref_mgr *uref_mgr,
         if (path2)
             *path2++ = '\0';
 
-        unsigned channels = 16; //FIXME
+        unsigned channels = netmap_ctx->input_channels;
         if (!channels) {
             printf("audio URI missing channels\n");
             uref_free(flow_def);
@@ -1689,14 +1681,14 @@ static int setup_rfc_audio(netmap_ctx_t *netmap_ctx, struct uref_mgr *uref_mgr,
         assert((channels & 1) == 0);
 
         netmap_audio_t *a = &netmap_ctx->audio[i++];
-        a->idx = netmap_ctx->channels/2;
+        a->idx = netmap_ctx->output_channels/2; // FIXME what does this do
         a->channels = channels;
 
         setup_rfc_audio_channel(netmap_ctx, audio, path2, a, uprobe_main,
                 loglevel, flow_def);
 
         audio = next;
-        netmap_ctx->channels += channels;
+        netmap_ctx->output_channels += channels;
     }
     uref_free(flow_def);
 
@@ -1886,6 +1878,9 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
                 uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "avsync"));
         assert(netmap_ctx->avsync);
         upipe_attach_uclock(netmap_ctx->avsync);
+        if (!ubase_check(upipe_set_option(netmap_ctx->avsync, "frame-sync", "0"))) {
+            return 1;
+        }
         upipe_mgr_release(upipe_sync_mgr);
         sdi_dec = netmap_ctx->avsync;
     }
@@ -1909,7 +1904,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         }
 
         /* audio callback */
-        netmap_ctx->channels = 16;
+        netmap_ctx->output_channels = 16;
         struct upipe *probe_uref_audio = upipe_void_alloc_output(audio,
                 upipe_probe_uref_mgr,
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_audio_hbrmt, netmap_ctx),
@@ -2192,6 +2187,7 @@ static void *open_input( void *ptr )
 
     netmap_ctx.uri = user_opts->netmap_uri;
     netmap_ctx.audio_uri = user_opts->netmap_audio;
+    netmap_ctx.input_channels = user_opts->netmap_audio_channels;
     netmap_ctx.rfc4175 = user_opts->netmap_mode && !strcmp(user_opts->netmap_mode, "rfc4175");
     netmap_ctx.ptp_nic = user_opts->ptp_nic;
     netmap_ctx.h = h;

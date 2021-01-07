@@ -33,6 +33,17 @@
 #include "x86/vfilter.h"
 #include "input/sdi/sdi.h"
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include <unistd.h>
+#include <fcntl.h>
+#include <poll.h>
+
+#include <bitstream/scte/104.h>
+#include <input/sdi/ancillary.h>
+
 typedef struct
 {
     int filter_bit_depth;
@@ -67,6 +78,12 @@ typedef struct
     int16_t *error_buf;
 
     int flip_ready;
+
+    /* SCTE TCP */
+    int64_t duration;
+    int sockfd;
+    int connfd;
+    uint8_t msg_number;
 } obe_vid_filter_ctx_t;
 
 typedef struct
@@ -953,6 +970,128 @@ static int encapsulate_user_data( obe_raw_frame_t *raw_frame, obe_int_input_stre
     return ret;
 }
 
+static int setup_scte104_socket( obe_vid_filter_ctx_t *vfilt, obe_output_stream_t *scte35_stream )
+{
+    struct sockaddr_in listen_addr;
+    int flags;
+    char *ip, *port;
+
+    vfilt->sockfd = socket( AF_INET, SOCK_STREAM, 0 );
+    if( vfilt->sockfd < 0 )
+    {
+        fprintf( stderr, "socket creation failed \n" );
+        return -1;
+    }
+
+    flags = fcntl(vfilt->sockfd, F_GETFL, 0);
+    fcntl(vfilt->sockfd, F_SETFL, flags | O_NONBLOCK);
+
+    int enable = 1;
+    if( setsockopt( vfilt->sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int) ) < 0 )
+        fprintf( stderr, "setsockopt(SO_REUSEADDR) failed \n" );
+
+    ip = strtok( scte35_stream->scte_tcp_address, ":" );
+    port = strtok( NULL, ":" );
+
+    listen_addr.sin_family = AF_INET;
+    listen_addr.sin_addr.s_addr = inet_addr(ip);
+    listen_addr.sin_port = htons(atoi(port));
+
+    if( bind( vfilt->sockfd, (struct sockaddr*)&listen_addr, sizeof(listen_addr) ) < 0 )
+    {
+        fprintf( stderr, "bind() failed \n" );
+        return -1;
+    }
+
+    if( listen( vfilt->sockfd, 128 ) < 0 )
+    {
+        fprintf( stderr, "listen() failed \n" );
+        return -1;
+    }
+
+    return 0;
+}
+
+static void send_scte104_reply(obe_vid_filter_ctx_t *vfilt, uint16_t type)
+{
+    uint8_t msg[500];
+
+    int len = SCTE104M_HEADER_SIZE + SCTE104T_HEADER_SIZE + 1 + SCTE104O_HEADER_SIZE;
+
+    scte104_set_opid(msg, SCTE104_OPID_MULTIPLE);
+    scte104o_set_data_length(msg, len);
+    scte104m_set_protocol(msg, 0);
+    scte104m_set_as_index(msg, 0);
+    scte104m_set_message_number(msg, vfilt->msg_number++);
+    scte104m_set_dpi_pid_index(msg, 0);
+    scte104m_set_scte35_protocol(msg, 0);
+
+    uint8_t *ts = scte104m_get_timestamp(msg);
+    scte104t_set_type(ts, SCTE104T_TYPE_NONE);
+
+    scte104m_set_num_ops(msg, 1);
+    
+    uint8_t *op = ts + 2;
+    scte104o_set_opid(op, type);
+    scte104o_set_data_length(op, 0);
+
+    if( send(vfilt->connfd, msg, len, 0) < 0)
+        fprintf( stderr, "Failed to send scte 104 reply \n" );
+}
+
+static int handle_scte104_message( obe_t *h, obe_vid_filter_ctx_t *vfilt, int64_t pts )
+{
+    uint8_t scte104[500];
+    obe_sdi_non_display_data_t non_display_data;
+
+    int len = recv( vfilt->connfd, (void *)scte104, sizeof(scte104), 0 );
+
+    if( len < 0 )
+    {
+        fprintf( stderr, "error receiving scte tcp message \n");
+        return -1;
+    }
+    
+    if( len == 0 )
+    {
+        close( vfilt->connfd );
+        vfilt->connfd = 0;        
+    }
+
+    if( len >= 14 )
+    {
+        /* Check it's a message we should decode */
+        if( scte104m_validate( scte104 ) && scte104_get_opid( scte104 ) == SCTE104_OPID_MULTIPLE )
+        {
+            int num_ops = scte104m_get_num_ops( scte104 );
+            for( int i = 0; i < num_ops; i++ )
+            {
+                uint8_t *op = scte104m_get_op( scte104, i );
+                if( scte104o_get_opid( op ) == SCTE104_OPID_INIT_REQUEST_DATA ||
+                    scte104o_get_opid( op ) == SCTE104_OPID_ALIVE_REQUEST_DATA )
+                {
+                    send_scte104_reply( vfilt, scte104o_get_opid( op ) + 1 );
+                }
+                else if( scte104o_get_opid( op ) == SCTE104_OPID_SPLICE_NULL ||
+                         scte104o_get_opid( op ) == SCTE104_OPID_SPLICE ||
+                         scte104o_get_opid( op ) == SCTE104_OPID_TIME_SIGNAL ||
+                         scte104o_get_opid( op ) == SCTE104_OPID_INSERT_SD )
+                {
+                    decode_scte104( &non_display_data, scte104 );
+                    if( non_display_data.scte35_frame )
+                    {
+                        if( send_scte35( h, &non_display_data, pts, vfilt->duration) < 0 )
+                            fprintf( stderr, "couldn't send scte35 data \n");
+                    }
+                }
+            }
+        }
+    }
+
+
+    return 0;
+}
+
 static void *start_filter( void *ptr )
 {
     obe_vid_filter_params_t *filter_params = ptr;
@@ -961,7 +1100,10 @@ static void *start_filter( void *ptr )
     obe_int_input_stream_t *input_stream = filter_params->input_stream;
     obe_raw_frame_t *raw_frame;
     obe_output_stream_t *output_stream = get_output_stream( h, 0 ); /* FIXME when output_stream_id for video is not zero */
-    int h_shift, v_shift;
+    obe_output_stream_t *scte35_stream = get_output_stream_by_format( h, MISC_SCTE35 );
+    int h_shift, v_shift, scte_tcp = 0;
+    int64_t pts;
+    struct pollfd fds[2];
 
     obe_vid_filter_ctx_t *vfilt = calloc( 1, sizeof(*vfilt) );
     if( !vfilt )
@@ -974,6 +1116,19 @@ static void *start_filter( void *ptr )
 
     vfilt->dst_width = output_stream->avc_param.i_width;
     vfilt->dst_height = output_stream->avc_param.i_height;
+
+    if( scte35_stream && strlen( scte35_stream->scte_tcp_address ) )
+    {
+        if( setup_scte104_socket( vfilt, scte35_stream) < 0 )
+        {
+            fprintf( stderr, "Could not open socket\n" );
+            goto end;
+        }
+
+        scte_tcp = 1;
+    }
+
+    vfilt->duration = av_rescale_q( 1, (AVRational){input_stream->timebase_num, input_stream->timebase_den}, (AVRational){1, OBE_CLOCK} );
 
     while( 1 )
     {
@@ -1050,7 +1205,39 @@ static void *start_filter( void *ptr )
             raw_frame->sar_guess = 1;
         }
 
+        pts = raw_frame->pts;
         add_to_encode_queue( h, raw_frame, 0 );
+
+        if( scte_tcp )
+        {
+            int num_fds = 1;
+            fds[0].fd = vfilt->sockfd;
+            fds[0].events = POLLIN;
+
+            if( vfilt->connfd > 0 )
+            {
+                fds[1].fd = vfilt->connfd;
+                fds[1].events = POLLIN;
+                num_fds = 2;
+            }
+
+            if( poll( fds, num_fds, 2 ) )
+            {
+                if( fds[0].revents & POLLIN )
+                {
+                    vfilt->connfd = accept( vfilt->sockfd, NULL, 0 );
+                    if( vfilt->connfd < 0 && (vfilt->connfd != EAGAIN || vfilt->connfd != EWOULDBLOCK) )
+                    {
+                        fprintf( stderr, "accept() failed \n" );
+                    }
+                }
+
+                if( fds[1].revents & POLLIN )
+                {
+                    handle_scte104_message( h, vfilt, pts );
+                }
+            }
+        }
     }
 
 end:
@@ -1058,6 +1245,12 @@ end:
     {
         if( vfilt->resize_filter_graph )
             avfilter_graph_free( &vfilt->resize_filter_graph );
+
+        if( vfilt->connfd )
+            close( vfilt->connfd );
+
+        if( vfilt->sockfd )
+            close( vfilt->sockfd );
 
         free( vfilt );
     }
