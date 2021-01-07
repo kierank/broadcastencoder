@@ -90,7 +90,7 @@ static const char * const flip_types[]               = { "", "horizontal" };
 
 static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
 static const char * input_opts[]  = { "netmap-uri", "card-idx", "video-format", "video-connection", "audio-connection",
-                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", "netmap-mode", "netmap-audio", "ptp-nic", "bars-beep", "bars-beep-interval", NULL };
+                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", "netmap-mode", "netmap-audio", "netmap-audio-channels", "ptp-nic", "bars-beep", "bars-beep-interval", NULL };
 static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
@@ -545,9 +545,10 @@ static int set_input( char *command, obecli_command_t *child )
         char *picture_on_loss = obe_get_option( input_opts[9], opts );
         char *netmap_mode = obe_get_option( input_opts[10], opts );
         char *netmap_audio = obe_get_option( input_opts[11], opts );
-        char *ptp_nic = obe_get_option( input_opts[12], opts );
-        char *bars_beep = obe_get_option( input_opts[13], opts );
-        char *bars_beep_interval = obe_get_option( input_opts[14], opts );
+        char *netmap_audio_channels = obe_get_option( input_opts[12], opts );
+        char *ptp_nic = obe_get_option( input_opts[13], opts );
+        char *bars_beep = obe_get_option( input_opts[14], opts );
+        char *bars_beep_interval = obe_get_option( input_opts[15], opts );
 
         FAIL_IF_ERROR( video_format && ( check_enum_value( video_format, input_video_formats ) < 0 ),
                        "Invalid video format\n" );
@@ -567,6 +568,8 @@ static int set_input( char *command, obecli_command_t *child )
             strncpy(cli.input.netmap_mode, netmap_mode, sizeof(cli.input.netmap_mode));
         if( netmap_audio )
             strncpy(cli.input.netmap_audio, netmap_audio, sizeof(cli.input.netmap_audio));
+        if( netmap_audio_channels )
+            cli.input.netmap_audio_channels = obe_otoi( netmap_audio_channels, cli.input.netmap_audio_channels );
         if( ptp_nic )
             strncpy(cli.input.ptp_nic, ptp_nic, sizeof(cli.input.ptp_nic));
         cli.input.card_idx = obe_otoi( card_idx, cli.input.card_idx );

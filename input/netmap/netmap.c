@@ -104,7 +104,7 @@
 #define XFER_QUEUE              255
 #define XFER_POOL               20
 
-#define RFC_LATENCY (UCLOCK_FREQ/100)
+#define RFC_LATENCY (UCLOCK_FREQ/500)
 
 typedef struct
 {
@@ -174,6 +174,7 @@ typedef struct
     AVRational      a_timebase;
     const obe_audio_sample_pattern_t *sample_pattern;
     int64_t         a_errors;
+    uint8_t         input_channels;
     uint8_t         output_channels;
 
     netmap_audio_t  audio[16];
@@ -1670,7 +1671,7 @@ static int setup_rfc_audio(netmap_ctx_t *netmap_ctx, struct uref_mgr *uref_mgr,
         if (path2)
             *path2++ = '\0';
 
-        unsigned channels = 16; //FIXME
+        unsigned channels = netmap_ctx->input_channels;
         if (!channels) {
             printf("audio URI missing channels\n");
             uref_free(flow_def);
@@ -1877,6 +1878,9 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
                 uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "avsync"));
         assert(netmap_ctx->avsync);
         upipe_attach_uclock(netmap_ctx->avsync);
+        if (!ubase_check(upipe_set_option(netmap_ctx->avsync, "frame-sync", "0"))) {
+            return 1;
+        }
         upipe_mgr_release(upipe_sync_mgr);
         sdi_dec = netmap_ctx->avsync;
     }
@@ -2183,6 +2187,7 @@ static void *open_input( void *ptr )
 
     netmap_ctx.uri = user_opts->netmap_uri;
     netmap_ctx.audio_uri = user_opts->netmap_audio;
+    netmap_ctx.input_channels = user_opts->netmap_audio_channels;
     netmap_ctx.rfc4175 = user_opts->netmap_mode && !strcmp(user_opts->netmap_mode, "rfc4175");
     netmap_ctx.ptp_nic = user_opts->ptp_nic;
     netmap_ctx.h = h;
