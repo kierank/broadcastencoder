@@ -1484,7 +1484,7 @@ static void upipe_event_timer(struct upump *upump)
             upump_free(upump);
 
             upipe_release(netmap_ctx->upipe_main_src);
-            for (int i = 0; i < 16; i++) {
+            for (int i = 0; i < 8; i++) {
                 netmap_audio_t *audio = &netmap_ctx->audio[i];
                 if (audio->channels == 0)
                     break;
@@ -1514,7 +1514,7 @@ static void upipe_event_timer(struct upump *upump)
 
         if( netmap_ctx->stop )
         {
-            for (int i = 0; i < 16; i++) {
+            for (int i = 0; i < 8; i++) {
                 netmap_audio_t *audio = &netmap_ctx->audio[i];
                 if (audio->channels == 0)
                     break;
