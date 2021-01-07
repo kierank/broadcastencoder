@@ -623,6 +623,13 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 scte35_stream->output_stream_id = i;
 
                 scte35_stream->ts_opts.pid = ancillary_opts_in->scte35_pid;
+
+                if( encoder_control->ancillary_opts->has_scte_tcp_enabled && encoder_control->ancillary_opts->scte_tcp_enabled &&
+                    encoder_control->ancillary_opts->scte_tcp_address )
+                {
+                    strncpy( scte35_stream->scte_tcp_address, encoder_control->ancillary_opts->scte_tcp_address, sizeof(scte35_stream->scte_tcp_address) );
+                }
+
                 i++;
             }
 

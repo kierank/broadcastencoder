@@ -209,6 +209,7 @@ lzvbi="auto"
 lopenfec="auto"
 protobuf="auto"
 upipe="auto"
+bitstream="auto"
 
 CFLAGS="$CFLAGS -Wall -I."
 CXXFLAGS="$CXXFLAGS -c -Wall -I."
@@ -738,6 +739,23 @@ if [ "$upipe" = "yes" ]; then
     LDFLAGS="$UPIPE_LIBS $LDFLAGS"
     CFLAGS="$CFLAGS $UPIPE_CFLAGS"
     CXXFLAGS="$CXXFLAGS $UPIPE_CFLAGS"
+fi
+
+if [ "$bitstream" = "auto" ] ; then
+    bitstream="no"
+    if ${cross_prefix}pkg-config --exists bitstream 2>/dev/null; then
+        BITSTREAM_LIBS="$BITSTREAM_LIBS $(${cross_prefix}pkg-config --libs bitstream)"
+        BITSTREAM_CFLAGS="$BITSTREAM_CFLAGS $(${cross_prefix}pkg-config --cflags bitstream)"
+        bitstream="yes"
+    else
+        echo "Compiling might fail without bitstream"
+    fi
+fi
+
+if [ "$bitstream" = "yes" ]; then
+    LDFLAGS="$BITSTREAM_LIBS $LDFLAGS"
+    CFLAGS="$CFLAGS $BITSTREAM_CFLAGS"
+    CXXFLAGS="$CXXFLAGS $BITSTREAM_CFLAGS"
 fi
 
 if [ "$pic" = "yes" ] ; then
