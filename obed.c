@@ -319,19 +319,25 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                     if( input_opts_in->path1_ptp_nic )
                         snprintf( input_opts_out->ptp_nic, sizeof(input_opts_out->ptp_nic), "%s|%s", input_opts_in->path1_ptp_nic, input_opts_in->path2_ptp_nic ? input_opts_in->path2_ptp_nic : "" );
                     strncpy( input_opts_out->netmap_mode, "rfc4175", sizeof(input_opts_out->netmap_mode) );
+                    struct in_addr path1_addr = intf_addr(input_opts_in->path1_ptp_nic);
+                    struct in_addr path2_addr = intf_addr(input_opts_in->path2_ptp_nic);
+                    char tmp[17], tmp2[17];
 
-                    /* TODO: multiple streams */
-                    if( encoder_control->n_audio_input_opts )
+                    /* inet_ntoa writes to a static buffer so can't use it twice */
+                    strncpy(tmp, inet_ntoa(path1_addr), sizeof(tmp));
+                    strncpy(tmp2, inet_ntoa(path2_addr), sizeof(tmp));
+
+                    for( i = 0; i < encoder_control->n_audio_input_opts; i++ )
                     {
-                        Obed__AudioInputOpts *audio_input_opts = encoder_control->audio_input_opts[0];
-                        struct in_addr path1_addr = intf_addr(input_opts_in->path1_ptp_nic);
-                        struct in_addr path2_addr = intf_addr(input_opts_in->path2_ptp_nic);
-                        char tmp[17], tmp2[17];
+                        char tmp3[150];
+                        Obed__AudioInputOpts *audio_input_opts = encoder_control->audio_input_opts[i];
 
-                        /* inet_ntoa writes to a static buffer so can't use it twice */
-                        strncpy(tmp, inet_ntoa(path1_addr), sizeof(tmp));
-                        strncpy(tmp2, inet_ntoa(path2_addr), sizeof(tmp));
-                        snprintf( input_opts_out->netmap_audio, sizeof(input_opts_out->netmap_audio), "%s@%s:%u/ifaddr=%s|%s@%s:%u/ifaddr=%s",
+                        if( i == 0 )
+                            input_opts_out->netmap_audio_channels = audio_input_opts->channels;
+                        else
+                            strncat( input_opts_out->netmap_audio, ";", 1 );
+
+                        snprintf( tmp3, sizeof(tmp3), "%s@%s:%u/ifaddr=%s|%s@%s:%u/ifaddr=%s",
                                   audio_input_opts->path1_source_ip_address ? audio_input_opts->path1_source_ip_address : "",
                                   audio_input_opts->path1_ip_address ? audio_input_opts->path1_ip_address : "",
                                   audio_input_opts->path1_port,
@@ -340,6 +346,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                                   audio_input_opts->path2_ip_address ? audio_input_opts->path2_ip_address : "",
                                   audio_input_opts->path2_port,
                                   tmp2 );
+                        strncat( input_opts_out->netmap_audio, tmp3, sizeof(tmp3) ); // max 8 channels
                     }
                 }
             }
