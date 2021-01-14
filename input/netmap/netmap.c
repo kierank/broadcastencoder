@@ -1310,7 +1310,8 @@ static int catch_vanc(struct uprobe *uprobe, struct upipe *upipe,
     UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
     struct uref *uref = va_arg(args, struct uref *);
     va_arg(args, struct upump **);
-    va_arg(args, bool *);
+    bool *drop = va_arg(args, bool *);
+    *drop = true;
 
     const struct sdi_picture_fmt *fmt = NULL;
     for (int i = 0; i < sizeof(pict_fmts) / sizeof(*pict_fmts); i++) {
