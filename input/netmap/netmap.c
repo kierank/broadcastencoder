@@ -80,6 +80,7 @@
 #include <upipe-modules/upipe_null.h>
 #include <upipe-modules/upipe_probe_uref.h>
 #include <upipe-modules/upipe_sync.h>
+#include <upipe-modules/upipe_audio_merge.h>
 #include <upipe-hbrmt/upipe_sdi_dec.h>
 #include <upipe-netmap/upipe_netmap_source.h>
 #include <upipe-pciesdi/upipe_pciesdi_source.h>
@@ -143,6 +144,7 @@ typedef struct
     char *uri;
     struct upipe *upipe_main_src;
     struct upipe *avsync;
+    struct upipe *audio_merge;
 
     /* Probe */
     int             probe_cb_cnt;
@@ -1546,7 +1548,7 @@ static void upipe_event_timer(struct upump *upump)
                 netmap_ctx->stored_audio_frame.release_data( &netmap_ctx->stored_audio_frame );
 
             upipe_release(netmap_ctx->upipe_main_src);
-            //upipe_release(netmap_ctx->avsync);
+            upipe_release(netmap_ctx->audio_merge);
         }
     }
 }
@@ -1610,6 +1612,8 @@ static void setup_rfc_audio_channel(netmap_ctx_t *netmap_ctx, char *uri, char *u
     uref_sound_flow_set_channels(flow_def, a->channels);
     uref_sound_flow_set_planes(flow_def, 0);
     uref_sound_flow_add_plane(flow_def, "all");
+    uref_attr_set_small_unsigned(flow_def, a->idx * a->channels,
+            UDICT_TYPE_SMALL_UNSIGNED, "channel_idx");
     upipe_setflowdef_set_dict(setflowdef, flow_def);
     uref_free(flow_def);
 
@@ -1632,15 +1636,12 @@ static void setup_rfc_audio_channel(netmap_ctx_t *netmap_ctx, char *uri, char *u
 
     struct upipe *audio = upipe_void_alloc_output_sub(probe_uref_audio_restamp, netmap_ctx->avsync,
             uprobe_pfx_alloc_va(uprobe_use(uprobe_main),
-                loglevel, "sync audio %u", 0));
+                loglevel, "sync audio %u", a->idx));
     upipe_release(audio);
 
-    struct upipe *probe_uref_audio = upipe_void_alloc_output(audio,
-                upipe_probe_uref_mgr,
-                uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_main), catch_audio_2110, netmap_ctx),
-                    loglevel, "audio probe_uref"));
-    upipe_release(probe_uref_audio);
-    upipe_mgr_release(upipe_probe_uref_mgr);
+    audio = upipe_void_alloc_output_sub(audio, netmap_ctx->audio_merge,
+        uprobe_pfx_alloc_va(uprobe_use(uprobe_main), loglevel, "audio_merge input %u", a->idx));
+    upipe_release(audio);
 }
 
 static int get_channels_from_uri(char *uri)
@@ -1680,15 +1681,14 @@ static int setup_rfc_audio(netmap_ctx_t *netmap_ctx, struct uref_mgr *uref_mgr,
 
         assert((channels & 1) == 0);
 
-        netmap_audio_t *a = &netmap_ctx->audio[i++];
-        a->idx = netmap_ctx->output_channels/2; // FIXME what does this do
+        netmap_audio_t *a = &netmap_ctx->audio[i];
+        a->idx = i++;
         a->channels = channels;
 
         setup_rfc_audio_channel(netmap_ctx, audio, path2, a, uprobe_main,
                 loglevel, flow_def);
 
         audio = next;
-        netmap_ctx->output_channels += channels;
     }
     uref_free(flow_def);
 
@@ -1883,6 +1883,28 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         }
         upipe_mgr_release(upipe_sync_mgr);
         sdi_dec = netmap_ctx->avsync;
+
+        /* flow_def for audio_merge to map N channels into a 16 channel block */
+        struct uref *output_flow = uref_sound_flow_alloc_def(uref_mgr, "s32.", 16, 64);
+        assert(output_flow);
+        ubase_assert(uref_sound_flow_set_rate(output_flow, 48000));
+        uref_sound_flow_add_plane(output_flow, "lrcLRS0123456789");
+
+        /* audio_merge pipe */
+        struct upipe_mgr *upipe_audio_merge_mgr = upipe_audio_merge_mgr_alloc();
+        netmap_ctx->audio_merge = upipe_flow_alloc(upipe_audio_merge_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "audio_merge"),
+                output_flow);
+        assert(netmap_ctx->audio_merge);
+        upipe_mgr_release(upipe_audio_merge_mgr);
+        uref_free(output_flow);
+
+        struct upipe *probe_uref_audio = upipe_void_alloc_output(netmap_ctx->audio_merge,
+                    upipe_probe_uref_mgr,
+                    uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_main), catch_audio_2110, netmap_ctx),
+                        loglevel, "audio probe_uref"));
+        upipe_release(probe_uref_audio);
+        upipe_mgr_release(upipe_probe_uref_mgr);
     }
 
     /* video callback */
@@ -1972,6 +1994,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
             printf("Missing audio URI\n");
             return 1;
         }
+        netmap_ctx->output_channels = 16;
 
         if (setup_rfc_audio(netmap_ctx, uref_mgr, uprobe_main, loglevel, audio))
             return 1;
