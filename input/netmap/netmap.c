@@ -1615,7 +1615,6 @@ static void setup_rfc_audio_channel(netmap_ctx_t *netmap_ctx, char *uri, char *u
     uref_attr_set_small_unsigned(flow_def, a->idx * a->channels,
             UDICT_TYPE_SMALL_UNSIGNED, "channel_idx");
     upipe_setflowdef_set_dict(setflowdef, flow_def);
-    uref_free(flow_def);
 
     upipe_mgr_release(setflowdef_mgr);
 
@@ -1638,6 +1637,18 @@ static void setup_rfc_audio_channel(netmap_ctx_t *netmap_ctx, char *uri, char *u
             uprobe_pfx_alloc_va(uprobe_use(uprobe_main),
                 loglevel, "sync audio %u", a->idx));
     upipe_release(audio);
+
+    /* RTP PCM input may not be available so create a flow def that avsync will accept */
+    struct uref *flow_def_dup = uref_dup(flow_def);
+    uref_free(flow_def);
+
+    uref_sound_flow_clear_format(flow_def_dup);
+    uref_flow_set_def(flow_def_dup, "sound.s32.");
+    uref_sound_flow_add_plane(flow_def_dup, "all");
+    uref_sound_flow_set_sample_size(flow_def_dup, 4 * a->channels);
+
+    upipe_set_flow_def(audio, flow_def_dup);
+    uref_free(flow_def_dup);
 
     audio = upipe_void_alloc_output_sub(audio, netmap_ctx->audio_merge,
         uprobe_pfx_alloc_va(uprobe_use(uprobe_main), loglevel, "audio_merge input %u", a->idx));
