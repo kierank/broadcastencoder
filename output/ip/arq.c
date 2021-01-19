@@ -274,7 +274,7 @@ static void parse_rtcp(struct arq_ctx *ctx, struct upipe *upipe,
 
             uref_block_unmap(xr, 0);
 
-            upipe_notice_va(upipe, "sending XR");
+            upipe_dbg_va(upipe, "sending XR");
             upipe_input(ctx->upipe_udpsink_rtcp, xr, NULL);
             break;
         default:
