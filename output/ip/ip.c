@@ -528,6 +528,8 @@ static void *open_output( void *ptr )
                 fprintf( stderr, "[rtp] Could not create arq output" );
                 return NULL;
             }
+
+            output->handle = p_rtp;
         }
     }
     else
@@ -591,4 +593,19 @@ static void *open_output( void *ptr )
     return NULL;
 }
 
-const obe_output_func_t ip_output = { open_output };
+static int get_status( void *ptr )
+{
+    obe_output_t *output = ptr;
+    obe_output_dest_t *output_dest = &output->output_dest;
+    obe_rtp_ctx *p_rtp = output;
+
+    if( !output )
+        return 0;
+
+    if( p_rtp->arq )
+        return arq_bidirectional( p_rtp->arq_ctx );
+
+    return 0;
+}
+
+const obe_output_func_t ip_output = { open_output, get_status };

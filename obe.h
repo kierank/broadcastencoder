@@ -598,6 +598,8 @@ typedef struct
 
 int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts );
 
+int obe_get_arq_status( obe_t *h, int *arq_status );
+
 int obe_start( obe_t *h );
 
 typedef struct

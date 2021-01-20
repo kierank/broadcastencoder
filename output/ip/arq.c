@@ -218,6 +218,11 @@ static void parse_rtcp(struct arq_ctx *ctx, struct upipe *upipe,
                 cr_sys -= delay * UCLOCK_FREQ / 65536;
                 upipe_verbose_va(upipe, "RTCP RR: RTT %f", (float) cr_sys / UCLOCK_FREQ);
             }
+
+            pthread_mutex_lock(&ctx->mutex);
+            ctx->last_rr_cr = uclock_now(ctx->uclock);
+            pthread_mutex_unlock(&ctx->mutex);
+
             break;
         case RTCP_PT_XR:
             if (s < RTCP_XR_HEADER_SIZE + RTCP_XR_RRTP_SIZE)
@@ -274,7 +279,7 @@ static void parse_rtcp(struct arq_ctx *ctx, struct upipe *upipe,
 
             uref_block_unmap(xr, 0);
 
-            upipe_notice_va(upipe, "sending XR");
+            upipe_dbg_va(upipe, "sending XR");
             upipe_input(ctx->upipe_udpsink_rtcp, xr, NULL);
             break;
         default:
@@ -624,4 +629,18 @@ void close_arq(struct arq_ctx *ctx)
     free(ctx->queue);
     free(ctx->queue_extra);
     free(ctx);
+}
+
+int arq_bidirectional(struct arq_ctx *ctx)
+{
+    uint64_t now = uclock_now(ctx->uclock);
+    uint64_t last_rr_cr = 0;
+    pthread_mutex_lock(&ctx->mutex);
+    last_rr_cr = ctx->last_rr_cr;
+    pthread_mutex_unlock(&ctx->mutex);
+
+    if(now - last_rr_cr < UCLOCK_FREQ)
+        return 1;
+
+    return 0;
 }

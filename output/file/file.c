@@ -108,4 +108,4 @@ static void *open_output( void *ptr )
     return NULL;
 }
 
-const obe_output_func_t file_output = { open_output };
+const obe_output_func_t file_output = { open_output, NULL };
