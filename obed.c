@@ -69,6 +69,8 @@
 static char socket_name[100];
 static char ident[100];
 
+#define MAX_OUTPUTS 8
+
 enum obe_quality_metric_e
 {
     QUALITY_METRIC_PSY,
@@ -748,6 +750,8 @@ static void obed__encoder_status(Obed__EncoderCommunicate_Service *service,
 {
     Obed__EncoderStatusResponse result = OBED__ENCODER_STATUS_RESPONSE__INIT;
     obe_input_status_t input_status = {0};
+    int arq_status[MAX_OUTPUTS];
+    int32_t arq_status32[MAX_OUTPUTS];
 
     obe_input_status( d.h, &input_status );
 
@@ -757,6 +761,14 @@ static void obed__encoder_status(Obed__EncoderCommunicate_Service *service,
     result.input_active = input_status.active;
     result.has_detected_video_format = 1;
     result.detected_video_format = input_status.active ? get_return_format( input_status.detected_video_format ) : -1;
+
+    obe_get_arq_status( d.h, arq_status );
+
+    result.n_arq_status = d.output.num_outputs;
+    for( int i = 0; i < d.output.num_outputs; i++ )
+        arq_status32[i] = arq_status[i];
+
+    result.arq_status = arq_status32;
 
     closure( &result, closure_data );
 }
