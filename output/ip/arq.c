@@ -364,7 +364,7 @@ static void *arq_thread(void *arg)
 {
     struct arq_ctx *ctx = arg;
 
-    enum uprobe_log_level loglevel = UPROBE_LOG_DEBUG;
+    enum uprobe_log_level loglevel = UPROBE_LOG_WARNING;
 
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
