@@ -27,6 +27,7 @@
 typedef struct
 {
     void* (*open_output)( void *ptr );
+    int   (*get_status)( void *ptr );
 } obe_output_func_t;
 
 extern const obe_output_func_t ip_output;

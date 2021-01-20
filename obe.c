@@ -1490,6 +1490,30 @@ int obe_input_status( obe_t *h, obe_input_status_t *input_status )
     return ret;
 }
 
+int obe_get_arq_status( obe_t *h, int *arq_status )
+{
+    obe_output_func_t output;
+
+    if( !h || !arq_status )
+        return -1;
+
+    for( int i = 0; i < h->num_outputs; i++ )
+    {
+        if( h->outputs[i]->output_dest.type == OUTPUT_UDP ||
+                h->outputs[i]->output_dest.type == OUTPUT_RTP ||
+                h->outputs[i]->output_dest.type == OUTPUT_ARQ )
+            output = ip_output;
+        else if( h->outputs[i]->output_dest.type == OUTPUT_FILE )
+            output = file_output;
+        else
+            return 0;
+
+        arq_status[i] = output.get_status( h->outputs[i]->handle );
+    }
+
+    return 0;
+}
+
 void obe_close( obe_t *h )
 {
     void *ret_ptr;

@@ -521,6 +521,8 @@ typedef struct
 
     /* Muxed frame queue for transmission */
     obe_queue_t queue;
+
+    hnd_t *handle;
 } obe_output_t;
 
 typedef struct

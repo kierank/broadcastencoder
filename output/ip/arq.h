@@ -22,6 +22,7 @@ struct arq_ctx {
     struct uclock *uclock;
     uint64_t last_sr_ntp;
     uint64_t last_sr_cr;
+    uint64_t last_rr_cr;
     int fd;
     struct sockaddr_storage dest_addr;
     int dest_addr_len;
