@@ -49,3 +49,5 @@ struct arq_ctx *open_arq(obe_udp_ctx *p_udp, obe_udp_ctx *p_row,
 void close_arq(struct arq_ctx *ctx);
 struct uref *make_uref(struct arq_ctx *ctx, uint8_t *buf, size_t len,
         int64_t timestamp);
+int arq_bidirectional(struct arq_ctx *ctx);
+
