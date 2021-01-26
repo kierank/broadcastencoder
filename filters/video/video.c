@@ -1246,6 +1246,9 @@ end:
         if( vfilt->resize_filter_graph )
             avfilter_graph_free( &vfilt->resize_filter_graph );
 
+        if( vfilt->frame )
+            av_frame_free( &vfilt->frame );
+
         if( vfilt->connfd )
             close( vfilt->connfd );
 
