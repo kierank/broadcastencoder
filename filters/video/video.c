@@ -1030,7 +1030,7 @@ static void send_scte104_reply(obe_vid_filter_ctx_t *vfilt, uint16_t type)
     scte104t_set_type(ts, SCTE104T_TYPE_NONE);
 
     scte104m_set_num_ops(msg, 1);
-    
+
     uint8_t *op = ts + 2;
     scte104o_set_opid(op, type);
     scte104o_set_data_length(op, 0);
@@ -1051,11 +1051,11 @@ static int handle_scte104_message( obe_t *h, obe_vid_filter_ctx_t *vfilt, int64_
         fprintf( stderr, "error receiving scte tcp message \n");
         return -1;
     }
-    
+
     if( len == 0 )
     {
         close( vfilt->connfd );
-        vfilt->connfd = 0;        
+        vfilt->connfd = 0;
     }
 
     if( len >= 14 )
@@ -1119,7 +1119,7 @@ static void *start_filter( void *ptr )
 
     if( scte35_stream && strlen( scte35_stream->scte_tcp_address ) )
     {
-        if( setup_scte104_socket( vfilt, scte35_stream) < 0 )
+        if( setup_scte104_socket( vfilt, scte35_stream ) < 0 )
         {
             fprintf( stderr, "Could not open socket\n" );
             goto end;
