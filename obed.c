@@ -433,6 +433,9 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             /* Add SCTE-35 PID */
             d.num_output_streams += encoder_control->ancillary_opts->has_scte35_enabled && encoder_control->ancillary_opts->scte35_enabled;
 
+            /* Add SMPTE-2038 PID */
+            d.num_output_streams += encoder_control->ancillary_opts->has_smpte2038_enabled && encoder_control->ancillary_opts->smpte2038_enabled;
+
             d.output_streams = calloc( d.num_output_streams, sizeof(*d.output_streams) );
             if( !d.output_streams )
                 goto fail;
@@ -638,6 +641,18 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 {
                     strncpy( scte35_stream->scte_tcp_address, encoder_control->ancillary_opts->scte_tcp_address, sizeof(scte35_stream->scte_tcp_address) );
                 }
+
+                i++;
+            }
+
+            if( encoder_control->ancillary_opts->has_smpte2038_enabled && encoder_control->ancillary_opts->smpte2038_enabled )
+            {
+                obe_output_stream_t *smpte2038_stream = &d.output_streams[i];
+                smpte2038_stream->stream_format = ANC_RAW;
+                smpte2038_stream->input_stream_id = 4;
+                smpte2038_stream->output_stream_id = i;
+
+                smpte2038_stream->ts_opts.pid = ancillary_opts_in->smpte2038_pid;
 
                 i++;
             }
