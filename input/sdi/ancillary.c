@@ -613,6 +613,55 @@ static int parse_scte104_vanc( obe_t *h, obe_sdi_non_display_data_t *non_display
     return 0;
 }
 
+/* FIXME: duplicated with netmap */
+static int encap_custom_vanc( obe_t *h, obe_sdi_non_display_data_t *non_display_data, uint16_t *line, int line_number, int len,
+                              uint8_t did, uint8_t sdid, int offset )
+{
+    int dc;
+
+    dc = READ_8( line[0] );
+    line++;
+
+    obe_output_stream_t *output_stream = get_output_stream_by_format( h, ANC_RAW );
+    if( !output_stream )
+        return 0;
+
+    obe_coded_frame_t *anc_frame = non_display_data->anc_frame;
+    if( !anc_frame )
+    {
+        non_display_data->anc_frame = anc_frame = new_coded_frame( output_stream->output_stream_id, 65536 );
+        if( !anc_frame )
+            return -1;
+
+        anc_frame->len = 0;
+    }
+
+    bs_t s;
+    bs_init(&s, &anc_frame->data[anc_frame->len], 65536 - anc_frame->len);
+
+    bs_write(&s, 6, 0);
+    bs_write(&s, 1, 1); /* FIXME: SD */
+    bs_write(&s, 11, line_number);
+    bs_write(&s, 12, offset);
+    bs_write(&s, 10, did);
+    bs_write(&s, 10, sdid);
+    bs_write(&s, 10, dc);
+
+    for (int i = 0; i < (dc & 0xff) + 1 /* CS */; i++) {
+        bs_write(&s, 10, line[i]);
+    }
+
+    int pos = bs_pos(&s) & 7;
+    if (pos)
+        bs_write(&s, 8 - pos, 0xff);
+
+    bs_flush(&s);
+
+    anc_frame->len += bs_pos(&s) / 8;
+
+    return 0;
+}
+
 int parse_vanc_line( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe_raw_frame_t *raw_frame,
                      uint16_t *line, int width, int line_number )
 {
@@ -650,8 +699,11 @@ int parse_vanc_line( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe
 
             if( pkt_start[j] == vanc_checksum )
             {
+                uint8_t did, sdid;
+                did = READ_8( pkt_start[0] );
+                sdid = READ_8( pkt_start[1] );
                 /* Pass the DC word to the parsing function because some parsers may want to sanity check the length */
-                switch ( get_vanc_type( READ_8( pkt_start[0] ), READ_8( pkt_start[1] ) ) )
+                switch ( get_vanc_type( did, sdid ) )
                 {
                     case MISC_AFD:
                         parse_afd( h, non_display_data, raw_frame, &pkt_start[2], line_number, len );
@@ -669,6 +721,7 @@ int parse_vanc_line( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe
                         parse_scte104_vanc( h, non_display_data, raw_frame, &pkt_start[2], line_number, len );
                         break;
                     default:
+                        encap_custom_vanc( h, non_display_data, &pkt_start[2], line_number, len, did, sdid, i );
                         break;
                 }
             }
@@ -711,6 +764,33 @@ int send_scte35( obe_t *h, obe_sdi_non_display_data_t *non_display_parser, int64
         }
 
         non_display_parser->scte35_frame = NULL;
+    }
+
+    return 0;
+}
+
+int send_anc( obe_t *h, obe_sdi_non_display_data_t *non_display_parser, int64_t pts, int64_t duration )
+{
+    obe_output_stream_t *output_stream;
+
+    if( non_display_parser->anc_frame )
+    {
+        output_stream = get_output_stream_by_format( h, ANC_RAW );
+
+        if( output_stream && output_stream->output_stream_id >= 0 )
+        {
+            non_display_parser->anc_frame->output_stream_id = output_stream->output_stream_id;
+            non_display_parser->anc_frame->pts = pts;
+            non_display_parser->anc_frame->duration = duration;
+
+            if( add_to_queue( &h->mux_queue, &non_display_parser->anc_frame->uchain ) < 0 )
+            {
+                destroy_coded_frame( non_display_parser->anc_frame );
+                return -1;
+            }
+        }
+
+        non_display_parser->anc_frame = NULL;
     }
 
     return 0;

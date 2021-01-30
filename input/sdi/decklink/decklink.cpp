@@ -806,6 +806,9 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             if( send_scte35( h, &decklink_ctx->non_display_parser, pts, video_duration ) < 0 )
                 goto fail;
 
+            if( send_anc( h, &decklink_ctx->non_display_parser, pts, video_duration ) < 0 )
+                goto fail;
+
             decklink_ctx->non_display_parser.num_vbi = 0;
             decklink_ctx->non_display_parser.num_anc_vbi = 0;
         }
@@ -1514,7 +1517,7 @@ static void *autoconf_input( void *ptr )
     obe_device_t *device;
     int cur_input_stream_id = 0;
 
-    for( int i = 0; i < 4; i++ )
+    for( int i = 0; i < 5; i++ )
     {
         streams[i] = (obe_int_input_stream_t*)calloc( 1, sizeof(*streams[i]) );
         if( !streams[i] )
@@ -1568,10 +1571,15 @@ static void *autoconf_input( void *ptr )
             streams[i]->stream_type = STREAM_TYPE_MISC;
             streams[i]->stream_format = MISC_SCTE35;
         }
+        else if( i == 4 )
+        {
+            streams[i]->stream_type = STREAM_TYPE_MISC;
+            streams[i]->stream_format = ANC_RAW;
+        }
     }
 
     init_device(&h->device);
-    h->device.num_input_streams = 4;
+    h->device.num_input_streams = 5;
     memcpy( h->device.streams, streams, h->device.num_input_streams * sizeof(obe_int_input_stream_t**) );
     h->device.device_type = INPUT_DEVICE_DECKLINK;
     memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );
