@@ -55,6 +55,7 @@ typedef struct
     obe_coded_frame_t *dvb_vbi_frame;
     obe_coded_frame_t *dvb_ttx_frame;
     obe_coded_frame_t *scte35_frame;
+    obe_coded_frame_t *anc_frame;
 
     /* VBI */
     int ntsc;
