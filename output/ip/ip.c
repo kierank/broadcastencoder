@@ -596,11 +596,12 @@ static void *open_output( void *ptr )
 static int get_status( void *ptr )
 {
     obe_output_t *output = ptr;
-    obe_output_dest_t *output_dest = &output->output_dest;
-    obe_rtp_ctx *p_rtp = (obe_rtp_ctx *)output->handle;
 
     if( !output )
         return 0;
+
+    obe_output_dest_t *output_dest = &output->output_dest;
+    obe_rtp_ctx *p_rtp = (obe_rtp_ctx *)output->handle;
 
     if( p_rtp->arq )
         return arq_bidirectional( p_rtp->arq_ctx );
