@@ -590,6 +590,9 @@ static int parse_scte104_vanc( obe_t *h, obe_sdi_non_display_data_t *non_display
     uint8_t scte104[1920];
     int dc;
 
+    if( non_display_data->probe )
+        return 0;
+
     dc = READ_8( line[0] );
     line++;
 
@@ -618,6 +621,9 @@ static int encap_custom_vanc( obe_t *h, obe_sdi_non_display_data_t *non_display_
                               uint8_t did, uint8_t sdid, int offset )
 {
     int dc;
+
+    if( non_display_data->probe )
+        return 0;
 
     dc = READ_8( line[0] );
     line++;
