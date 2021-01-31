@@ -130,7 +130,7 @@ static void *start_filter( void *ptr )
         {
             output_stream = &h->output_streams[i];
             if( output_stream->stream_action == STREAM_PASSTHROUGH && output_stream->stream_format != MISC_TELETEXT &&
-                output_stream->stream_format != MISC_SCTE35 )
+                output_stream->stream_format != MISC_SCTE35 && output_stream->stream_format != ANC_RAW )
             {
                 obe_passthrough_t *passthrough = get_passthrough( h, output_stream->output_stream_id );
                 if( !passthrough )
