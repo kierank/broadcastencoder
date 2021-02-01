@@ -649,9 +649,9 @@ static int encap_custom_vanc( obe_t *h, obe_sdi_non_display_data_t *non_display_
     bs_write(&s, 1, 1); /* FIXME: SD */
     bs_write(&s, 11, line_number);
     bs_write(&s, 12, offset);
-    bs_write(&s, 10, did);
-    bs_write(&s, 10, sdid);
-    bs_write(&s, 10, dc);
+    bs_write(&s, 10, line[-3]); /* did */
+    bs_write(&s, 10, line[-2]); /* sdid */
+    bs_write(&s, 10, line[-1]); /* dc */
 
     for (int i = 0; i < (dc & 0xff) + 1 /* CS */; i++) {
         bs_write(&s, 10, line[i]);
