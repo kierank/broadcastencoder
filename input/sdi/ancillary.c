@@ -657,9 +657,7 @@ static int encap_custom_vanc( obe_t *h, obe_sdi_non_display_data_t *non_display_
         bs_write(&s, 10, line[i]);
     }
 
-    int pos = bs_pos(&s) & 7;
-    if (pos)
-        bs_write(&s, 8 - pos, 0xff);
+    bs_align_1(&s);
 
     bs_flush(&s);
 
@@ -727,7 +725,7 @@ int parse_vanc_line( obe_t *h, obe_sdi_non_display_data_t *non_display_data, obe
                         parse_scte104_vanc( h, non_display_data, raw_frame, &pkt_start[2], line_number, len );
                         break;
                     default:
-                        encap_custom_vanc( h, non_display_data, &pkt_start[2], line_number, len, did, sdid, i );
+                        encap_custom_vanc( h, non_display_data, &pkt_start[2], line_number, len, did, sdid, i - 3 );
                         break;
                 }
             }
