@@ -1508,7 +1508,7 @@ int obe_get_arq_status( obe_t *h, int *arq_status )
         else
             return 0;
 
-        arq_status[i] = output.get_status( h->outputs[i]->handle );
+        arq_status[i] = output.get_status( h->outputs[i] );
     }
 
     return 0;
