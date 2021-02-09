@@ -208,6 +208,10 @@ static void parse_rtcp(struct arq_ctx *ctx, struct upipe *upipe,
             if (rtcp_get_rc(rtp) < 1)
                 break;
 
+            pthread_mutex_lock(&ctx->mutex);
+            ctx->last_rr_cr = uclock_now(ctx->uclock);
+            pthread_mutex_unlock(&ctx->mutex);
+
             uint32_t delay = rtcp_rr_get_delay_since_last_sr(rtp);
             uint32_t last_sr = rtcp_rr_get_last_sr(rtp);
             if (last_sr != ((ctx->last_sr_ntp >> 16) & 0xffffffff))
@@ -218,10 +222,6 @@ static void parse_rtcp(struct arq_ctx *ctx, struct upipe *upipe,
                 cr_sys -= delay * UCLOCK_FREQ / 65536;
                 upipe_verbose_va(upipe, "RTCP RR: RTT %f", (float) cr_sys / UCLOCK_FREQ);
             }
-
-            pthread_mutex_lock(&ctx->mutex);
-            ctx->last_rr_cr = uclock_now(ctx->uclock);
-            pthread_mutex_unlock(&ctx->mutex);
 
             break;
         case RTCP_PT_XR:
