@@ -629,6 +629,7 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
 
     memcpy( raw_frame->buf_ref, frame->buf, sizeof(frame->buf) );
+    memset( frame->buf, 0, sizeof(frame->buf) );
 
     raw_frame->sar_width = raw_frame->sar_height = 1;
 
