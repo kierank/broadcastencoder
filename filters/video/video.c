@@ -520,7 +520,7 @@ static int init_jpegenc( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filter_p
     const AVCodec *codec;
     int ret;
 
-    strncpy( vfilt->jpeg_dst, "/tmp/obepreview.jpg", sizeof(vfilt->jpeg_dst) );
+    snprintf( vfilt->jpeg_dst, sizeof(vfilt->jpeg_dst), "/tmp/obepreview%u.jpg", encoder_id );
 
     vfilt->encode_period  = input_stream->timebase_den > 60 ? input_stream->timebase_den / 1000 : input_stream->timebase_den;
     vfilt->encode_period *= PREVIEW_SECONDS;
