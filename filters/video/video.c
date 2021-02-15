@@ -25,6 +25,9 @@
 #include <libavutil/opt.h>
 #include <libavfilter/buffersink.h>
 #include <libavfilter/buffersrc.h>
+
+#include <libavcodec/avcodec.h>
+
 #include "common/common.h"
 #include "common/bitstream.h"
 #include "video.h"
@@ -43,6 +46,8 @@
 
 #include <bitstream/scte/104.h>
 #include <input/sdi/ancillary.h>
+
+#define PREVIEW_SECONDS 5
 
 typedef struct
 {
@@ -84,6 +89,15 @@ typedef struct
     int sockfd;
     int connfd;
     uint8_t msg_number;
+
+    /* JPEG encoding */
+    int encode_period;
+    uint64_t frame_counter;
+    AVCodecContext *jpeg_codec;
+    AVFrame *jpeg_frame;
+    AVPacket *jpeg_pkt;
+    char jpeg_dst[30];
+
 } obe_vid_filter_ctx_t;
 
 typedef struct
@@ -500,6 +514,66 @@ end:
     return ret;
 }
 
+static int init_jpegenc( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filter_params_t *filter_params,
+                         obe_int_input_stream_t *input_stream )
+{
+    const AVCodec *codec;
+    int ret;
+
+    strncpy( vfilt->jpeg_dst, "/tmp/obepreview.jpg", sizeof(vfilt->jpeg_dst) );
+
+    vfilt->encode_period  = input_stream->timebase_den > 60 ? input_stream->timebase_den / 1000 : input_stream->timebase_den;
+    vfilt->encode_period *= PREVIEW_SECONDS;
+
+    vfilt->jpeg_frame = av_frame_alloc();
+    if( !vfilt->jpeg_frame )
+    {
+        fprintf( stderr, "Could not allocate AVFrame \n" );
+        return -1;
+    }
+
+    vfilt->jpeg_pkt = av_packet_alloc();
+    if( !vfilt->jpeg_pkt )
+    {
+        fprintf( stderr, "Could not allocate AVPacket \n" );
+        return -1;
+    }
+
+    codec = avcodec_find_encoder( AV_CODEC_ID_MJPEG );
+    if( !codec )
+    {
+        fprintf( stderr, "MJPEG codec not found \n" );
+        return -1;
+    }
+
+    vfilt->jpeg_codec = avcodec_alloc_context3( codec );
+    if( !vfilt->jpeg_codec )
+    {
+        fprintf( stderr, "Could not allocate MJPEG codec \n" );
+        return -1;
+    }
+
+    vfilt->jpeg_codec->pix_fmt = filter_params->target_csp == X264_CSP_I420 ? AV_PIX_FMT_YUVJ420P : AV_PIX_FMT_YUVJ422P;
+    vfilt->jpeg_codec->width = vfilt->dst_width;
+    vfilt->jpeg_codec->height = vfilt->dst_height;
+
+    /* Arbitrary */
+    vfilt->jpeg_codec->time_base.num = 25;
+    vfilt->jpeg_codec->time_base.den = 1;
+
+    vfilt->jpeg_codec->flags |= AV_CODEC_FLAG_QSCALE;
+    vfilt->jpeg_codec->global_quality = FF_QP2LAMBDA * 10;
+
+    ret = avcodec_open2( vfilt->jpeg_codec, codec, NULL );
+    if( ret < 0 )
+    {
+        fprintf( stderr, "Could not open MJPEG codec \n" );
+        return -1;
+    }
+
+    return 0;
+}
+
 static int csp_num_interleaved( int csp, int plane )
 {
     return ( csp == AV_PIX_FMT_NV12 && plane == 1 ) ? 2 : 1;
@@ -636,7 +710,44 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     return 0;
 }
 
+static int encode_jpeg( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
+{
+    int ret;
 
+    AVFrame *frame = vfilt->jpeg_frame;
+    AVPacket *pkt = vfilt->jpeg_pkt;
+
+    /* Setup AVFrame */
+    memcpy( frame->buf, raw_frame->buf_ref, sizeof(frame->buf) );
+    memset(raw_frame->buf_ref, 0, sizeof(raw_frame->buf_ref));
+    memcpy( frame->linesize, raw_frame->img.stride, sizeof(raw_frame->img.stride) );
+    memcpy( frame->data, raw_frame->img.plane, sizeof(raw_frame->img.plane) );
+    frame->format = raw_frame->img.csp;
+    frame->width = raw_frame->img.width;
+    frame->height = raw_frame->img.height;
+    frame->pict_type = AV_PICTURE_TYPE_I;
+
+    ret = avcodec_send_frame( vfilt->jpeg_codec, frame );
+    while( ret >= 0 )
+    {
+        ret = avcodec_receive_packet( vfilt->jpeg_codec, pkt );
+        if( ret == AVERROR(EAGAIN) || ret == AVERROR_EOF )
+            return 0;
+        else if( ret < 0 )
+        {
+            fprintf( stderr, "Error during encoding\n" );
+            return -1;
+        }
+
+        FILE *fp = fopen( vfilt->jpeg_dst, "wb" );
+        fwrite( pkt->data, 1, pkt->size, fp );
+        fclose( fp );
+
+        av_packet_unref( pkt );
+    }
+
+    return 0;
+}
 
 #if 0
 
@@ -1131,6 +1242,8 @@ static void *start_filter( void *ptr )
 
     vfilt->duration = av_rescale_q( 1, (AVRational){input_stream->timebase_num, input_stream->timebase_den}, (AVRational){1, OBE_CLOCK} );
 
+    init_jpegenc( h, vfilt, filter_params, input_stream );
+
     while( 1 )
     {
         /* TODO: support resolution changes */
@@ -1193,6 +1306,10 @@ static void *start_filter( void *ptr )
                 if( dither_image( vfilt, raw_frame ) < 0 )
                     goto end;
             }
+
+            /* TODO: 10-bit jpeg */
+            if( X264_BIT_DEPTH == 8 && !( vfilt->frame_counter % vfilt->encode_period ) )
+                encode_jpeg( vfilt, raw_frame );
         }
 
         if( encapsulate_user_data( raw_frame, input_stream ) < 0 )
@@ -1208,6 +1325,7 @@ static void *start_filter( void *ptr )
 
         pts = raw_frame->pts;
         add_to_encode_queue( h, raw_frame, 0 );
+        vfilt->frame_counter++;
 
         if( scte_tcp )
         {
@@ -1255,6 +1373,15 @@ end:
 
         if( vfilt->sockfd )
             close( vfilt->sockfd );
+
+        if( vfilt->jpeg_frame )
+            av_frame_free( &vfilt->jpeg_frame );
+
+        if( vfilt->jpeg_pkt )
+            av_packet_free( &vfilt->jpeg_pkt );
+
+        if( vfilt->jpeg_codec )
+            avcodec_free_context( &vfilt->jpeg_codec );
 
         free( vfilt );
     }
