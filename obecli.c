@@ -1398,6 +1398,10 @@ static int show_input_streams( char *command, obecli_command_t *child )
         {
             printf( "Input-stream-id: %d - Teletext: \n", stream->input_stream_id );
         }
+        else if( stream->stream_format == MISC_SCTE35 )
+        {
+            printf( "Input-stream-id: %d - SCTE-35: \n", stream->input_stream_id );
+        }
         else if( stream->stream_format == VBI_RAW )
         {
             printf( "Input-stream-id: %d - VBI: \n", stream->input_stream_id );
@@ -1428,6 +1432,7 @@ static int show_output_streams( char *command, obecli_command_t *child )
     {
         output_stream = &cli.output_streams[i];
         input_stream = &cli.program.streams[output_stream->input_stream_id];
+
         printf( "Output-stream-id: %d - Input-stream-id: %d - ", output_stream->output_stream_id, output_stream->input_stream_id );
 
         if( output_stream->stream_format == MISC_TELETEXT )
