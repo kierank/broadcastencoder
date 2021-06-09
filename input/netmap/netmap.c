@@ -84,6 +84,7 @@
 #include <upipe-hbrmt/upipe_sdi_dec.h>
 #include <upipe-netmap/upipe_netmap_source.h>
 #include <upipe-pciesdi/upipe_pciesdi_source.h>
+#include <upipe-hbrmt/upipe_pciesdi_source_framer.h>
 #include <upipe-filters/upipe_filter_vanc.h>
 #include <upipe-filters/upipe_filter_vbi.h>
 #include <upipe/uref_dump.h>
@@ -1809,6 +1810,16 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     upipe_attach_uclock(netmap_ctx->upipe_main_src);
     if (!ubase_check(upipe_set_uri(netmap_ctx->upipe_main_src, uri))) {
         return 2;
+    }
+
+    if (pciesdi) {
+        struct upipe_mgr *upipe_mgr = upipe_pciesdi_source_framer_mgr_alloc();
+        struct upipe *pipe = upipe_void_alloc_output(netmap_ctx->upipe_main_src, upipe_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe_main), loglevel, "pciesdi_source_framer"));
+        assert(pipe);
+        ubase_assert(upipe_set_option(pipe, "mode", "vsync-only"));
+        upipe_mgr_release(upipe_mgr);
+        upipe_release(pipe);
     }
 
     uprobe_throw(uprobe_main, NULL, UPROBE_THAW_UPUMP_MGR);
