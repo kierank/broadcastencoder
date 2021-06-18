@@ -526,56 +526,52 @@ int decode_scte104( obe_sdi_non_display_data_t *non_display_data, uint8_t *scte1
                 scte35_desc = scte35_get_descl( scte35_start );
 
             uint8_t *scte35_desc_start = scte35_desc;
+            int length = (segmentation_event_cancel_indicator ? 0 :
+                    SCTE35_SEG_DESC_NO_CANCEL_SIZE
+                    /* + components */
+                    + (duration ? SCTE35_SEG_DESC_DURATION_SIZE : 0)
+                    + segmentation_upid_length
+                    + (insert_sub_segment_info ? SCTE35_SEG_DESC_SUB_SEG_SIZE : 0)
+            );
 
-            scte35sd_init( scte35_desc );
-            scte35sd_set_splice_descriptor_tag( scte35_desc, SCTE35_SD_TAG );
-            scte35sd_set_identifier( scte35_desc, SCTE35_SD_IDENTIFIER );
-            scte35sd_set_segmentation_event_id( scte35_desc, segmentation_event_id );
-            scte35sd_set_segmentation_event_cancel_indicator( scte35_desc, segmentation_event_cancel_indicator);
+            scte35_seg_desc_init( scte35_desc, length );
+            scte35_seg_desc_set_event_id( scte35_desc, segmentation_event_id );
+            scte35_seg_desc_set_cancel( scte35_desc, segmentation_event_cancel_indicator);
             if( segmentation_event_cancel_indicator == 0 )
             {
-                scte35sd_set_program_segmentation_flag( scte35_desc, 1);
-                scte35sd_set_segmentation_duration_flag( scte35_desc, !!duration );
-                scte35sd_set_delivery_not_restricted_flag( scte35_desc, delivery_not_restricted_flag );
-                scte35sd_init_delivery_not_restricted( scte35_desc );
+                scte35_seg_desc_set_program_seg( scte35_desc, 1);
+                scte35_seg_desc_set_has_duration( scte35_desc, !!duration );
+                scte35_seg_desc_set_delivery_not_restricted( scte35_desc, delivery_not_restricted_flag );
                 if( delivery_not_restricted_flag == 0 )
                 {
-                    scte35sd_set_web_delivery_allowed_flag( scte35_desc, web_delivery_allowed_flag );
-                    scte35sd_set_no_regional_blackout_flag( scte35_desc, no_regional_blackout_flag );
-                    scte35sd_set_archive_allowed_flag( scte35_desc, archive_allowed_flag );
-                    scte35sd_set_device_restrictions( scte35_desc, device_restrictions );
+                    scte35_seg_desc_set_web_delivery_allowed( scte35_desc, web_delivery_allowed_flag );
+                    scte35_seg_desc_set_no_regional_blackout( scte35_desc, no_regional_blackout_flag );
+                    scte35_seg_desc_set_archive_allowed( scte35_desc, archive_allowed_flag );
+                    scte35_seg_desc_set_device_restrictions( scte35_desc, device_restrictions );
                 }
 
-                /* program_segmentation_flag == 1 for this message */
-                scte35_desc += SCTE35_SD_HEADER_SIZE + 1;
+                /* No component count because program_segmentation_flag is set */
 
-                if( duration )
-                {
-                    /* XXX: Assumes 29.97fps */
-                    scte35sd_set_segmentation_duration( scte35_desc, duration * 90000 + duration_extension_frames * 3003 );
-                    scte35_desc += 5;
-                }
-                scte35sd_set_segmentation_upid_type( scte35_desc, segmentation_upid_type );
-                scte35sd_set_segmentation_upid_length( scte35_desc, segmentation_upid_length );
-                memcpy( scte35_desc + 2, segmentation_upid, segmentation_upid_length );
-                scte35_desc += 2 + segmentation_upid_length;
-                scte35sd_set_segmentation_type_id( scte35_desc, segment_type_id );
-                scte35sd_set_segment_num( scte35_desc, segment_num );
-                scte35sd_set_segments_expected( scte35_desc, segments_expected );
-                scte35_desc += 3;
+                scte35_seg_desc_set_duration( scte35_desc, duration * 90000 + duration_extension_frames * 3003 );
+
+                scte35_seg_desc_set_upid_type( scte35_desc, segmentation_upid_type );
+                scte35_seg_desc_set_upid_length( scte35_desc, segmentation_upid_length );
+                memcpy( scte35_seg_desc_get_upid(scte35_desc), segmentation_upid, segmentation_upid_length );
+
+                scte35_seg_desc_set_type_id( scte35_desc, segment_type_id );
+                scte35_seg_desc_set_num( scte35_desc, segment_num );
+                scte35_seg_desc_set_expected( scte35_desc, segments_expected );
 
                 if( insert_sub_segment_info )
                 {
                     scte35sd_set_sub_segment_num( scte35_desc, sub_segment_num );
-                    scte35sd_set_sub_segments_expected( scte35_desc, sub_segments_expected );
-                    scte35_desc += 2;
+                    scte35_seg_desc_set_sub_expected( scte35_desc, sub_segments_expected );
                 }
 
                 syslog(LOG_INFO, "[SCTE-104] Insert Segmentation Descriptor. Duration %u (90kHz)", duration * 90000 + duration_extension_frames * 3003);
             }
-            scte35sd_set_descriptor_length( scte35_desc_start, scte35_desc - scte35_desc_start - 2 );
 
-            desc_len += scte35_desc - scte35_desc_start;
+            desc_len += length + SCTE35_SPLICE_DESC_HEADER_SIZE + SCTE35_SEG_DESC_HEADER_SIZE;
         }
         else
             syslog(LOG_INFO, "[SCTE-104] Unhandled opID 0x%x ", scte104o_get_opid( op ) );
