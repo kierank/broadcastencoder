@@ -22,7 +22,6 @@
  *
  *****************************************************************************/
 
-#include <libavutil/random_seed.h>
 #include <libavutil/intreadwrite.h>
 #include <libavutil/fifo.h>
 
@@ -150,7 +149,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         goto error;
     }
 
-    p_rtp->ssrc = av_get_random_seed();
+    p_rtp->ssrc = 0x04030201;
 
     p_rtp->dup_delay = output_dest->dup_delay;
     p_rtp->arq = output_dest->type == OUTPUT_ARQ;
