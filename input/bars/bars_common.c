@@ -85,7 +85,7 @@ static void drawtext_set_font_size(AVFilterContext *drawtext_ctx, int font_size)
 int open_bars( hnd_t *p_handle, obe_bars_opts_t *bars_opts )
 {
     int ret = 0;
-    const char *fontfile = "/usr/share/fonts/truetype/droid/DroidSans.ttf";
+    const char *fontfile = "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf";
     char tmp[50];
     int interlaced = 0;
 
