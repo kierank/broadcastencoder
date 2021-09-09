@@ -1454,7 +1454,8 @@ end:
         if( vfilt->jpeg_codec )
             avcodec_free_context( &vfilt->jpeg_codec );
 
-        vfilt->overlay_frame.release_data( &vfilt->overlay_frame );
+        if( vfilt->overlay_frame.release_data )
+            vfilt->overlay_frame.release_data( &vfilt->overlay_frame );
 
         free( vfilt );
     }
