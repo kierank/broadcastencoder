@@ -23,10 +23,12 @@
 
 #include <libavutil/cpu.h>
 #include <libavutil/opt.h>
+#include <libavutil/frame.h>
 #include <libavfilter/buffersink.h>
 #include <libavfilter/buffersrc.h>
 
 #include <libavcodec/avcodec.h>
+#include <libswscale/swscale.h>
 
 #include "common/common.h"
 #include "common/bitstream.h"
@@ -97,6 +99,9 @@ typedef struct
     AVFrame *jpeg_frame;
     AVPacket *jpeg_pkt;
     char jpeg_dst[30];
+
+    /* Overlay image */
+    obe_raw_frame_t overlay_frame;
 
 } obe_vid_filter_ctx_t;
 
@@ -1204,6 +1209,62 @@ static int handle_scte104_message( obe_t *h, obe_vid_filter_ctx_t *vfilt, int64_
     return 0;
 }
 
+static int init_overlay( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filter_params_t *filter_params,
+                         obe_int_input_stream_t *input_stream, obe_output_stream_t *output_stream )
+{
+    obe_raw_frame_t *overlay_frame = &vfilt->overlay_frame;
+    char *uri = output_stream->overlay_image;
+
+    overlay_frame->alloc_img.width = input_stream->width;
+    overlay_frame->alloc_img.height = input_stream->height;
+    overlay_frame->alloc_img.csp = AV_PIX_FMT_YUVA422P;
+    overlay_frame->release_data = obe_release_video_data;
+
+    av_image_fill_linesizes( overlay_frame->alloc_img.stride, overlay_frame->alloc_img.csp, overlay_frame->alloc_img.width);
+
+    int size = av_image_alloc(  overlay_frame->alloc_img.plane, overlay_frame->alloc_img.stride,
+                                overlay_frame->alloc_img.width, overlay_frame->alloc_img.height,
+                                overlay_frame->alloc_img.csp, 32 );
+
+    FILE *fp = fopen( uri, "rb" );
+
+    for( int plane = 0; plane < 4; plane++ )
+    {
+        uint8_t *cur_plane = overlay_frame->alloc_img.plane[plane];
+        int width = (plane == 1 || plane == 2) ? (overlay_frame->alloc_img.width / 2) : overlay_frame->alloc_img.width;
+        for( int i = 0; i < overlay_frame->alloc_img.height; i++ )
+        {
+            uint8_t *dest = &cur_plane[i * overlay_frame->alloc_img.stride[plane]];
+            fread( dest, width, 1, fp );
+        }
+    }
+
+    fclose( fp );
+
+    return 0;
+
+}
+
+void blit_overlay( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
+{
+    obe_raw_frame_t *overlay_frame = &vfilt->overlay_frame;
+
+    for( int i = 0; i < overlay_frame->alloc_img.height; i++)
+    {
+        for( int j = 0; j < overlay_frame->alloc_img.width; j++ )
+        {
+            uint8_t alpha = overlay_frame->alloc_img.plane[3][i*overlay_frame->alloc_img.stride[3] + j];
+            if( alpha )
+            {
+                uint8_t *dest = &raw_frame->alloc_img.plane[0][i*raw_frame->alloc_img.stride[0] + j];
+                uint8_t *src = &overlay_frame->alloc_img.plane[0][i*overlay_frame->alloc_img.stride[0] + j];
+
+                *dest = (*dest * (0xff - alpha) + *src * alpha) / 0xff;
+            }
+        }
+    }
+}
+
 static void *start_filter( void *ptr )
 {
     obe_vid_filter_params_t *filter_params = ptr;
@@ -1213,7 +1274,7 @@ static void *start_filter( void *ptr )
     obe_raw_frame_t *raw_frame;
     obe_output_stream_t *output_stream = get_output_stream( h, 0 ); /* FIXME when output_stream_id for video is not zero */
     obe_output_stream_t *scte35_stream = get_output_stream_by_format( h, MISC_SCTE35 );
-    int h_shift, v_shift, scte_tcp = 0;
+    int h_shift, v_shift, scte_tcp = 0, overlay = 0;
     int64_t pts;
     struct pollfd fds[2];
 
@@ -1244,6 +1305,13 @@ static void *start_filter( void *ptr )
 
     init_jpegenc( h, vfilt, filter_params, input_stream );
 
+    if( output_stream && strlen( output_stream->overlay_image ) )
+    {
+        init_overlay( h, vfilt, filter_params, input_stream, output_stream );
+
+        overlay = 1;
+    }
+
     while( 1 )
     {
         /* TODO: support resolution changes */
@@ -1273,6 +1341,9 @@ static void *start_filter( void *ptr )
 
             if( raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL && c->depth == 10 )
                 blank_lines( raw_frame );
+
+            if( overlay )
+                blit_overlay( vfilt, raw_frame );
 
             /* Resize if wrong pixel format or wrong resolution */
             if( !( raw_frame->img.csp == AV_PIX_FMT_YUV422P   || raw_frame->img.csp == AV_PIX_FMT_YUV422P10 )
@@ -1382,6 +1453,8 @@ end:
 
         if( vfilt->jpeg_codec )
             avcodec_free_context( &vfilt->jpeg_codec );
+
+        vfilt->overlay_frame.release_data( &vfilt->overlay_frame );
 
         free( vfilt );
     }

@@ -494,6 +494,9 @@ typedef struct
     /* SCTE-35 from 104 TCP */
     char scte_tcp_address[100];
 
+    /* Overlay image */
+    char overlay_image[500];
+
     /** Mux options **/
     /* MPEG-TS */
     obe_ts_stream_opts_t ts_opts;
