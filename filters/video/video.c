@@ -1249,19 +1249,42 @@ void blit_overlay( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
     obe_raw_frame_t *overlay_frame = &vfilt->overlay_frame;
 
-    for( int i = 0; i < overlay_frame->alloc_img.height; i++)
+    if( raw_frame->alloc_img.csp == AV_PIX_FMT_YUV422P )
     {
-        for( int j = 0; j < overlay_frame->alloc_img.width; j++ )
+        for( int i = 0; i < overlay_frame->alloc_img.height; i++)
         {
-            uint8_t alpha = overlay_frame->alloc_img.plane[3][i*overlay_frame->alloc_img.stride[3] + j];
-            if( alpha )
+            for( int j = 0; j < overlay_frame->alloc_img.width; j++ )
             {
-                uint8_t *dest = &raw_frame->alloc_img.plane[0][i*raw_frame->alloc_img.stride[0] + j];
-                uint8_t *src = &overlay_frame->alloc_img.plane[0][i*overlay_frame->alloc_img.stride[0] + j];
+                uint8_t alpha = overlay_frame->alloc_img.plane[3][i*overlay_frame->alloc_img.stride[3] + j];
+                if( alpha )
+                {
+                    uint8_t *dest = &raw_frame->alloc_img.plane[0][i*raw_frame->alloc_img.stride[0] + j];
+                    uint8_t *src = &overlay_frame->alloc_img.plane[0][i*overlay_frame->alloc_img.stride[0] + j];
 
-                *dest = (*dest * (0xff - alpha) + *src * alpha) / 0xff;
+                    *dest = (*dest * (0xff - alpha) + *src * alpha) / 0xff;
+                }
             }
         }
+    }
+    else if( raw_frame->alloc_img.csp == AV_PIX_FMT_YUV422P10 )
+    {
+        for( int i = 0; i < overlay_frame->alloc_img.height; i++)
+        {
+            for( int j = 0; j < overlay_frame->alloc_img.width; j++ )
+            {
+                uint16_t alpha = overlay_frame->alloc_img.plane[3][i*overlay_frame->alloc_img.stride[3] + j] << 2;
+                if( alpha )
+                {
+                    uint16_t *dest = (uint16_t *)&raw_frame->alloc_img.plane[0][i*raw_frame->alloc_img.stride[0] + 2*j];
+                    uint8_t *src = &overlay_frame->alloc_img.plane[0][i*overlay_frame->alloc_img.stride[0] + j];
+
+                    uint16_t src_data = *src << 2;
+
+                    *dest = (*dest * (0x3fc - alpha) + src_data * alpha) / 0x3fc;
+                }
+            }
+        }
+
     }
 }
 
