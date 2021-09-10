@@ -2056,7 +2056,7 @@ static void *autoconf_input( void *ptr )
     obe_input_t *user_opts = &probe_ctx->user_opts;
     int cur_input_stream_id = 0;
 
-    for( int i = 0; i < 2; i++ )
+    for( int i = 0; i < 5; i++ )
     {
         streams[i] = (obe_int_input_stream_t*)calloc( 1, sizeof(*streams[i]) );
         if( !streams[i] )
@@ -2100,9 +2100,24 @@ static void *autoconf_input( void *ptr )
             /* TODO: support other sample rates */
             streams[i]->sample_rate = 48000;
         }
+        else if( i == 2 )
+        {
+            streams[i]->stream_type = STREAM_TYPE_MISC;
+            streams[i]->stream_format = MISC_TELETEXT;
+        }
+        else if( i == 3 )
+        {
+            streams[i]->stream_type = STREAM_TYPE_MISC;
+            streams[i]->stream_format = MISC_SCTE35;
+        }
+        else if( i == 4 )
+        {
+            streams[i]->stream_type = STREAM_TYPE_MISC;
+            streams[i]->stream_format = ANC_RAW;
+        }
     }
 
-    h->device.num_input_streams = 2;
+    h->device.num_input_streams = 5;
     memcpy( h->device.streams, streams, h->device.num_input_streams * sizeof(obe_int_input_stream_t**) );
     h->device.device_type = INPUT_DEVICE_NETMAP;
     memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );
