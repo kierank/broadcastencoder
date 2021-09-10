@@ -628,6 +628,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     netmap_ctx_t *netmap_ctx = uprobe_obe->data;
     netmap_opts_t *netmap_opts = &netmap_ctx->netmap_opts;
     obe_t *h = netmap_ctx->h;
+    int64_t video_duration = 0;
 
     if (netmap_ctx->stop)
         return UBASE_ERR_NONE;
@@ -828,6 +829,10 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                 goto end;
 
             if( send_vbi_and_ttx( h, &netmap_ctx->non_display_parser, pts ) < 0 )
+                goto end;
+
+            video_duration = av_rescale_q( 1, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+            if( send_scte35( h, &netmap_ctx->non_display_parser, pts, video_duration ) < 0 )
                 goto end;
 
             if (netmap_ctx->anc_frame) {
@@ -1420,6 +1425,52 @@ next:
     return UBASE_ERR_NONE;
 }
 
+static int catch_scte104(struct uprobe *uprobe, struct upipe *upipe,
+                       int event, va_list args)
+{
+    struct uprobe_obe *uprobe_obe = uprobe_obe_from_uprobe(uprobe);
+    netmap_ctx_t *netmap_ctx = uprobe_obe->data;
+    obe_sdi_non_display_data_t *non_display_data = &netmap_ctx->non_display_parser;
+    obe_t *h = netmap_ctx->h;
+    struct uref *flow_def;
+    const char *def;
+
+    if (event == UPROBE_PROBE_UREF) {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
+        struct uref *uref = va_arg(args, struct uref *);
+        va_arg(args, struct upump **);
+        bool *drop = va_arg(args, bool *);
+        *drop = true;
+
+        int s = -1;
+        const uint8_t *buf;
+        if (!ubase_check(uref_block_read(uref, 0, &s, &buf)))
+            return;
+
+        if (decode_scte104( &non_display_data, buf ) < 0) {
+            printf("Couldn't decode SCTE-104 message \n");
+            return -1;
+        }
+
+        uref_block_unmap(uref, 0);
+
+        return UBASE_ERR_NONE;
+    }
+
+    if (!uprobe_plumber(event, args, &flow_def, &def))
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
+    struct upipe *probe_uref_ttx = upipe_void_alloc_output(upipe,
+            upipe_probe_uref_mgr,
+            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe), catch_scte104, netmap_ctx),
+            UPROBE_LOG_DEBUG, "probe_uref_scte104"));
+    upipe_mgr_release(upipe_probe_uref_mgr);
+    upipe_release(probe_uref_ttx);
+
+    return 0;
+}
+
 static int catch_null(struct uprobe *uprobe, struct upipe *upipe,
                        int event, va_list args)
 {
@@ -1978,7 +2029,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
                 uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "vanc filter"),
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
                 loglevel, "afd"),
-                uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
+                uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_scte104, netmap_ctx),
                 loglevel, "scte104"),
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_ttx, netmap_ctx),
                 loglevel, "op47"),
