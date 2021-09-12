@@ -1056,7 +1056,8 @@ static int catch_ttx(struct uprobe *uprobe, struct upipe *upipe,
         bool *drop = va_arg(args, bool *);
         *drop = true;
 
-        extract_ttx(netmap_ctx, uref);
+        if (netmap_ctx->video_good == 2)
+            extract_ttx(netmap_ctx, uref);
 
         return UBASE_ERR_NONE;
     }
@@ -1442,14 +1443,16 @@ static int catch_scte104(struct uprobe *uprobe, struct upipe *upipe,
         bool *drop = va_arg(args, bool *);
         *drop = true;
 
-        int s = -1;
-        const uint8_t *buf;
-        if (!ubase_check(uref_block_read(uref, 0, &s, &buf)))
-            return;
+        if (netmap_ctx->video_good == 2) {
+            int s = -1;
+            const uint8_t *buf;
+            if (!ubase_check(uref_block_read(uref, 0, &s, &buf)))
+                return;
 
-        if (decode_scte104( &non_display_data, buf ) < 0) {
-            printf("Couldn't decode SCTE-104 message \n");
-            return -1;
+            if (decode_scte104( &non_display_data, buf ) < 0) {
+                printf("Couldn't decode SCTE-104 message \n");
+                return -1;
+            }
         }
 
         uref_block_unmap(uref, 0);
