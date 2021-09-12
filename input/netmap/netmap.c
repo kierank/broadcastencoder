@@ -25,6 +25,7 @@
 #define _GNU_SOURCE
 #include "common/common.h"
 #include "input/input.h"
+#include "input/sdi/ancillary.h"
 #include "input/sdi/sdi.h"
 #include "input/sdi/vbi.h"
 #include "input/bars/bars_common.h"
