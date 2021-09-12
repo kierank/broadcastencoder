@@ -454,7 +454,7 @@ fail:
 }
 
 
-static void extract_op47(netmap_ctx_t *netmap_ctx, struct uref *uref)
+static void extract_ttx(netmap_ctx_t *netmap_ctx, struct uref *uref)
 {
     obe_sdi_non_display_data_t *non_display_data = &netmap_ctx->non_display_parser;
     obe_t *h = netmap_ctx->h;
@@ -720,7 +720,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         if(netmap_opts->probe) {
             extract_cc(netmap_ctx, uref, NULL);
             extract_afd_bar_data(netmap_ctx, uref, NULL);
-            extract_op47(netmap_ctx, NULL);
+            extract_ttx(netmap_ctx, NULL);
             netmap_opts->probe_success = 1;
         } else if(netmap_ctx->video_good == 1) {
             /* drop first video frame,
@@ -1056,7 +1056,7 @@ static int catch_ttx(struct uprobe *uprobe, struct upipe *upipe,
         bool *drop = va_arg(args, bool *);
         *drop = true;
 
-        extract_op47(netmap_ctx, uref);
+        extract_ttx(netmap_ctx, uref);
 
         return UBASE_ERR_NONE;
     }
