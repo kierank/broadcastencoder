@@ -654,8 +654,9 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
         }
         else {
-            /* check this matches the configured format */
-            int j = 0, detected_video_format = -1;
+            /* check this matches the configured format, starting from 1 to avoid
+               autodetect */
+            int j = 1, detected_video_format = -1;
             for( ; video_format_tab[j].obe_name != -1; j++ )
             {
                 if( netmap_opts->video_format == video_format_tab[j].obe_name )
@@ -676,7 +677,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                 netmap_ctx->video_good = 0;
 
                 /* Find the actual format */
-                j = 0;
+                j = 1;
                 for( ; video_format_tab[j].obe_name != -1; j++ )
                 {
                     if( video_format_tab[j].width == netmap_opts->width &&
