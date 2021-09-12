@@ -169,6 +169,8 @@ static void *start_filter( void *ptr )
                     int last_end_pos = 0;
                     int fifo_size = av_fifo_size( passthrough->in_fifo );
                     num_samples = fifo_size / 4;
+                    if( (fifo_size / 32) > MAX_SAMPLES )
+                        av_fifo_drain( passthrough->in_fifo, (fifo_size / 32) - MAX_SAMPLES );
                     av_fifo_generic_read( passthrough->in_fifo, dst8, fifo_size, NULL );
 
                     passthrough->bit_depth = 0;
