@@ -1455,9 +1455,9 @@ static int catch_scte104(struct uprobe *uprobe, struct upipe *upipe,
                 printf("Couldn't decode SCTE-104 message \n");
                 return -1;
             }
-        }
 
-        uref_block_unmap(uref, 0);
+            uref_block_unmap(uref, 0);
+        }
 
         return UBASE_ERR_NONE;
     }
