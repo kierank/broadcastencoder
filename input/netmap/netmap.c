@@ -1449,9 +1449,9 @@ static int catch_scte104(struct uprobe *uprobe, struct upipe *upipe,
             int s = -1;
             const uint8_t *buf;
             if (!ubase_check(uref_block_read(uref, 0, &s, &buf)))
-                return;
+                return -1;
 
-            if (decode_scte104( &non_display_data, buf ) < 0) {
+            if (decode_scte104( non_display_data, buf ) < 0) {
                 printf("Couldn't decode SCTE-104 message \n");
                 return -1;
             }
