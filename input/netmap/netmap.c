@@ -2027,7 +2027,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         struct upipe *probe_vanc = upipe_void_alloc_output(vanc,
                 upipe_probe_uref_mgr,
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_vanc, netmap_ctx),
-                loglevel, "probe_uref_ttx"));
+                loglevel, "probe_uref_vanc"));
 
         probe_vanc = upipe_vanc_chain_output(probe_vanc,
                 upipe_filter_vanc_mgr,
