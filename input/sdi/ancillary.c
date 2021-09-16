@@ -480,7 +480,7 @@ int decode_scte104( obe_sdi_non_display_data_t *non_display_data, uint8_t *scte1
                 scte35_insert_set_avail_num( scte35, avail_num );
                 scte35_insert_set_avails_expected( scte35, avails_expected );
 
-                syslog(LOG_WARNING, "[SCTE-104] Splice Insert. %s, Preroll (90kHz) %"PRIu64" Duration (90kHz) %"PRIu64"", oon ? "Out" : "In", (pre_roll_time * 90) % mod, (duration * 9000) % mod);
+                syslog(LOG_INFO, "[SCTE-104] Splice Insert. %s, Preroll (90kHz) %"PRIu64" Duration (90kHz) %"PRIu64"", oon ? "Out" : "In", (pre_roll_time * 90) % mod, (duration * 9000) % mod);
             }
         }
         else if( scte104o_get_opid( op ) == SCTE104_OPID_TIME_SIGNAL )
@@ -493,7 +493,7 @@ int decode_scte104( obe_sdi_non_display_data_t *non_display_data, uint8_t *scte1
             scte35_splice_time_init( scte35 );
             scte35_splice_time_set_time_specified( scte35, 1 );
             scte35_splice_time_set_pts_time( scte35, (pre_roll_time * 90) % mod );
-            syslog(LOG_WARNING, "[SCTE-104] Time signal. Pre Roll %"PRIu64" (90kHz)", (pre_roll_time * 90) % mod);
+            syslog(LOG_INFO, "[SCTE-104] Time signal. Pre Roll %"PRIu64" (90kHz)", (pre_roll_time * 90) % mod);
         }
         else if( scte104o_get_opid( op ) == SCTE104_OPID_INSERT_SD )
         {
