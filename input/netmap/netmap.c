@@ -1043,13 +1043,36 @@ end:
     return UBASE_ERR_NONE;
 }
 
+static int catch_null(struct uprobe *uprobe, struct upipe *upipe,
+                       int event, va_list args)
+{
+    struct uref *flow_def;
+    const char *def;
+
+    if (!uprobe_plumber(event, args, &flow_def, &def))
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    struct upipe_mgr *null_mgr = upipe_null_mgr_alloc();
+    struct upipe *pipe = upipe_void_alloc_output(upipe, null_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_DEBUG, "null"));
+    upipe_release(pipe);
+
+
+    return UBASE_ERR_NONE;
+}
+
 static int catch_ttx(struct uprobe *uprobe, struct upipe *upipe,
                        int event, va_list args)
 {
     struct uprobe_obe *uprobe_obe = uprobe_obe_from_uprobe(uprobe);
     netmap_ctx_t *netmap_ctx = uprobe_obe->data;
+    obe_t *h = netmap_ctx->h;
     struct uref *flow_def;
     const char *def;
+
+    obe_output_stream_t *output_stream = get_output_stream_by_format(h, MISC_TELETEXT);
+    if (!output_stream)
+        return catch_null(uprobe, upipe, event, args);
 
     if (event == UPROBE_PROBE_UREF) {
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
@@ -1438,6 +1461,10 @@ static int catch_scte104(struct uprobe *uprobe, struct upipe *upipe,
     struct uref *flow_def;
     const char *def;
 
+    obe_output_stream_t *output_stream = get_output_stream_by_format(h, MISC_SCTE35);
+    if (!output_stream)
+        return catch_null(uprobe, upipe, event, args);
+
     if (event == UPROBE_PROBE_UREF) {
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
         struct uref *uref = va_arg(args, struct uref *);
@@ -1474,24 +1501,6 @@ static int catch_scte104(struct uprobe *uprobe, struct upipe *upipe,
     upipe_release(probe_uref_ttx);
 
     return 0;
-}
-
-static int catch_null(struct uprobe *uprobe, struct upipe *upipe,
-                       int event, va_list args)
-{
-    struct uref *flow_def;
-    const char *def;
-
-    if (!uprobe_plumber(event, args, &flow_def, &def))
-        return uprobe_throw_next(uprobe, upipe, event, args);
-
-    struct upipe_mgr *null_mgr = upipe_null_mgr_alloc();
-    struct upipe *pipe = upipe_void_alloc_output(upipe, null_mgr,
-                uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_DEBUG, "null"));
-    upipe_release(pipe);
-
-
-    return UBASE_ERR_NONE;
 }
 
 static int restamp_rfc4175_video(struct uprobe *uprobe, struct upipe *upipe,
