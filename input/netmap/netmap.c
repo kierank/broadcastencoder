@@ -2031,7 +2031,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 
         probe_vanc = upipe_vanc_chain_output(probe_vanc,
                 upipe_filter_vanc_mgr,
-                uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), UPROBE_LOG_ERROR, "vanc filter"),
+                uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "vanc filter"),
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
                 loglevel, "afd"),
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_scte104, netmap_ctx),
