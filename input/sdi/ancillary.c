@@ -568,7 +568,7 @@ int decode_scte104( obe_sdi_non_display_data_t *non_display_data, uint8_t *scte1
                     scte35_desc += 2;
                 }
 
-                syslog(LOG_WARNING, "[SCTE-104] Insert Segmentation Descriptor. Duration %u (90kHz)", duration * 90000 + duration_extension_frames * 3003);
+                syslog(LOG_INFO, "[SCTE-104] Insert Segmentation Descriptor. Duration %u (90kHz)", duration * 90000 + duration_extension_frames * 3003);
             }
             scte35sd_set_descriptor_length( scte35_desc_start, scte35_desc - scte35_desc_start - 2 );
 
