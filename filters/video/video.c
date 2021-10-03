@@ -1173,7 +1173,7 @@ static int handle_scte104_message( obe_t *h, obe_vid_filter_ctx_t *vfilt, int64_
     if( len >= 14 )
     {
         /* Check it's a message we should decode */
-        if( scte104m_validate( scte104 ) && scte104_get_opid( scte104 ) == SCTE104_OPID_MULTIPLE )
+        if( scte104m_validate( scte104, len ) && scte104_get_opid( scte104 ) == SCTE104_OPID_MULTIPLE )
         {
             int num_ops = scte104m_get_num_ops( scte104 );
             for( int i = 0; i < num_ops; i++ )
@@ -1189,7 +1189,7 @@ static int handle_scte104_message( obe_t *h, obe_vid_filter_ctx_t *vfilt, int64_
                          scte104o_get_opid( op ) == SCTE104_OPID_TIME_SIGNAL ||
                          scte104o_get_opid( op ) == SCTE104_OPID_INSERT_SD )
                 {
-                    decode_scte104( &non_display_data, scte104 );
+                    decode_scte104( &non_display_data, scte104, len );
                     if( non_display_data.scte35_frame )
                     {
                         if( send_scte35( h, &non_display_data, pts, vfilt->duration) < 0 )

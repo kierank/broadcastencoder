@@ -389,12 +389,15 @@ static int parse_op47_sdp( obe_t *h, obe_sdi_non_display_data_t *non_display_dat
     return 0;
 }
 
-int decode_scte104( obe_sdi_non_display_data_t *non_display_data, uint8_t *scte104 )
+int decode_scte104( obe_sdi_non_display_data_t *non_display_data, uint8_t *scte104, int buf_size )
 {
     int num_ops = scte104m_get_num_ops( scte104 );
     uint8_t *scte35 = NULL, *scte35_start = NULL, *scte35_desc = NULL;
     int desc_len = 0, size = 0;
     int64_t mod = (int64_t)1 << 33;
+
+    if( !scte104m_validate( scte104, buf_size ) || scte104_get_opid( scte104 ) != SCTE104_OPID_MULTIPLE )
+        return -1;
 
     non_display_data->scte35_frame = new_coded_frame( 0, PSI_MAX_SIZE + PSI_HEADER_SIZE );
     if( !non_display_data->scte35_frame )
@@ -606,11 +609,8 @@ static int parse_scte104_vanc( obe_t *h, obe_sdi_non_display_data_t *non_display
         for( int i = 0; i < dc; i++ )
             scte104[i] = READ_8( line[i] );
 
-        if( scte104m_validate( scte104 ) && scte104_get_opid( scte104 ) == SCTE104_OPID_MULTIPLE )
-        {
-            if( decode_scte104( non_display_data, scte104 ) < 0 )
-                return -1;
-        }
+        if( decode_scte104( non_display_data, scte104, dc ) < 0 )
+            return -1;
     }
 
     return 0;
