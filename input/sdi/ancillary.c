@@ -577,6 +577,8 @@ int decode_scte104( obe_sdi_non_display_data_t *non_display_data, uint8_t *scte1
 
             desc_len += scte35_desc - scte35_desc_start;
         }
+        else
+            syslog(LOG_INFO, "[SCTE-104] Unhandled opID 0x%x ", scte104o_get_opid( op ) );
     }
 
     scte35_set_desclength( scte35_start, desc_len );
