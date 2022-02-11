@@ -657,6 +657,14 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 i++;
             }
 
+            if( encoder_control->ancillary_opts->has_timecode && encoder_control->ancillary_opts->timecode )
+            {
+                if( input_opts_out->video_format == INPUT_VIDEO_FORMAT_PAL || input_opts_out->video_format == INPUT_VIDEO_FORMAT_NTSC )
+                    input_opts_out->tc_source = TC_SOURCE_VITC;
+                else
+                    input_opts_out->tc_source = TC_SOURCE_RP188;
+            }
+
             mux_opts->ts_muxrate = mux_opts_in->muxrate;
             mux_opts->ts_type = mux_opts_in->ts_type;
             mux_opts->cbr = mux_opts_in->null_packets;
