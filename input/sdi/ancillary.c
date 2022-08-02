@@ -564,7 +564,7 @@ int decode_scte104( obe_sdi_non_display_data_t *non_display_data, uint8_t *scte1
 
                 if( insert_sub_segment_info )
                 {
-                    scte35sd_set_sub_segment_num( scte35_desc, sub_segment_num );
+                    scte35_seg_desc_set_sub_num( scte35_desc, sub_segment_num );
                     scte35_seg_desc_set_sub_expected( scte35_desc, sub_segments_expected );
                 }
 
