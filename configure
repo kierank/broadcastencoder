@@ -354,7 +354,7 @@ esac
 case $host_cpu in
   i*86)
     ARCH="X86"
-    AS="yasm"
+    AS="nasm"
     ASFLAGS="$ASFLAGS -O2"
     if [[ "$asm" == auto && "$CFLAGS" != *-march* ]]; then
       CFLAGS="$CFLAGS -march=i686"
@@ -368,12 +368,12 @@ case $host_cpu in
       ASFLAGS="$ASFLAGS -f win32 -DPREFIX"
       LDFLAGS="$LDFLAGS -Wl,--large-address-aware"
     else
-      ASFLAGS="$ASFLAGS -f elf"
+      ASFLAGS="$ASFLAGS -f elf32"
     fi
     ;;
   x86_64)
     ARCH="X86_64"
-    AS="yasm"
+    AS="nasm"
     if [ "$SYS" = MACOSX ];then
       ASFLAGS="$ASFLAGS -f macho64 -m amd64 -DPIC -DPREFIX"
       if cc_check '' "-arch x86_64"; then
@@ -384,7 +384,7 @@ case $host_cpu in
       ASFLAGS="$ASFLAGS -f win32 -m amd64"
       cc_check "" "-S" && grep -q "_main:" conftest && ASFLAGS="$ASFLAGS -DPREFIX"
     else
-      ASFLAGS="$ASFLAGS -f elf -m amd64"
+      ASFLAGS="$ASFLAGS -f elf64"
     fi
     ;;
   powerpc|powerpc64)
@@ -463,10 +463,10 @@ elif cc_check '' -std=c99 ; then
 fi
 
 if [ $asm = auto -a \( $ARCH = X86 -o $ARCH = X86_64 \) ] ; then
-    if ! as_check "vpaddw xmm0, xmm0, xmm0" ; then
+    if ! as_check "vpdpwssds zmm31{k1}{z}, zmm29, zmm28" ; then
         VER=`($AS --version || echo no assembler) 2>/dev/null | head -n 1`
         echo "Found $VER"
-        echo "Minimum version is yasm-0.7.0"
+        echo "Minimum version is nasm 2.14"
         echo "If you really want to compile without asm, configure with --disable-asm."
         exit 1
     fi
