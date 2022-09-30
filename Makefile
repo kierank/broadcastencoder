@@ -45,7 +45,7 @@ X86SRC  += $(X86SRC1:%=input/sdi/x86/%)
 ifeq ($(ARCH),X86_64)
 ARCH_X86 = yes
 ASMSRC   = $(X86SRC:-32.asm=-64.asm)
-ASFLAGS += -DARCH_X86_64=1 -DHAVE_CPUNOP=1
+ASFLAGS += -DARCH_X86_64=1 -DHAVE_CPUNOP=0
 endif
 
 ifdef ARCH_X86
