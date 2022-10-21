@@ -1187,7 +1187,7 @@ static int handle_scte104_message( obe_t *h, obe_vid_filter_ctx_t *vfilt, int64_
                 else if( scte104o_get_opid( op ) == SCTE104_OPID_SPLICE_NULL ||
                          scte104o_get_opid( op ) == SCTE104_OPID_SPLICE ||
                          scte104o_get_opid( op ) == SCTE104_OPID_TIME_SIGNAL ||
-                         scte104o_get_opid( op ) == SCTE104_OPID_INSERT_SD )
+                         scte104o_get_opid( op ) == SCTE104_OPID_INSERT_SEGMENTATION_DESCRIPTOR )
                 {
                     decode_scte104( &non_display_data, scte104, len );
                     if( non_display_data.scte35_frame )
