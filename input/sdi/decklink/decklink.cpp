@@ -748,6 +748,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
             raw_frame->release_data = obe_release_bufref;
             raw_frame->release_frame = obe_release_frame;
+            raw_frame->dup_frame = obe_dup_bufref;
 
             raw_frame->alloc_img.planes = av_pix_fmt_count_planes( (AVPixelFormat)raw_frame->alloc_img.csp );
             raw_frame->alloc_img.format = decklink_opts_->video_format;
