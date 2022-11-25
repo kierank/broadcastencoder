@@ -435,6 +435,7 @@ typedef struct
 
     void (*release_data)( void* );
     void (*release_frame)( void* );
+    void *(*dup_frame)( void* );
 
     /* Video */
     /* Some devices output visible and VBI/VANC data together. In order
@@ -672,9 +673,12 @@ obe_coded_frame_t *new_coded_frame( int stream_id, int len );
 void destroy_coded_frame( obe_coded_frame_t *coded_frame );
 void obe_release_video_data( void *ptr );
 void obe_release_bufref( void *ptr );
+void *obe_dup_bufref( void *ptr );
 void obe_release_video_uref( void *ptr );
+void *obe_dup_video_uref( void *ptr );
 void obe_release_audio_data( void *ptr );
 void obe_release_frame( void *ptr );
+
 
 obe_muxed_data_t *new_muxed_data( int len );
 void destroy_muxed_data( obe_muxed_data_t *muxed_data );

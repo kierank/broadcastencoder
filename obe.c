@@ -119,6 +119,21 @@ void obe_release_bufref( void *ptr )
     memset( raw_frame->audio_frame.audio_data, 0, sizeof(raw_frame->audio_frame.audio_data) );
 }
 
+void *obe_dup_bufref( void *ptr )
+{
+    obe_raw_frame_t *raw_frame = ptr;
+    obe_raw_frame_t *raw_frame_dup = new_raw_frame();
+    if( !raw_frame_dup )
+        return NULL;
+
+    memcpy( raw_frame_dup, raw_frame, sizeof(*raw_frame) );
+
+    for( int i = 0; raw_frame->buf_ref[i] != NULL; i++ )
+        raw_frame_dup->buf_ref[i] = av_buffer_ref( raw_frame->buf_ref[i] );
+
+    return raw_frame_dup;
+}
+
 /* upipe urefs */
 void obe_release_video_uref( void *ptr )
 {
@@ -138,6 +153,52 @@ void obe_release_video_uref( void *ptr )
 
     uref_free(raw_frame->uref);
     raw_frame->uref = NULL;
+}
+
+void *obe_dup_video_uref( void *ptr )
+{
+    obe_raw_frame_t *raw_frame = ptr;
+    /* upipe will only ever give us YUV422P10 */
+    const char *input_chroma_map[3+1];
+
+    input_chroma_map[0] = "y10l";
+    input_chroma_map[1] = "u10l";
+    input_chroma_map[2] = "v10l";
+    input_chroma_map[3] = NULL;
+
+    obe_raw_frame_t *raw_frame_dup = new_raw_frame();
+    if( !raw_frame_dup )
+        return NULL;
+
+    memcpy( raw_frame_dup, raw_frame, sizeof(*raw_frame) );
+
+    raw_frame_dup->uref = uref_dup(raw_frame->uref);
+    if (!raw_frame_dup->uref)
+    {
+        free( raw_frame_dup );
+        raw_frame_dup = NULL;
+        return raw_frame_dup;
+    }
+
+    /* explicitly get new buffers */
+    for (int i = 0; i < 3 && input_chroma_map[i] != NULL; i++)
+    {
+        const uint8_t *data;
+        size_t stride;
+        if (unlikely(!ubase_check(uref_pic_plane_read(raw_frame_dup->uref, input_chroma_map[i], 0, 0, -1, -1, &data)) ||
+                        !ubase_check(uref_pic_plane_size(raw_frame_dup->uref, input_chroma_map[i], &stride, NULL, NULL, NULL)))) {
+            syslog(LOG_ERR, "invalid buffer received");
+            uref_free(raw_frame_dup->uref);
+            raw_frame_dup = NULL;
+            return raw_frame_dup;
+        }
+
+        raw_frame_dup->alloc_img.plane[i] = (uint8_t *)data;
+        raw_frame_dup->alloc_img.stride[i] = stride;
+    }
+    memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
+
+    return raw_frame_dup;
 }
 
 void obe_release_audio_data( void *ptr )
