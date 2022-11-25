@@ -562,7 +562,8 @@ static int init_jpegenc( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filter_p
     vfilt->jpeg_codec->time_base.den = 1;
 
     vfilt->jpeg_codec->flags |= AV_CODEC_FLAG_QSCALE;
-    vfilt->jpeg_codec->global_quality = FF_QP2LAMBDA * 10;
+    vfilt->jpeg_codec->thread_count = 4;
+    vfilt->jpeg_codec->thread_type = FF_THREAD_SLICE;
 
     ret = avcodec_open2( vfilt->jpeg_codec, codec, NULL );
     if( ret < 0 )
@@ -726,6 +727,7 @@ static int encode_jpeg( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
     frame->width = raw_frame->img.width;
     frame->height = raw_frame->img.height;
     frame->pict_type = AV_PICTURE_TYPE_I;
+    frame->quality = FF_QP2LAMBDA * 31;
 
     ret = avcodec_send_frame( vfilt->jpeg_codec, frame );
     while( ret >= 0 )
