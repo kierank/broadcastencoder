@@ -647,7 +647,13 @@ static int scale_frame( obe_raw_frame_t *raw_frame )
     }
 
     raw_frame->release_data( raw_frame );
-    raw_frame->release_data = obe_release_video_data;
+    raw_frame->buf_ref[0] = av_buffer_create( tmp_image.plane[0], tmp_image.stride[0] * (tmp_image.height+1), av_buffer_default_free, NULL, 0);
+    if ( !raw_frame->buf_ref[0] )
+        return -1;
+    raw_frame->buf_ref[1] = NULL;
+
+    raw_frame->release_data = obe_release_bufref;
+    raw_frame->dup_frame = obe_dup_bufref;
     memcpy( &raw_frame->alloc_img, out, sizeof(obe_image_t) );
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
 }
@@ -657,7 +663,6 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     AVFrame *frame = vfilt->frame;
     /* Setup AVFrame */
     memcpy( frame->buf, raw_frame->buf_ref, sizeof(frame->buf) );
-    memset(raw_frame->buf_ref, 0, sizeof(raw_frame->buf_ref));
     memcpy( frame->linesize, raw_frame->img.stride, sizeof(raw_frame->img.stride) );
     memcpy( frame->data, raw_frame->img.plane, sizeof(raw_frame->img.plane) );
     frame->format = raw_frame->img.csp;
@@ -720,7 +725,6 @@ static int encode_jpeg( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
 
     /* Setup AVFrame */
     memcpy( frame->buf, raw_frame->buf_ref, sizeof(frame->buf) );
-    memset(raw_frame->buf_ref, 0, sizeof(raw_frame->buf_ref));
     memcpy( frame->linesize, raw_frame->img.stride, sizeof(raw_frame->img.stride) );
     memcpy( frame->data, raw_frame->img.plane, sizeof(raw_frame->img.plane) );
     frame->format = raw_frame->img.csp;
@@ -868,7 +872,14 @@ static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_fr
     }
 
     raw_frame->release_data( raw_frame );
-    raw_frame->release_data = obe_release_video_data;
+
+    raw_frame->buf_ref[0] = av_buffer_create( tmp_image.plane[0], tmp_image.stride[0] * (tmp_image.height+1), av_buffer_default_free, NULL, 0);
+    if ( !raw_frame->buf_ref[0] )
+        return -1;
+    raw_frame->buf_ref[1] = NULL;
+
+    raw_frame->release_data = obe_release_bufref;
+    raw_frame->dup_frame = obe_dup_bufref;
     memcpy( &raw_frame->alloc_img, out, sizeof(obe_image_t) );
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
 
@@ -906,7 +917,13 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     }
 
     raw_frame->release_data( raw_frame );
-    raw_frame->release_data = obe_release_video_data;
+    raw_frame->buf_ref[0] = av_buffer_create( tmp_image.plane[0], tmp_image.stride[0] * (tmp_image.height+1), av_buffer_default_free, NULL, 0);
+    if ( !raw_frame->buf_ref[0] )
+        return -1;
+    raw_frame->buf_ref[1] = NULL;
+
+    raw_frame->release_data = obe_release_bufref;
+    raw_frame->dup_frame = obe_dup_bufref;
     memcpy( &raw_frame->alloc_img, &tmp_image, sizeof(obe_image_t) );
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
 
@@ -1380,7 +1397,7 @@ end:
             avfilter_graph_free( &vfilt->resize_filter_graph );
 
         if( vfilt->frame )
-            av_frame_free( &vfilt->frame );
+            av_freep( &vfilt->frame );
 
         if( vfilt->connfd )
             close( vfilt->connfd );
@@ -1389,7 +1406,7 @@ end:
             close( vfilt->sockfd );
 
         if( vfilt->jpeg_frame )
-            av_frame_free( &vfilt->jpeg_frame );
+            av_freep( &vfilt->jpeg_frame );
 
         if( vfilt->jpeg_pkt )
             av_packet_free( &vfilt->jpeg_pkt );
