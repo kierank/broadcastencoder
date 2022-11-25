@@ -498,6 +498,7 @@ int get_bars( hnd_t ptr, obe_raw_frame_t **raw_frames )
 
     raw_frame->release_data = obe_release_bufref;
     raw_frame->release_frame = obe_release_frame;
+    raw_frame->dup_frame = obe_dup_bufref;
 
     raw_frame->sar_width = raw_frame->sar_height = 1;
 
