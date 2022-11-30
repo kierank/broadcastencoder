@@ -2,12 +2,11 @@
 
 SECTION_RODATA 32
 
-scale: times 4 dd 511
-shift: dd 11
-
-align 32
 two:   times 16 dw 2
 three: times 16 dw 3
+
+; align 16
+scale: times 4 dd 511
 
 SECTION .text
 
@@ -19,7 +18,7 @@ cextern dithers
 
 %macro dither_plane 0
 
-cglobal dither_plane_10_to_8, 6, 10, 11, src, src_stride, dst, dst_stride, width, height
+cglobal dither_plane_10_to_8, 6, 10, 7, src, src_stride, dst, dst_stride, width, height
     %define cur_row r6
     %define dither r7
     %define org_w r8
