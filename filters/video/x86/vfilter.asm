@@ -20,9 +20,9 @@ cextern dithers
 %macro dither_plane 0
 
 cglobal dither_plane_10_to_8, 6, 10, 11
-%define cur_row r6
-%define dither r7
-%define org_w r8
+    %define cur_row r6
+    %define dither r7
+    %define org_w r8
     mova      m5, [scale]
     lea       r0, [r0+2*r4]
     add       r2, r4
@@ -32,48 +32,48 @@ cglobal dither_plane_10_to_8, 6, 10, 11
     lea       r9, [rel dithers]
     pxor      m6, m6
 
-.loop1:
-    mov       dither, cur_row
-    and       dither, 7
-    shl       dither, 4
-    mova      m2, [r9 + dither]
+    .loop1:
+        mov       dither, cur_row
+        and       dither, 7
+        shl       dither, 4
+        mova      m2, [r9 + dither]
 
-.loop2:
-    paddw     m0, m2, [r0+2*r4]
-    paddw     m1, m2, [r0+2*r4+mmsize]
+        .loop2:
+            paddw     m0, m2, [r0+2*r4]
+            paddw     m1, m2, [r0+2*r4+mmsize]
 
-    punpcklwd m3, m0, m6
-    punpcklwd m4, m1, m6
-    punpckhwd m0, m6
-    punpckhwd m1, m6
+            punpcklwd m3, m0, m6
+            punpcklwd m4, m1, m6
+            punpckhwd m0, m6
+            punpckhwd m1, m6
 
-    pmulld    m3, m5
-    pmulld    m4, m5
-    pmulld    m0, m5
-    pmulld    m1, m5
+            pmulld    m3, m5
+            pmulld    m4, m5
+            pmulld    m0, m5
+            pmulld    m1, m5
 
-    psrld     m3, 11
-    psrld     m4, 11
-    psrld     m0, 11
-    psrld     m1, 11
-    packusdw  m3, m0
-    packusdw  m4, m1
+            psrld     m3, 11
+            psrld     m4, 11
+            psrld     m0, 11
+            psrld     m1, 11
+            packusdw  m3, m0
+            packusdw  m4, m1
 
-    packuswb  m3, m4
-    mova      [r2+r4], m3
+            packuswb  m3, m4
+            mova      [r2+r4], m3
 
-    add       r4, mmsize
-    jl        .loop2
+            add       r4, mmsize
+        jl        .loop2
 
-    add       r0, r1
-    add       r2, r3
-    mov       r4, org_w
+        add       r0, r1
+        add       r2, r3
+        mov       r4, org_w
 
-    inc       cur_row
-    cmp       cur_row, r5
+        inc       cur_row
+        cmp       cur_row, r5
     jl        .loop1
+REP_RET
 
-    REP_RET
 %endmacro
 
 INIT_XMM sse4
