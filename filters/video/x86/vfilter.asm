@@ -19,15 +19,15 @@ cextern dithers
 
 %macro dither_plane 0
 
-cglobal dither_plane_10_to_8, 6, 10, 11
+cglobal dither_plane_10_to_8, 6, 10, 11, src, src_stride, dst, dst_stride, width, height
     %define cur_row r6
     %define dither r7
     %define org_w r8
     mova      m5, [scale]
-    lea       r0, [r0+2*r4]
-    add       r2, r4
-    neg       r4
-    mov       org_w, r4
+    lea       srcq, [srcq+2*widthq]
+    add       dstq, widthq
+    neg       widthq
+    mov       org_w, widthq
     xor       cur_row, cur_row
     lea       r9, [rel dithers]
     pxor      m6, m6
@@ -39,8 +39,8 @@ cglobal dither_plane_10_to_8, 6, 10, 11
         mova      m2, [r9 + dither]
 
         .loop2:
-            paddw     m0, m2, [r0+2*r4]
-            paddw     m1, m2, [r0+2*r4+mmsize]
+            paddw     m0, m2, [srcq+2*widthq]
+            paddw     m1, m2, [srcq+2*widthq+mmsize]
 
             punpcklwd m3, m0, m6
             punpcklwd m4, m1, m6
@@ -60,17 +60,17 @@ cglobal dither_plane_10_to_8, 6, 10, 11
             packusdw  m4, m1
 
             packuswb  m3, m4
-            mova      [r2+r4], m3
+            mova      [dstq+widthq], m3
 
-            add       r4, mmsize
+            add       widthq, mmsize
         jl        .loop2
 
-        add       r0, r1
-        add       r2, r3
-        mov       r4, org_w
+        add       srcq, src_strideq
+        add       dstq, dst_strideq
+        mov       widthq, org_w
 
         inc       cur_row
-        cmp       cur_row, r5
+        cmp       cur_row, heightq
     jl        .loop1
 REP_RET
 
