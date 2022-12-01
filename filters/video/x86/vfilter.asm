@@ -4,9 +4,7 @@ SECTION_RODATA 32
 
 two:   times 16 dw 2
 three: times 16 dw 3
-
-; align 16
-scale: times 4 dd 511
+scale: times 16 dw 511
 
 SECTION .text
 
@@ -18,7 +16,7 @@ cextern dithers
 
 %macro dither_plane 0
 
-cglobal dither_plane_10_to_8, 6, 10, 7, src, src_stride, dst, dst_stride, width, height
+cglobal dither_plane_10_to_8, 6, 10, 6+cpuflag(avx2), src, src_stride, dst, dst_stride, width, height
     %define cur_row r6
     %define dither r7
     %define org_w r8
@@ -29,35 +27,37 @@ cglobal dither_plane_10_to_8, 6, 10, 7, src, src_stride, dst, dst_stride, width,
     mov       org_w, widthq
     xor       cur_row, cur_row
     lea       r9, [rel dithers]
-    pxor      m6, m6
 
     .loop1:
         mov       dither, cur_row
         and       dither, 7
         shl       dither, 4
-        mova      m2, [r9 + dither]
+        VBROADCASTI128 m2, [r9 + dither]
 
         .loop2:
-            paddw     m0, m2, [srcq+2*widthq]
-            paddw     m1, m2, [srcq+2*widthq+mmsize]
+            mova m0, [srcq+2*widthq]        ;  0..15
+            mova m1, [srcq+2*widthq+mmsize] ; 16..31
 
-            punpcklwd m3, m0, m6
-            punpcklwd m4, m1, m6
-            punpckhwd m0, m6
-            punpckhwd m1, m6
+            punpcklwd m3, m0, m2 ;  0..3    8..11
+            punpcklwd m4, m1, m2 ; 16..19  24..27
+            punpckhwd m0, m2     ;  4..7   12..15
+            punpckhwd m1, m2     ; 20..23  28..31
 
-            pmulld    m3, m5
-            pmulld    m4, m5
-            pmulld    m0, m5
-            pmulld    m1, m5
+            pmaddwd   m3, m5
+            pmaddwd   m4, m5
+            pmaddwd   m0, m5
+            pmaddwd   m1, m5
 
             psrld     m3, 11
             psrld     m4, 11
             psrld     m0, 11
             psrld     m1, 11
-            packusdw  m3, m0
-            packusdw  m4, m1
 
+            packssdw  m3, m0 ;  0..3  8..11  4..7 12..15
+            packssdw  m4, m1 ; 16..19 24..27 20..23 28..31
+            %if cpuflag(avx2)
+                SBUTTERFLY dqqq, 3, 4, 6
+            %endif
             packuswb  m3, m4
             mova      [dstq+widthq], m3
 
@@ -75,9 +75,9 @@ REP_RET
 
 %endmacro
 
-INIT_XMM sse4
+INIT_XMM sse2
 dither_plane
-INIT_XMM avx
+INIT_YMM avx2
 dither_plane
 
 ;
