@@ -22,7 +22,7 @@ SECTION .text
 
 cglobal downscale_line, 3,3,2
     imul r2d, 1440
-.loop
+.loop:
     mova   m0, [r0]
     mova   m1, [r0+mmsize]
     psrlw  m0, 2
@@ -56,7 +56,7 @@ cglobal v210_planar_unpack_%1, 5, 5, 7
     mova   m4, [rel v210_mask]
     mova   m5, [rel v210_luma_shuf]
     mova   m6, [rel v210_chroma_shuf]
-.loop
+.loop:
 %ifidn %1, unaligned
     movu   m0, [r0]
 %else
