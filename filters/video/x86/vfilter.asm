@@ -1,8 +1,7 @@
 %include "x86util.asm"
 
-SECTION .rodata
+SECTION_RODATA 32
 
-align 32
 scale: times 4 dd 511
 shift: dd 11
 
@@ -33,13 +32,13 @@ cglobal dither_plane_10_to_8, 6, 10, 11
     lea       r9, [rel dithers]
     pxor      m6, m6
 
-.loop1
+.loop1:
     mov       dither, cur_row
     and       dither, 7
     shl       dither, 4
     mova      m2, [r9 + dither]
 
-.loop2
+.loop2:
     paddw     m0, m2, [r0+2*r4]
     paddw     m1, m2, [r0+2*r4+mmsize]
 
@@ -115,7 +114,7 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
 %ifidn %1, 8
     pxor      m7, m7
 
-.loop1
+.loop1:
     ; top field
     mova      m2, [r0+r4]
     mova      m5, [r6+r4]
@@ -141,7 +140,7 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
 
     NEXT_field
 
-.loop2
+.loop2:
     ; bottom field
     mova      m2, [r0+r4]
     mova      m5, [r6+r4]
@@ -167,7 +166,7 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
 
 %else
 
-.loop1
+.loop1:
     ; top field
     pmullw    m2, m0, [r0+r4]
     paddw     m3, m1, [r6+r4]
@@ -180,7 +179,7 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
 
     NEXT_field
 
-.loop2
+.loop2:
     ; bottom field
     pmullw    m2, m0, [r6+r4]
     paddw     m3, m1, [r0+r4]
