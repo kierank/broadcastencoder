@@ -97,98 +97,99 @@ cglobal downsample_chroma_fields_%1, 6, 8, 8
 %else
 cglobal downsample_chroma_fields_%1, 6, 8, 4
 %endif
-%define h     r5d
-%define org_w r7
+    %define h     r5d
+    %define org_w r7
     mova      m0, [three]
     mova      m1, [two]
-%ifidn %1, 10
-    add       r4d, r4d
-%endif
+    %ifidn %1, 10
+        add       r4d, r4d
+    %endif
     add       r0, r4
     add       r2, r4
     neg       r4
     mov       org_w, r4
     lea       r6, [r0+2*r1]
 
-%ifidn %1, 8
+    %ifidn %1, 8
     pxor      m7, m7
 
-.loop1:
-    ; top field
-    mova      m2, [r0+r4]
-    mova      m5, [r6+r4]
+    .loop1:
+        ; top field
+        mova      m2, [r0+r4]
+        mova      m5, [r6+r4]
 
-    punpcklbw m3, m2, m7
-    punpckhbw m2, m7
-    punpcklbw m4, m5, m7
-    punpckhbw m5, m7
+        punpcklbw m3, m2, m7
+        punpckhbw m2, m7
+        punpcklbw m4, m5, m7
+        punpckhbw m5, m7
 
-    pmullw    m2, m0
-    pmullw    m3, m0
-    paddw     m4, m1
-    paddw     m5, m1
-    paddw     m2, m5
-    paddw     m3, m4
-    psrlw     m2, 2
-    psrlw     m3, 2
+        pmullw    m2, m0
+        pmullw    m3, m0
+        paddw     m4, m1
+        paddw     m5, m1
+        paddw     m2, m5
+        paddw     m3, m4
+        psrlw     m2, 2
+        psrlw     m3, 2
 
-    packuswb  m3, m2
-    mova      [r2+r4], m3
-    add       r4, mmsize
+        packuswb  m3, m2
+        mova      [r2+r4], m3
+        add       r4, mmsize
     jl        .loop1
 
     NEXT_field
 
-.loop2:
-    ; bottom field
-    mova      m2, [r0+r4]
-    mova      m5, [r6+r4]
+    .loop2:
+        ; bottom field
+        mova      m2, [r0+r4]
+        mova      m5, [r6+r4]
 
-    punpcklbw m3, m2, m7
-    punpckhbw m2, m7
-    punpcklbw m4, m5, m7
-    punpckhbw m5, m7
+        punpcklbw m3, m2, m7
+        punpckhbw m2, m7
+        punpcklbw m4, m5, m7
+        punpckhbw m5, m7
 
-    pmullw    m4, m0
-    pmullw    m5, m0
-    paddw     m2, m1
-    paddw     m3, m1
-    paddw     m2, m5
-    paddw     m3, m4
-    psrlw     m2, 2
-    psrlw     m3, 2
+        pmullw    m4, m0
+        pmullw    m5, m0
+        paddw     m2, m1
+        paddw     m3, m1
+        paddw     m2, m5
+        paddw     m3, m4
+        psrlw     m2, 2
+        psrlw     m3, 2
 
-    packuswb  m3, m2
-    mova      [r2+r4], m3
-    add       r4, mmsize
+        packuswb  m3, m2
+        mova      [r2+r4], m3
+        add       r4, mmsize
     jl        .loop2
 
-%else
+    %else
 
-.loop1:
-    ; top field
-    pmullw    m2, m0, [r0+r4]
-    paddw     m3, m1, [r6+r4]
-    paddw     m2, m3
-    psrlw     m2, 2
+    .loop1:
+        ; top field
+        pmullw    m2, m0, [r0+r4]
+        paddw     m3, m1, [r6+r4]
+        paddw     m2, m3
+        psrlw     m2, 2
 
-    mova      [r2+r4], m2
-    add       r4, mmsize
+        mova      [r2+r4], m2
+        add       r4, mmsize
     jl        .loop1
 
     NEXT_field
 
-.loop2:
-    ; bottom field
-    pmullw    m2, m0, [r6+r4]
-    paddw     m3, m1, [r0+r4]
-    paddw     m2, m3
-    psrlw     m2, 2
+    .loop2:
+        ; bottom field
+        pmullw    m2, m0, [r6+r4]
+        paddw     m3, m1, [r0+r4]
+        paddw     m2, m3
+        psrlw     m2, 2
 
-    mova      [r2+r4], m2
-    add       r4, mmsize
+        mova      [r2+r4], m2
+        add       r4, mmsize
     jl        .loop2
-%endif
+    %endif
+
     mov       r4, org_w
     add       r2, r3
     add       r0, r1
@@ -197,7 +198,7 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
 
     sub       h, 2
     jg        .loop1
-    REP_RET
+REP_RET
 %endmacro
 
 INIT_XMM sse2
