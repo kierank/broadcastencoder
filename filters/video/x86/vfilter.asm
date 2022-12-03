@@ -85,38 +85,37 @@ dither_plane
 ;
 
 %macro NEXT_field 0
-    mov       r4, org_w
-    add       r0, r1
-    add       r6, r1
-    add       r2, r3
+    mov       widthq, org_w
+    add       srcq, src_strideq
+    add       r6, src_strideq
+    add       dstq, dst_strideq
 %endmacro
 
 %macro DOWNSAMPLE_chroma_fields 1
 %ifidn %1, 8
-cglobal downsample_chroma_fields_%1, 6, 8, 8
+cglobal downsample_chroma_fields_%1, 6, 8, 8, src, src_stride, dst, dst_stride, width, height
 %else
-cglobal downsample_chroma_fields_%1, 6, 8, 4
+cglobal downsample_chroma_fields_%1, 6, 8, 4, src, src_stride, dst, dst_stride, width, height
 %endif
-    %define h     r5d
     %define org_w r7
     mova      m0, [three]
     mova      m1, [two]
     %ifidn %1, 10
-        add       r4d, r4d
+        add       widthd, widthd
     %endif
-    add       r0, r4
-    add       r2, r4
-    neg       r4
-    mov       org_w, r4
-    lea       r6, [r0+2*r1]
+    add       srcq, widthq
+    add       dstq, widthq
+    neg       widthq
+    mov       org_w, widthq
+    lea       r6, [srcq+2*src_strideq]
 
     %ifidn %1, 8
     pxor      m7, m7
 
     .loop1:
         ; top field
-        mova      m2, [r0+r4]
-        mova      m5, [r6+r4]
+        mova      m2, [srcq+widthq]
+        mova      m5, [r6+widthq]
 
         punpcklbw m3, m2, m7
         punpckhbw m2, m7
@@ -133,16 +132,16 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
         psrlw     m3, 2
 
         packuswb  m3, m2
-        mova      [r2+r4], m3
-        add       r4, mmsize
+        mova      [dstq+widthq], m3
+        add       widthq, mmsize
     jl        .loop1
 
     NEXT_field
 
     .loop2:
         ; bottom field
-        mova      m2, [r0+r4]
-        mova      m5, [r6+r4]
+        mova      m2, [srcq+widthq]
+        mova      m5, [r6+widthq]
 
         punpcklbw m3, m2, m7
         punpckhbw m2, m7
@@ -159,44 +158,44 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
         psrlw     m3, 2
 
         packuswb  m3, m2
-        mova      [r2+r4], m3
-        add       r4, mmsize
+        mova      [dstq+widthq], m3
+        add       widthq, mmsize
     jl        .loop2
 
     %else
 
     .loop1:
         ; top field
-        pmullw    m2, m0, [r0+r4]
-        paddw     m3, m1, [r6+r4]
+        pmullw    m2, m0, [srcq+widthq]
+        paddw     m3, m1, [r6+widthq]
         paddw     m2, m3
         psrlw     m2, 2
 
-        mova      [r2+r4], m2
-        add       r4, mmsize
+        mova      [dstq+widthq], m2
+        add       widthq, mmsize
     jl        .loop1
 
     NEXT_field
 
     .loop2:
         ; bottom field
-        pmullw    m2, m0, [r6+r4]
-        paddw     m3, m1, [r0+r4]
+        pmullw    m2, m0, [r6+widthq]
+        paddw     m3, m1, [srcq+widthq]
         paddw     m2, m3
         psrlw     m2, 2
 
-        mova      [r2+r4], m2
-        add       r4, mmsize
+        mova      [dstq+widthq], m2
+        add       widthq, mmsize
     jl        .loop2
     %endif
 
-    mov       r4, org_w
-    add       r2, r3
-    add       r0, r1
-    lea       r0, [r0+2*r1]
-    lea       r6, [r0+2*r1]
+    mov       widthq, org_w
+    add       dstq, dst_strideq
+    add       srcq, src_strideq
+    lea       srcq, [srcq+2*src_strideq]
+    lea       r6, [srcq+2*src_strideq]
 
-    sub       h, 2
+    sub       heightq, 2
     jg        .loop1
 REP_RET
 %endmacro
