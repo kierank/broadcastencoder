@@ -1,14 +1,10 @@
 %include "x86util.asm"
 
-SECTION .rodata
+SECTION_RODATA 32
 
-align 32
-scale: times 4 dd 511
-shift: dd 11
-
-align 32
 two:   times 16 dw 2
 three: times 16 dw 3
+scale: times 16 dw 511
 
 SECTION .text
 
@@ -20,66 +16,68 @@ cextern dithers
 
 %macro dither_plane 0
 
-cglobal dither_plane_10_to_8, 6, 10, 11
-%define cur_row r6
-%define dither r7
-%define org_w r8
+cglobal dither_plane_10_to_8, 6, 10, 6+cpuflag(avx2), src, src_stride, dst, dst_stride, width, height
+    %define cur_row r6
+    %define dither r7
+    %define org_w r8
     mova      m5, [scale]
-    lea       r0, [r0+2*r4]
-    add       r2, r4
-    neg       r4
-    mov       org_w, r4
+    lea       srcq, [srcq+2*widthq]
+    add       dstq, widthq
+    neg       widthq
+    mov       org_w, widthq
     xor       cur_row, cur_row
     lea       r9, [rel dithers]
-    pxor      m6, m6
 
-.loop1
-    mov       dither, cur_row
-    and       dither, 7
-    shl       dither, 4
-    mova      m2, [r9 + dither]
+    .loop1:
+        mov       dither, cur_row
+        and       dither, 7
+        shl       dither, 4
+        VBROADCASTI128 m2, [r9 + dither]
 
-.loop2
-    paddw     m0, m2, [r0+2*r4]
-    paddw     m1, m2, [r0+2*r4+mmsize]
+        .loop2:
+            mova m0, [srcq+2*widthq]        ;  0..15
+            mova m1, [srcq+2*widthq+mmsize] ; 16..31
 
-    punpcklwd m3, m0, m6
-    punpcklwd m4, m1, m6
-    punpckhwd m0, m6
-    punpckhwd m1, m6
+            punpcklwd m3, m0, m2 ;  0..3    8..11
+            punpcklwd m4, m1, m2 ; 16..19  24..27
+            punpckhwd m0, m2     ;  4..7   12..15
+            punpckhwd m1, m2     ; 20..23  28..31
 
-    pmulld    m3, m5
-    pmulld    m4, m5
-    pmulld    m0, m5
-    pmulld    m1, m5
+            pmaddwd   m3, m5
+            pmaddwd   m4, m5
+            pmaddwd   m0, m5
+            pmaddwd   m1, m5
 
-    psrld     m3, 11
-    psrld     m4, 11
-    psrld     m0, 11
-    psrld     m1, 11
-    packusdw  m3, m0
-    packusdw  m4, m1
+            psrld     m3, 11
+            psrld     m4, 11
+            psrld     m0, 11
+            psrld     m1, 11
 
-    packuswb  m3, m4
-    mova      [r2+r4], m3
+            packssdw  m3, m0 ;  0..3  8..11  4..7 12..15
+            packssdw  m4, m1 ; 16..19 24..27 20..23 28..31
+            %if cpuflag(avx2)
+                SBUTTERFLY dqqq, 3, 4, 6
+            %endif
+            packuswb  m3, m4
+            mova      [dstq+widthq], m3
 
-    add       r4, mmsize
-    jl        .loop2
+            add       widthq, mmsize
+        jl        .loop2
 
-    add       r0, r1
-    add       r2, r3
-    mov       r4, org_w
+        add       srcq, src_strideq
+        add       dstq, dst_strideq
+        mov       widthq, org_w
 
-    inc       cur_row
-    cmp       cur_row, r5
+        inc       cur_row
+        cmp       cur_row, heightq
     jl        .loop1
+REP_RET
 
-    REP_RET
 %endmacro
 
-INIT_XMM sse4
+INIT_XMM sse2
 dither_plane
-INIT_XMM avx
+INIT_YMM avx2
 dither_plane
 
 ;
@@ -115,7 +113,7 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
 %ifidn %1, 8
     pxor      m7, m7
 
-.loop1
+.loop1:
     ; top field
     mova      m2, [r0+r4]
     mova      m5, [r6+r4]
@@ -141,7 +139,7 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
 
     NEXT_field
 
-.loop2
+.loop2:
     ; bottom field
     mova      m2, [r0+r4]
     mova      m5, [r6+r4]
@@ -167,7 +165,7 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
 
 %else
 
-.loop1
+.loop1:
     ; top field
     pmullw    m2, m0, [r0+r4]
     paddw     m3, m1, [r6+r4]
@@ -180,7 +178,7 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4
 
     NEXT_field
 
-.loop2
+.loop2:
     ; bottom field
     pmullw    m2, m0, [r6+r4]
     paddw     m3, m1, [r0+r4]
