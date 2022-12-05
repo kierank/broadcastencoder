@@ -201,6 +201,13 @@ void *obe_dup_video_uref( void *ptr )
     return raw_frame_dup;
 }
 
+/* umem frames */
+void obe_free_umem(void *opaque, uint8_t *data)
+{
+    struct umem *umem = opaque;
+    umem_free( umem );
+}
+
 void obe_release_audio_data( void *ptr )
 {
     obe_raw_frame_t *raw_frame = ptr;

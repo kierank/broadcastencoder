@@ -617,8 +617,16 @@ static int scale_frame( obe_raw_frame_t *raw_frame )
     tmp_image.planes = av_pix_fmt_count_planes( raw_frame->img.csp );
     tmp_image.format = raw_frame->img.format;
 
-    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
-                        tmp_image.csp, 32 ) < 0 )
+    int buf_size = av_image_get_buffer_size( tmp_image.csp, tmp_image.width, tmp_image.height, 64 );
+    int ret = umem_alloc( h->umem_mgr, &raw_frame->umem, buf_size );
+    if( !ret )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+
+    if( av_image_fill_arrays( tmp_image.plane, tmp_image.stride, umem_buffer( &raw_frame->umem ), tmp_image.csp,
+                              tmp_image.width, tmp_image.height, 64 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
@@ -645,7 +653,7 @@ static int scale_frame( obe_raw_frame_t *raw_frame )
     }
 
     raw_frame->release_data( raw_frame );
-    raw_frame->buf_ref[0] = av_buffer_create( tmp_image.plane[0], tmp_image.stride[0] * (tmp_image.height+1), av_buffer_default_free, NULL, 0);
+    raw_frame->buf_ref[0] = av_buffer_create( tmp_image.plane[0], tmp_image.stride[0] * tmp_image.height, obe_free_umem, &raw_frame->umem, 0);
     if ( !raw_frame->buf_ref[0] )
         return -1;
     raw_frame->buf_ref[1] = NULL;
@@ -783,7 +791,7 @@ static void dither_plane_##pitch( pixel *dst, int dst_stride, uint16_t *src, int
 DITHER_PLANE( 1 )
 DITHER_PLANE( 2 )
 
-static int dither_image( obe_raw_frame_t *raw_frame, int16_t *error_buf )
+static int dither_image( obe_t *h, obe_raw_frame_t *raw_frame, int16_t *error_buf )
 {
     obe_image_t *img = &raw_frame->img;
     obe_image_t tmp_image = {0};
@@ -846,8 +854,16 @@ static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_fr
     tmp_image.planes = av_pix_fmt_count_planes( raw_frame->img.csp );
     tmp_image.format = raw_frame->img.format;
 
-    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
-                        tmp_image.csp, 32 ) < 0 )
+    int buf_size = av_image_get_buffer_size( tmp_image.csp, tmp_image.width, tmp_image.height, 64 );
+    int ret = umem_alloc( h->umem_mgr, &raw_frame->umem, buf_size );
+    if( !ret )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+
+    if( av_image_fill_arrays( tmp_image.plane, tmp_image.stride, umem_buffer( &raw_frame->umem ), tmp_image.csp,
+                              tmp_image.width, tmp_image.height, 64 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
@@ -871,7 +887,7 @@ static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_fr
 
     raw_frame->release_data( raw_frame );
 
-    raw_frame->buf_ref[0] = av_buffer_create( tmp_image.plane[0], tmp_image.stride[0] * (tmp_image.height+1), av_buffer_default_free, NULL, 0);
+    raw_frame->buf_ref[0] = av_buffer_create( tmp_image.plane[0], tmp_image.stride[0] * tmp_image.height, obe_free_umem, &raw_frame->umem, 0);
     if ( !raw_frame->buf_ref[0] )
         return -1;
     raw_frame->buf_ref[1] = NULL;
@@ -884,7 +900,7 @@ static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_fr
     return 0;
 }
 
-static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
+static int dither_image( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
     obe_image_t *img = &raw_frame->img;
     obe_image_t tmp_image = {0};
@@ -896,8 +912,16 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     tmp_image.planes = av_pix_fmt_count_planes( tmp_image.csp );
     tmp_image.format = raw_frame->img.format;
 
-    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height,
-                        tmp_image.csp, 32 ) < 0 )
+    int buf_size = av_image_get_buffer_size( tmp_image.csp, tmp_image.width, tmp_image.height, 64 );
+    int ret = umem_alloc( h->umem_mgr, &raw_frame->umem, buf_size );
+    if( !ret )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+
+    if( av_image_fill_arrays( tmp_image.plane, tmp_image.stride, umem_buffer( &raw_frame->umem ), tmp_image.csp,
+                              tmp_image.width, tmp_image.height, 64 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
@@ -915,7 +939,7 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     }
 
     raw_frame->release_data( raw_frame );
-    raw_frame->buf_ref[0] = av_buffer_create( tmp_image.plane[0], tmp_image.stride[0] * (tmp_image.height+1), av_buffer_default_free, NULL, 0);
+    raw_frame->buf_ref[0] = av_buffer_create( tmp_image.plane[0], tmp_image.stride[0] * tmp_image.height, obe_free_umem, &raw_frame->umem, 0);
     if ( !raw_frame->buf_ref[0] )
         return -1;
     raw_frame->buf_ref[1] = NULL;
@@ -1320,7 +1344,7 @@ static void *start_filter( void *ptr )
             c = &pfd->comp[0];
             if( c->depth == 10 && X264_BIT_DEPTH == 8 )
             {
-                if( dither_image( vfilt, raw_frame ) < 0 )
+                if( dither_image( h, vfilt, raw_frame ) < 0 )
                     goto end;
             }
 

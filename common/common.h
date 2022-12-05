@@ -446,6 +446,8 @@ typedef struct
      * For most devices these are the same. */
     obe_image_t alloc_img;
     obe_image_t img;
+    struct umem umem;
+
     int sar_width;
     int sar_height;
     int sar_guess; /* This is set if the SAR cannot be determined from any WSS/AFD that might exist in the stream */
@@ -680,6 +682,7 @@ void obe_release_bufref( void *ptr );
 void *obe_dup_bufref( void *ptr );
 void obe_release_video_uref( void *ptr );
 void *obe_dup_video_uref( void *ptr );
+void obe_free_umem(void *opaque, uint8_t *data);
 void obe_release_audio_data( void *ptr );
 void obe_release_frame( void *ptr );
 
