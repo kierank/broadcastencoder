@@ -92,7 +92,7 @@ dither_plane
 %endmacro
 
 %macro DOWNSAMPLE_chroma_fields 1
-%ifidn %1, 8
+%if %1 == 8
 cglobal downsample_chroma_fields_%1, 6, 8, 8, src, src_stride, dst, dst_stride, width, height
 %else
 cglobal downsample_chroma_fields_%1, 6, 8, 4, src, src_stride, dst, dst_stride, width, height
@@ -100,7 +100,7 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4, src, src_stride, dst, dst_stride, 
     %define org_w r7
     mova      m0, [three]
     mova      m1, [two]
-    %ifidn %1, 10
+    %if %1 == 10
         add       widthd, widthd
     %endif
     add       srcq, widthq
@@ -109,7 +109,7 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4, src, src_stride, dst, dst_stride, 
     mov       org_w, widthq
     lea       r6, [srcq+2*src_strideq]
 
-    %ifidn %1, 8
+    %if %1 == 8
     pxor      m7, m7
 
     .loop1:
