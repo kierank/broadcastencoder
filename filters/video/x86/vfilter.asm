@@ -2,8 +2,9 @@
 
 SECTION_RODATA 32
 
-two:   times 16 dw 2
-three: times 16 dw 3
+two:   times 32 dw 2
+three: times 32 dw 3
+db_3_1: times 32 db 3, 1
 scale: times 16 dw 511
 
 SECTION .text
@@ -196,14 +197,86 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4 + 4*(%1==8), src, src_stride, dst, 
 REP_RET
 %endmacro
 
+%macro DOWNSAMPLE_chroma_fields_new8 0
+
+cglobal downsample_chroma_fields_8, 6, 8, 5, src, src_stride, dst, dst_stride, width, height
+    mova m0, [db_3_1]
+    mova m1, [two]
+    add  srcq, widthq
+    add  dstq, widthq
+    neg  widthq
+    mov  r7, widthq
+    lea  r6, [srcq+2*src_strideq]
+
+    .loop1:
+        ; top field
+        mova      m2, [srcq+widthq] ; a0..a15 | a16..a31
+        mova      m4, [r6+widthq]   ; b0..b15 | b16..b31
+
+        punpcklbw m3, m2, m4 ; a0 b0 .. a7 b7   | a16 b16 .. a23 b23
+        punpckhbw m2, m4     ; a8 b8 .. a15 b15 | a24 b24 .. a31 b31
+
+        pmaddubsw m3, m0 ; c0 .. c7  | c16 .. c23
+        pmaddubsw m2, m0 ; c8 .. c15 | c24 .. c31
+
+        paddw     m3, m1
+        paddw     m2, m1
+
+        psrlw     m2, 2
+        psrlw     m3, 2
+
+        packuswb  m3, m2
+        mova      [dstq+widthq], m3
+        add       widthq, mmsize
+    jl        .loop1
+
+    NEXT_field
+
+    .loop2:
+        ; bottom field
+        mova      m2, [srcq+widthq]
+        mova      m4, [r6+widthq]
+        punpcklbw m3, m4, m2 ; different interleave order
+        punpckhbw m4, m4, m2
+        SWAP 2,4
+        pmaddubsw m3, m0
+        pmaddubsw m2, m0
+        paddw     m3, m1
+        paddw     m2, m1
+        psrlw     m2, 2
+        psrlw     m3, 2
+        packuswb  m3, m2
+        mova      [dstq+widthq], m3
+        add       widthq, mmsize
+    jl        .loop2
+
+    mov       widthq, r7
+    add       dstq, dst_strideq
+    add       srcq, src_strideq
+    lea       srcq, [srcq+2*src_strideq]
+    lea       r6, [srcq+2*src_strideq]
+
+    sub       heightq, 2
+    jg        .loop1
+RET
+
+%endmacro
+
 INIT_XMM sse2
 DOWNSAMPLE_chroma_fields 8
 DOWNSAMPLE_chroma_fields 10
 
+INIT_XMM ssse3
+DOWNSAMPLE_chroma_fields_new8
+
 INIT_XMM avx
-DOWNSAMPLE_chroma_fields 8
+DOWNSAMPLE_chroma_fields_new8
 DOWNSAMPLE_chroma_fields 10
 
 INIT_YMM avx2
-DOWNSAMPLE_chroma_fields 8
+DOWNSAMPLE_chroma_fields_new8
+DOWNSAMPLE_chroma_fields 10
+
+INIT_ZMM avx512icl
+DOWNSAMPLE_chroma_fields_new8
 DOWNSAMPLE_chroma_fields 10

@@ -303,11 +303,15 @@ static void init_filter( obe_t *h, obe_vid_filter_ctx_t *vfilt )
         vfilt->dither_plane_10_to_8 = obe_dither_plane_10_to_8_sse2;
     }
 
+    if( vfilt->avutil_cpu & AV_CPU_FLAG_SSSE3 )
+    {
+        vfilt->downsample_chroma_fields_8 = obe_downsample_chroma_fields_8_ssse3;
+    }
+
     if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX )
     {
         vfilt->downsample_chroma_fields_8 = obe_downsample_chroma_fields_8_avx;
         vfilt->downsample_chroma_fields_10 = obe_downsample_chroma_fields_10_avx;
-
     }
 
     if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX2 )
@@ -315,6 +319,12 @@ static void init_filter( obe_t *h, obe_vid_filter_ctx_t *vfilt )
         vfilt->downsample_chroma_fields_8 = obe_downsample_chroma_fields_8_avx2;
         vfilt->downsample_chroma_fields_10 = obe_downsample_chroma_fields_10_avx2;
         vfilt->dither_plane_10_to_8 = obe_dither_plane_10_to_8_avx2;
+    }
+
+    if( vfilt->avutil_cpu & AV_CPU_FLAG_AVX512ICL )
+    {
+        vfilt->downsample_chroma_fields_8 = obe_downsample_chroma_fields_8_avx512icl;
+        vfilt->downsample_chroma_fields_10 = obe_downsample_chroma_fields_10_avx512icl;
     }
 }
 
