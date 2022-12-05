@@ -92,11 +92,7 @@ dither_plane
 %endmacro
 
 %macro DOWNSAMPLE_chroma_fields 1
-%if %1 == 8
-cglobal downsample_chroma_fields_%1, 6, 8, 8, src, src_stride, dst, dst_stride, width, height
-%else
-cglobal downsample_chroma_fields_%1, 6, 8, 4, src, src_stride, dst, dst_stride, width, height
-%endif
+cglobal downsample_chroma_fields_%1, 6, 8, 4 + 4*(%1==8), src, src_stride, dst, dst_stride, width, height
     %define org_w r7
     mova      m0, [three]
     mova      m1, [two]
