@@ -127,6 +127,8 @@ void *obe_dup_bufref( void *ptr )
         return NULL;
 
     memcpy( raw_frame_dup, raw_frame, sizeof(*raw_frame) );
+    raw_frame_dup->num_user_data = 0;
+    raw_frame_dup->user_data = NULL;
 
     for( int i = 0; raw_frame->buf_ref[i] != NULL; i++ )
         raw_frame_dup->buf_ref[i] = av_buffer_ref( raw_frame->buf_ref[i] );
@@ -171,6 +173,8 @@ void *obe_dup_video_uref( void *ptr )
         return NULL;
 
     memcpy( raw_frame_dup, raw_frame, sizeof(*raw_frame) );
+    raw_frame_dup->num_user_data = 0;
+    raw_frame_dup->user_data = NULL;
 
     raw_frame_dup->uref = uref_dup(raw_frame->uref);
     if (!raw_frame_dup->uref)
