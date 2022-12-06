@@ -75,11 +75,11 @@ typedef struct
     AVFrame *frame;
 
     /* downsample */
-    void (*downsample_chroma_fields_8)( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
-    void (*downsample_chroma_fields_10)( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
+    void (*downsample_chroma_fields_8)( void *src_ptr, ptrdiff_t src_stride, void *dst_ptr, ptrdiff_t dst_stride, uintptr_t width, uintptr_t height );
+    void (*downsample_chroma_fields_10)( void *src_ptr, ptrdiff_t src_stride, void *dst_ptr, ptrdiff_t dst_stride, uintptr_t width, uintptr_t height );
 
     /* dither */
-    void (*dither_plane_10_to_8)( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height );
+    void (*dither_plane_10_to_8)( uint16_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, uintptr_t width, uintptr_t height );
     int16_t *error_buf;
 
     int flip_ready;
@@ -205,15 +205,15 @@ static int set_sar( obe_raw_frame_t *raw_frame, int is_wide )
     return -1;
 }
 
-static void dither_plane_10_to_8_c( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height )
+static void dither_plane_10_to_8_c( uint16_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, uintptr_t width, uintptr_t height )
 {
     const int scale = 511;
     const uint16_t shift = 11;
 
-    for( int j = 0; j < height; j++ )
+    for( uintptr_t j = 0; j < height; j++ )
     {
         const uint16_t *dither = obe_dithers[j&7];
-        int k;
+        uintptr_t k;
         for (k = 0; k < width-7; k+=8)
         {
             dst[k+0] = (src[k+0] + dither[0])*scale>>shift;
@@ -234,16 +234,16 @@ static void dither_plane_10_to_8_c( uint16_t *src, int src_stride, uint8_t *dst,
 }
 
 /* Note: srcf is the next field (two pixels down) */
-static void downsample_chroma_fields_8_c( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height )
+static void downsample_chroma_fields_8_c( void *src_ptr, ptrdiff_t src_stride, void *dst_ptr, ptrdiff_t dst_stride, uintptr_t width, uintptr_t height )
 {
     uint8_t *src = src_ptr;
     uint8_t *dst = dst_ptr;
-    for( int i = 0; i < height; i += 2 )
+    for( uintptr_t i = 0; i < height; i += 2 )
     {
         uint8_t *srcf = src + src_stride*2;
 
         /* Top field */
-        for( int j = 0; j < width; j++ )
+        for( uintptr_t j = 0; j < width; j++ )
             dst[j] = (3*src[j] + srcf[j] + 2) >> 2;
 
         dst  += dst_stride;
@@ -251,7 +251,7 @@ static void downsample_chroma_fields_8_c( void *src_ptr, int src_stride, void *d
         srcf += src_stride;
 
         /* Bottom field */
-        for( int j = 0; j < width; j++ )
+        for( uintptr_t j = 0; j < width; j++ )
             dst[j] = (src[j] + 3*srcf[j] + 2) >> 2;
 
         dst += dst_stride;
@@ -259,16 +259,16 @@ static void downsample_chroma_fields_8_c( void *src_ptr, int src_stride, void *d
     }
 }
 
-static void downsample_chroma_fields_10_c( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height )
+static void downsample_chroma_fields_10_c( void *src_ptr, ptrdiff_t src_stride, void *dst_ptr, ptrdiff_t dst_stride, uintptr_t width, uintptr_t height )
 {
     uint16_t *src = src_ptr;
     uint16_t *dst = dst_ptr;
-    for( int i = 0; i < height; i += 2 )
+    for( uintptr_t i = 0; i < height; i += 2 )
     {
         uint16_t *srcf = src + src_stride;
 
         /* Top field */
-        for( int j = 0; j < width; j++ )
+        for( uintptr_t j = 0; j < width; j++ )
             dst[j] = (3*src[j] + srcf[j] + 2) >> 2;
 
         dst  += dst_stride/2;
@@ -276,7 +276,7 @@ static void downsample_chroma_fields_10_c( void *src_ptr, int src_stride, void *
         srcf += src_stride/2;
 
         /* Bottom field */
-        for( int j = 0; j < width; j++ )
+        for( uintptr_t j = 0; j < width; j++ )
             dst[j] = (src[j] + 3*srcf[j] + 2) >> 2;
 
         dst += dst_stride/2;
