@@ -792,7 +792,6 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
             raw_frame->uref = uref;
             raw_frame->release_data = obe_release_video_uref;
             raw_frame->release_frame = obe_release_frame;
-            raw_frame->dup_frame = obe_dup_video_uref;
 
             setup_picture_on_signal_loss_timer(netmap_ctx);
 
