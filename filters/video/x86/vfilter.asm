@@ -5,7 +5,7 @@ SECTION_RODATA 64
 two:   times 32 dw 2
 three: times 32 dw 3
 db_3_1: times 32 db 3, 1
-scale: times 16 dw 511
+scale: times 32 dw 511
 
 SECTION .text
 
@@ -36,13 +36,22 @@ cglobal dither_plane_10_to_8, 6, 10, 6+cpuflag(avx2), src, src_stride, dst, dst_
         VBROADCASTI128 m2, [r9 + dither]
 
         .loop2:
-            mova m0, [srcq+2*widthq]        ;  0..15
-            mova m1, [srcq+2*widthq+mmsize] ; 16..31
+            mova m0, [srcq+2*widthq]        ;  0..7  |  8..15 | 16..23 | 24..31
+            mova m1, [srcq+2*widthq+mmsize] ; 32..39 | 40..47 | 48..55 | 56..63
 
-            punpcklwd m3, m0, m2 ;  0..3    8..11
-            punpcklwd m4, m1, m2 ; 16..19  24..27
-            punpckhwd m0, m2     ;  4..7   12..15
-            punpckhwd m1, m2     ; 20..23  28..31
+            %if cpuflag(avx512icl)
+                vshufi32x4 m3, m0, m1, q2020 ; 0..7  | 16..23 | 32..39 | 48..55
+                vshufi32x4 m4, m0, m1, q3131 ; 8..15 | 24..31 | 40..47 | 56..63
+                SWAP 0,3
+                SWAP 1,4
+            %elif cpuflag(avx2)
+                SBUTTERFLY dqqq, 0,1,6
+            %endif
+
+            punpcklwd m3, m0, m2            ;  0..3  | 16..19 | 32..35 | 48..51
+            punpcklwd m4, m1, m2            ;  8..11 | 24..27 | 40..43 | 56..59
+            punpckhwd m0, m2                ;  4..7  | 20..23 | 36..39 | 52..55
+            punpckhwd m1, m2                ; 12..15 | 28..31 | 44..47 | 60..63
 
             pmaddwd   m3, m5
             pmaddwd   m4, m5
@@ -54,12 +63,14 @@ cglobal dither_plane_10_to_8, 6, 10, 6+cpuflag(avx2), src, src_stride, dst, dst_
             psrld     m0, 11
             psrld     m1, 11
 
-            packssdw  m3, m0 ;  0..3  8..11  4..7 12..15
-            packssdw  m4, m1 ; 16..19 24..27 20..23 28..31
-            %if cpuflag(avx2)
-                SBUTTERFLY dqqq, 3, 4, 6
+            %if cpuflag(sse4)
+                packusdw m3, m0              ; 0..7  | 16..23 | 32..39 | 48..55
+                packusdw m4, m1              ; 8..15 | 24..31 | 40..47 | 56..63
+            %else
+                packssdw m3, m0
+                packssdw m4, m1
             %endif
-            packuswb  m3, m4
+            packuswb  m3, m4                 ; 0..15 | 16..31 | 32..47 | 48..63
             mova      [dstq+widthq], m3
 
             add       widthq, mmsize
@@ -79,6 +90,8 @@ REP_RET
 INIT_XMM sse2
 dither_plane
 INIT_YMM avx2
+dither_plane
+INIT_ZMM avx512icl
 dither_plane
 
 ;
