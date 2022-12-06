@@ -36,8 +36,8 @@ cglobal dither_plane_10_to_8, 6, 10, 6+cpuflag(avx2), src, src_stride, dst, dst_
         VBROADCASTI128 m2, [r9 + dither]
 
         .loop2:
-            mova m0, [srcq+2*widthq]        ;  0..7  |  8..15 | 16..23 | 24..31
-            mova m1, [srcq+2*widthq+mmsize] ; 32..39 | 40..47 | 48..55 | 56..63
+            movu m0, [srcq+2*widthq]        ;  0..7  |  8..15 | 16..23 | 24..31
+            movu m1, [srcq+2*widthq+mmsize] ; 32..39 | 40..47 | 48..55 | 56..63
 
             %if cpuflag(avx512icl)
                 vshufi32x4 m3, m0, m1, q2020 ; 0..7  | 16..23 | 32..39 | 48..55
@@ -71,7 +71,7 @@ cglobal dither_plane_10_to_8, 6, 10, 6+cpuflag(avx2), src, src_stride, dst, dst_
                 packssdw m4, m1
             %endif
             packuswb  m3, m4                 ; 0..15 | 16..31 | 32..47 | 48..63
-            mova      [dstq+widthq], m3
+            movu      [dstq+widthq], m3
 
             add       widthq, mmsize
         jl        .loop2
@@ -124,8 +124,8 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4 + 4*(%1==8), src, src_stride, dst, 
 
     .loop1:
         ; top field
-        mova      m2, [srcq+widthq]
-        mova      m5, [r6+widthq]
+        movu      m2, [srcq+widthq]
+        movu      m5, [r6+widthq]
 
         punpcklbw m3, m2, m7
         punpckhbw m2, m7
@@ -142,7 +142,7 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4 + 4*(%1==8), src, src_stride, dst, 
         psrlw     m3, 2
 
         packuswb  m3, m2
-        mova      [dstq+widthq], m3
+        movu      [dstq+widthq], m3
         add       widthq, mmsize
     jl        .loop1
 
@@ -150,8 +150,8 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4 + 4*(%1==8), src, src_stride, dst, 
 
     .loop2:
         ; bottom field
-        mova      m2, [srcq+widthq]
-        mova      m5, [r6+widthq]
+        movu      m2, [srcq+widthq]
+        movu      m5, [r6+widthq]
 
         punpcklbw m3, m2, m7
         punpckhbw m2, m7
@@ -168,7 +168,7 @@ cglobal downsample_chroma_fields_%1, 6, 8, 4 + 4*(%1==8), src, src_stride, dst, 
         psrlw     m3, 2
 
         packuswb  m3, m2
-        mova      [dstq+widthq], m3
+        movu      [dstq+widthq], m3
         add       widthq, mmsize
     jl        .loop2
 
@@ -223,8 +223,8 @@ cglobal downsample_chroma_fields_8, 6, 8, 5, src, src_stride, dst, dst_stride, w
 
     .loop1:
         ; top field
-        mova      m2, [srcq+widthq] ; a0..a15 | a16..a31
-        mova      m4, [r6+widthq]   ; b0..b15 | b16..b31
+        movu      m2, [srcq+widthq] ; a0..a15 | a16..a31
+        movu      m4, [r6+widthq]   ; b0..b15 | b16..b31
 
         punpcklbw m3, m2, m4 ; a0 b0 .. a7 b7   | a16 b16 .. a23 b23
         punpckhbw m2, m4     ; a8 b8 .. a15 b15 | a24 b24 .. a31 b31
@@ -239,7 +239,7 @@ cglobal downsample_chroma_fields_8, 6, 8, 5, src, src_stride, dst, dst_stride, w
         psrlw     m3, 2
 
         packuswb  m3, m2
-        mova      [dstq+widthq], m3
+        movu      [dstq+widthq], m3
         add       widthq, mmsize
     jl        .loop1
 
@@ -247,8 +247,8 @@ cglobal downsample_chroma_fields_8, 6, 8, 5, src, src_stride, dst, dst_stride, w
 
     .loop2:
         ; bottom field
-        mova      m2, [srcq+widthq]
-        mova      m4, [r6+widthq]
+        movu      m2, [srcq+widthq]
+        movu      m4, [r6+widthq]
         punpcklbw m3, m4, m2 ; different interleave order
         punpckhbw m4, m4, m2
         SWAP 2,4
@@ -259,7 +259,7 @@ cglobal downsample_chroma_fields_8, 6, 8, 5, src, src_stride, dst, dst_stride, w
         psrlw     m2, 2
         psrlw     m3, 2
         packuswb  m3, m2
-        mova      [dstq+widthq], m3
+        movu      [dstq+widthq], m3
         add       widthq, mmsize
     jl        .loop2
 
