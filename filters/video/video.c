@@ -629,7 +629,7 @@ static int scale_frame( obe_t *h, obe_raw_frame_t *raw_frame )
     tmp_image.format = raw_frame->img.format;
 
     if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
-                        tmp_image.csp, 32 ) < 0 )
+                        tmp_image.csp, 64 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
@@ -805,7 +805,7 @@ static int dither_image( obe_raw_frame_t *raw_frame, int16_t *error_buf )
     tmp_image.height = raw_frame->img.height;
 
     if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height,
-                        tmp_image.csp, 32 ) < 0 )
+                        tmp_image.csp, 64 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
@@ -858,7 +858,7 @@ static int downconvert_image_interlaced( obe_t *h, obe_vid_filter_ctx_t *vfilt, 
     tmp_image.format = raw_frame->img.format;
 
     if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
-                        tmp_image.csp, 32 ) < 0 )
+                        tmp_image.csp, 64 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
@@ -908,7 +908,7 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     tmp_image.format = raw_frame->img.format;
 
     if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height,
-                        tmp_image.csp, 32 ) < 0 )
+                        tmp_image.csp, 64 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;

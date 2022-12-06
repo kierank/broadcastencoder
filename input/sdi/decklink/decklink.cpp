@@ -698,7 +698,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 raw_frame->alloc_img.csp = AV_PIX_FMT_UYVY422;
                 int size = av_image_alloc( raw_frame->alloc_img.plane, raw_frame->alloc_img.stride,
                                            raw_frame->alloc_img.width, raw_frame->alloc_img.height,
-                                           (AVPixelFormat)raw_frame->alloc_img.csp, 32 );
+                                           (AVPixelFormat)raw_frame->alloc_img.csp, 64 );
                 if( size < 0 )
                 {
                     syslog( LOG_ERR, "Malloc failed\n" );
