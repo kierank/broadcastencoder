@@ -30,10 +30,13 @@ void obe_scale_plane_avx( uint16_t *src, int stride, int width, int height, int 
 
 void obe_downsample_chroma_fields_8_sse2( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
 void obe_downsample_chroma_fields_10_sse2( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
+void obe_downsample_chroma_fields_8_ssse3( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
 void obe_downsample_chroma_fields_8_avx( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
 void obe_downsample_chroma_fields_10_avx( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
 void obe_downsample_chroma_fields_8_avx2( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
 void obe_downsample_chroma_fields_10_avx2( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
+void obe_downsample_chroma_fields_8_avx512icl( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
+void obe_downsample_chroma_fields_10_avx512icl( void *src_ptr, int src_stride, void *dst_ptr, int dst_stride, int width, int height );
 
 void obe_dither_plane_10_to_8_sse2( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height );
 void obe_dither_plane_10_to_8_avx2( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height );
