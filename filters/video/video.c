@@ -325,6 +325,7 @@ static void init_filter( obe_t *h, obe_vid_filter_ctx_t *vfilt )
     {
         vfilt->downsample_chroma_fields_8 = obe_downsample_chroma_fields_8_avx512icl;
         vfilt->downsample_chroma_fields_10 = obe_downsample_chroma_fields_10_avx512icl;
+        vfilt->dither_plane_10_to_8 = obe_dither_plane_10_to_8_avx512icl;
     }
 }
 
