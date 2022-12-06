@@ -50,6 +50,16 @@
 #include <jpeglib.h>
 #include <setjmp.h>
 
+#include <upipe/ubuf.h>
+#include <upipe/ubuf_pic.h>
+#include <upipe/ubuf_pic_mem.h>
+#include <upipe/uref.h>
+#include <upipe/uref_std.h>
+#include <upipe/uref_pic.h>
+#include <upipe/umem.h>
+#include <upipe/udict.h>
+#include <upipe/udict_inline.h>
+
 #define PREVIEW_SECONDS 5
 
 typedef struct
@@ -58,6 +68,16 @@ typedef struct
 
     /* cpu flags */
     uint32_t avutil_cpu;
+
+    /* upipe */
+    struct uref_mgr *uref_mgr;
+
+#define UBUF_MGR_YUV420P 0
+#define UBUF_MGR_YUV422P 1
+#define UBUF_MGR_YUV420P10 2
+#define UBUF_MGR_YUV422P10 3
+
+    struct ubuf_mgr *ubuf_mgr[4];
 
     /* upscaling */
     void (*scale_plane)( uint16_t *src, int stride, int width, int height, int lshift, int rshift );
@@ -295,6 +315,8 @@ static void downsample_chroma_fields_10_c( void *src_ptr, ptrdiff_t src_stride, 
 
 static void init_filter( obe_t *h, obe_vid_filter_ctx_t *vfilt )
 {
+    struct ubuf_mgr *mgr;
+
     vfilt->filter_bit_depth = h->filter_bit_depth;
     vfilt->avutil_cpu = av_get_cpu_flags();
 
@@ -336,6 +358,50 @@ static void init_filter( obe_t *h, obe_vid_filter_ctx_t *vfilt )
         vfilt->downsample_chroma_fields_10 = obe_downsample_chroma_fields_10_avx512icl;
         vfilt->dither_plane_10_to_8 = obe_dither_plane_10_to_8_avx512icl;
     }
+
+#define UDICT_POOL_DEPTH 300
+#define UREF_POOL_DEPTH 300
+#define UBUF_POOL_DEPTH 300
+
+    struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH, h->umem_mgr, -1, -1);
+    vfilt->uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
+    udict_mgr_release(udict_mgr);
+
+    /* yuv420p */
+    mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, h->umem_mgr, 1, 0, 0, 0, 0, 64, 0);
+    assert(mgr != NULL);
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "y8", 1, 1, 1));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "u8", 2, 2, 1));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "v8", 2, 2, 1));
+
+    vfilt->ubuf_mgr[UBUF_MGR_YUV420P] = mgr;
+
+    /* yuv422p */
+    mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, h->umem_mgr, 1, 0, 0, 0, 0, 64, 0);
+    assert(mgr != NULL);
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "y8", 1, 1, 1));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "u8", 2, 1, 1));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "v8", 2, 1, 1));
+
+    vfilt->ubuf_mgr[UBUF_MGR_YUV422P] = mgr;
+
+    /* yuv420p10 */
+    mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, h->umem_mgr, 1, 0, 0, 0, 0, 64, 0);
+    assert(mgr != NULL);
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "y10l", 1, 1, 2));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "u10l", 2, 2, 2));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "v10l", 2, 2, 2));
+
+    vfilt->ubuf_mgr[UBUF_MGR_YUV420P10] = mgr;
+
+    /* yuv422p10 */
+    mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, h->umem_mgr, 1, 0, 0, 0, 0, 64, 0);
+    assert(mgr != NULL);
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "y10l", 1, 1, 2));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "u10l", 2, 1, 2));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(mgr, "v10l", 2, 1, 2));
+
+    vfilt->ubuf_mgr[UBUF_MGR_YUV422P10] = mgr;
 }
 
 static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filter_params_t *filter_params,
@@ -671,8 +737,18 @@ static int scale_frame( obe_t *h, obe_raw_frame_t *raw_frame )
     tmp_image.planes = av_pix_fmt_count_planes( raw_frame->img.csp );
     tmp_image.format = raw_frame->img.format;
 
-    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
-                        tmp_image.csp, 64 ) < 0 )
+#if 0
+    // FIXME
+    int buf_size = av_image_get_buffer_size( tmp_image.csp, tmp_image.width, tmp_image.height, 64 );
+    int ret = umem_alloc( h->umem_mgr, &raw_frame->umem, buf_size );
+    if( !ret )
+    {
+        syslog( LOG_ERR, "Malloc failed\n" );
+        return -1;
+    }
+
+    if( av_image_fill_arrays( tmp_image.plane, tmp_image.stride, umem_buffer( &raw_frame->umem ), tmp_image.csp,
+                              tmp_image.width, tmp_image.height, 64 ) < 0 )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
@@ -699,9 +775,17 @@ static int scale_frame( obe_t *h, obe_raw_frame_t *raw_frame )
     }
 
     raw_frame->release_data( raw_frame );
-    raw_frame->release_data = obe_release_video_data;
+    raw_frame->buf_ref[0] = av_buffer_create( tmp_image.plane[0], tmp_image.stride[0] * tmp_image.height, NULL, &raw_frame->umem, 0);
+    if ( !raw_frame->buf_ref[0] )
+        return -1;
+    raw_frame->buf_ref[1] = NULL;
+
+    raw_frame->release_data = obe_release_bufref;
+    raw_frame->dup_frame = obe_dup_bufref;
     memcpy( &raw_frame->alloc_img, out, sizeof(obe_image_t) );
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
+
+#endif
 
     return 0;
 }
@@ -903,7 +987,7 @@ static int dither_image( obe_raw_frame_t *raw_frame, int16_t *error_buf )
 
 #endif
 
-static int downconvert_image_interlaced( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
+static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
     obe_image_t *img = &raw_frame->img;
     obe_image_t tmp_image = {0};
@@ -911,6 +995,7 @@ static int downconvert_image_interlaced( obe_t *h, obe_vid_filter_ctx_t *vfilt, 
     const AVPixFmtDescriptor *pfd = av_pix_fmt_desc_get( raw_frame->img.csp );
     const AVComponentDescriptor *c = &pfd->comp[0];
     int bpp = c->depth > 8 ? 2 : 1;
+    struct uref *uref;
 
     tmp_image.csp    = bpp == 2 ? AV_PIX_FMT_YUV420P10 : AV_PIX_FMT_YUV420P;
     tmp_image.width  = raw_frame->img.width;
@@ -918,11 +1003,45 @@ static int downconvert_image_interlaced( obe_t *h, obe_vid_filter_ctx_t *vfilt, 
     tmp_image.planes = av_pix_fmt_count_planes( raw_frame->img.csp );
     tmp_image.format = raw_frame->img.format;
 
-    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height+1,
-                        tmp_image.csp, 64 ) < 0 )
+    int ubuf_mgr = tmp_image.csp == AV_PIX_FMT_YUV420P10 ? UBUF_MGR_YUV420P10 : UBUF_MGR_YUV420P;
+
+    const char *output_chroma_map[3+1];
+
+    if( tmp_image.csp == AV_PIX_FMT_YUV420P10 )
+    {
+        output_chroma_map[0] = "y10l";
+        output_chroma_map[1] = "u10l";
+        output_chroma_map[2] = "v10l";
+        output_chroma_map[3] = NULL;
+    }
+    else
+    {
+        output_chroma_map[0] = "y8";
+        output_chroma_map[1] = "u8";
+        output_chroma_map[2] = "v8";
+        output_chroma_map[3] = NULL;
+    }
+
+    uref = uref_pic_alloc( vfilt->uref_mgr, vfilt->ubuf_mgr[ubuf_mgr], tmp_image.width, tmp_image.height );
+    if( !uref )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
+    }
+
+    for (int i = 0; i < 3 && output_chroma_map[i] != NULL; i++)
+    {
+        uint8_t *data;
+        size_t stride;
+        if (unlikely(!ubase_check(uref_pic_plane_write(uref, output_chroma_map[i], 0, 0, -1, -1, &data)) ||
+                    !ubase_check(uref_pic_plane_size(uref, output_chroma_map[i], &stride, NULL, NULL, NULL)))) {
+            syslog(LOG_ERR, "invalid buffer received");
+            uref_free(uref);
+            return -1;
+        }
+
+        tmp_image.plane[i] = (uint8_t *)data;
+        tmp_image.stride[i] = stride;
     }
 
     av_image_copy_plane( (uint8_t*)tmp_image.plane[0], tmp_image.stride[0],
@@ -942,7 +1061,10 @@ static int downconvert_image_interlaced( obe_t *h, obe_vid_filter_ctx_t *vfilt, 
     }
 
     raw_frame->release_data( raw_frame );
-    raw_frame->release_data = obe_release_video_data;
+    raw_frame->uref = uref;
+
+    raw_frame->release_data = obe_release_video_uref;
+    raw_frame->dup_frame = obe_dup_video_uref;
     memcpy( &raw_frame->alloc_img, out, sizeof(obe_image_t) );
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
 
@@ -954,18 +1076,41 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     obe_image_t *img = &raw_frame->img;
     obe_image_t tmp_image = {0};
     obe_image_t *out = &tmp_image;
+    struct uref *uref;
 
     tmp_image.csp = img->csp == AV_PIX_FMT_YUV422P10 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV420P;
     tmp_image.width = raw_frame->img.width;
     tmp_image.height = raw_frame->img.height;
     tmp_image.planes = av_pix_fmt_count_planes( tmp_image.csp );
     tmp_image.format = raw_frame->img.format;
+    int ubuf_mgr = tmp_image.csp == AV_PIX_FMT_YUV422P ? UBUF_MGR_YUV422P : UBUF_MGR_YUV420P;
 
-    if( av_image_alloc( tmp_image.plane, tmp_image.stride, tmp_image.width, tmp_image.height,
-                        tmp_image.csp, 64 ) < 0 )
+    const char *output_chroma_map[3+1];
+    output_chroma_map[0] = "y8";
+    output_chroma_map[1] = "u8";
+    output_chroma_map[2] = "v8";
+    output_chroma_map[3] = NULL;
+
+    uref = uref_pic_alloc( vfilt->uref_mgr, vfilt->ubuf_mgr[ubuf_mgr], tmp_image.width, tmp_image.height );
+    if( !uref )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
+    }
+
+    for (int i = 0; i < 3 && output_chroma_map[i] != NULL; i++)
+    {
+        uint8_t *data;
+        size_t stride;
+        if (unlikely(!ubase_check(uref_pic_plane_write(uref, output_chroma_map[i], 0, 0, -1, -1, &data)) ||
+                    !ubase_check(uref_pic_plane_size(uref, output_chroma_map[i], &stride, NULL, NULL, NULL)))) {
+            syslog(LOG_ERR, "invalid buffer received");
+            uref_free(uref);
+            return -1;
+        }
+
+        tmp_image.plane[i] = (uint8_t *)data;
+        tmp_image.stride[i] = stride;
     }
 
     for( int i = 0; i < img->planes; i++ )
@@ -980,7 +1125,10 @@ static int dither_image( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     }
 
     raw_frame->release_data( raw_frame );
-    raw_frame->release_data = obe_release_video_data;
+    raw_frame->uref = uref;
+
+    raw_frame->release_data = obe_release_video_uref;
+    raw_frame->dup_frame = obe_dup_video_uref;
     memcpy( &raw_frame->alloc_img, &tmp_image, sizeof(obe_image_t) );
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
 
@@ -1371,7 +1519,7 @@ static void *start_filter( void *ptr )
             /* Downconvert using interlaced scaling if input is 4:2:2 and target is 4:2:0 */
             if( h_shift == 1 && v_shift == 0 && filter_params->target_csp == X264_CSP_I420 )
             {
-                if( downconvert_image_interlaced( h, vfilt, raw_frame ) < 0 )
+                if( downconvert_image_interlaced( vfilt, raw_frame ) < 0 )
                     goto end;
             }
 
@@ -1438,6 +1586,11 @@ static void *start_filter( void *ptr )
 end:
     if( vfilt )
     {
+        for( int i = 0; i < 4; i++ )
+            ubuf_mgr_release( vfilt->ubuf_mgr[i] );
+
+        uref_mgr_release( vfilt->uref_mgr );
+
         if( vfilt->resize_filter_graph )
             avfilter_graph_free( &vfilt->resize_filter_graph );
 
