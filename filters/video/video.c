@@ -438,7 +438,7 @@ static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt,
 
     if( IS_PROGRESSIVE( raw_frame->img.format ) )
     {
-        if( filter_params->target_csp == X264_CSP_I422 )
+        if( vfilt->target_csp == X264_CSP_I422 )
             vfilt->dst_csp = h->filter_bit_depth == OBE_BIT_DEPTH_8 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV422P10;
         else
             vfilt->dst_csp = h->filter_bit_depth == OBE_BIT_DEPTH_8 ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_YUV420P10;
