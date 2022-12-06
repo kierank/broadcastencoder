@@ -40,5 +40,6 @@ void obe_downsample_chroma_fields_10_avx512icl( void *src_ptr, int src_stride, v
 
 void obe_dither_plane_10_to_8_sse2( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height );
 void obe_dither_plane_10_to_8_avx2( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height );
+void obe_dither_plane_10_to_8_avx512icl( uint16_t *src, int src_stride, uint8_t *dst, int dst_stride, int width, int height );
 
 #endif
