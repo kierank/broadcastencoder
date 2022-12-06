@@ -1221,7 +1221,7 @@ static void *start_filter( void *ptr )
     obe_t *h = filter_params->h;
     obe_filter_t *filter = filter_params->filter;
     obe_int_input_stream_t *input_stream = filter_params->input_stream;
-    obe_raw_frame_t *raw_frame, *raw_frame_dup = NULL;
+    obe_raw_frame_t *raw_frame;
     obe_output_stream_t *output_stream = get_output_stream( h, 0 ); /* FIXME when output_stream_id for video is not zero */
     obe_output_stream_t *scte35_stream = get_output_stream_by_format( h, MISC_SCTE35 );
     int h_shift, v_shift, scte_tcp = 0;
@@ -1318,12 +1318,9 @@ static void *start_filter( void *ptr )
                     goto end;
             }
 
+            /* TODO: 10-bit jpeg */
             if( X264_BIT_DEPTH == 8 && !( vfilt->frame_counter % vfilt->encode_period ) )
-            {
-                raw_frame_dup = raw_frame->dup_frame( raw_frame );
-                if( !raw_frame_dup )
-                    goto end;
-            }
+                encode_jpeg( vfilt, raw_frame );
         }
 
         if( encapsulate_user_data( raw_frame, input_stream ) < 0 )
@@ -1339,15 +1336,6 @@ static void *start_filter( void *ptr )
 
         pts = raw_frame->pts;
         add_to_encode_queue( h, raw_frame, 0 );
-        /* TODO: 10-bit jpeg */
-        if( raw_frame_dup )
-        {
-            encode_jpeg( vfilt, raw_frame_dup );
-            raw_frame_dup->release_data( raw_frame_dup );
-            raw_frame_dup->release_frame( raw_frame_dup );
-            raw_frame_dup = NULL;
-        }
-
         vfilt->frame_counter++;
 
         if( scte_tcp )
