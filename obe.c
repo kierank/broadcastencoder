@@ -124,13 +124,26 @@ void obe_release_video_uref( void *ptr )
 {
     obe_raw_frame_t *raw_frame = ptr;
 
-    /* Unmap planes */
-    if( raw_frame->alloc_img.csp == AV_PIX_FMT_YUV422P10 )
+    const char *input_chroma_map[3+1];
+
+    if( raw_frame->alloc_img.csp == AV_PIX_FMT_YUV420P10 || raw_frame->alloc_img.csp == AV_PIX_FMT_YUV422P10 )
     {
-        uref_pic_plane_unmap(raw_frame->uref, "y10l", 0, 0, -1, -1);
-        uref_pic_plane_unmap(raw_frame->uref, "u10l", 0, 0, -1, -1);
-        uref_pic_plane_unmap(raw_frame->uref, "v10l", 0, 0, -1, -1);
+        input_chroma_map[0] = "y10l";
+        input_chroma_map[1] = "u10l";
+        input_chroma_map[2] = "v10l";
+        input_chroma_map[3] = NULL;
     }
+    else if( raw_frame->alloc_img.csp == AV_PIX_FMT_YUV420P || raw_frame->alloc_img.csp == AV_PIX_FMT_YUV422P )
+    {
+        input_chroma_map[0] = "y8";
+        input_chroma_map[1] = "u8";
+        input_chroma_map[2] = "v8";
+        input_chroma_map[3] = NULL;
+    }
+
+    /* Unmap planes */
+    for (int i = 0; i < 3 && input_chroma_map[i] != NULL; i++)
+        uref_pic_plane_unmap(raw_frame->uref, input_chroma_map[i], 0, 0, -1, -1);
 
     /* Clear video */
     memset( &raw_frame->alloc_img, 0, sizeof(raw_frame->alloc_img) );
@@ -138,6 +151,68 @@ void obe_release_video_uref( void *ptr )
 
     uref_free(raw_frame->uref);
     raw_frame->uref = NULL;
+}
+
+void *obe_dup_video_uref( void *ptr )
+{
+    obe_raw_frame_t *raw_frame = ptr;
+    const char *input_chroma_map[3+1];
+
+    if( raw_frame->alloc_img.csp == AV_PIX_FMT_YUV420P10 || raw_frame->alloc_img.csp == AV_PIX_FMT_YUV422P10 )
+    {
+        input_chroma_map[0] = "y10l";
+        input_chroma_map[1] = "u10l";
+        input_chroma_map[2] = "v10l";
+        input_chroma_map[3] = NULL;
+    }
+    else if( raw_frame->alloc_img.csp == AV_PIX_FMT_YUV420P || raw_frame->alloc_img.csp == AV_PIX_FMT_YUV422P )
+    {
+        input_chroma_map[0] = "y8";
+        input_chroma_map[1] = "u8";
+        input_chroma_map[2] = "v8";
+        input_chroma_map[3] = NULL;
+    }
+
+    obe_raw_frame_t *raw_frame_dup = new_raw_frame();
+    if( !raw_frame_dup )
+        return NULL;
+
+    memcpy( raw_frame_dup, raw_frame, sizeof(*raw_frame) );
+
+    raw_frame_dup->uref = uref_dup(raw_frame->uref);
+    if (!raw_frame_dup->uref)
+    {
+        free( raw_frame_dup );
+        raw_frame_dup = NULL;
+        return raw_frame_dup;
+    }
+
+    /* explicitly get new buffers */
+    for (int i = 0; i < 3 && input_chroma_map[i] != NULL; i++)
+    {
+        uint8_t *data;
+        size_t stride;
+        if (unlikely(!ubase_check(uref_pic_plane_write(raw_frame_dup->uref, input_chroma_map[i], 0, 0, -1, -1, &data)) ||
+                        !ubase_check(uref_pic_plane_size(raw_frame_dup->uref, input_chroma_map[i], &stride, NULL, NULL, NULL)))) {
+            syslog(LOG_ERR, "invalid buffer received");
+            uref_free(raw_frame_dup->uref);
+            raw_frame_dup = NULL;
+            return raw_frame_dup;
+        }
+
+        raw_frame_dup->alloc_img.plane[i] = (uint8_t *)data;
+        raw_frame_dup->alloc_img.stride[i] = stride;
+    }
+    memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
+
+    return raw_frame_dup;
+}
+
+/* umem frames */
+void obe_free_umem(void *opaque, uint8_t *data)
+{
+    struct umem *umem = opaque;
+    umem_free( umem );
 }
 
 void obe_release_audio_data( void *ptr )
