@@ -1,6 +1,6 @@
 %include "x86util.asm"
 
-SECTION_RODATA 32
+SECTION_RODATA 64
 
 two:   times 32 dw 2
 three: times 32 dw 3
