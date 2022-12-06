@@ -613,7 +613,7 @@ static void blank_lines( obe_raw_frame_t *raw_frame )
     blank_line( y, u, v, raw_frame->img.width / 2 );
 }
 
-static int scale_frame( obe_raw_frame_t *raw_frame )
+static int scale_frame( obe_t *h, obe_raw_frame_t *raw_frame )
 {
     obe_image_t *img = &raw_frame->img;
     obe_image_t tmp_image = {0};
@@ -849,7 +849,7 @@ static int dither_image( obe_t *h, obe_raw_frame_t *raw_frame, int16_t *error_bu
 
 #endif
 
-static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
+static int downconvert_image_interlaced( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
     obe_image_t *img = &raw_frame->img;
     obe_image_t tmp_image = {0};
@@ -1320,7 +1320,7 @@ static void *start_filter( void *ptr )
             const AVComponentDescriptor *c = &pfd->comp[0];
 
             if( raw_frame->img.csp == AV_PIX_FMT_YUV422P && X264_BIT_DEPTH == 10 )
-                scale_frame( raw_frame );
+                scale_frame( h, raw_frame );
 
             if( raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL && c->depth == 10 )
                 blank_lines( raw_frame );
@@ -1346,7 +1346,7 @@ static void *start_filter( void *ptr )
             /* Downconvert using interlaced scaling if input is 4:2:2 and target is 4:2:0 */
             if( h_shift == 1 && v_shift == 0 && filter_params->target_csp == X264_CSP_I420 )
             {
-                if( downconvert_image_interlaced( vfilt, raw_frame ) < 0 )
+                if( downconvert_image_interlaced( h, vfilt, raw_frame ) < 0 )
                     goto end;
             }
 
