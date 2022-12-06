@@ -329,7 +329,7 @@ static void init_filter( obe_t *h, obe_vid_filter_ctx_t *vfilt )
     }
 }
 
-static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt,
+static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filter_params_t *filter_params,
                              obe_output_stream_t *output_stream, obe_raw_frame_t *raw_frame )
 {
     char tmp[1024];
@@ -438,7 +438,7 @@ static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt,
 
     if( IS_PROGRESSIVE( raw_frame->img.format ) )
     {
-        if( vfilt->target_csp == X264_CSP_I422 )
+        if( filter_params->target_csp == X264_CSP_I422 )
             vfilt->dst_csp = h->filter_bit_depth == OBE_BIT_DEPTH_8 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV422P10;
         else
             vfilt->dst_csp = h->filter_bit_depth == OBE_BIT_DEPTH_8 ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_YUV420P10;
@@ -1298,7 +1298,7 @@ static void *start_filter( void *ptr )
                 if( vfilt->src_csp    != raw_frame->img.csp || vfilt->src_width != raw_frame->img.width ||
                     vfilt->src_height != raw_frame->img.height || ( output_stream->flip && !vfilt->flip_ready) )
                 {
-                    init_libavfilter( h, vfilt, output_stream, raw_frame );
+                    init_libavfilter( h, vfilt, filter_params, output_stream, raw_frame );
                 }
 
                 resize_frame( vfilt, raw_frame );
