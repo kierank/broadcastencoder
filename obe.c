@@ -200,7 +200,7 @@ void *obe_dup_video_uref( void *ptr )
         raw_frame_dup->alloc_img.plane[i] = (uint8_t *)data;
         raw_frame_dup->alloc_img.stride[i] = stride;
     }
-    memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
+    memcpy( &raw_frame_dup->img, &raw_frame_dup->alloc_img, sizeof(raw_frame_dup->alloc_img) );
 
     return raw_frame_dup;
 }
