@@ -1172,14 +1172,6 @@ int obe_start( obe_t *h )
     /* TODO: a lot of sanity checks */
     /* TODO: decide upon thread priorities */
 
-#define UMEM_POOL               512
-    h->umem_mgr = umem_pool_mgr_alloc_simple( UMEM_POOL );
-    if( !h->umem_mgr )
-    {
-        fprintf( stderr, "Could not allocate umem_mgr \n" );
-        goto fail;
-    }
-
     /* Setup mutexes and cond vars */
     obe_init_queue( &h->enc_smoothing_queue );
     obe_init_queue( &h->mux_queue );
@@ -1737,8 +1729,6 @@ void obe_close( obe_t *h )
 
     /* Destroy lock manager */
     av_lockmgr_register( NULL );
-
-    umem_mgr_release( h->umem_mgr );
 
     free( h );
     h = NULL;
