@@ -1316,7 +1316,7 @@ end:
         if( vfilt->frame )
             av_frame_free( &vfilt->frame );
 
-        jpeg_destroy_compress( vfilt->cinfo );
+        jpeg_destroy_compress( &vfilt->cinfo );
 
         if( vfilt->connfd )
             close( vfilt->connfd );
