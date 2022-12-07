@@ -1273,7 +1273,7 @@ static void *start_filter( void *ptr )
         if( filter->cancel_thread )
         {
             pthread_mutex_unlock( &filter->queue.mutex );
-            goto end;
+            break;
         }
 
         raw_frame = obe_raw_frame_t_from_uchain( ulist_pop( &filter->queue.ulist ) );
