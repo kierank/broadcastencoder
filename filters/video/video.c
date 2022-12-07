@@ -747,7 +747,7 @@ static int encode_jpeg( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
     {
         ret = avcodec_receive_packet( vfilt->jpeg_codec, pkt );
         if( ret == AVERROR(EAGAIN) || ret == AVERROR_EOF )
-            return 0;
+            break;
         else if( ret < 0 )
         {
             fprintf( stderr, "Error during encoding\n" );
