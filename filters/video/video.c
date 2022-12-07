@@ -93,9 +93,6 @@ typedef struct
     /* JPEG encoding */
     int encode_period;
     uint64_t frame_counter;
-    AVCodecContext *jpeg_codec;
-    AVFrame *jpeg_frame;
-    AVPacket *jpeg_pkt;
     char jpeg_dst[30];
 
 } obe_vid_filter_ctx_t;
@@ -539,53 +536,6 @@ static int init_jpegenc( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filter_p
     vfilt->encode_period  = input_stream->timebase_den > 60 ? input_stream->timebase_den / 1000 : input_stream->timebase_den;
     vfilt->encode_period *= PREVIEW_SECONDS;
 
-    vfilt->jpeg_frame = av_frame_alloc();
-    if( !vfilt->jpeg_frame )
-    {
-        fprintf( stderr, "Could not allocate AVFrame \n" );
-        return -1;
-    }
-
-    vfilt->jpeg_pkt = av_packet_alloc();
-    if( !vfilt->jpeg_pkt )
-    {
-        fprintf( stderr, "Could not allocate AVPacket \n" );
-        return -1;
-    }
-
-    codec = avcodec_find_encoder( AV_CODEC_ID_MJPEG );
-    if( !codec )
-    {
-        fprintf( stderr, "MJPEG codec not found \n" );
-        return -1;
-    }
-
-    vfilt->jpeg_codec = avcodec_alloc_context3( codec );
-    if( !vfilt->jpeg_codec )
-    {
-        fprintf( stderr, "Could not allocate MJPEG codec \n" );
-        return -1;
-    }
-
-    vfilt->jpeg_codec->pix_fmt = filter_params->target_csp == X264_CSP_I420 ? AV_PIX_FMT_YUVJ420P : AV_PIX_FMT_YUVJ422P;
-    vfilt->jpeg_codec->width = vfilt->dst_width;
-    vfilt->jpeg_codec->height = vfilt->dst_height;
-
-    /* Arbitrary */
-    vfilt->jpeg_codec->time_base.num = 25;
-    vfilt->jpeg_codec->time_base.den = 1;
-
-    vfilt->jpeg_codec->flags |= AV_CODEC_FLAG_QSCALE;
-    vfilt->jpeg_codec->thread_count = 4;
-    vfilt->jpeg_codec->thread_type = FF_THREAD_SLICE;
-
-    ret = avcodec_open2( vfilt->jpeg_codec, codec, NULL );
-    if( ret < 0 )
-    {
-        fprintf( stderr, "Could not open MJPEG codec \n" );
-        return -1;
-    }
-
     return 0;
 }
 
@@ -729,38 +679,7 @@ static int encode_jpeg( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
 {
     int ret;
 
-    AVFrame *frame = vfilt->jpeg_frame;
-    AVPacket *pkt = vfilt->jpeg_pkt;
 
-    /* Setup AVFrame */
-    memcpy( frame->buf, raw_frame->buf_ref, sizeof(frame->buf) );
-    memcpy( frame->linesize, raw_frame->img.stride, sizeof(raw_frame->img.stride) );
-    memcpy( frame->data, raw_frame->img.plane, sizeof(raw_frame->img.plane) );
-    frame->format = raw_frame->img.csp;
-    frame->width = raw_frame->img.width;
-    frame->height = raw_frame->img.height;
-    frame->pict_type = AV_PICTURE_TYPE_I;
-    frame->quality = FF_QP2LAMBDA * 31;
-
-    ret = avcodec_send_frame( vfilt->jpeg_codec, frame );
-    while( ret >= 0 )
-    {
-        ret = avcodec_receive_packet( vfilt->jpeg_codec, pkt );
-        if( ret == AVERROR(EAGAIN) || ret == AVERROR_EOF )
-            break;
-        else if( ret < 0 )
-        {
-            fprintf( stderr, "Error during encoding\n" );
-            return -1;
-        }
-
-        FILE *fp = fopen( vfilt->jpeg_dst, "wb" );
-        fwrite( pkt->data, 1, pkt->size, fp );
-        fclose( fp );
-
-        av_packet_unref( pkt );
-    }
-    memset( frame->buf, 0, sizeof(frame->buf) );
 
     return 0;
 }
@@ -1389,15 +1308,6 @@ end:
 
         if( vfilt->sockfd )
             close( vfilt->sockfd );
-
-        if( vfilt->jpeg_frame )
-            av_frame_free( &vfilt->jpeg_frame );
-
-        if( vfilt->jpeg_pkt )
-            av_packet_free( &vfilt->jpeg_pkt );
-
-        if( vfilt->jpeg_codec )
-            avcodec_free_context( &vfilt->jpeg_codec );
 
         free( vfilt );
     }
