@@ -734,7 +734,6 @@ static int encode_jpeg( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
 
     /* Setup AVFrame */
     memcpy( frame->buf, raw_frame->buf_ref, sizeof(frame->buf) );
-    memset(raw_frame->buf_ref, 0, sizeof(raw_frame->buf_ref));
     memcpy( frame->linesize, raw_frame->img.stride, sizeof(raw_frame->img.stride) );
     memcpy( frame->data, raw_frame->img.plane, sizeof(raw_frame->img.plane) );
     frame->format = raw_frame->img.csp;
@@ -761,6 +760,7 @@ static int encode_jpeg( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
 
         av_packet_unref( pkt );
     }
+    memset( frame->buf, 0, sizeof(frame->buf) );
 
     return 0;
 }
