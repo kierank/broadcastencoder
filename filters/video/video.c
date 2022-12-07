@@ -542,7 +542,7 @@ static int init_jpegenc( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filter_p
     vfilt->encode_period  = input_stream->timebase_den > 60 ? input_stream->timebase_den / 1000 : input_stream->timebase_den;
     vfilt->encode_period *= PREVIEW_SECONDS;
 
-    vfilt->divisor = vfilt->dst_width <= 720 ? 3 : vfilt->dst_width <= 1280 : 5 : 8;
+    vfilt->divisor = vfilt->dst_width <= 720 ? 3 : vfilt->dst_width <= 1280 ? 5 : 8;
 
     vfilt->cinfo.err = jpeg_std_error( &vfilt->jerr );
 
