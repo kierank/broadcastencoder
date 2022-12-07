@@ -722,7 +722,7 @@ if [ "$protobuf" = "yes" ] ; then
     fi
 fi
 
-LDFLAGS="$LDFLAGS -lnacl"
+LDFLAGS="$LDFLAGS -lnacl -ljpeg"
 
 UPIPE_MODULES="libupump_ev libupipe_netmap libupipe_pciesdi libupipe_hbrmt libupipe_pthread libupipe_modules libupipe_filters libupipe"
 

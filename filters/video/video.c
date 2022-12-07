@@ -47,6 +47,8 @@
 #include <bitstream/scte/104.h>
 #include <input/sdi/ancillary.h>
 
+#include <jpeglib.h>
+
 #define PREVIEW_SECONDS 5
 
 typedef struct
@@ -93,8 +95,12 @@ typedef struct
     /* JPEG encoding */
     int encode_period;
     uint64_t frame_counter;
+    int divisor;
     char jpeg_dst[30];
-
+    struct jpeg_compress_struct cinfo;
+    struct jpeg_error_mgr jerr;
+    int jpeg_output_buf_size;
+    uint8_t *jpeg_output_buf;
 } obe_vid_filter_ctx_t;
 
 typedef struct
@@ -536,6 +542,10 @@ static int init_jpegenc( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filter_p
     vfilt->encode_period  = input_stream->timebase_den > 60 ? input_stream->timebase_den / 1000 : input_stream->timebase_den;
     vfilt->encode_period *= PREVIEW_SECONDS;
 
+    vfilt->divisor = vfilt->dst_width <= 720 ? 3 : vfilt->dst_width <= 1280 : 5 : 8;
+
+    vfilt->cinfo.err = jpeg_std_error( &vfilt->jerr );
+
     return 0;
 }
 
@@ -679,8 +689,11 @@ static int encode_jpeg( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
 {
     int ret;
 
-
-
+#if 0
+    FILE *fp = fopen( vfilt->jpeg_dst, "wb" );
+    fwrite( pkt->data, 1, pkt->size, fp );
+    fclose( fp );
+#endif
     return 0;
 }
 
@@ -1302,6 +1315,8 @@ end:
 
         if( vfilt->frame )
             av_frame_free( &vfilt->frame );
+
+        jpeg_destroy_compress( vfilt->cinfo );
 
         if( vfilt->connfd )
             close( vfilt->connfd );
