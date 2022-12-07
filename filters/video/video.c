@@ -624,6 +624,8 @@ static int scale_frame( obe_t *h, obe_raw_frame_t *raw_frame )
     raw_frame->release_data = obe_release_video_data;
     memcpy( &raw_frame->alloc_img, out, sizeof(obe_image_t) );
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
+
+    return 0;
 }
 
 static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
