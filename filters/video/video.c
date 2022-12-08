@@ -767,7 +767,7 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
 
 static int encode_jpeg( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
-    jpeg_set_quality( &vfilt->cinfo, 50, true );
+    jpeg_set_quality( &vfilt->cinfo, 80, true );
 
     if( setjmp( vfilt->setjmp_buffer ) )
     {
