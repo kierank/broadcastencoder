@@ -48,6 +48,7 @@
 #include <input/sdi/ancillary.h>
 
 #include <jpeglib.h>
+#include <setjmp.h>
 
 #define PREVIEW_SECONDS 5
 
@@ -99,7 +100,12 @@ typedef struct
     char jpeg_dst[30];
     struct jpeg_compress_struct cinfo;
     struct jpeg_error_mgr jerr;
-    int jpeg_output_buf_size;
+    JSAMPIMAGE row_pointers;
+    jmp_buf setjmp_buffer;
+
+    uint8_t *jpeg_src[3];
+    int jpeg_src_stride[3];
+    long unsigned int jpeg_output_buf_size;
     uint8_t *jpeg_output_buf;
 } obe_vid_filter_ctx_t;
 
@@ -531,11 +537,29 @@ end:
     return ret;
 }
 
+/*
+ * Exit error handler for libjpeg
+ */
+static void user_error_exit( j_common_ptr p_jpeg )
+{
+    obe_vid_filter_ctx_t *vfilt = (obe_vid_filter_ctx_t *)p_jpeg->err;
+
+    fprintf( stderr, "libjpeg exit \n");
+    longjmp( vfilt->setjmp_buffer, 1 );
+}
+
+/*
+ * Emit message error handler for libjpeg
+ */
+static void user_error_message( j_common_ptr p_jpeg )
+{
+    fprintf( stderr, "Unknown libjpeg error \n" );
+}
+
 static int init_jpegenc( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filter_params_t *filter_params,
                          obe_int_input_stream_t *input_stream )
 {
-    const AVCodec *codec;
-    int ret;
+    int buf_size;
 
     strncpy( vfilt->jpeg_dst, "/tmp/obepreview.jpg", sizeof(vfilt->jpeg_dst) );
 
@@ -545,6 +569,60 @@ static int init_jpegenc( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filter_p
     vfilt->divisor = vfilt->dst_width <= 720 ? 3 : vfilt->dst_width <= 1280 ? 5 : 8;
 
     vfilt->cinfo.err = jpeg_std_error( &vfilt->jerr );
+    vfilt->jerr.error_exit = user_error_exit;
+    vfilt->jerr.output_message = user_error_message;
+    jpeg_create_compress( &vfilt->cinfo );
+
+    vfilt->cinfo.image_width = ((vfilt->dst_width / vfilt->divisor) / 16) * 16;
+    vfilt->cinfo.image_height = ((vfilt->dst_height / vfilt->divisor) / 16) * 16;
+
+    buf_size = vfilt->cinfo.image_width * vfilt->cinfo.image_height * 3 / 2;
+    vfilt->jpeg_src[0] = malloc( buf_size );
+    if( !vfilt->jpeg_src )
+    {
+        fprintf( stderr, "Could not allocate jpeg src buffer \n" );
+        return -1;
+    }
+
+    vfilt->jpeg_src[1] = vfilt->jpeg_src[0] + (vfilt->cinfo.image_width * vfilt->cinfo.image_height);
+    vfilt->jpeg_src[2] = vfilt->jpeg_src[1] + ((vfilt->cinfo.image_width * vfilt->cinfo.image_height) / 4);
+
+    vfilt->jpeg_src_stride[0] = vfilt->cinfo.image_width;
+    vfilt->jpeg_src_stride[1] = vfilt->jpeg_src_stride[2] = vfilt->cinfo.image_width / 2;
+
+    vfilt->cinfo.input_components = 3;
+    vfilt->cinfo.in_color_space = JCS_YCbCr;
+    vfilt->cinfo.jpeg_color_space = JCS_YCbCr;
+    vfilt->cinfo.data_precision   = 8;
+
+    jpeg_set_defaults( &vfilt->cinfo );
+
+    vfilt->cinfo.raw_data_in = true;
+
+    /* 4:2:0 */
+    vfilt->cinfo.comp_info[0].h_samp_factor = 2;
+    vfilt->cinfo.comp_info[0].v_samp_factor = 2;
+    vfilt->cinfo.comp_info[1].h_samp_factor = 1;
+    vfilt->cinfo.comp_info[1].v_samp_factor = 1;
+    vfilt->cinfo.comp_info[2].h_samp_factor = 1;
+    vfilt->cinfo.comp_info[2].v_samp_factor = 1;
+
+    vfilt->row_pointers = malloc( 3 * sizeof(JSAMPARRAY) );
+    if( !vfilt->row_pointers )
+    {
+        fprintf( stderr, "Could not allocate libjpeg pointer buffers \n" );
+        return -1;
+    }
+
+    for( int i = 0; i < 3; i++ )
+    {
+        vfilt->row_pointers[i] = malloc(vfilt->cinfo.comp_info[i].v_samp_factor * sizeof(JSAMPROW) * DCTSIZE);
+        if( !vfilt->row_pointers[i] )
+        {
+            fprintf( stderr, "Could not allocate libjpeg pointer buffers \n" );
+            return -1;
+        }
+    }
 
     return 0;
 }
@@ -689,13 +767,61 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
 
 static int encode_jpeg( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
-    int ret;
+    jpeg_set_quality( &vfilt->cinfo, 50, true );
 
-#if 0
+    if( setjmp( vfilt->setjmp_buffer ) )
+    {
+        goto error;
+    }
+
+    for( int plane = 0; plane < 3; plane++ )
+    {
+        uint8_t *src = raw_frame->img.plane[plane];
+        uint8_t *dst = vfilt->jpeg_src[plane];
+        int v_sub = plane == 0 ? 1 : raw_frame->img.csp == AV_PIX_FMT_YUV422P ? 2 : 1;
+        int width = vfilt->cinfo.image_width * obe_cli_csps[raw_frame->img.csp].width[plane];
+        int height = vfilt->cinfo.image_height * obe_cli_csps[raw_frame->img.csp].height[plane];
+
+        /* Basic 4:2:2 to 4:2:0 conversion */
+        if( raw_frame->img.csp == AV_PIX_FMT_YUV422P && plane > 0 )
+            height >>= 1;
+
+        for( int i = 0; i < height; i++ )
+        {
+            for( int j = 0; j < width; j++ )
+                dst[j] = src[j * vfilt->divisor];
+
+            src += raw_frame->img.stride[plane] * vfilt->divisor * v_sub;
+            dst += vfilt->jpeg_src_stride[plane];
+        }
+    }
+
+    jpeg_mem_dest( &vfilt->cinfo, &vfilt->jpeg_output_buf, &vfilt->jpeg_output_buf_size );
+    jpeg_start_compress( &vfilt->cinfo, true );
+
+    while( vfilt->cinfo.next_scanline < vfilt->cinfo.image_height )
+    {
+        for( int i = 0; i < 3; i++ )
+        {
+            int offset = vfilt->cinfo.next_scanline * vfilt->cinfo.comp_info[i].v_samp_factor / vfilt->cinfo.max_v_samp_factor;
+
+            for( int j = 0; j < vfilt->cinfo.comp_info[i].v_samp_factor * DCTSIZE; j++ )
+            {
+                vfilt->row_pointers[i][j] = vfilt->jpeg_src[i] + vfilt->jpeg_src_stride[i] * (offset + j);
+            }
+        }
+
+        jpeg_write_raw_data( &vfilt->cinfo, vfilt->row_pointers, vfilt->cinfo.max_v_samp_factor * DCTSIZE );
+    }
+
+    jpeg_finish_compress( &vfilt->cinfo );
+
     FILE *fp = fopen( vfilt->jpeg_dst, "wb" );
-    fwrite( pkt->data, 1, pkt->size, fp );
+    fwrite( vfilt->jpeg_output_buf, 1, vfilt->jpeg_output_buf_size, fp );
     fclose( fp );
-#endif
+
+error:
+
     return 0;
 }
 
@@ -1319,6 +1445,17 @@ end:
             av_frame_free( &vfilt->frame );
 
         jpeg_destroy_compress( &vfilt->cinfo );
+
+        for( int i = 0; i < 3; i++ )
+            free( vfilt->row_pointers[i] );
+
+        free( vfilt->row_pointers );
+
+        if( vfilt->jpeg_src[0] )
+            free( vfilt->jpeg_src[0] );
+
+        if( vfilt->jpeg_output_buf )
+            free( vfilt->jpeg_output_buf );
 
         if( vfilt->connfd )
             close( vfilt->connfd );
