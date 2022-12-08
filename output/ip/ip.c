@@ -559,9 +559,6 @@ static void *open_output( void *ptr )
         end = output->cancel_thread;
         pthread_mutex_unlock(&output->queue.mutex);
 
-        if (end)
-            break;
-
 //        printf("\n START %i \n", num_buf_refs );
 
         ulist_delete_foreach( &queue, uchain, uchain_tmp )
@@ -585,6 +582,9 @@ static void *open_output( void *ptr )
             av_buffer_unref( &data_buf_ref );
             av_buffer_unref( &buf_ref->self_buf_ref );
         }
+
+        if (end)
+            break;
     }
 
     close_output(&status);
