@@ -715,6 +715,8 @@ if [ "$lopenfec" = "yes" ] ; then
     LDFLAGS="$LDFLAGS $LOPENFEC_LIBS"
 fi
 
+LDFLAGS="$LDFLAGS -ljpeg"
+
 UPIPE_MODULES="libupump_ev libupipe_netmap libupipe_pciesdi libupipe_hbrmt libupipe_pthread libupipe_modules libupipe_filters libupipe"
 if [ "$upipe" = "auto" ] ; then
     upipe="no"
