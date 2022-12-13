@@ -46,8 +46,6 @@
 #include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/uprobe_uclock.h>
 #include <upipe/uprobe_dejitter.h>
-#include <upipe/umem.h>
-#include <upipe/umem_pool.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
@@ -97,7 +95,6 @@
 #include <bitstream/dvb/vbi.h>
 #include <bitstream/smpte/291.h>
 
-#define UMEM_POOL               512
 #define UDICT_POOL_DEPTH        500
 #define UREF_POOL_DEPTH         500
 #define UBUF_POOL_DEPTH         3000
@@ -799,6 +796,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
             raw_frame->uref = uref;
             raw_frame->release_data = obe_release_video_uref;
             raw_frame->release_frame = obe_release_frame;
+            raw_frame->dup_frame = obe_dup_video_uref;
 
             setup_picture_on_signal_loss_timer(netmap_ctx);
 
@@ -1783,6 +1781,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 {
     char *uri = netmap_ctx->uri;
     char *ptp_nic = netmap_ctx->ptp_nic;
+    obe_t *h = netmap_ctx->h;
 
     netmap_ctx->detected_video_format = -1;
     netmap_ctx->input_chroma_map[0] = "y10l";
@@ -1795,9 +1794,8 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     assert(main_upump_mgr);
     netmap_ctx->upump_mgr = main_upump_mgr;
     netmap_ctx->no_video_upump = NULL;
-    struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
-                                                         umem_mgr, -1, -1);
+                                                         h->umem_mgr, -1, -1);
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
     udict_mgr_release(udict_mgr);
@@ -1810,13 +1808,12 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     assert(uprobe_main);
     uprobe_main = uprobe_uref_mgr_alloc(uprobe_main, uref_mgr);
     assert(uprobe_main);
-    uprobe_main = uprobe_ubuf_mem_alloc(uprobe_main, umem_mgr, UBUF_POOL_DEPTH,
+    uprobe_main = uprobe_ubuf_mem_alloc(uprobe_main, h->umem_mgr, UBUF_POOL_DEPTH,
                                         UBUF_SHARED_POOL_DEPTH);
     uprobe_main = uprobe_pthread_upump_mgr_alloc(uprobe_main);
     assert(uprobe_main);
 
     uref_mgr_release(uref_mgr);
-    umem_mgr_release(umem_mgr);
     uprobe_pthread_upump_mgr_set(uprobe_main, main_upump_mgr);
 
     struct uprobe *uprobe_main_pthread = uprobe_main;
