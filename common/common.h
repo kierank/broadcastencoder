@@ -677,6 +677,7 @@ obe_coded_frame_t *new_coded_frame( int stream_id, int len );
 void destroy_coded_frame( obe_coded_frame_t *coded_frame );
 void obe_release_video_data( void *ptr );
 void obe_release_bufref( void *ptr );
+void *obe_dup_bufref( void *ptr );
 void obe_release_video_uref( void *ptr );
 void *obe_dup_video_uref( void *ptr );
 void obe_release_audio_data( void *ptr );
