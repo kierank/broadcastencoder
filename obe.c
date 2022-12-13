@@ -215,6 +215,70 @@ void obe_free_umem(void *opaque, uint8_t *data)
     umem_free( umem );
 }
 
+void *obe_dup_video_uref( void *ptr )
+{
+    obe_raw_frame_t *raw_frame = ptr;
+    const char *input_chroma_map[3+1];
+
+    if( raw_frame->alloc_img.csp == AV_PIX_FMT_YUV420P10 || raw_frame->alloc_img.csp == AV_PIX_FMT_YUV422P10 )
+    {
+        input_chroma_map[0] = "y10l";
+        input_chroma_map[1] = "u10l";
+        input_chroma_map[2] = "v10l";
+        input_chroma_map[3] = NULL;
+    }
+    else if( raw_frame->alloc_img.csp == AV_PIX_FMT_YUV420P || raw_frame->alloc_img.csp == AV_PIX_FMT_YUV422P )
+    {
+        input_chroma_map[0] = "y8";
+        input_chroma_map[1] = "u8";
+        input_chroma_map[2] = "v8";
+        input_chroma_map[3] = NULL;
+    }
+
+    obe_raw_frame_t *raw_frame_dup = new_raw_frame();
+    if( !raw_frame_dup )
+        return NULL;
+
+    memcpy( raw_frame_dup, raw_frame, sizeof(*raw_frame) );
+    raw_frame_dup->num_user_data = 0;
+    raw_frame_dup->user_data = NULL;
+
+    raw_frame_dup->uref = uref_dup(raw_frame->uref);
+    if (!raw_frame_dup->uref)
+    {
+        free( raw_frame_dup );
+        raw_frame_dup = NULL;
+        return raw_frame_dup;
+    }
+
+    /* explicitly get new buffers */
+    for (int i = 0; i < 3 && input_chroma_map[i] != NULL; i++)
+    {
+        const uint8_t *data;
+        size_t stride;
+        if (unlikely(!ubase_check(uref_pic_plane_write(raw_frame_dup->uref, input_chroma_map[i], 0, 0, -1, -1, &data)) ||
+                        !ubase_check(uref_pic_plane_size(raw_frame_dup->uref, input_chroma_map[i], &stride, NULL, NULL, NULL)))) {
+            syslog(LOG_ERR, "invalid buffer received");
+            uref_free(raw_frame_dup->uref);
+            raw_frame_dup = NULL;
+            return raw_frame_dup;
+        }
+
+        raw_frame_dup->alloc_img.plane[i] = (uint8_t *)data;
+        raw_frame_dup->alloc_img.stride[i] = stride;
+    }
+    memcpy( &raw_frame_dup->img, &raw_frame_dup->alloc_img, sizeof(raw_frame_dup->alloc_img) );
+
+    return raw_frame_dup;
+}
+
+/* umem frames */
+void obe_free_umem(void *opaque, uint8_t *data)
+{
+    struct umem *umem = opaque;
+    umem_free( umem );
+}
+
 void obe_release_audio_data( void *ptr )
 {
     obe_raw_frame_t *raw_frame = ptr;
@@ -1186,6 +1250,14 @@ int obe_start( obe_t *h )
     /* TODO: a lot of sanity checks */
     /* TODO: decide upon thread priorities */
 
+#define UMEM_POOL               512
+    h->umem_mgr = umem_pool_mgr_alloc_simple( UMEM_POOL );
+    if( !h->umem_mgr )
+    {
+        fprintf( stderr, "Could not allocate umem_mgr \n" );
+        goto fail;
+    }
+
     /* Setup mutexes and cond vars */
     obe_init_queue( &h->enc_smoothing_queue );
     obe_init_queue( &h->mux_queue );
@@ -1743,6 +1815,8 @@ void obe_close( obe_t *h )
 
     /* Destroy lock manager */
     av_lockmgr_register( NULL );
+
+    umem_mgr_release( h->umem_mgr );
 
     free( h );
     h = NULL;
