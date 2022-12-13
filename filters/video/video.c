@@ -689,6 +689,7 @@ static int init_jpegenc( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filter_p
             return -1;
         }
     }
+    jpeg_destroy_compress( &vfilt->cinfo );
 
     return 0;
 }
@@ -851,6 +852,32 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
 
 static int encode_jpeg( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
+    /* Duplicate init_jpegenc to avoid per frame malloc */
+    vfilt->cinfo.err = jpeg_std_error( &vfilt->jerr );
+    vfilt->jerr.error_exit = user_error_exit;
+    vfilt->jerr.output_message = user_error_message;
+    jpeg_create_compress( &vfilt->cinfo );
+
+    vfilt->cinfo.image_width = ((vfilt->dst_width / vfilt->divisor) / 16) * 16;
+    vfilt->cinfo.image_height = ((vfilt->dst_height / vfilt->divisor) / 16) * 16;
+
+    vfilt->cinfo.input_components = 3;
+    vfilt->cinfo.in_color_space = JCS_YCbCr;
+    vfilt->cinfo.jpeg_color_space = JCS_YCbCr;
+    vfilt->cinfo.data_precision   = 8;
+
+    jpeg_set_defaults( &vfilt->cinfo );
+
+    vfilt->cinfo.raw_data_in = true;
+
+    /* 4:2:0 */
+    vfilt->cinfo.comp_info[0].h_samp_factor = 2;
+    vfilt->cinfo.comp_info[0].v_samp_factor = 2;
+    vfilt->cinfo.comp_info[1].h_samp_factor = 1;
+    vfilt->cinfo.comp_info[1].v_samp_factor = 1;
+    vfilt->cinfo.comp_info[2].h_samp_factor = 1;
+    vfilt->cinfo.comp_info[2].v_samp_factor = 1;
+
     jpeg_set_quality( &vfilt->cinfo, 80, true );
 
     if( setjmp( vfilt->setjmp_buffer ) )
@@ -903,6 +930,8 @@ static int encode_jpeg( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
     FILE *fp = fopen( vfilt->jpeg_dst, "wb" );
     fwrite( vfilt->jpeg_output_buf, 1, vfilt->jpeg_output_buf_size, fp );
     fclose( fp );
+
+    jpeg_destroy_compress( &vfilt->cinfo );
 
 error:
 
