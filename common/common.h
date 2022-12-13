@@ -30,6 +30,8 @@
 #include <upipe/ulist.h>
 #include <upipe/uref.h>
 #include <upipe/uref_pic.h>
+#include <upipe/umem.h>
+#include <upipe/umem_pool.h>
 #include <libavutil/pixfmt.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/common.h>
@@ -435,6 +437,7 @@ typedef struct
 
     void (*release_data)( void* );
     void (*release_frame)( void* );
+    void *(*dup_frame)( void* );
 
     /* Video */
     /* Some devices output visible and VBI/VANC data together. In order
@@ -581,6 +584,8 @@ struct obe_t
     int64_t start_time;
     int obe_system;
     int filter_bit_depth;
+
+    struct umem_mgr *umem_mgr;
 
     /* OBE recovered clock */
     pthread_mutex_t obe_clock_mutex;
