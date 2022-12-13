@@ -932,6 +932,9 @@ static int encode_jpeg( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
     fclose( fp );
 
     jpeg_destroy_compress( &vfilt->cinfo );
+    free( vfilt->jpeg_output_buf );
+    vfilt->jpeg_output_buf = NULL;
+    vfilt->jpeg_output_buf_size = 0;
 
 error:
 
