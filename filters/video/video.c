@@ -1065,7 +1065,7 @@ static int downconvert_image_interlaced( obe_vid_filter_ctx_t *vfilt, obe_raw_fr
     {
         uint8_t *data;
         size_t stride;
-        if (unlikely(!ubase_check(uref_pic_plane_write(uref, output_chroma_map[i], 0, 0, -1, -1, &data)) ||
+        if (unlikely(!ubase_check(uref_pic_plane_write(uref, output_chroma_map[i], 0, 0, -1, -1, (uint8_t **)&data)) ||
                     !ubase_check(uref_pic_plane_size(uref, output_chroma_map[i], &stride, NULL, NULL, NULL)))) {
             syslog(LOG_ERR, "invalid buffer received");
             uref_free(uref);

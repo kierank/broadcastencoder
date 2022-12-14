@@ -211,7 +211,7 @@ void *obe_dup_video_uref( void *ptr )
     {
         const uint8_t *data;
         size_t stride;
-        if (unlikely(!ubase_check(uref_pic_plane_write(raw_frame_dup->uref, input_chroma_map[i], 0, 0, -1, -1, &data)) ||
+        if (unlikely(!ubase_check(uref_pic_plane_write(raw_frame_dup->uref, input_chroma_map[i], 0, 0, -1, -1, (uint8_t **)&data)) ||
                         !ubase_check(uref_pic_plane_size(raw_frame_dup->uref, input_chroma_map[i], &stride, NULL, NULL, NULL)))) {
             syslog(LOG_ERR, "invalid buffer received");
             uref_free(raw_frame_dup->uref);
