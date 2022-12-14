@@ -475,7 +475,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
                     decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
                 {
-                    if( decklink_ctx->stored_video_frame && decklink_ctx->stored_video_frame->dup_frame )
+                    if( decklink_ctx->stored_video_frame )
                     {
                         video_frame = (obe_raw_frame_t *)decklink_ctx->stored_video_frame->dup_frame( decklink_ctx->stored_video_frame );
                         if( !video_frame )
