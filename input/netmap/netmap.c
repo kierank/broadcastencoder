@@ -249,6 +249,7 @@ static void no_video_timer(struct upump *upump)
     obe_raw_frame_t *video_frame = NULL, *audio_frame = NULL;
     pts = av_rescale_q( netmap_ctx->v_counter, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
     obe_clock_tick( h, pts );
+    int video_duration = av_rescale_q( 1, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
 
     if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
         netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
@@ -328,6 +329,12 @@ static void no_video_timer(struct upump *upump)
     {
         if( h->device.streams[i]->stream_format == AUDIO_PCM )
             audio_frame->input_stream_id = h->device.streams[i]->input_stream_id;
+    }
+
+    if( pts != -1 )
+    {
+        audio_frame->video_pts = pts;
+        audio_frame->video_duration = video_duration;
     }
 
     audio_frame->pts = av_rescale_q( netmap_ctx->a_counter, netmap_ctx->a_timebase,
