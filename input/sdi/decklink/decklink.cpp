@@ -414,6 +414,8 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
     av_init_packet( &pkt );
 
+    video_duration = av_rescale_q( 1, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+
     if( videoframe )
     {
         pts = av_rescale_q( decklink_ctx->v_counter, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
@@ -468,6 +470,11 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 }
 
                 video_frame->pts = pts;
+                for( int i = 0; i < h->device.num_input_streams; i++ )
+                {
+                    if( h->device.streams[i]->stream_format == VIDEO_UNCOMPRESSED )
+                        video_frame->input_stream_id = h->device.streams[i]->input_stream_id;
+                }
 
                 if( add_to_filter_queue( h, video_frame ) < 0 )
                     goto end;
@@ -499,6 +506,12 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
                 audio_frame->pts = av_rescale_q( decklink_ctx->a_counter, decklink_ctx->a_timebase,
                                                  (AVRational){1, OBE_CLOCK} );
+
+                if( pts != -1 )
+                {
+                    audio_frame->video_pts = pts;
+                    audio_frame->video_duration = video_duration;
+                }
                 decklink_ctx->a_counter += audio_frame->audio_frame.num_samples;
 
                 if( add_to_filter_queue( h, audio_frame ) < 0 )
@@ -547,7 +560,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         const int width = videoframe->GetWidth();
         const int height = videoframe->GetHeight();
         const int stride = videoframe->GetRowBytes();
-        video_duration = av_rescale_q( 1, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
 
         videoframe->GetBytes( &frame_bytes );
 
