@@ -207,6 +207,7 @@ int setup_stored_video_frame( obe_raw_frame_t *stored_video_frame, int width, in
     stored_video_frame->buf_ref[1] = NULL;
     stored_video_frame->release_data = obe_release_bufref;
     stored_video_frame->release_frame = obe_release_frame;
+    stored_video_frame->dup_frame = obe_dup_bufref;
 
     return 0;
 }
