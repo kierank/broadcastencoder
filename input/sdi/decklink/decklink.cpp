@@ -1148,6 +1148,9 @@ static int open_card( decklink_opts_t *decklink_opts )
 
         if( decklink_ctx->cpu_flags & AV_CPU_FLAG_AVX )
             decklink_ctx->v210_unpack = obe_v210_planar_unpack_aligned_avx;
+
+        if( decklink_ctx->cpu_flags & AV_CPU_FLAG_AVX2 )
+            decklink_ctx->v210_unpack = obe_v210_planar_unpack_aligned_avx2;
     }
 
     decklink_iterator = CreateDeckLinkIteratorInstance();
