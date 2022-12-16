@@ -651,8 +651,9 @@ static int init_jpegenc( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filter_p
     vfilt->jpeg_src_stride[0] = ((vfilt->cinfo.image_width + 15) / 16) * 16;
     vfilt->jpeg_src_stride[1] = vfilt->jpeg_src_stride[2] = (((vfilt->cinfo.image_width / 2) + 15) / 16) * 16;
 
-    for( int i = 0; i < 3; i++ )
-        buf_size += vfilt->jpeg_src_stride[i] * vfilt->cinfo.image_height;
+    buf_size += vfilt->jpeg_src_stride[0] * vfilt->cinfo.image_height;
+    for( int i = 1; i < 3; i++ )
+        buf_size += vfilt->jpeg_src_stride[i] * vfilt->cinfo.image_height / 2;
 
     vfilt->jpeg_src[0] = av_malloc( buf_size );
     if( !vfilt->jpeg_src )
