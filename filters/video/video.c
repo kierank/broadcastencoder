@@ -50,6 +50,8 @@
 #include <jpeglib.h>
 #include <setjmp.h>
 
+#include <libswscale/swscale.h>
+
 #include <upipe/ubuf.h>
 #include <upipe/ubuf_pic.h>
 #include <upipe/ubuf_pic_mem.h>
@@ -122,6 +124,9 @@ typedef struct
     struct jpeg_error_mgr jerr;
     JSAMPIMAGE row_pointers;
     jmp_buf setjmp_buffer;
+
+    struct SwsContext *sws_context;
+    int interlaced;
 
     uint8_t *jpeg_src[3];
     int jpeg_src_stride[3];
@@ -642,19 +647,22 @@ static int init_jpegenc( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filter_p
     vfilt->cinfo.image_width = ((vfilt->dst_width / vfilt->divisor) / 16) * 16;
     vfilt->cinfo.image_height = ((vfilt->dst_height / vfilt->divisor) / 16) * 16;
 
-    buf_size = vfilt->cinfo.image_width * vfilt->cinfo.image_height * 3 / 2;
-    vfilt->jpeg_src[0] = malloc( buf_size );
+    buf_size = 0;
+    vfilt->jpeg_src_stride[0] = ((vfilt->cinfo.image_width + 15) / 16) * 16;
+    vfilt->jpeg_src_stride[1] = vfilt->jpeg_src_stride[2] = (((vfilt->cinfo.image_width / 2) + 15) / 16) * 16;
+
+    for( int i = 0; i < 3; i++ )
+        buf_size += vfilt->jpeg_src_stride[i] * vfilt->cinfo.image_height;
+
+    vfilt->jpeg_src[0] = av_malloc( buf_size );
     if( !vfilt->jpeg_src )
     {
         fprintf( stderr, "Could not allocate jpeg src buffer \n" );
         return -1;
     }
 
-    vfilt->jpeg_src[1] = vfilt->jpeg_src[0] + (vfilt->cinfo.image_width * vfilt->cinfo.image_height);
-    vfilt->jpeg_src[2] = vfilt->jpeg_src[1] + ((vfilt->cinfo.image_width * vfilt->cinfo.image_height) / 4);
-
-    vfilt->jpeg_src_stride[0] = vfilt->cinfo.image_width;
-    vfilt->jpeg_src_stride[1] = vfilt->jpeg_src_stride[2] = vfilt->cinfo.image_width / 2;
+    vfilt->jpeg_src[1] = vfilt->jpeg_src[0] + (vfilt->jpeg_src_stride[0] * vfilt->cinfo.image_height);
+    vfilt->jpeg_src[2] = vfilt->jpeg_src[1] + ((vfilt->jpeg_src_stride[1] * vfilt->cinfo.image_height / 2));
 
     vfilt->cinfo.input_components = 3;
     vfilt->cinfo.in_color_space = JCS_YCbCr;
@@ -689,6 +697,14 @@ static int init_jpegenc( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filter_p
             return -1;
         }
     }
+
+    int dst_pix_fmt = filter_params->target_csp == X264_CSP_I422 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV420P;
+    int dst_height = input_stream->interlaced ? vfilt->dst_height / 2 : vfilt->dst_height;
+    vfilt->sws_context = sws_getContext( vfilt->dst_width, dst_height, dst_pix_fmt,
+                                         vfilt->cinfo.image_width, vfilt->cinfo.image_height, AV_PIX_FMT_YUV420P,
+                                         SWS_BICUBIC, NULL, NULL, NULL );
+
+
     jpeg_destroy_compress( &vfilt->cinfo );
 
     return 0;
@@ -852,6 +868,9 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
 
 static int encode_jpeg( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
+    int src_stride[4] = {0}, height;
+    int interlaced = IS_INTERLACED( raw_frame->img.format );
+
     /* Duplicate init_jpegenc to avoid per frame malloc */
     vfilt->cinfo.err = jpeg_std_error( &vfilt->jerr );
     vfilt->jerr.error_exit = user_error_exit;
@@ -885,27 +904,11 @@ static int encode_jpeg( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
         goto error;
     }
 
-    for( int plane = 0; plane < 3; plane++ )
-    {
-        uint8_t *src = raw_frame->img.plane[plane];
-        uint8_t *dst = vfilt->jpeg_src[plane];
-        int v_sub = plane == 0 ? 1 : raw_frame->img.csp == AV_PIX_FMT_YUV422P ? 2 : 1;
-        int width = vfilt->cinfo.image_width * obe_cli_csps[raw_frame->img.csp].width[plane];
-        int height = vfilt->cinfo.image_height * obe_cli_csps[raw_frame->img.csp].height[plane];
+    for( int i = 0; i < 3; i++ )
+        src_stride[i] = interlaced ? raw_frame->img.stride[i] * 2 : raw_frame->img.stride[i];
+    height = interlaced ? raw_frame->img.height / 2 : raw_frame->img.height;
 
-        /* Basic 4:2:2 to 4:2:0 conversion */
-        if( raw_frame->img.csp == AV_PIX_FMT_YUV422P && plane > 0 )
-            height >>= 1;
-
-        for( int i = 0; i < height; i++ )
-        {
-            for( int j = 0; j < width; j++ )
-                dst[j] = src[j * vfilt->divisor];
-
-            src += raw_frame->img.stride[plane] * vfilt->divisor * v_sub;
-            dst += vfilt->jpeg_src_stride[plane];
-        }
-    }
+    sws_scale( vfilt->sws_context, (const uint8_t * const*)raw_frame->img.plane, src_stride, 0, height, vfilt->jpeg_src, vfilt->jpeg_src_stride );
 
     jpeg_mem_dest( &vfilt->cinfo, &vfilt->jpeg_output_buf, &vfilt->jpeg_output_buf_size );
     jpeg_start_compress( &vfilt->cinfo, true );
@@ -1641,6 +1644,9 @@ end:
         if( vfilt->frame )
             av_frame_free( &vfilt->frame );
 
+        if ( vfilt->sws_context )
+            sws_freeContext( vfilt->sws_context );
+
         jpeg_destroy_compress( &vfilt->cinfo );
 
         for( int i = 0; i < 3; i++ )
@@ -1649,7 +1655,7 @@ end:
         free( vfilt->row_pointers );
 
         if( vfilt->jpeg_src[0] )
-            free( vfilt->jpeg_src[0] );
+            av_free( vfilt->jpeg_src[0] );
 
         if( vfilt->jpeg_output_buf )
             free( vfilt->jpeg_output_buf );
