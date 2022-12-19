@@ -1,6 +1,20 @@
 %include "x86util.asm"
 
-SECTION_RODATA 32
+SECTION_RODATA 64
+
+perm_y:
+    db  0,1,   4,5,   6,7,   8,9,  12,13, 14,15, 16,17, 20,21
+    db 22,23, 24,25, 28,29, 30,31, 32,33, 36,37, 38,39, 40,41
+    db 44,45, 46,47, 48,49, 52,53, 54,55, 56,57, 60,61, 62,63
+times 16 db 0xff ; align to 64
+
+perm_uv:
+    db  0,1,   4,5,  10,11, 16,17, 20,21, 26,27, 32,33, 36,37
+    db 42,43, 48,49, 52,53, 58,59
+times 8 db 0xff ; align to 32
+    db  2,3,   8,9,  12,13, 18,19, 24,25, 28,29, 34,35, 40,41
+    db 44,45, 50,51, 56,57, 60,61
+times 8 db 0xff ; align to 32
 
 ; for AVX2 version only
 v210_luma_permute: dd 0,1,2,4,5,6,7,7  ; 32-byte alignment required
@@ -18,6 +32,9 @@ v210_nv20_chroma_shuf: times 2 db 0,1,2,3,5,6,8,9,10,11,13,14,10,11,13,14
 ; vpermd indices {0,1,2,4,5,7,_,_} merged in the 3 lsb of each dword to save a register
 v210_nv20_mult: dw 0x2000,0x7fff,0x0801,0x2000,0x7ffa,0x0800,0x7ffc,0x0800
                 dw 0x1ffd,0x7fff,0x07ff,0x2000,0x7fff,0x0800,0x7fff,0x0800
+
+shift: times 4 dw 6, 2
+kmask: dw 0x5555, 0xaaaa
 
 SECTION .text
 
