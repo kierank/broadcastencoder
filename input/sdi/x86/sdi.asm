@@ -127,6 +127,42 @@ v210_planar_unpack aligned
 INIT_YMM avx2
 v210_planar_unpack aligned
 
+INIT_ZMM avx512icl
+
+cglobal v210_planar_unpack, 5, 5, 6, src, y, u, v, w
+    movsxdifnidn wq, wd
+    lea    yq, [yq+2*wq]
+    add    uq, wq
+    add    vq, wq
+    neg    wq
+
+    kmovw k1, [kmask]   ; odd dword mask
+    kmovw k2, [kmask+2] ; even dword mask
+
+    VBROADCASTI128 m0, [shift]
+    mova           m1, [perm_y]
+    mova           m2, [perm_uv]
+
+    .loop:
+        movu    m3, [srcq]
+        vpsllvw m4, m3, m0
+        pslld   m5, m3, 12
+        psrlw   m4, 6
+        psrld   m5, 22
+
+        vpblendmd m3{k1}, m4, m5
+        vpermb    m3, m1, m3 ; could use vpcompressw
+        movu      [yq+2*wq], m3
+
+        vpblendmd     m5{k2}, m4, m5
+        vpermb        m5, m2, m5
+        movu          [uq+wq], ym5
+        vextracti32x8 [vq+wq], zm5, 1
+
+        add srcq, mmsize
+        add wq, (mmsize*3)/8
+    jl  .loop
+RET
 
 %macro PLANE_DEINTERLEAVE_V210 0
 ;-----------------------------------------------------------------------------
