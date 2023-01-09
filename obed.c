@@ -473,10 +473,10 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                     video_stream->avc_param.i_height = 720;
                 }
                 else
-            {
-                video_stream->avc_param.i_width = 720;
-                video_stream->avc_param.i_height = 576;
-            }
+                {
+                    video_stream->avc_param.i_width = 720;
+                    video_stream->avc_param.i_height = 576;
+                }
             }
 
 #ifdef C100
