@@ -541,6 +541,15 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             if( video_opts_in->has_flip )
                 video_stream->flip = video_opts_in->flip;
 
+            /* HOTFIX: Disable adaptive bframes and one bframe maximum for p50/60 */
+            if( video_stream->avc_param.i_fps_num == 50 ||
+                video_stream->avc_param.i_fps_num == 60000 ||
+                video_stream->avc_param.i_fps_num == 60 )
+            {
+                video_stream->avc_param.i_bframe_adaptive = 0;
+                video_stream->avc_param.i_bframe = video_stream->avc_param.i_bframe ? 1 : 0;
+            }
+
             /* Setup audio streams */
             for( i = 1; i <= encoder_control->n_audio_opts; i++ )
             {
