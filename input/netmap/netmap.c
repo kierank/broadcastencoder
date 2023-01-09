@@ -1316,6 +1316,12 @@ static int restamp_audio_2110(struct uprobe *uprobe, struct upipe *upipe,
     // * 48000 / 27000000
     pts_orig = pts_orig * 2 / 1125;
 
+    /* A few packets at the beginning can be marked as reordered by rtp_reorder, drop these */
+    if (cr_sys == 0) {
+        *drop = 1;
+        return UBASE_ERR_NONE;
+    }
+
     uint64_t ptp_rtp = cr_sys * 2 / 1125;
     uint32_t timestamp = pts_orig;
     uint32_t expected_timestamp = ptp_rtp;
