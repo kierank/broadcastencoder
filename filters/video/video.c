@@ -741,13 +741,14 @@ static void blank_lines( obe_raw_frame_t *raw_frame )
     blank_line( y, u, v, raw_frame->img.width / 2 );
 }
 
-static int scale_frame( obe_t *h, obe_raw_frame_t *raw_frame )
+static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
     obe_image_t *img = &raw_frame->img;
     obe_image_t tmp_image = {0};
     obe_image_t *out = &tmp_image;
     uint8_t *src;
     uint16_t *dst;
+    struct uref *uref;
 
     tmp_image.csp    = AV_PIX_FMT_YUV422P10;
     tmp_image.width  = raw_frame->img.width;
@@ -755,21 +756,32 @@ static int scale_frame( obe_t *h, obe_raw_frame_t *raw_frame )
     tmp_image.planes = av_pix_fmt_count_planes( raw_frame->img.csp );
     tmp_image.format = raw_frame->img.format;
 
-#if 0
-    // FIXME
-    int buf_size = av_image_get_buffer_size( tmp_image.csp, tmp_image.width, tmp_image.height, 64 );
-    int ret = umem_alloc( h->umem_mgr, &raw_frame->umem, buf_size );
-    if( !ret )
+    const char *output_chroma_map[3+1];
+    output_chroma_map[0] = "y10l";
+    output_chroma_map[1] = "u10l";
+    output_chroma_map[2] = "v10l";
+    output_chroma_map[3] = NULL;
+
+    uref = uref_pic_alloc( vfilt->uref_mgr, vfilt->ubuf_mgr[UBUF_MGR_YUV422P10], tmp_image.width, tmp_image.height );
+    if( !uref )
     {
         syslog( LOG_ERR, "Malloc failed\n" );
         return -1;
     }
 
-    if( av_image_fill_arrays( tmp_image.plane, tmp_image.stride, umem_buffer( &raw_frame->umem ), tmp_image.csp,
-                              tmp_image.width, tmp_image.height, 64 ) < 0 )
+    for (int i = 0; i < 3 && output_chroma_map[i] != NULL; i++)
     {
-        syslog( LOG_ERR, "Malloc failed\n" );
-        return -1;
+        uint8_t *data;
+        size_t stride;
+        if (unlikely(!ubase_check(uref_pic_plane_write(uref, output_chroma_map[i], 0, 0, -1, -1, (uint8_t **)&data)) ||
+                    !ubase_check(uref_pic_plane_size(uref, output_chroma_map[i], &stride, NULL, NULL, NULL)))) {
+            syslog(LOG_ERR, "invalid buffer received");
+            uref_free(uref);
+            return -1;
+        }
+
+        tmp_image.plane[i] = (uint8_t *)data;
+        tmp_image.stride[i] = stride;
     }
 
     for( int i = 0; i < tmp_image.planes; i++ )
@@ -793,17 +805,12 @@ static int scale_frame( obe_t *h, obe_raw_frame_t *raw_frame )
     }
 
     raw_frame->release_data( raw_frame );
-    raw_frame->buf_ref[0] = av_buffer_create( tmp_image.plane[0], tmp_image.stride[0] * tmp_image.height, NULL, &raw_frame->umem, 0);
-    if ( !raw_frame->buf_ref[0] )
-        return -1;
-    raw_frame->buf_ref[1] = NULL;
+    raw_frame->uref = uref;
 
-    raw_frame->release_data = obe_release_bufref;
-    raw_frame->dup_frame = obe_dup_bufref;
+    raw_frame->release_data = obe_release_video_uref;
+    raw_frame->dup_frame = obe_dup_video_uref;
     memcpy( &raw_frame->alloc_img, out, sizeof(obe_image_t) );
     memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(obe_image_t) );
-
-#endif
 
     return 0;
 }
@@ -1529,7 +1536,7 @@ static void *start_filter( void *ptr )
             const AVComponentDescriptor *c = &pfd->comp[0];
 
             if( raw_frame->img.csp == AV_PIX_FMT_YUV422P && X264_BIT_DEPTH == 10 )
-                scale_frame( h, raw_frame );
+                scale_frame( vfilt, raw_frame );
 
             if( raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL && c->depth == 10 )
                 blank_lines( raw_frame );
