@@ -519,12 +519,12 @@ static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filt
     if( IS_PROGRESSIVE( raw_frame->img.format ) )
     {
         if( filter_params->target_csp == X264_CSP_I422 )
-            vfilt->dst_csp = h->filter_bit_depth == OBE_BIT_DEPTH_8 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV422P10;
+            vfilt->dst_csp = X264_BIT_DEPTH == 8 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV422P10;
         else
-            vfilt->dst_csp = h->filter_bit_depth == OBE_BIT_DEPTH_8 ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_YUV420P10;
+            vfilt->dst_csp = X264_BIT_DEPTH == 8 ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_YUV420P10;
     }
     else
-        vfilt->dst_csp = h->filter_bit_depth == OBE_BIT_DEPTH_8 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV422P10;
+        vfilt->dst_csp = X264_BIT_DEPTH == 8 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV422P10;
 
     av_opt_set( vfilt->format_ctx, "pix_fmts", av_get_pix_fmt_name( vfilt->dst_csp ), AV_OPT_SEARCH_CHILDREN );
 
@@ -1541,21 +1541,6 @@ static void *start_filter( void *ptr )
             if( raw_frame->img.format == INPUT_VIDEO_FORMAT_PAL && c->depth == 10 )
                 blank_lines( raw_frame );
 
-            /* Resize if wrong pixel format or wrong resolution */
-            if( !( raw_frame->img.csp == AV_PIX_FMT_YUV422P   || raw_frame->img.csp == AV_PIX_FMT_YUV422P10 )
-                || vfilt->dst_width   != raw_frame->img.width || vfilt->dst_height != raw_frame->img.height
-                || output_stream->flip )
-            {
-                /* Reset the filter if it has been setup incorrectly or not setup at all */
-                if( vfilt->src_csp    != raw_frame->img.csp || vfilt->src_width != raw_frame->img.width ||
-                    vfilt->src_height != raw_frame->img.height || ( output_stream->flip && !vfilt->flip_ready) )
-                {
-                    init_libavfilter( h, vfilt, filter_params, output_stream, raw_frame );
-                }
-
-                resize_frame( vfilt, raw_frame );
-            }
-
             if( av_pix_fmt_get_chroma_sub_sample( raw_frame->img.csp, &h_shift, &v_shift ) < 0 )
                 goto end;
 
@@ -1572,6 +1557,19 @@ static void *start_filter( void *ptr )
             {
                 if( dither_image( vfilt, raw_frame ) < 0 )
                     goto end;
+            }
+
+            /* Resize if wrong resolution */
+            if( vfilt->dst_width   != raw_frame->img.width || vfilt->dst_height != raw_frame->img.height || output_stream->flip )
+            {
+                /* Reset the filter if it has been setup incorrectly or not setup at all */
+                if( vfilt->src_csp    != raw_frame->img.csp || vfilt->src_width != raw_frame->img.width ||
+                    vfilt->src_height != raw_frame->img.height || ( output_stream->flip && !vfilt->flip_ready) )
+                {
+                    init_libavfilter( h, vfilt, filter_params, output_stream, raw_frame );
+                }
+
+                resize_frame( vfilt, raw_frame );
             }
 
             if( X264_BIT_DEPTH == 8 && !( vfilt->frame_counter % vfilt->encode_period ) )
