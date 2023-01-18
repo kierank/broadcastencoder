@@ -373,8 +373,6 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 input_opts_out->bars_beep_interval = input_opts_in->bars_clapper_interval;
 
             int bit_depth = OBE_BIT_DEPTH_10;
-            if( input_opts_in->has_sd_downscale && input_opts_in->sd_downscale )
-                bit_depth = OBE_BIT_DEPTH_8;
 
             if( video_opts_in->latency == 1 )
             {
