@@ -858,6 +858,7 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     raw_frame->alloc_img.height = frame->height;
 
     raw_frame->release_data = obe_release_bufref;
+    raw_frame->dup_data = obe_dup_bufref;
 
     memcpy( raw_frame->alloc_img.stride, frame->linesize, sizeof(raw_frame->alloc_img.stride) );
     memcpy( raw_frame->alloc_img.plane, frame->data, sizeof(raw_frame->alloc_img.plane) );
