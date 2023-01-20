@@ -817,6 +817,8 @@ static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
 
 static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
+    obe_image_t tmp_image = {0};
+
     AVFrame *frame = vfilt->frame;
     /* Setup AVFrame */
     memcpy( frame->buf, raw_frame->buf_ref, sizeof(frame->buf) );
@@ -826,6 +828,12 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     frame->format = raw_frame->img.csp;
     frame->width = raw_frame->img.width;
     frame->height = raw_frame->img.height;
+
+    tmp_image.csp    = raw_frame->img.csp;
+    tmp_image.width  = raw_frame->img.width;
+    tmp_image.height = raw_frame->img.height;
+    tmp_image.planes = av_pix_fmt_count_planes( raw_frame->img.csp );
+    tmp_image.format = raw_frame->img.format;
 
     if( av_buffersrc_add_frame( vfilt->buffersrc_ctx, vfilt->frame ) < 0 )
     {
@@ -853,6 +861,7 @@ static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame
     }
 
     raw_frame->release_data(raw_frame);
+    memcpy( &raw_frame->alloc_img, &tmp_image, sizeof(obe_image_t) );
 
     raw_frame->alloc_img.width = frame->width;
     raw_frame->alloc_img.height = frame->height;
