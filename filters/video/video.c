@@ -815,7 +815,7 @@ static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
     return 0;
 }
 
-static int resize_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
+static int filter_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame )
 {
     obe_image_t tmp_image = {0};
 
@@ -1562,7 +1562,7 @@ static void *start_filter( void *ptr )
                     init_libavfilter( h, vfilt, filter_params, output_stream, raw_frame );
                 }
 
-                resize_frame( vfilt, raw_frame );
+                filter_frame( vfilt, raw_frame );
             }
 
             if( av_pix_fmt_get_chroma_sub_sample( raw_frame->img.csp, &h_shift, &v_shift ) < 0 )
