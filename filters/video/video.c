@@ -91,7 +91,7 @@ typedef struct
     int dst_width;
     int dst_height;
     int dst_csp;
-    AVFilterGraph   *resize_filter_graph;
+    AVFilterGraph   *avfilter_graph;
     AVFilterContext *buffersrc_ctx;
     AVFilterContext *resize_ctx;
     AVFilterContext *format_ctx;
@@ -417,10 +417,10 @@ static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filt
     int interlaced = 0;
     AVFilterContext *penultimate = NULL;
 
-    if( vfilt->resize_filter_graph )
+    if( vfilt->avfilter_graph )
     {
-        avfilter_graph_free( &vfilt->resize_filter_graph );
-        vfilt->resize_filter_graph = NULL;
+        avfilter_graph_free( &vfilt->avfilter_graph );
+        vfilt->avfilter_graph = NULL;
     }
 
     if( !vfilt->frame )
@@ -440,15 +440,15 @@ static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filt
     vfilt->src_csp = raw_frame->img.csp;
 
     /* Resize filter graph */
-    vfilt->resize_filter_graph = avfilter_graph_alloc();
-    if( !vfilt->resize_filter_graph )
+    vfilt->avfilter_graph = avfilter_graph_alloc();
+    if( !vfilt->avfilter_graph )
     {
         fprintf( stderr, "Could not allocate filter graph \n" );
         ret = -1;
         goto end;
     }
 
-    vfilt->buffersrc_ctx = avfilter_graph_alloc_filter( vfilt->resize_filter_graph, avfilter_get_by_name( "buffer" ), "src" );
+    vfilt->buffersrc_ctx = avfilter_graph_alloc_filter( vfilt->avfilter_graph, avfilter_get_by_name( "buffer" ), "src" );
     if( !vfilt->buffersrc_ctx )
     {
         syslog( LOG_ERR, "Failed to create buffersrc\n" );
@@ -477,7 +477,7 @@ static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filt
         goto end;
     }
 
-    vfilt->resize_ctx = avfilter_graph_alloc_filter( vfilt->resize_filter_graph, avfilter_get_by_name( "scale" ), "scale" );
+    vfilt->resize_ctx = avfilter_graph_alloc_filter( vfilt->avfilter_graph, avfilter_get_by_name( "scale" ), "scale" );
     if( !vfilt->resize_ctx )
     {
         syslog( LOG_ERR, "Failed to create scaler\n" );
@@ -508,7 +508,7 @@ static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filt
     snprintf( tmp, sizeof(tmp), "%i", output_stream->avc_param.i_height );
     av_opt_set( vfilt->resize_ctx, "height", tmp, AV_OPT_SEARCH_CHILDREN );
 
-    vfilt->format_ctx = avfilter_graph_alloc_filter( vfilt->resize_filter_graph, avfilter_get_by_name( "format" ), "format" );
+    vfilt->format_ctx = avfilter_graph_alloc_filter( vfilt->avfilter_graph, avfilter_get_by_name( "format" ), "format" );
     if( !vfilt->format_ctx )
     {
         syslog( LOG_ERR, "Failed to create format\n" );
@@ -537,7 +537,7 @@ static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filt
 
     if( output_stream->flip == VIDEO_FLIP_HORIZONTAL )
     {
-        vfilt->flip_ctx = avfilter_graph_alloc_filter( vfilt->resize_filter_graph, avfilter_get_by_name( "hflip" ), "hflip" );
+        vfilt->flip_ctx = avfilter_graph_alloc_filter( vfilt->avfilter_graph, avfilter_get_by_name( "hflip" ), "hflip" );
         if( !vfilt->flip_ctx )
         {
             syslog( LOG_ERR, "Failed to create flip\n" );
@@ -546,7 +546,7 @@ static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filt
         }
     }
 
-    vfilt->buffersink_ctx = avfilter_graph_alloc_filter( vfilt->resize_filter_graph, avfilter_get_by_name( "buffersink" ), "sink" );
+    vfilt->buffersink_ctx = avfilter_graph_alloc_filter( vfilt->avfilter_graph, avfilter_get_by_name( "buffersink" ), "sink" );
     if( !vfilt->buffersink_ctx )
     {
         syslog( LOG_ERR, "Failed to create buffersink\n" );
@@ -596,7 +596,7 @@ static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filt
     }
 
     /* Configure the graph. */
-    ret = avfilter_graph_config( vfilt->resize_filter_graph, NULL );
+    ret = avfilter_graph_config( vfilt->avfilter_graph, NULL );
     if( ret < 0 )
     {
         syslog( LOG_ERR, "Failed to configure filter chain\n" );
@@ -1654,8 +1654,8 @@ end:
 
         uref_mgr_release( vfilt->uref_mgr );
 
-        if( vfilt->resize_filter_graph )
-            avfilter_graph_free( &vfilt->resize_filter_graph );
+        if( vfilt->avfilter_graph )
+            avfilter_graph_free( &vfilt->avfilter_graph );
 
         if( vfilt->frame )
             av_frame_free( &vfilt->frame );
