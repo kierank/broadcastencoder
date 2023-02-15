@@ -516,15 +516,10 @@ static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filt
         goto end;
     }
 
-    if( IS_PROGRESSIVE( raw_frame->img.format ) )
-    {
-        if( filter_params->target_csp == X264_CSP_I422 )
-            vfilt->dst_csp = h->filter_bit_depth == OBE_BIT_DEPTH_8 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV422P10;
-        else
-            vfilt->dst_csp = h->filter_bit_depth == OBE_BIT_DEPTH_8 ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_YUV420P10;
-    }
+    if( filter_params->target_csp == X264_CSP_I422 )
+        vfilt->dst_csp = X264_BIT_DEPTH == 8 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV422P10;
     else
-        vfilt->dst_csp = h->filter_bit_depth == OBE_BIT_DEPTH_8 ? AV_PIX_FMT_YUV422P : AV_PIX_FMT_YUV422P10;
+        vfilt->dst_csp = X264_BIT_DEPTH == 8 ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_YUV420P10;
 
     av_opt_set( vfilt->format_ctx, "pix_fmts", av_get_pix_fmt_name( vfilt->dst_csp ), AV_OPT_SEARCH_CHILDREN );
 
