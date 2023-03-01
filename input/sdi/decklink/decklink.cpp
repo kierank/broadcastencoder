@@ -67,8 +67,7 @@ static inline uint32_t rl32(const void *src)
 
 #define READ_PIXELS_10(a, b, c) \
     do { \
-        uint32_t val = rl32(src); \
-        src += 4; \
+        uint32_t val = rl32(src++); \
         *(a)++ = (val)       & 1023; \
         *(b)++ = (val >> 10) & 1023; \
         *(c)++ = (val >> 20) & 1023; \
