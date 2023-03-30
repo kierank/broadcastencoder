@@ -67,8 +67,7 @@ static inline uint32_t rl32(const void *src)
 
 #define READ_PIXELS_10(a, b, c) \
     do { \
-        uint32_t val = rl32(src); \
-        src += 4; \
+        uint32_t val = rl32(src++); \
         *(a)++ = (val)       & 1023; \
         *(b)++ = (val >> 10) & 1023; \
         *(c)++ = (val >> 20) & 1023; \
@@ -777,22 +776,40 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                     v += w >> 1;
                     src += (w * 2) / 3;
 
-                    if( w < width - 1 )
+                    if( w++ < width )
                     {
                         READ_PIXELS_10(u, y, v);
-                        uint32_t val = rl32(src);
-                        src++;
-                        *y++ = val & 1023;
 
-                        if( w < width - 3 )
+                        if( w++ < width )
                         {
-                            *u++ = (val >> 10) & 1023;
-                            *y++ = (val >> 20) & 1023;
+                            uint32_t val = rl32(src++);
+                            *y++ = val & 1023;
 
-                            val = rl32(src);
-                            src++;
-                            *v++ = val & 1023;
-                            *y++ = (val >> 10) & 1023;
+                            if( w++ < width )
+                            {
+                                *u++ = (val >> 10) & 1023;
+                                *y++ = (val >> 20) & 1023;
+                                val  = rl32(src++);
+                                *v++ = val & 1023;
+
+                                if( w++ < width )
+                                {
+                                    *y++ = (val >> 10) & 1023;
+
+                                    if( w++ < width )
+                                    {
+                                        *u++ = (val >> 20) & 1023;
+                                        val  = rl32(src++);
+                                        *y++ = val & 1023;
+                                        *v++ = (val >> 10) & 1023;
+
+                                        if( w++ < width )
+                                        {
+                                            *y++ = (val >> 20) & 1023;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
