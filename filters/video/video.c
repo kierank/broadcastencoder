@@ -100,7 +100,10 @@ typedef struct
     AVFilterContext *buffersink_ctx;
     AVFrame *frame;
     int filter_built;
-    struct uchain ulist;
+    struct uchain in_ulist;
+    uint64_t filter_frame_counter;
+    uint64_t last_pts;
+    struct uchain out_ulist;
 
     /* downsample */
     void (*downsample_chroma_fields_8)( void *src_ptr, ptrdiff_t src_stride, void *dst_ptr, ptrdiff_t dst_stride, uintptr_t width, uintptr_t height );
@@ -417,7 +420,8 @@ static int init_libavfilter( obe_t *h, obe_vid_filter_ctx_t *vfilt, obe_vid_filt
     int ret = 0;
     int interlaced = 0;
     AVFilterContext *penultimate = NULL;
-    ulist_init( &vfilt->ulist );
+    ulist_init( &vfilt->in_ulist );
+    ulist_init( &vfilt->out_ulist );
 
     if( vfilt->avfilter_graph )
     {
@@ -839,11 +843,10 @@ static int scale_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t *raw_frame 
     return 0;
 }
 
-static int filter_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t **p_raw_frame )
+static int filter_frame( obe_vid_filter_ctx_t *vfilt, obe_output_stream_t *output_stream, obe_raw_frame_t *raw_frame )
 {
     obe_image_t tmp_image = {0};
     int got_frame = 0;
-    obe_raw_frame_t *raw_frame = *p_raw_frame;
 
     AVFrame *frame = vfilt->frame;
     /* Setup AVFrame */
@@ -872,7 +875,14 @@ static int filter_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t **p_raw_fr
     while( 1 )
     {
         ret = av_buffersink_get_frame( vfilt->buffersink_ctx, vfilt->frame );
-        printf("ret %i \n", ret);
+
+        /* On the first trip round, release the input frame */
+        if ( !got_frame )
+        {
+            raw_frame->release_data(raw_frame);
+            ulist_add( &vfilt->in_ulist, &raw_frame->uchain );
+            raw_frame = NULL;
+        }
 
         if( ret == AVERROR(EAGAIN) || ret == AVERROR_EOF )
             break;
@@ -882,40 +892,56 @@ static int filter_frame( obe_vid_filter_ctx_t *vfilt, obe_raw_frame_t **p_raw_fr
             fprintf( stderr, "Could not get frame from buffersink \n" );
             return -1;
         }
-        else
+
+        got_frame = 1;
+
+        if( got_frame )
         {
-            got_frame = 1;
-            break;
+            if( output_stream->deinterlace_mode == VIDEO_DEINTERLACE_DOUBLE &&
+                vfilt->filter_frame_counter & 1 )
+            {
+                /* No corresponding obe_raw_frame_t so we need to make a new one */
+                raw_frame = new_raw_frame();
+                if( !raw_frame )
+                {
+                    fprintf( stderr, "Could not create raw frame \n" );
+                    return -1;
+                }
+
+                raw_frame->release_frame = obe_release_frame;
+                raw_frame->sar_width = raw_frame->sar_height = 1;
+                raw_frame->pts = vfilt->last_pts + av_rescale_q( 1, (AVRational){output_stream->avc_param.i_fps_den, output_stream->avc_param.i_fps_num},
+                                                                    (AVRational){1, OBE_CLOCK} );
+            }
+            else
+            {
+                raw_frame = obe_raw_frame_t_from_uchain( ulist_pop( &vfilt->in_ulist ) );
+                vfilt->last_pts = raw_frame->pts;
+            }
+
+            memcpy( &raw_frame->alloc_img, &tmp_image, sizeof(obe_image_t) );
+
+            raw_frame->alloc_img.width = frame->width;
+            raw_frame->alloc_img.height = frame->height;
+
+            raw_frame->release_data = obe_release_bufref;
+            raw_frame->dup_frame = obe_dup_bufref;
+
+            memcpy( raw_frame->alloc_img.stride, frame->linesize, sizeof(raw_frame->alloc_img.stride) );
+            memcpy( raw_frame->alloc_img.plane, frame->data, sizeof(raw_frame->alloc_img.plane) );
+            raw_frame->alloc_img.csp = frame->format;
+            raw_frame->alloc_img.planes = av_pix_fmt_count_planes( raw_frame->alloc_img.csp );
+
+            memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
+
+            memcpy( raw_frame->buf_ref, frame->buf, sizeof(frame->buf) );
+            memset( frame->buf, 0, sizeof(frame->buf) );
+
+            raw_frame->sar_width = raw_frame->sar_height = 1;
+            ulist_add( &vfilt->out_ulist, &raw_frame->uchain );
+
+            vfilt->filter_frame_counter++;
         }
-    }
-
-    raw_frame->release_data(raw_frame);
-    ulist_add( &vfilt->ulist, &raw_frame->uchain );
-    *p_raw_frame = NULL;
-
-    if( got_frame )
-    {
-        raw_frame = obe_raw_frame_t_from_uchain( ulist_pop( &vfilt->ulist ) );
-        memcpy( &raw_frame->alloc_img, &tmp_image, sizeof(obe_image_t) );
-
-        raw_frame->alloc_img.width = frame->width;
-        raw_frame->alloc_img.height = frame->height;
-
-        raw_frame->release_data = obe_release_bufref;
-        raw_frame->dup_frame = obe_dup_bufref;
-
-        memcpy( raw_frame->alloc_img.stride, frame->linesize, sizeof(raw_frame->alloc_img.stride) );
-        memcpy( raw_frame->alloc_img.plane, frame->data, sizeof(raw_frame->alloc_img.plane) );
-        raw_frame->alloc_img.csp = frame->format;
-        raw_frame->alloc_img.planes = av_pix_fmt_count_planes( raw_frame->alloc_img.csp );
-
-        memcpy( &raw_frame->img, &raw_frame->alloc_img, sizeof(raw_frame->alloc_img) );
-
-        memcpy( raw_frame->buf_ref, frame->buf, sizeof(frame->buf) );
-        memset( frame->buf, 0, sizeof(frame->buf) );
-
-        raw_frame->sar_width = raw_frame->sar_height = 1;
-        *p_raw_frame = raw_frame;
     }
 
     return 0;
@@ -1610,6 +1636,7 @@ static void *start_filter( void *ptr )
             if( vfilt->dst_width   != raw_frame->img.width || vfilt->dst_height != raw_frame->img.height || output_stream->flip ||
                 output_stream->deinterlace_mode )
             {
+                int output_frames = 0;
                 /* Reset the filter if it has been setup incorrectly or not setup at all */
                 if( vfilt->src_csp    != raw_frame->img.csp || vfilt->src_width != raw_frame->img.width ||
                     vfilt->src_height != raw_frame->img.height ||
@@ -1618,11 +1645,25 @@ static void *start_filter( void *ptr )
                     init_libavfilter( h, vfilt, filter_params, output_stream, raw_frame );
                 }
 
-                filter_frame( vfilt, &raw_frame );
-                if( !raw_frame )
+                filter_frame( vfilt, output_stream, raw_frame );
+                output_frames = ulist_depth( &vfilt->out_ulist );
+                if( !output_frames )
                 {
                     /* Frame has been put into ulist as libavfilter is buffering frames */
                     continue;
+                }
+                else
+                {
+                    while( ulist_depth( &vfilt->out_ulist ) > 1 )
+                    {
+                        raw_frame = obe_raw_frame_t_from_uchain( ulist_pop( &vfilt->out_ulist ) );
+                        add_to_encode_queue( h, raw_frame, 0 );
+                        vfilt->frame_counter++;
+                    }
+
+                    /* Use the last frame for downstream processes such as user-data and thumbnail
+                       XXX: Need to split up closed captions */
+                    raw_frame = obe_raw_frame_t_from_uchain( ulist_pop( &vfilt->out_ulist ) );
                 }
             }
 

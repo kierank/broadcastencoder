@@ -26,32 +26,37 @@
 static void *start_smoothing( void *ptr )
 {
     obe_t *h = ptr;
-    int num_enc_smoothing_frames = 0, buffer_frames = 0;
+    int num_enc_smoothing_frames = 0, buffer_frames = 0, double_output = 0, release_late_frame = 0;
     int64_t start_dts = -1, start_pts = -1, last_clock = -1;
-    obe_coded_frame_t *coded_frame = NULL;
+    obe_coded_frame_t *coded_frame[2] = { NULL };
+    obe_output_stream_t *output_stream = NULL;
 
     struct sched_param param = {0};
     param.sched_priority = 50;
     pthread_setschedparam( pthread_self(), SCHED_FIFO, &param );
 
     /* FIXME: when we have soft pulldown this will need changing */
-    if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
+    for( int i = 0; i < h->num_encoders; i++ )
     {
-        for( int i = 0; i < h->num_encoders; i++ )
+        if( h->encoders[i]->is_video )
         {
-            if( h->encoders[i]->is_video )
+            pthread_mutex_lock( &h->encoders[i]->queue.mutex );
+            while( !h->encoders[i]->is_ready )
+                pthread_cond_wait( &h->encoders[i]->queue.in_cv, &h->encoders[i]->queue.mutex );
+            output_stream = get_output_stream( h, h->encoders[i]->output_stream_id );
+            if( h->obe_system == OBE_SYSTEM_TYPE_GENERIC )
             {
-                pthread_mutex_lock( &h->encoders[i]->queue.mutex );
-                while( !h->encoders[i]->is_ready )
-                    pthread_cond_wait( &h->encoders[i]->queue.in_cv, &h->encoders[i]->queue.mutex );
-                obe_output_stream_t *output_stream = get_output_stream( h, h->encoders[i]->output_stream_id );
                 x264_param_t *params = &output_stream->avc_param;
                 buffer_frames = params->sc.i_buffer_size;
-                pthread_mutex_unlock( &h->encoders[i]->queue.mutex );
-                break;
             }
+            pthread_mutex_unlock( &h->encoders[i]->queue.mutex );
+            break;
         }
     }
+
+    double_output = output_stream->deinterlace_mode == 2;
+    if( double_output )
+        buffer_frames = 2;
 
     int64_t send_delta = 0;
 
@@ -84,9 +89,14 @@ static void *start_smoothing( void *ptr )
             }
         }
 
-//        printf("\n smoothed frames %i \n", num_enc_smoothing_frames );
+        //printf("\n smoothed frames %i \n", num_enc_smoothing_frames );
 
-        coded_frame = obe_coded_frame_t_from_uchain( ulist_pop( &h->enc_smoothing_queue.ulist ) );
+        coded_frame[0] = obe_coded_frame_t_from_uchain( ulist_pop( &h->enc_smoothing_queue.ulist ) );
+        if( double_output && !release_late_frame )
+        {
+            if( num_enc_smoothing_frames > 1 )
+                coded_frame[1] = obe_coded_frame_t_from_uchain( ulist_pop( &h->enc_smoothing_queue.ulist ) );
+        }
         pthread_mutex_unlock( &h->enc_smoothing_queue.mutex );
 
         /* The terminology can be a cause for confusion:
@@ -95,20 +105,22 @@ static void *start_smoothing( void *ptr )
 
         pthread_mutex_lock( &h->obe_clock_mutex );
 
-        //printf("\n dts gap %"PRIi64" \n", coded_frame->real_dts - start_dts );
+        //printf("\n dts gap %"PRIi64" \n", coded_frame[0]->real_dts - start_dts );
         //printf("\n pts gap %"PRIi64" \n", h->obe_clock_last_pts - start_pts );
 
         last_clock = h->obe_clock_last_pts;
 
-        if( start_dts == -1 )
+        if( release_late_frame )
+            release_late_frame = 0;
+        else if( start_dts == -1 )
         {
-            start_dts = coded_frame->real_dts;
+            start_dts = coded_frame[0]->real_dts;
             /* Wait until the next clock tick */
             while( last_clock == h->obe_clock_last_pts && !h->cancel_enc_smoothing_thread )
                 pthread_cond_wait( &h->obe_clock_cv, &h->obe_clock_mutex );
             start_pts = h->obe_clock_last_pts;
         }
-        else if( coded_frame->real_dts - start_dts > h->obe_clock_last_pts - start_pts )
+        else if( coded_frame[0]->real_dts - start_dts > h->obe_clock_last_pts - start_pts )
         {
             //printf("\n waiting \n");
             while( last_clock == h->obe_clock_last_pts && !h->cancel_enc_smoothing_thread )
@@ -118,7 +130,19 @@ static void *start_smoothing( void *ptr )
 
         pthread_mutex_unlock( &h->obe_clock_mutex );
 
-        add_to_queue( &h->mux_queue, &coded_frame->uchain );
+        add_to_queue( &h->mux_queue, &coded_frame[0]->uchain );
+        coded_frame[0] = NULL;
+
+        if( double_output )
+        {
+            if( num_enc_smoothing_frames == 1 )
+                release_late_frame = 1;
+            else if( coded_frame[1] )
+            {
+                add_to_queue( &h->mux_queue, &coded_frame[1]->uchain );
+                coded_frame[1] = NULL;
+            }
+        }
 
 #if 0
         pthread_mutex_lock( &h->obe_clock_mutex );

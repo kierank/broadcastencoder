@@ -539,9 +539,6 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
             if( video_opts_in->has_flip )
                 video_stream->flip = video_opts_in->flip;
 
-            // FIXME
-            video_opts_in->has_deinterlace_mode = 1;
-            video_opts_in->deinterlace_mode = 1;
             if( video_opts_in->has_deinterlace_mode && video_opts_in->deinterlace_mode &&
                 !(input_opts_in->has_sd_downscale && input_opts_in->sd_downscale) )
             {
@@ -550,6 +547,8 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                     input_opts_out->video_format == INPUT_VIDEO_FORMAT_1080I_5994 )
                 {
                     video_stream->avc_param.b_interlaced = 0;
+                    if( video_stream->deinterlace_mode == VIDEO_DEINTERLACE_DOUBLE )
+                        video_stream->avc_param.i_fps_num <<= 1;
                 }
             }
 
