@@ -1658,6 +1658,9 @@ static void *start_filter( void *ptr )
                     {
                         raw_frame = obe_raw_frame_t_from_uchain( ulist_pop( &vfilt->out_ulist ) );
                         add_to_encode_queue( h, raw_frame, 0 );
+                        if( encapsulate_user_data( raw_frame, input_stream ) < 0 )
+                            goto end;
+
                         vfilt->frame_counter++;
                     }
 
