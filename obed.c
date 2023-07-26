@@ -557,8 +557,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 video_stream->avc_param.i_fps_num == 60000 ||
                 video_stream->avc_param.i_fps_num == 60 )
             {
-                video_stream->avc_param.i_bframe_adaptive = 0;
-                video_stream->avc_param.i_bframe = video_stream->avc_param.i_bframe ? 1 : 0;
+                video_stream->avc_param.i_lookahead_threads = 4;
             }
 
             /* Setup audio streams */
