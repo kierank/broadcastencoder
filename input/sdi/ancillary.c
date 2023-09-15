@@ -489,7 +489,7 @@ int decode_scte104( obe_sdi_non_display_data_t *non_display_data, uint8_t *scte1
         else if( scte104o_get_opid( op ) == SCTE104_OPID_TIME_SIGNAL )
         {
             op = scte104o_get_data( op );
-            uint16_t pre_roll_time = scte104ts_get_pre_roll_time( op );
+            uint16_t pre_roll_time = scte104tsrd_get_pre_roll_time( op );
 
             scte35_time_signal_init( scte35, SCTE35_SPLICE_TIME_TIME_SIZE );
             scte35 = scte35_time_signal_get_splice_time( scte35 );
@@ -498,29 +498,28 @@ int decode_scte104( obe_sdi_non_display_data_t *non_display_data, uint8_t *scte1
             scte35_splice_time_set_pts_time( scte35, (pre_roll_time * 90) % mod );
             syslog(LOG_INFO, "[SCTE-104] Time signal. Pre Roll %"PRIu64" (90kHz)", (pre_roll_time * 90) % mod);
         }
-        else if( scte104o_get_opid( op ) == SCTE104_OPID_INSERT_SD )
+        else if( scte104o_get_opid( op ) == SCTE104_OPID_INSERT_SEGMENTATION_DESCRIPTOR )
         {
             op = scte104o_get_data( op );
-            uint32_t segmentation_event_id = scte104isd_get_segmentation_event_id( op );
-            uint8_t segmentation_event_cancel_indicator = scte104isd_get_segmentation_event_cancel_indicator( op );
-            uint16_t duration = scte104isd_get_duration( op );
-            uint8_t segmentation_upid_type = scte104isd_get_segmentation_upid_type( op );
-            uint8_t segmentation_upid_length = scte104isd_get_segmentation_upid_length( op );
-            uint8_t *segmentation_upid = scte104isd_get_segmentation_upid( op );
+            uint32_t segmentation_event_id = scte104isdrd_get_event_id( op );
+            uint8_t segmentation_event_cancel_indicator = scte104isdrd_get_cancel_indicator( op );
+            uint16_t duration = scte104isdrd_get_duration( op );
+            uint8_t segmentation_upid_type = scte104isdrd_get_upid_type( op );
+            uint8_t segmentation_upid_length = scte104isdrd_get_upid_length( op );
+            uint8_t *segmentation_upid = scte104isdrd_get_upid( op );
 
-            op = segmentation_upid + segmentation_upid_length;
-            uint8_t segment_type_id = scte104isd_get_segment_type_id( op );
-            uint8_t segment_num = scte104isd_get_segment_num( op );
-            uint8_t segments_expected = scte104isd_get_segments_expected( op );
-            uint8_t duration_extension_frames = scte104isd_get_duration_extension_frames( op );
-            uint8_t delivery_not_restricted_flag = scte104isd_get_delivery_not_restricted_flag( op );
-            uint8_t web_delivery_allowed_flag = scte104isd_get_web_delivery_allowed_flag( op );
-            uint8_t no_regional_blackout_flag = scte104isd_get_no_regional_blackout_flag( op );
-            uint8_t archive_allowed_flag = scte104isd_get_archive_allowed_flag( op );
-            uint8_t device_restrictions = scte104isd_get_device_restrictions( op );
-            uint8_t insert_sub_segment_info = scte104isd_get_insert_sub_segment_info( op );
-            uint8_t sub_segment_num = scte104isd_get_sub_segment_num( op );
-            uint8_t sub_segments_expected = scte104isd_get_sub_segment_num( op );
+            uint8_t segment_type_id = scte104isdrd_get_type_id( op );
+            uint8_t segment_num = scte104isdrd_get_num( op );
+            uint8_t segments_expected = scte104isdrd_get_expected( op );
+            uint8_t duration_extension_frames = scte104isdrd_get_duration_extension_frames( op );
+            uint8_t delivery_not_restricted_flag = scte104isdrd_get_delivery_not_restricted( op );
+            uint8_t web_delivery_allowed_flag = scte104isdrd_get_web_delivery_allowed( op );
+            uint8_t no_regional_blackout_flag = scte104isdrd_get_no_regional_blackout( op );
+            uint8_t archive_allowed_flag = scte104isdrd_get_archive_allowed( op );
+            uint8_t device_restrictions = scte104isdrd_get_device_restrictions( op );
+            uint8_t insert_sub_segment_info = scte104isdrd_get_insert_sub_info( op );
+            uint8_t sub_segment_num = scte104isdrd_get_sub_num( op );
+            uint8_t sub_segments_expected = scte104isdrd_get_sub_expected( op );
 
             if( !scte35_desc )
                 scte35_desc = scte35_get_descl( scte35_start );
