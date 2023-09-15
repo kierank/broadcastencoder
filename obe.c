@@ -1243,7 +1243,8 @@ int obe_start( obe_t *h )
         obe_init_queue( &h->outputs[i]->queue );
         if( h->outputs[i]->output_dest.type == OUTPUT_UDP ||
                 h->outputs[i]->output_dest.type == OUTPUT_RTP ||
-                h->outputs[i]->output_dest.type == OUTPUT_ARQ )
+                h->outputs[i]->output_dest.type == OUTPUT_ARQ ||
+                h->outputs[i]->output_dest.type == OUTPUT_SRT )
             output = ip_output;
         else if( h->outputs[i]->output_dest.type == OUTPUT_FILE )
             output = file_output;
@@ -1596,7 +1597,8 @@ int obe_get_arq_status( obe_t *h, int *arq_status )
     {
         if( h->outputs[i]->output_dest.type == OUTPUT_UDP ||
                 h->outputs[i]->output_dest.type == OUTPUT_RTP ||
-                h->outputs[i]->output_dest.type == OUTPUT_ARQ )
+                h->outputs[i]->output_dest.type == OUTPUT_ARQ ||
+                h->outputs[i]->output_dest.type == OUTPUT_SRT )
             output = ip_output;
         else if( h->outputs[i]->output_dest.type == OUTPUT_FILE )
             output = file_output;

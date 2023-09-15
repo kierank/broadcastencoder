@@ -30,6 +30,9 @@
 #include "config.h"
 
 #include <signal.h>
+
+#include <gcrypt.h>
+
 #define _GNU_SOURCE
 
 #include <readline/readline.h>
@@ -81,7 +84,7 @@ static const char * const aac_encapsulations[]       = { "adts", "latm", 0 };
 static const char * const mp2_modes[]                = { "auto", "stereo", "joint-stereo", "dual-channel", 0 };
 static const char * const channel_maps[]             = { "", "mono", "stereo", "5.0", "5.1", 0 };
 static const char * const mono_channels[]            = { "left", "right", 0 };
-static const char * const output_modules[]           = { "udp", "rtp", "arq", "file", 0 };
+static const char * const output_modules[]           = { "udp", "rtp", "arq", "file", "srt", 0 };
 static const char * const addable_streams[]          = { "audio", "ttx", "scte35", 0};
 static const char * const filter_bit_depths[]        = { "10", "8", 0 };
 static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned", "ldpc-staircase", 0 };
@@ -1554,7 +1557,8 @@ static int start_encode( char *command, obecli_command_t *child )
     {
         if( ( cli.output.outputs[i].type == OUTPUT_UDP ||
                     cli.output.outputs[i].type == OUTPUT_RTP ||
-                    cli.output.outputs[i].type == OUTPUT_ARQ) &&
+                    cli.output.outputs[i].type == OUTPUT_ARQ ||
+                    cli.output.outputs[i].type == OUTPUT_SRT) &&
              !cli.output.outputs[i].target )
         {
             fprintf( stderr, "No output target chosen. Output-ID %d\n", i );
@@ -1724,6 +1728,9 @@ int main( int argc, char **argv )
     char *home_dir = getenv( "HOME" );
     char *history_filename;
     char *prompt = "obecli> ";
+
+    gcry_check_version(NULL);
+    gcry_control(GCRYCTL_INITIALIZATION_FINISHED, 0);
 
     history_filename = malloc( strlen( home_dir ) + 16 + 1 );
     if( !history_filename )

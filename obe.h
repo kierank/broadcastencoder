@@ -567,6 +567,7 @@ enum output_e
     OUTPUT_RTP, /* MPEG-TS in RTP in UDP */
     OUTPUT_ARQ, /* MPEG-TS in RTP in UDP, with retransmission */
     OUTPUT_FILE, /* File output */
+    OUTPUT_SRT, /* MPEG-TS in RTP in UDP, with retransmission */
 //    OUTPUT_LINSYS_ASI,
 //    OUTPUT_LINSYS_SMPTE_310M,
 };
