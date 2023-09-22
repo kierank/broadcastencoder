@@ -599,6 +599,8 @@ typedef struct
     unsigned arq_latency;
 
     char *srt_password;
+
+    char *stream_id;
 } obe_output_dest_t;
 
 typedef struct

@@ -174,6 +174,9 @@ static int start(struct srt_ctx *ctx)
     if (ctx->password)
         upipe_srt_handshake_set_password(upipe_srt_handshake, ctx->password);
 
+    if (ctx->stream_id)
+        upipe_set_option(upipe_srt_handshake, "stream_id", ctx->stream_id);
+
     upipe_mgr_release(upipe_srt_handshake_mgr);
 
     upipe_mgr_release(upipe_udpsrc_mgr);

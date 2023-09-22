@@ -502,6 +502,7 @@ static void close_output(struct ip_status *status)
 
     free( status->output->output_dest.target );
     free( status->output->output_dest.srt_password );
+    free( status->output->output_dest.stream_id );
 }
 
 static void *open_output( void *ptr )
@@ -554,9 +555,8 @@ static void *open_output( void *ptr )
                 return NULL;
             }
             p_rtp->srt_ctx->uref_ctx = &p_rtp->uref_ctx;
-
-//
             p_rtp->srt_ctx->password = output_dest->srt_password;
+            p_rtp->srt_ctx->stream_id = output_dest->stream_id;
 
             output->handle = (hnd_t)p_rtp;
         }
