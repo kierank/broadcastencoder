@@ -501,6 +501,7 @@ static void close_output(struct ip_status *status)
     }
 
     free( status->output->output_dest.target );
+    free( status->output->output_dest.srt_password );
 }
 
 static void *open_output( void *ptr )
@@ -553,6 +554,9 @@ static void *open_output( void *ptr )
                 return NULL;
             }
             p_rtp->srt_ctx->uref_ctx = &p_rtp->uref_ctx;
+
+//
+            p_rtp->srt_ctx->password = output_dest->srt_password;
 
             output->handle = (hnd_t)p_rtp;
         }

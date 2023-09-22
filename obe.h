@@ -597,6 +597,8 @@ typedef struct
     int dup_delay;
 
     unsigned arq_latency;
+
+    char *srt_password;
 } obe_output_dest_t;
 
 typedef struct

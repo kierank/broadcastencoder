@@ -27,7 +27,7 @@ struct srt_ctx {
     // XXX
     bool restart;
 
-    // password
+    char *password;
     int fd;
     struct sockaddr_storage dest_addr;
     int dest_addr_len;

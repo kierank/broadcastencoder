@@ -171,7 +171,8 @@ static int start(struct srt_ctx *ctx)
     struct upipe *upipe_srt_handshake = upipe_void_alloc_output(ctx->upipe_udpsrc_srt, upipe_srt_handshake_mgr,
             uprobe_pfx_alloc(uprobe_use(ctx->logger), loglevel, "srt handshake"));
     upipe_set_option(upipe_srt_handshake, "listener", listener ? "1" : "0");
-    //upipe_srt_handshake_set_password(upipe_srt_handshake, password); // TODO
+    if (ctx->password)
+        upipe_srt_handshake_set_password(upipe_srt_handshake, ctx->password);
 
     upipe_mgr_release(upipe_srt_handshake_mgr);
 
