@@ -135,7 +135,12 @@ static void addr_to_str(const struct sockaddr *s, char uri[INET6_ADDRSTRLEN+6])
 
 static int start(struct srt_ctx *ctx)
 {
-    bool listener = false; //dirpath && *dirpath == '@';
+    bool listener = false;
+    if (ctx->dest_addr.ss_family == AF_INET) {
+        struct sockaddr_in *in = (struct sockaddr_in *)&ctx->dest_addr;
+        if (in->sin_addr.s_addr == INADDR_ANY)
+            listener = true;
+    }
 
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
 
@@ -199,26 +204,17 @@ static int start(struct srt_ctx *ctx)
 
     upipe_set_output(upipe_srt_handshake_sub, ctx->upipe_udpsink);
 
-    if (listener) {
-        // TODO
-        #if 0
-        if (!ubase_check(upipe_set_uri(ctx->upipe_udpsrc_srt, dirpath))) {
-            return EXIT_FAILURE;
-        }
-        ubase_assert(upipe_udpsrc_get_fd(ctx->upipe_udpsrc_srt, &udp_fd));
-        #endif
-    } else {
-        ubase_assert(upipe_udpsink_set_fd(ctx->upipe_udpsink, ctx->fd));
+    ubase_assert(upipe_udpsink_set_fd(ctx->upipe_udpsink, ctx->fd));
 
-        int flags = fcntl(ctx->fd, F_GETFL);
-        flags |= O_NONBLOCK;
-        if (fcntl(ctx->fd, F_SETFL, flags) < 0)
-            upipe_err(ctx->upipe_udpsink, "Could not set flags");;
+    int flags = fcntl(ctx->fd, F_GETFL);
+    flags |= O_NONBLOCK;
+    if (fcntl(ctx->fd, F_SETFL, flags) < 0)
+        upipe_err(ctx->upipe_udpsink, "Could not set flags");;
 
-        ubase_assert(upipe_udpsrc_set_fd(ctx->upipe_udpsrc_srt, ctx->fd));
+    ubase_assert(upipe_udpsrc_set_fd(ctx->upipe_udpsrc_srt, ctx->fd));
+    if (!listener)
         ubase_assert(upipe_udpsink_set_peer(ctx->upipe_udpsink,
                     (const struct sockaddr*)&ctx->dest_addr, ctx->dest_addr_len));
-    }
 
     struct sockaddr_storage ad;
     socklen_t peer_len = sizeof(ad);
