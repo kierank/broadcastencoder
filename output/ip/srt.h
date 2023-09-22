@@ -16,9 +16,6 @@ struct srt_ctx {
     struct upipe *upipe_setflowdef;
     struct upipe *upipe_udpsink;
     struct upipe *upipe_udpsrc_srt;
-    struct upipe *upipe_srt_handshake_sub;
-    struct upipe *upipe_srt_sender;
-    struct upipe *upipe_srt_sender_sub;
 
     struct uprobe *uprobe_udp_srt;
     struct uprobe *logger;

@@ -94,7 +94,7 @@ static void catch_event(struct upump *upump)
 
     if (end) {
         upipe_release(ctx->upipe_udpsrc_srt);
-        upipe_release(ctx->upipe_srt_handshake_sub);
+        upipe_release(ctx->upipe_setflowdef);
 
         upump_stop(upump);
         return;
@@ -154,14 +154,14 @@ static int start(struct srt_ctx *ctx)
 
     /* send through srt sender */
     struct upipe_mgr *upipe_srt_sender_mgr = upipe_srt_sender_mgr_alloc();
-    ctx->upipe_srt_sender = upipe_void_alloc_output(upipe_setflowdef, upipe_srt_sender_mgr,
+    struct upipe *upipe_srt_sender = upipe_void_alloc_output(upipe_setflowdef, upipe_srt_sender_mgr,
             uprobe_pfx_alloc(uprobe_use(ctx->logger), loglevel, "srt sender"));
     upipe_mgr_release(upipe_srt_sender_mgr);
 
     char lat[12];
     snprintf(lat, sizeof(lat) - 1, "%u", ctx->latency);
     lat[sizeof(lat)-1] = '\0';
-    if (!ubase_check(upipe_set_option(ctx->upipe_srt_sender, "latency", lat)))
+    if (!ubase_check(upipe_set_option(upipe_srt_sender, "latency", lat)))
         return EXIT_FAILURE;
 
     ctx->upipe_udpsrc_srt = upipe_void_alloc(upipe_udpsrc_mgr, uprobe_use(ctx->uprobe_udp_srt));
@@ -177,25 +177,24 @@ static int start(struct srt_ctx *ctx)
 
     upipe_mgr_release(upipe_udpsrc_mgr);
 
-    ctx->upipe_srt_handshake_sub = upipe_void_alloc_sub(upipe_srt_handshake,
+    struct upipe *upipe_srt_handshake_sub = upipe_void_alloc_sub(upipe_srt_handshake,
         uprobe_pfx_alloc(uprobe_use(ctx->logger), loglevel, "srt handshake sub"));
-    assert(ctx->upipe_srt_handshake_sub);
+    assert(upipe_srt_handshake_sub);
 
-    ctx->upipe_srt_sender_sub = upipe_void_chain_output_sub(upipe_srt_handshake,
-        ctx->upipe_srt_sender,
+    struct upipe *upipe_srt_sender_sub = upipe_void_chain_output_sub(upipe_srt_handshake,
+        upipe_srt_sender,
         uprobe_pfx_alloc(uprobe_use(ctx->logger), loglevel, "srt sender sub"));
-    assert(ctx->upipe_srt_sender_sub);
-    upipe_release(ctx->upipe_srt_sender_sub);
+    assert(upipe_srt_sender_sub);
+    upipe_release(upipe_srt_sender_sub);
 
     /* send to udp */
     struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
-    ctx->upipe_udpsink = upipe_void_chain_output(ctx->upipe_srt_sender, upipe_udpsink_mgr,
+    ctx->upipe_udpsink = upipe_void_chain_output(upipe_srt_sender, upipe_udpsink_mgr,
             uprobe_pfx_alloc(uprobe_use(ctx->logger), loglevel, "udp sink"));
     upipe_release(ctx->upipe_udpsink);
 
-    upipe_set_output(ctx->upipe_srt_handshake_sub, ctx->upipe_udpsink);
+    upipe_set_output(upipe_srt_handshake_sub, ctx->upipe_udpsink);
 
-    int udp_fd = -1;
     if (listener) {
         // TODO
         #if 0
@@ -205,23 +204,23 @@ static int start(struct srt_ctx *ctx)
         ubase_assert(upipe_udpsrc_get_fd(ctx->upipe_udpsrc_srt, &udp_fd));
         #endif
     } else {
+        ubase_assert(upipe_udpsink_set_fd(ctx->upipe_udpsink, ctx->fd));
+
         int flags = fcntl(ctx->fd, F_GETFL);
         flags |= O_NONBLOCK;
         if (fcntl(ctx->fd, F_SETFL, flags) < 0)
             upipe_err(ctx->upipe_udpsink, "Could not set flags");;
 
-        ubase_assert(upipe_udpsink_set_fd(ctx->upipe_udpsink, ctx->fd));
+        ubase_assert(upipe_udpsrc_set_fd(ctx->upipe_udpsrc_srt, ctx->fd));
         ubase_assert(upipe_udpsink_set_peer(ctx->upipe_udpsink,
                     (const struct sockaddr*)&ctx->dest_addr, ctx->dest_addr_len));
-
-        ubase_assert(upipe_udpsrc_set_fd(ctx->upipe_udpsrc_srt, ctx->fd));
     }
 
     struct sockaddr_storage ad;
     socklen_t peer_len = sizeof(ad);
     struct sockaddr *peer = (struct sockaddr*) &ad;
 
-    if (!getsockname(udp_fd, peer, &peer_len)) {
+    if (!getsockname(ctx->fd, peer, &peer_len)) {
         char uri[INET6_ADDRSTRLEN+6];
         addr_to_str(peer, uri);
         upipe_warn_va(upipe_srt_handshake, "Local %s", uri); // XXX: INADDR_ANY when listening
@@ -242,7 +241,6 @@ static void stop(struct upump *upump)
 
     upipe_release(ctx->upipe_udpsrc_srt);
     upipe_release(ctx->upipe_setflowdef);
-    upipe_release(ctx->upipe_srt_handshake_sub);
 
     if (ctx->restart) {
         ctx->restart = false;
