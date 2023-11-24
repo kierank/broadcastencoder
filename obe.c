@@ -1143,6 +1143,8 @@ int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts )
                 return -1;
             }
         }
+        h->outputs[i]->output_dest.stream_id = output_opts->outputs[i].stream_id;
+        h->outputs[i]->output_dest.srt_password = output_opts->outputs[i].srt_password;
         h->outputs[i]->output_dest.arq_latency = output_opts->outputs[i].arq_latency;
         h->outputs[i]->output_dest.dup_delay = output_opts->outputs[i].dup_delay;
         h->outputs[i]->output_dest.fec_type = output_opts->outputs[i].fec_type;
@@ -1243,7 +1245,8 @@ int obe_start( obe_t *h )
         obe_init_queue( &h->outputs[i]->queue );
         if( h->outputs[i]->output_dest.type == OUTPUT_UDP ||
                 h->outputs[i]->output_dest.type == OUTPUT_RTP ||
-                h->outputs[i]->output_dest.type == OUTPUT_ARQ )
+                h->outputs[i]->output_dest.type == OUTPUT_ARQ ||
+                h->outputs[i]->output_dest.type == OUTPUT_SRT )
             output = ip_output;
         else if( h->outputs[i]->output_dest.type == OUTPUT_FILE )
             output = file_output;
@@ -1596,7 +1599,8 @@ int obe_get_arq_status( obe_t *h, int *arq_status )
     {
         if( h->outputs[i]->output_dest.type == OUTPUT_UDP ||
                 h->outputs[i]->output_dest.type == OUTPUT_RTP ||
-                h->outputs[i]->output_dest.type == OUTPUT_ARQ )
+                h->outputs[i]->output_dest.type == OUTPUT_ARQ ||
+                h->outputs[i]->output_dest.type == OUTPUT_SRT )
             output = ip_output;
         else if( h->outputs[i]->output_dest.type == OUTPUT_FILE )
             output = file_output;

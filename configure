@@ -717,7 +717,7 @@ fi
 
 LDFLAGS="$LDFLAGS -ljpeg"
 
-UPIPE_MODULES="libupump_ev libupipe_netmap libupipe_pciesdi libupipe_hbrmt libupipe_pthread libupipe_modules libupipe_filters libupipe"
+UPIPE_MODULES="libupump_ev libupipe_netmap libupipe_pciesdi libupipe_hbrmt libupipe_pthread libupipe_modules libupipe_filters libupipe_srt libupipe"
 if [ "$upipe" = "auto" ] ; then
     upipe="no"
     if ${cross_prefix}pkg-config --exists ${UPIPE_MODULES} 2>/dev/null; then

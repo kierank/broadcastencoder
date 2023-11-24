@@ -223,6 +223,7 @@ static const obecli_output_name_t output_names[] =
     { OUTPUT_UDP, "UDP",  "MPEG-TS in UDP",        "internal" },
     { OUTPUT_RTP, "RTP",  "MPEG-TS in RTP in UDP", "internal" },
     { OUTPUT_ARQ, "ARQ",  "MPEG-TS in RTP in UDP in ARQ", "internal" },
+    { OUTPUT_SRT, "SRT",  "MPEG-TS in RTP in UDP in SRT", "internal" },
     { 0, 0, 0, 0 },
 };
 #endif
