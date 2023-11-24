@@ -1246,7 +1246,8 @@ int obe_start( obe_t *h )
         if( h->outputs[i]->output_dest.type == OUTPUT_UDP ||
                 h->outputs[i]->output_dest.type == OUTPUT_RTP ||
                 h->outputs[i]->output_dest.type == OUTPUT_ARQ ||
-                h->outputs[i]->output_dest.type == OUTPUT_SRT )
+                h->outputs[i]->output_dest.type == OUTPUT_SRT ||
+                h->outputs[i]->output_dest.type == OUTPUT_SRT_RTP )
             output = ip_output;
         else if( h->outputs[i]->output_dest.type == OUTPUT_FILE )
             output = file_output;
