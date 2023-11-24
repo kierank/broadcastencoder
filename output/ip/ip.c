@@ -30,6 +30,7 @@
 #include "common/bitstream.h"
 #include "udp.h"
 #include "arq.h"
+#include "srt.h"
 
 
 #include <bitstream/ietf/rtp.h>
@@ -59,7 +60,10 @@ typedef struct
     int dup_delay;
 
     bool arq;
-    unsigned arq_latency;
+
+    bool srt;
+
+    unsigned latency;
 
     /* COP3 FEC */
     hnd_t column_handle;
@@ -80,7 +84,9 @@ typedef struct
     uint64_t column_seq;
     uint64_t row_seq;
 
+    struct uref_ctx uref_ctx;
     struct arq_ctx *arq_ctx;
+    struct srt_ctx *srt_ctx;
 } obe_rtp_ctx;
 
 struct ip_status
@@ -103,6 +109,8 @@ static void rtp_close( hnd_t handle )
 
     if (p_rtp->arq)
         close_arq(p_rtp->arq_ctx);
+    else if (p_rtp->srt)
+        close_srt(p_rtp->srt_ctx);
 
     udp_close( p_rtp->udp_handle );
 
@@ -153,9 +161,10 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
 
     p_rtp->dup_delay = output_dest->dup_delay;
     p_rtp->arq = output_dest->type == OUTPUT_ARQ;
-    p_rtp->arq_latency = output_dest->arq_latency;
-    if (!p_rtp->arq_latency)
-        p_rtp->arq_latency = 100;
+    p_rtp->srt = output_dest->type == OUTPUT_SRT;
+    p_rtp->latency = output_dest->arq_latency;
+    if (!p_rtp->latency)
+        p_rtp->latency = 100;
     p_rtp->fec_columns = output_dest->fec_columns;
     p_rtp->fec_rows = output_dest->fec_rows;
 
@@ -277,8 +286,8 @@ static int write_fec_packet(obe_rtp_ctx *p_rtp, hnd_t udp_handle, uint8_t *data,
     int ret = 0;
     const size_t len = COP3_FEC_PACKET_SIZE;
 
-    if (p_rtp->arq) {
-        *uref = make_uref(p_rtp->arq_ctx, data, len, timestamp);
+    if (p_rtp->arq || p_rtp->srt) {
+        *uref = make_uref(&p_rtp->uref_ctx, data, len, timestamp);
         if (!*uref)
             ret = -1;
     } else {
@@ -426,8 +435,8 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
     memcpy( &pkt_ptr[RTP_HEADER_SIZE], data, len );
 
     struct uref *uref = NULL;
-    if (p_rtp->arq) {
-        uref = make_uref(p_rtp->arq_ctx, pkt_ptr, RTP_PACKET_SIZE, timestamp);
+    if (p_rtp->arq || p_rtp->srt) {
+        uref = make_uref(&p_rtp->uref_ctx, pkt_ptr, RTP_PACKET_SIZE, timestamp);
         if (!uref)
             ret = -1;
     } else {
@@ -465,6 +474,9 @@ static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestam
         }
 
         arq_write(p_rtp->arq_ctx, uref);
+    } else if (p_rtp->srt) {
+        if (uref)
+            srt_write(p_rtp->srt_ctx, uref);
     }
 
 end:
@@ -481,13 +493,16 @@ static void close_output(struct ip_status *status)
 {
     if( *status->ip_handle ) {
         if( status->output->output_dest.type == OUTPUT_RTP ||
-                status->output->output_dest.type == OUTPUT_ARQ)
+                status->output->output_dest.type == OUTPUT_ARQ ||
+                status->output->output_dest.type == OUTPUT_SRT)
             rtp_close( *status->ip_handle );
         else
             udp_close( *status->ip_handle );
     }
 
     free( status->output->output_dest.target );
+    free( status->output->output_dest.srt_password );
+    free( status->output->output_dest.stream_id );
 }
 
 static void *open_output( void *ptr )
@@ -512,7 +527,8 @@ static void *open_output( void *ptr )
     udp_populate_opts( &udp_opts, output_dest->target );
 
     if( output_dest->type == OUTPUT_RTP ||
-            output_dest->type == OUTPUT_ARQ )
+            output_dest->type == OUTPUT_ARQ ||
+            output_dest->type == OUTPUT_SRT )
     {
         if( rtp_open( &ip_handle, &udp_opts, output_dest ) < 0 )
             return NULL;
@@ -521,12 +537,26 @@ static void *open_output( void *ptr )
         if (p_rtp->arq) {
             obe_udp_ctx *p_udp = p_rtp->udp_handle;
             p_rtp->arq_ctx = open_arq(p_udp, p_rtp->row_handle,
-                    p_rtp->column_handle,  p_rtp->rtcp_handle, p_rtp->arq_latency);
+                    p_rtp->column_handle,  p_rtp->rtcp_handle, p_rtp->latency);
             if (!p_rtp->arq_ctx) {
                 rtp_close(p_rtp);
                 fprintf( stderr, "[rtp] Could not create arq output" );
                 return NULL;
             }
+            p_rtp->arq_ctx->uref_ctx = &p_rtp->uref_ctx;
+
+            output->handle = (hnd_t)p_rtp;
+        } else if (p_rtp->srt) {
+            obe_udp_ctx *p_udp = p_rtp->udp_handle;
+            p_rtp->srt_ctx = open_srt(p_udp, p_rtp->latency);
+            if (!p_rtp->srt_ctx) {
+                rtp_close(p_rtp);
+                fprintf( stderr, "[rtp] Could not create srt output" );
+                return NULL;
+            }
+            p_rtp->srt_ctx->uref_ctx = &p_rtp->uref_ctx;
+            p_rtp->srt_ctx->password = output_dest->srt_password;
+            p_rtp->srt_ctx->stream_id = output_dest->stream_id;
 
             output->handle = (hnd_t)p_rtp;
         }
@@ -567,7 +597,8 @@ static void *open_output( void *ptr )
             AVBufferRef *data_buf_ref = buf_ref->data_buf_ref;
             uint8_t *data = &data_buf_ref->data[7*sizeof(int64_t)];
             if( output_dest->type == OUTPUT_RTP ||
-                    output_dest->type == OUTPUT_ARQ )
+                    output_dest->type == OUTPUT_ARQ ||
+                    output_dest->type == OUTPUT_SRT )
             {
                 if( write_rtp_pkt( ip_handle, data, TS_PACKETS_SIZE, AV_RN64( data_buf_ref->data ), output_dest->fec_type ) < 0 )
                     syslog( LOG_ERR, "[rtp] Failed to write RTP packet\n" );
@@ -599,11 +630,14 @@ static int get_status( void *ptr )
     if( !output )
         return 0;
 
-    obe_output_dest_t *output_dest = &output->output_dest;
     obe_rtp_ctx *p_rtp = (obe_rtp_ctx *)output->handle;
+    if( !p_rtp )
+        return 0;
 
-    if( p_rtp && p_rtp->arq )
+    if (p_rtp->arq)
         return arq_bidirectional( p_rtp->arq_ctx );
+    else if (p_rtp->srt)
+        return srt_bidirectional( p_rtp->srt_ctx );
 
     return 0;
 }

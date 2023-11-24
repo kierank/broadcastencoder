@@ -30,6 +30,9 @@
 #include "config.h"
 
 #include <signal.h>
+
+#include <gcrypt.h>
+
 #define _GNU_SOURCE
 
 #include <readline/readline.h>
@@ -81,7 +84,7 @@ static const char * const aac_encapsulations[]       = { "adts", "latm", 0 };
 static const char * const mp2_modes[]                = { "auto", "stereo", "joint-stereo", "dual-channel", 0 };
 static const char * const channel_maps[]             = { "", "mono", "stereo", "5.0", "5.1", 0 };
 static const char * const mono_channels[]            = { "left", "right", 0 };
-static const char * const output_modules[]           = { "udp", "rtp", "arq", "file", 0 };
+static const char * const output_modules[]           = { "udp", "rtp", "arq", "srt", "srt-rtp", "file", 0 };
 static const char * const addable_streams[]          = { "audio", "ttx", "scte35", 0};
 static const char * const filter_bit_depths[]        = { "10", "8", 0 };
 static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned", "ldpc-staircase", 0 };
@@ -118,7 +121,7 @@ static const char * stream_opts[] = { "action", "format",
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", "service-name", "provider-name", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
-static const char * output_opts[] = { "type", "target", "fec-columns", "fec-rows", "fec-type", "dup-delay", "arq-latency", NULL };
+static const char * output_opts[] = { "type", "target", "fec-columns", "fec-rows", "fec-type", "dup-delay", "arq-latency", "srt-password", "stream-id", NULL };
 static const char * update_stream_opts[]  = { "bitrate", "vbv-bufsize" };
 static const char * update_muxer_opts[]  = { "ts-muxrate" };
 
@@ -1075,6 +1078,8 @@ static int set_output( char *command, obecli_command_t *child )
         char *fec_type = obe_get_option( output_opts[4], opts );
         char *dup_delay = obe_get_option( output_opts[5], opts );
         char *arq_latency = obe_get_option( output_opts[6], opts );
+        char *srt_password = obe_get_option( output_opts[7], opts );
+        char *stream_id = obe_get_option( output_opts[8], opts );
 
         FAIL_IF_ERROR( type && ( check_enum_value( type, output_modules ) < 0 ),
                       "Invalid Output Type\n" );
@@ -1103,6 +1108,16 @@ static int set_output( char *command, obecli_command_t *child )
             cli.output.outputs[output_id].dup_delay = obe_otoi( dup_delay, cli.output.outputs[output_id].dup_delay );
         if( arq_latency )
             cli.output.outputs[output_id].arq_latency = obe_otoi( arq_latency, cli.output.outputs[output_id].arq_latency );
+        if( srt_password ) {
+             if( cli.output.outputs[output_id].srt_password )
+                 free( cli.output.outputs[output_id].srt_password );
+            cli.output.outputs[output_id].srt_password = strdup( srt_password );
+        }
+        if( stream_id ) {
+             if( cli.output.outputs[output_id].stream_id )
+                 free( cli.output.outputs[output_id].stream_id );
+            cli.output.outputs[output_id].stream_id = strdup( stream_id );
+        }
         obe_free_string_array( opts );
     }
 
@@ -1554,7 +1569,8 @@ static int start_encode( char *command, obecli_command_t *child )
     {
         if( ( cli.output.outputs[i].type == OUTPUT_UDP ||
                     cli.output.outputs[i].type == OUTPUT_RTP ||
-                    cli.output.outputs[i].type == OUTPUT_ARQ) &&
+                    cli.output.outputs[i].type == OUTPUT_ARQ ||
+                    cli.output.outputs[i].type == OUTPUT_SRT) &&
              !cli.output.outputs[i].target )
         {
             fprintf( stderr, "No output target chosen. Output-ID %d\n", i );
@@ -1724,6 +1740,9 @@ int main( int argc, char **argv )
     char *home_dir = getenv( "HOME" );
     char *history_filename;
     char *prompt = "obecli> ";
+
+    gcry_check_version(NULL);
+    gcry_control(GCRYCTL_INITIALIZATION_FINISHED, 0);
 
     history_filename = malloc( strlen( home_dir ) + 16 + 1 );
     if( !history_filename )
