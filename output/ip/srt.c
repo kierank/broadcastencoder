@@ -177,7 +177,7 @@ static int start(struct srt_ctx *ctx)
             uprobe_pfx_alloc(uprobe_use(ctx->logger), loglevel, "srt handshake"));
     upipe_set_option(upipe_srt_handshake, "listener", listener ? "1" : "0");
     if (ctx->password)
-        upipe_srt_handshake_set_password(upipe_srt_handshake, ctx->password);
+        upipe_srt_handshake_set_password(upipe_srt_handshake, ctx->password, 128/8 /* fixme */);
 
     if (ctx->stream_id)
         upipe_set_option(upipe_srt_handshake, "stream_id", ctx->stream_id);
@@ -324,8 +324,17 @@ static int catch_srt(struct uprobe *uprobe, struct upipe *upipe,
 
     switch (event) {
     case UPROBE_SOURCE_END:
-        upipe_release(upipe);
-        break;
+        if(!ctx->end) {
+            ctx->restart = true;
+            struct upump *u = upump_alloc_timer(ctx->upump_mgr, stop, ctx,
+                    NULL, UCLOCK_FREQ, 0);
+            upump_start(u);
+            return uprobe_throw_next(uprobe, upipe, event, args);
+        }
+        else {
+            upipe_release(upipe);
+            break;
+        }
 
     case UPROBE_PROBE_UREF: {
         int sig = va_arg(args, int);
