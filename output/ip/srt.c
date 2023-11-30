@@ -186,10 +186,6 @@ static int start(struct srt_ctx *ctx)
 
     upipe_mgr_release(upipe_udpsrc_mgr);
 
-    struct upipe *upipe_srt_handshake_sub = upipe_void_alloc_sub(upipe_srt_handshake,
-        uprobe_pfx_alloc(uprobe_use(ctx->logger), loglevel, "srt handshake sub"));
-    assert(upipe_srt_handshake_sub);
-
     struct upipe *upipe_srt_sender_sub = upipe_void_chain_output_sub(upipe_srt_handshake,
         upipe_srt_sender,
         uprobe_pfx_alloc(uprobe_use(ctx->logger), loglevel, "srt sender sub"));
@@ -201,8 +197,6 @@ static int start(struct srt_ctx *ctx)
     ctx->upipe_udpsink = upipe_void_chain_output(upipe_srt_sender, upipe_udpsink_mgr,
             uprobe_pfx_alloc(uprobe_use(ctx->logger), loglevel, "udp sink"));
     upipe_release(ctx->upipe_udpsink);
-
-    upipe_set_output(upipe_srt_handshake_sub, ctx->upipe_udpsink);
 
     ubase_assert(upipe_udpsink_set_fd(ctx->upipe_udpsink, ctx->fd));
 
