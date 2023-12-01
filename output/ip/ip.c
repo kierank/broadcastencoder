@@ -42,8 +42,7 @@
 
 #define FEC_PAYLOAD_TYPE 96
 
-#define RTP_PACKET_SIZE (RTP_HEADER_SIZE+TS_PACKETS_SIZE)
-#define COP3_FEC_PACKET_SIZE (RTP_PACKET_SIZE+SMPTE_2022_FEC_HEADER_SIZE)
+#define COP3_FEC_PACKET_SIZE (RTP_HEADER_SIZE+TS_PACKETS_SIZE+SMPTE_2022_FEC_HEADER_SIZE)
 
 typedef struct
 {
@@ -161,7 +160,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
 
     p_rtp->dup_delay = output_dest->dup_delay;
     p_rtp->arq = output_dest->type == OUTPUT_ARQ;
-    p_rtp->srt = output_dest->type == OUTPUT_SRT;
+    p_rtp->srt = output_dest->type == OUTPUT_SRT || output_dest->type == OUTPUT_SRT_RTP;
     p_rtp->latency = output_dest->arq_latency;
     if (!p_rtp->latency)
         p_rtp->latency = 100;
@@ -317,6 +316,9 @@ static int dup_stream(obe_rtp_ctx *p_rtp, AVBufferRef *buf_ref,
         return -1;
     }
 
+    size_t packet_size = TS_PACKETS_SIZE;
+    packet_size += RTP_HEADER_SIZE;
+
     av_fifo_generic_write( dup_fifo, &timestamp, sizeof(timestamp), NULL );
     av_fifo_generic_write( dup_fifo, &output_buffer, sizeof(output_buffer), NULL );
 
@@ -330,7 +332,7 @@ static int dup_stream(obe_rtp_ctx *p_rtp, AVBufferRef *buf_ref,
         av_fifo_drain( dup_fifo, sizeof(timestamp) );
         av_fifo_generic_read( dup_fifo, &output_buffer, sizeof(output_buffer), NULL );
 
-        bool ok = !udp_write( p_rtp->udp_handle, output_buffer->data, RTP_PACKET_SIZE );
+        bool ok = !udp_write( p_rtp->udp_handle, output_buffer->data, packet_size );
 
         av_buffer_unref( &output_buffer );
         if (!ok)
@@ -419,28 +421,36 @@ static int fec(obe_rtp_ctx *p_rtp, int fec_type, uint8_t *pkt_ptr,
     return ret;
 }
 
-static int write_rtp_pkt( hnd_t handle, uint8_t *data, int len, int64_t timestamp, int fec_type )
+static int write_rtp_pkt( struct ip_status *status, uint8_t *data, int len, int64_t timestamp, int fec_type )
 {
-    obe_rtp_ctx *p_rtp = handle;
+    obe_rtp_ctx *p_rtp = *status->ip_handle;
     int ret = 0;
     uint8_t *pkt_ptr;
 
+    bool udp = status->output->output_dest.type == OUTPUT_SRT;
+
+    size_t packet_size = TS_PACKETS_SIZE;
+    size_t header_size = udp ? 0 : RTP_HEADER_SIZE;
+    packet_size += header_size;
+
     /* Throughout this function, don't exit early because the decoder is expecting a sequence number increase
      * and consistent FEC packets. Return -1 at the end so the user knows there was a failure to submit a packet. */
-    AVBufferRef *buf_ref = av_buffer_alloc( RTP_PACKET_SIZE );
+    AVBufferRef *buf_ref = av_buffer_alloc( packet_size);
     pkt_ptr = buf_ref->data;
 
-    uint32_t ts_90 = timestamp / 300;
-    write_rtp_header( pkt_ptr, RTP_TYPE_MP2T, p_rtp->seq, ts_90, p_rtp->ssrc );
-    memcpy( &pkt_ptr[RTP_HEADER_SIZE], data, len );
+    if (!udp) {
+        uint32_t ts_90 = timestamp / 300;
+        write_rtp_header( pkt_ptr, RTP_TYPE_MP2T, p_rtp->seq, ts_90, p_rtp->ssrc );
+    }
+    memcpy( &pkt_ptr[header_size], data, len );
 
     struct uref *uref = NULL;
     if (p_rtp->arq || p_rtp->srt) {
-        uref = make_uref(&p_rtp->uref_ctx, pkt_ptr, RTP_PACKET_SIZE, timestamp);
+        uref = make_uref(&p_rtp->uref_ctx, pkt_ptr, packet_size, timestamp);
         if (!uref)
             ret = -1;
     } else {
-        if( udp_write( p_rtp->udp_handle, pkt_ptr, RTP_PACKET_SIZE ) < 0 )
+        if( udp_write( p_rtp->udp_handle, pkt_ptr, packet_size ) < 0 )
             ret = -1;
     }
 
@@ -494,7 +504,8 @@ static void close_output(struct ip_status *status)
     if( *status->ip_handle ) {
         if( status->output->output_dest.type == OUTPUT_RTP ||
                 status->output->output_dest.type == OUTPUT_ARQ ||
-                status->output->output_dest.type == OUTPUT_SRT)
+                status->output->output_dest.type == OUTPUT_SRT ||
+                status->output->output_dest.type == OUTPUT_SRT_RTP)
             rtp_close( *status->ip_handle );
         else
             udp_close( *status->ip_handle );
@@ -528,7 +539,8 @@ static void *open_output( void *ptr )
 
     if( output_dest->type == OUTPUT_RTP ||
             output_dest->type == OUTPUT_ARQ ||
-            output_dest->type == OUTPUT_SRT )
+            output_dest->type == OUTPUT_SRT ||
+            output_dest->type == OUTPUT_SRT_RTP )
     {
         if( rtp_open( &ip_handle, &udp_opts, output_dest ) < 0 )
             return NULL;
@@ -598,9 +610,10 @@ static void *open_output( void *ptr )
             uint8_t *data = &data_buf_ref->data[7*sizeof(int64_t)];
             if( output_dest->type == OUTPUT_RTP ||
                     output_dest->type == OUTPUT_ARQ ||
-                    output_dest->type == OUTPUT_SRT )
+                    output_dest->type == OUTPUT_SRT ||
+                    output_dest->type == OUTPUT_SRT_RTP )
             {
-                if( write_rtp_pkt( ip_handle, data, TS_PACKETS_SIZE, AV_RN64( data_buf_ref->data ), output_dest->fec_type ) < 0 )
+                if( write_rtp_pkt( &status, data, TS_PACKETS_SIZE, AV_RN64( data_buf_ref->data ), output_dest->fec_type ) < 0 )
                     syslog( LOG_ERR, "[rtp] Failed to write RTP packet\n" );
             }
             else
