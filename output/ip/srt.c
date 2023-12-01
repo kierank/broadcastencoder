@@ -93,6 +93,7 @@ static void catch_event(struct upump *upump)
     pthread_mutex_unlock(&ctx->mutex);
 
     if (end) {
+        ctx->restart = false;
         upipe_release(ctx->upipe_udpsrc_srt);
         upipe_release(ctx->upipe_setflowdef);
 
@@ -236,10 +237,8 @@ static void stop(struct upump *upump)
     upipe_release(ctx->upipe_udpsrc_srt);
     upipe_release(ctx->upipe_setflowdef);
 
-    if (ctx->restart) {
-        ctx->restart = false;
+    if (ctx->restart)
         start(ctx);
-    }
 }
 
 /** @This is the private context of an obe probe */
@@ -279,7 +278,6 @@ static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
     switch (event) {
     case UPROBE_SOURCE_END:
         upipe_warn(upipe, "Remote end not listening, can't receive SRT");
-        ctx->restart = true;
         struct upump *u = upump_alloc_timer(ctx->upump_mgr, stop, ctx,
                 NULL, UCLOCK_FREQ, 0);
         upump_start(u);
@@ -318,17 +316,14 @@ static int catch_srt(struct uprobe *uprobe, struct upipe *upipe,
 
     switch (event) {
     case UPROBE_SOURCE_END:
-        if(!ctx->end) {
-            ctx->restart = true;
-            struct upump *u = upump_alloc_timer(ctx->upump_mgr, stop, ctx,
-                    NULL, UCLOCK_FREQ, 0);
-            upump_start(u);
-            return uprobe_throw_next(uprobe, upipe, event, args);
-        }
-        else {
-            upipe_release(upipe);
-            break;
-        }
+        if (ctx->end)
+            ctx->restart = false;
+
+        upipe_warn_va(upipe, "end");
+        struct upump *u = upump_alloc_timer(ctx->upump_mgr, stop, ctx,
+                NULL, UCLOCK_FREQ, 0);
+        upump_start(u);
+        return uprobe_throw_next(uprobe, upipe, event, args);
 
     case UPROBE_PROBE_UREF: {
         int sig = va_arg(args, int);
@@ -438,6 +433,7 @@ struct srt_ctx *open_srt(obe_udp_ctx *p_udp, unsigned latency)
     if (!ctx)
         return NULL;
 
+    ctx->restart = true;
     ctx->fd = p_udp->udp_fd;
     ctx->dest_addr = p_udp->dest_addr;
     ctx->dest_addr_len = p_udp->dest_addr_len;
