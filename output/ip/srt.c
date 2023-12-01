@@ -143,12 +143,14 @@ static int start(struct srt_ctx *ctx)
             listener = true;
     }
 
+    unsigned n = ++ctx->n;
+
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
 
 
     struct upipe_mgr *upipe_setflowdef_mgr = upipe_setflowdef_mgr_alloc();
     struct upipe *upipe_setflowdef = upipe_void_alloc(upipe_setflowdef_mgr,
-            uprobe_pfx_alloc(uprobe_use(ctx->logger), loglevel, "setflowdef"));
+            uprobe_pfx_alloc_va(uprobe_use(ctx->logger), loglevel, "setflowdef %d", n));
     upipe_mgr_release(upipe_setflowdef_mgr);
 
     struct uref *flow_def = uref_block_flow_alloc_def(ctx->uref_ctx->uref_mgr, "");
@@ -161,7 +163,7 @@ static int start(struct srt_ctx *ctx)
     /* send through srt sender */
     struct upipe_mgr *upipe_srt_sender_mgr = upipe_srt_sender_mgr_alloc();
     struct upipe *upipe_srt_sender = upipe_void_alloc_output(upipe_setflowdef, upipe_srt_sender_mgr,
-            uprobe_pfx_alloc(uprobe_use(ctx->logger), loglevel, "srt sender"));
+            uprobe_pfx_alloc_va(uprobe_use(ctx->logger), loglevel, "srt sender %d", n));
     upipe_mgr_release(upipe_srt_sender_mgr);
 
     char lat[12];
@@ -170,12 +172,12 @@ static int start(struct srt_ctx *ctx)
     if (!ubase_check(upipe_set_option(upipe_srt_sender, "latency", lat)))
         return EXIT_FAILURE;
 
-    ctx->upipe_udpsrc_srt = upipe_void_alloc(upipe_udpsrc_mgr, uprobe_use(ctx->uprobe_udp_srt));
+    ctx->upipe_udpsrc_srt = upipe_void_alloc(upipe_udpsrc_mgr, uprobe_pfx_alloc_va(uprobe_use(ctx->uprobe_udp_srt), loglevel, "udp source srt %d", n));
     upipe_attach_uclock(ctx->upipe_udpsrc_srt);
 
     struct upipe_mgr *upipe_srt_handshake_mgr = upipe_srt_handshake_mgr_alloc();
     struct upipe *upipe_srt_handshake = upipe_void_alloc_output(ctx->upipe_udpsrc_srt, upipe_srt_handshake_mgr,
-            uprobe_pfx_alloc(uprobe_use(ctx->logger), loglevel, "srt handshake"));
+            uprobe_pfx_alloc_va(uprobe_use(ctx->logger), loglevel, "srt handshake %d", n));
     upipe_set_option(upipe_srt_handshake, "listener", listener ? "1" : "0");
     if (ctx->password)
         upipe_srt_handshake_set_password(upipe_srt_handshake, ctx->password, 128/8 /* fixme */);
@@ -189,24 +191,24 @@ static int start(struct srt_ctx *ctx)
 
     struct upipe *upipe_srt_sender_sub = upipe_void_chain_output_sub(upipe_srt_handshake,
         upipe_srt_sender,
-        uprobe_pfx_alloc(uprobe_use(ctx->logger), loglevel, "srt sender sub"));
+        uprobe_pfx_alloc_va(uprobe_use(ctx->logger), loglevel, "srt sender sub %d", n));
     assert(upipe_srt_sender_sub);
     upipe_release(upipe_srt_sender_sub);
 
     /* send to udp */
     struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
     ctx->upipe_udpsink = upipe_void_chain_output(upipe_srt_sender, upipe_udpsink_mgr,
-            uprobe_pfx_alloc(uprobe_use(ctx->logger), loglevel, "udp sink"));
+            uprobe_pfx_alloc_va(uprobe_use(ctx->logger), loglevel, "udp sink %d", n));
     upipe_release(ctx->upipe_udpsink);
 
-    ubase_assert(upipe_udpsink_set_fd(ctx->upipe_udpsink, ctx->fd));
+    ubase_assert(upipe_udpsink_set_fd(ctx->upipe_udpsink, dup(ctx->fd)));
 
     int flags = fcntl(ctx->fd, F_GETFL);
     flags |= O_NONBLOCK;
     if (fcntl(ctx->fd, F_SETFL, flags) < 0)
         upipe_err(ctx->upipe_udpsink, "Could not set flags");;
 
-    ubase_assert(upipe_udpsrc_set_fd(ctx->upipe_udpsrc_srt, ctx->fd));
+    ubase_assert(upipe_udpsrc_set_fd(ctx->upipe_udpsrc_srt, dup(ctx->fd)));
     if (!listener)
         ubase_assert(upipe_udpsink_set_peer(ctx->upipe_udpsink,
                     (const struct sockaddr*)&ctx->dest_addr, ctx->dest_addr_len));
@@ -395,7 +397,7 @@ static void *srt_thread(void *arg)
     assert(logger != NULL);
 
     ctx->logger = logger;
-    ctx->uprobe_udp_srt = uprobe_srt_alloc(uprobe_pfx_alloc(uprobe_use(logger), loglevel, "udp source srt"), catch_udp, ctx);
+    ctx->uprobe_udp_srt = uprobe_srt_alloc(uprobe_use(logger), catch_udp, ctx);
 
     start(ctx);
 
@@ -434,6 +436,7 @@ struct srt_ctx *open_srt(obe_udp_ctx *p_udp, unsigned latency)
         return NULL;
 
     ctx->restart = true;
+    ctx->n = 0;
     ctx->fd = p_udp->udp_fd;
     ctx->dest_addr = p_udp->dest_addr;
     ctx->dest_addr_len = p_udp->dest_addr_len;

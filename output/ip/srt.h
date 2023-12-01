@@ -24,8 +24,8 @@ struct srt_ctx {
 
     struct ueventfd *event;
 
-    // XXX
     bool restart;
+    unsigned n;
 
     char *password;
     char *stream_id;
