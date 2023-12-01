@@ -530,9 +530,9 @@ fi
 
 if [ "$libx264" = "auto" ] ; then
     libx264="no"
-    if ${cross_prefix}pkg-config --exists x264 2>/dev/null; then
-        X264_LIBS="$X264_LIBS $(${cross_prefix}pkg-config --libs x264)"
-        X264_CFLAGS="$X264_CFLAGS $(${cross_prefix}pkg-config --cflags x264)"
+    if ${cross_prefix}pkg-config --static --exists x264 2>/dev/null; then
+        X264_LIBS="$X264_LIBS $(${cross_prefix}pkg-config --static --libs x264)"
+        X264_CFLAGS="$X264_CFLAGS $(${cross_prefix}pkg-config --static --cflags x264)"
     else
         X264_LIBS=-lx264
     fi
@@ -567,9 +567,9 @@ fi
 
 if [ "$swscale" = "auto" ] ; then
     swscale="no"
-    if ${cross_prefix}pkg-config --exists libswscale 2>/dev/null; then
-        SWSCALE_LIBS="$SWSCALE_LIBS $(${cross_prefix}pkg-config --libs libswscale libavutil)"
-        SWSCALE_CFLAGS="$SWSCALE_CFLAGS $(${cross_prefix}pkg-config --cflags libswscale libavutil)"
+    if ${cross_prefix}pkg-config --static --exists libswscale 2>/dev/null; then
+        SWSCALE_LIBS="$SWSCALE_LIBS $(${cross_prefix}pkg-config --static --libs libswscale libavutil)"
+        SWSCALE_CFLAGS="$SWSCALE_CFLAGS $(${cross_prefix}pkg-config --static --cflags libswscale libavutil)"
     fi
     [ -z "$SWSCALE_LIBS" ] && SWSCALE_LIBS="-lswscale -lavutil"
 
@@ -584,9 +584,9 @@ fi
 
 if [ "$avresample" = "auto" ] ; then
     avresample="no"
-    if ${cross_prefix}pkg-config --exists libavresample 2>/dev/null; then
-        AVRESAMPLE_LIBS="$AVRESAMPLE_LIBS $(${cross_prefix}pkg-config --libs libavresample libavutil)"
-        AVRESAMPLE_CFLAGS="$AVRESAMPLE_CFLAGS $(${cross_prefix}pkg-config --cflags libavresample libavutil)"
+    if ${cross_prefix}pkg-config --static --exists libavresample 2>/dev/null; then
+        AVRESAMPLE_LIBS="$AVRESAMPLE_LIBS $(${cross_prefix}pkg-config --static --libs libavresample libavutil)"
+        AVRESAMPLE_CFLAGS="$AVRESAMPLE_CFLAGS $(${cross_prefix}pkg-config --static --cflags libavresample libavutil)"
         avresample="yes"
     fi
     [ -z "$AVRESAMPLE_LIBS" ] && AVRESAMPLE_LIBS="-lavresample -lavutil"
@@ -594,9 +594,9 @@ fi
 
 if [ "$lavf" = "auto" ] ; then
     lavf="no"
-    if ${cross_prefix}pkg-config --exists libavformat libavcodec libswscale libavfilter 2>/dev/null; then
-        LAVF_LIBS="$LAVF_LIBS $(${cross_prefix}pkg-config --libs libavformat libavcodec libavresample libavutil libswscale libavfilter)"
-        LAVF_CFLAGS="$LAVF_CFLAGS $(${cross_prefix}pkg-config --cflags libavformat libavcodec libavresample libavutil libswscale libavfilter)"
+    if ${cross_prefix}pkg-config --static --exists libavformat libavcodec libswscale libavfilter 2>/dev/null; then
+        LAVF_LIBS="$LAVF_LIBS $(${cross_prefix}pkg-config --static --libs libavformat libavcodec libavresample libavutil libswscale libavfilter)"
+        LAVF_CFLAGS="$LAVF_CFLAGS $(${cross_prefix}pkg-config --static --cflags libavformat libavcodec libavresample libavutil libswscale libavfilter)"
     fi
     if [ -z "$LAVF_LIBS" -a -z "$LAVF_CFLAGS" ]; then
         LAVF_LIBS="-lavformat"
@@ -720,9 +720,9 @@ LDFLAGS="$LDFLAGS -ljpeg"
 UPIPE_MODULES="libupump_ev libupipe_netmap libupipe_pciesdi libupipe_hbrmt libupipe_pthread libupipe_modules libupipe_filters libupipe_srt libupipe"
 if [ "$upipe" = "auto" ] ; then
     upipe="no"
-    if ${cross_prefix}pkg-config --exists ${UPIPE_MODULES} 2>/dev/null; then
-        UPIPE_LIBS="$UPIPE_LIBS $(${cross_prefix}pkg-config --libs ${UPIPE_MODULES})"
-        UPIPE_CFLAGS="$UPIPE_CFLAGS $(${cross_prefix}pkg-config --cflags ${UPIPE_MODULES})"
+    if ${cross_prefix}pkg-config --static --exists ${UPIPE_MODULES} 2>/dev/null; then
+        UPIPE_LIBS="$UPIPE_LIBS $(${cross_prefix}pkg-config --static --libs ${UPIPE_MODULES})"
+        UPIPE_CFLAGS="$UPIPE_CFLAGS $(${cross_prefix}pkg-config --static --cflags ${UPIPE_MODULES})"
         upipe="yes"
     fi
 fi
