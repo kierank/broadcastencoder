@@ -426,6 +426,7 @@ static int write_rtp_pkt( struct ip_status *status, uint8_t *data, int len, int6
     obe_rtp_ctx *p_rtp = *status->ip_handle;
     int ret = 0;
     uint8_t *pkt_ptr;
+    AVBufferRef *buf_ref = NULL;
 
     bool udp = status->output->output_dest.type == OUTPUT_SRT;
 
@@ -433,16 +434,19 @@ static int write_rtp_pkt( struct ip_status *status, uint8_t *data, int len, int6
     size_t header_size = udp ? 0 : RTP_HEADER_SIZE;
     packet_size += header_size;
 
-    /* Throughout this function, don't exit early because the decoder is expecting a sequence number increase
-     * and consistent FEC packets. Return -1 at the end so the user knows there was a failure to submit a packet. */
-    AVBufferRef *buf_ref = av_buffer_alloc( packet_size);
-    pkt_ptr = buf_ref->data;
-
     if (!udp) {
+        /* Throughout this function, don't exit early because the decoder is expecting a sequence number increase
+         * and consistent FEC packets. Return -1 at the end so the user knows there was a failure to submit a packet. */
+        buf_ref = av_buffer_alloc( packet_size);
+        pkt_ptr = buf_ref->data;
+
         uint32_t ts_90 = timestamp / 300;
         write_rtp_header( pkt_ptr, RTP_TYPE_MP2T, p_rtp->seq, ts_90, p_rtp->ssrc );
+        memcpy( &pkt_ptr[header_size], data, len );
     }
-    memcpy( &pkt_ptr[header_size], data, len );
+    else { 
+        pkt_ptr = data;        
+    }
 
     struct uref *uref = NULL;
     if (p_rtp->arq || p_rtp->srt) {
@@ -455,7 +459,7 @@ static int write_rtp_pkt( struct ip_status *status, uint8_t *data, int len, int6
     }
 
     /* Check and send duplicate packets */
-    if( p_rtp->dup_fifo ) {
+    if( p_rtp->dup_fifo && buf_ref ) {
         if (dup_stream(p_rtp, buf_ref, timestamp))
             ret = -1;
         goto end;
