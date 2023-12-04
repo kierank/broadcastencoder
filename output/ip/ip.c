@@ -553,13 +553,12 @@ static void *open_output( void *ptr )
         if (p_rtp->arq) {
             obe_udp_ctx *p_udp = p_rtp->udp_handle;
             p_rtp->arq_ctx = open_arq(p_udp, p_rtp->row_handle,
-                    p_rtp->column_handle,  p_rtp->rtcp_handle, p_rtp->latency);
+                    p_rtp->column_handle, p_rtp->rtcp_handle, p_rtp->latency, &p_rtp->uref_ctx);
             if (!p_rtp->arq_ctx) {
                 rtp_close(p_rtp);
                 fprintf( stderr, "[rtp] Could not create arq output" );
                 return NULL;
             }
-            p_rtp->arq_ctx->uref_ctx = &p_rtp->uref_ctx;
 
             output->handle = (hnd_t)p_rtp;
         } else if (p_rtp->srt) {

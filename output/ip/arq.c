@@ -550,12 +550,13 @@ static void *arq_thread(void *arg)
 }
 
 struct arq_ctx *open_arq(obe_udp_ctx *p_udp, obe_udp_ctx *p_row,
-        obe_udp_ctx *p_col, obe_udp_ctx *p_rtcp, unsigned latency)
+        obe_udp_ctx *p_col, obe_udp_ctx *p_rtcp, unsigned latency, struct uref_ctx *uref_ctx)
 {
     struct arq_ctx *ctx = calloc(1, sizeof(*ctx));
     if (!ctx)
         return NULL;
 
+    ctx->uref_ctx = uref_ctx;
     ctx->fd = p_udp->udp_fd;
     ctx->dest_addr = p_udp->dest_addr;
     ctx->dest_addr_len = p_udp->dest_addr_len;
