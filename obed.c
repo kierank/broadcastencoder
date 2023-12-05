@@ -251,6 +251,12 @@ static void stop_encode( void )
         {
             free( d.output.outputs[i].target );
             d.output.outputs[i].target = NULL;
+
+            free( d.output.outputs[i].stream_id );
+            d.output.outputs[i].stream_id = NULL;
+    
+            free( d.output.outputs[i].srt_password );
+            d.output.outputs[i].srt_password = NULL;
         }
     }
     free( d.output.outputs );
@@ -754,6 +760,31 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
                 if( output_opts_in->has_dup_delay && output_opts_in->dup_delay > 0 )
                 {
                     output_dst->dup_delay = output_opts_in->dup_delay;
+                }
+
+                if( output_opts_in->has_srt_type )
+                {
+                    // srt_type FIXME
+                }
+
+                if( output_opts_in->srt_stream_id && strlen(output_opts_in->srt_stream_id) > 0 ) 
+                {
+                    output_dst->stream_id = strdup( output_opts_in->srt_stream_id );
+                    if( !output_dst->stream_id )
+                        goto fail;
+                }
+
+                if( output_opts_in->has_srt_encryption )
+                {
+                    // srt_encryption FIXME
+                }
+
+                if( output_opts_in->srt_passphrase && strlen(output_opts_in->srt_passphrase) > 0 ) 
+                {
+                    /* Note different name */
+                    output_dst->srt_password = strdup( output_opts_in->srt_passphrase );
+                    if( !output_dst->srt_password )
+                        goto fail;
                 }
             }
 
