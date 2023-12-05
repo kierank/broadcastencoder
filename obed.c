@@ -38,6 +38,7 @@
 #include <arpa/inet.h> /* htonl */
 
 #include <nacl/crypto_sign.h>
+#include <gcrypt.h>
 
 #include "config.h"
 
@@ -950,6 +951,9 @@ int main( int argc, char **argv )
     ProtobufC_RPC_AddressType address_type = 0;
     const char *socket_name_format = "/tmp/obesocket%i";
     const char *ident_format = "obed%i";
+
+    gcry_check_version(NULL);
+    gcry_control(GCRYCTL_INITIALIZATION_FINISHED, 0);
 
     if( argc != 2 )
     {
