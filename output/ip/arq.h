@@ -44,7 +44,7 @@ struct arq_ctx {
 
 void arq_write(struct arq_ctx *ctx, struct uref *uref);
 struct arq_ctx *open_arq(obe_udp_ctx *p_udp, obe_udp_ctx *p_row,
-        obe_udp_ctx *p_col, obe_udp_ctx *p_rtcp, unsigned latency);
+        obe_udp_ctx *p_col, obe_udp_ctx *p_rtcp, unsigned latency, struct uref_ctx *uref_ctx);
 void close_arq(struct arq_ctx *ctx);
 int arq_bidirectional(struct arq_ctx *ctx);
 
