@@ -563,15 +563,12 @@ static void *open_output( void *ptr )
             output->handle = (hnd_t)p_rtp;
         } else if (p_rtp->srt) {
             obe_udp_ctx *p_udp = p_rtp->udp_handle;
-            p_rtp->srt_ctx = open_srt(p_udp, p_rtp->latency);
+            p_rtp->srt_ctx = open_srt(p_udp, p_rtp->latency, output_dest->srt_password, output_dest->stream_id, &p_rtp->uref_ctx);
             if (!p_rtp->srt_ctx) {
                 rtp_close(p_rtp);
                 fprintf( stderr, "[rtp] Could not create srt output" );
                 return NULL;
             }
-            p_rtp->srt_ctx->uref_ctx = &p_rtp->uref_ctx;
-            p_rtp->srt_ctx->password = output_dest->srt_password;
-            p_rtp->srt_ctx->stream_id = output_dest->stream_id;
 
             output->handle = (hnd_t)p_rtp;
         }
