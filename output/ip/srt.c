@@ -429,12 +429,15 @@ static void *srt_thread(void *arg)
     return NULL;
 }
 
-struct srt_ctx *open_srt(obe_udp_ctx *p_udp, unsigned latency)
+struct srt_ctx *open_srt(obe_udp_ctx *p_udp, unsigned latency, char *password, char *stream_id, struct uref_ctx *uref_ctx)
 {
     struct srt_ctx *ctx = calloc(1, sizeof(*ctx));
     if (!ctx)
         return NULL;
 
+    ctx->uref_ctx = uref_ctx;
+    ctx->password = password;
+    ctx->stream_id = stream_id;
     ctx->restart = true;
     ctx->n = 0;
     ctx->fd = p_udp->udp_fd;
