@@ -34,6 +34,8 @@ struct srt_ctx {
     int dest_addr_len;
     unsigned latency;
 
+    bool listener;
+
     pthread_mutex_t mutex;
     bool end;
     struct uqueue *queue;

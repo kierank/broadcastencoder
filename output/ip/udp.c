@@ -228,6 +228,8 @@ void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri )
             udp_opts->bind_iface = 1;
             strncpy( udp_opts->iface, buf, sizeof(udp_opts->iface) - 1 );
         }
+
+        udp_opts->listener = av_find_info_tag( buf, sizeof(buf), "listen", p );
     }
 
     /* fill the dest addr */
@@ -245,6 +247,7 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, int fd )
     if( !s )
         return -1;
 
+    s->listener = udp_opts->listener;
     s->dest_addr_len = udp_set_url( &s->dest_addr, udp_opts->hostname,
             udp_opts->port );
     if( s->dest_addr_len < 0 )
@@ -278,7 +281,7 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, int fd )
 
             /* bind to the local address if not multicast or if the multicast
              * bind failed, unless we're sending to local adapter */
-            if (!localhost)
+            if (!localhost && !s->listener)
                 if( bind_ret < 0 && bind( udp_fd, (struct sockaddr *)&my_addr, len ) < 0 )
                     goto fail;
         }
@@ -300,6 +303,13 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, int fd )
     len = sizeof(my_addr);
     getsockname( udp_fd, (struct sockaddr *)&my_addr, (socklen_t *) &len );
     udp_opts->local_port = udp_port( &my_addr, len );
+
+    if (s->listener) {
+        if( bind( udp_fd, (struct sockaddr *)&s->dest_addr, s->dest_addr_len ) < 0 ) {
+            perror("bind");
+            goto fail;
+        }
+    }
 
     s->udp_fd = udp_fd;
     *p_handle = s;

@@ -31,6 +31,7 @@ typedef struct
     int udp_fd;
     struct sockaddr_storage dest_addr;
     int dest_addr_len;
+    bool listener;
 } obe_udp_ctx;
 
 typedef struct obe_udp_opts_t
@@ -43,6 +44,7 @@ typedef struct obe_udp_opts_t
     int  tos;
     int  bind_iface;
     char iface[100];
+    bool listener;
 } obe_udp_opts_t;
 
 void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri );
