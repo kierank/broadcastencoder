@@ -111,7 +111,8 @@ static void rtp_close( hnd_t handle )
     else if (p_rtp->srt)
         close_srt(p_rtp->srt_ctx);
 
-    udp_close( p_rtp->udp_handle );
+    if ( p_rtp->udp_handle )
+        udp_close( p_rtp->udp_handle );
 
     if( p_rtp->dup_fifo )
     {
