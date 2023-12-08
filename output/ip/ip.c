@@ -111,7 +111,8 @@ static void rtp_close( hnd_t handle )
     else if (p_rtp->srt)
         close_srt(p_rtp->srt_ctx);
 
-    udp_close( p_rtp->udp_handle );
+    if ( p_rtp->udp_handle )
+        udp_close( p_rtp->udp_handle );
 
     if( p_rtp->dup_fifo )
     {
@@ -147,7 +148,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         return -1;
     }
 
-    if( !udp_opts->local_port )
+    if( !udp_opts->listener && !udp_opts->local_port )
         udp_opts->local_port = udp_opts->port;
     udp_opts->reuse_socket = 1;
     if( udp_open( &p_rtp->udp_handle, udp_opts, -1 ) < 0 )
