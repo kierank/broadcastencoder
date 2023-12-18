@@ -10,5 +10,5 @@ Homepage: <insert the upstream URL, if relevant>
 
 Package: obed
 Architecture: amd64
-Depends: ${shlibs:Depends}, libtwolame0, libzvbi0, fonts-noto, numactl, libjpeg-turbo8
+Depends: ${shlibs:Depends}, libtwolame0, libzvbi0, fonts-noto, numactl, libjpeg-turbo8, libgcrypt20
 Description: OBE C-@@ daemon
