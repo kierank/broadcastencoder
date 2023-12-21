@@ -36,6 +36,8 @@ struct srt_ctx {
 
     bool listener;
 
+    uint64_t last_ack_cr;
+
     pthread_mutex_t mutex;
     bool end;
     struct uqueue *queue;

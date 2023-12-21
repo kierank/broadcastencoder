@@ -347,8 +347,9 @@ static int catch_srt(struct uprobe *uprobe, struct upipe *upipe,
         if (!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys)))
             cr_sys = UINT64_MAX;
 
-        // TODO
-        //parse_rtcp(ctx, upipe, buf, s, cr_sys, uref->ubuf->mgr);
+        pthread_mutex_lock(&ctx->mutex);
+        ctx->last_ack_cr = uclock_now(ctx->uref_ctx->uclock);
+        pthread_mutex_unlock(&ctx->mutex);
 
         uref_block_unmap(uref, 0);
         break;
@@ -507,14 +508,13 @@ void close_srt(struct srt_ctx *ctx)
 int srt_bidirectional(struct srt_ctx *ctx)
 {
     uint64_t now = uclock_now(ctx->uref_ctx->uclock);
-    uint64_t last_rr_cr = 0;
+    uint64_t last_ack_cr = 0;
 
     pthread_mutex_lock(&ctx->mutex);
-    last_rr_cr = now+UCLOCK_FREQ;//ctx->last_rr_cr;
+    last_ack_cr = ctx->last_ack_cr;
     pthread_mutex_unlock(&ctx->mutex);
 
-    // TODO
-    if (now - last_rr_cr < UCLOCK_FREQ)
+    if (now - last_ack_cr < UCLOCK_FREQ)
         return 1;
 
     return 0;
