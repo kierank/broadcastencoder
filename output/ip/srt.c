@@ -170,8 +170,7 @@ static int start(struct srt_ctx *ctx)
 
     long seed;
     FILE *f = fopen("/dev/urandom", "r");
-    size_t ret;
-    if (!f || (ret = fread(&seed, sizeof(seed), 1, f)) < 0) {
+    if (!f || fread(&seed, sizeof(seed), 1, f) == 0) {
         perror("/dev/urandom");
         seed = (long)&ctx->upipe_udpsrc_srt;
     }
