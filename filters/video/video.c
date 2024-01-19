@@ -1777,15 +1777,6 @@ end:
         if( vfilt->sockfd )
             close( vfilt->sockfd );
 
-        if( vfilt->jpeg_frame )
-            av_frame_free( &vfilt->jpeg_frame );
-
-        if( vfilt->jpeg_pkt )
-            av_packet_free( &vfilt->jpeg_pkt );
-
-        if( vfilt->jpeg_codec )
-            avcodec_free_context( &vfilt->jpeg_codec );
-
         if( vfilt->overlay_frame.release_data )
             vfilt->overlay_frame.release_data( &vfilt->overlay_frame );
 
