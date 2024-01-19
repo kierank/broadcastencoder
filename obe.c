@@ -119,18 +119,48 @@ void obe_release_bufref( void *ptr )
     memset( raw_frame->audio_frame.audio_data, 0, sizeof(raw_frame->audio_frame.audio_data) );
 }
 
+void *obe_dup_bufref( void *ptr )
+{
+    obe_raw_frame_t *raw_frame = ptr;
+    obe_raw_frame_t *raw_frame_dup = new_raw_frame();
+    if( !raw_frame_dup )
+        return NULL;
+
+    memcpy( raw_frame_dup, raw_frame, sizeof(*raw_frame) );
+    raw_frame_dup->num_user_data = 0;
+    raw_frame_dup->user_data = NULL;
+
+    for( int i = 0; raw_frame->buf_ref[i] != NULL; i++ )
+        raw_frame_dup->buf_ref[i] = av_buffer_ref( raw_frame->buf_ref[i] );
+
+    return raw_frame_dup;
+}
+
 /* upipe urefs */
 void obe_release_video_uref( void *ptr )
 {
     obe_raw_frame_t *raw_frame = ptr;
 
-    /* Unmap planes */
-    if( raw_frame->alloc_img.csp == AV_PIX_FMT_YUV422P10 )
+    const char *input_chroma_map[3+1];
+
+    if( raw_frame->alloc_img.csp == AV_PIX_FMT_YUV420P10 || raw_frame->alloc_img.csp == AV_PIX_FMT_YUV422P10 )
     {
-        uref_pic_plane_unmap(raw_frame->uref, "y10l", 0, 0, -1, -1);
-        uref_pic_plane_unmap(raw_frame->uref, "u10l", 0, 0, -1, -1);
-        uref_pic_plane_unmap(raw_frame->uref, "v10l", 0, 0, -1, -1);
+        input_chroma_map[0] = "y10l";
+        input_chroma_map[1] = "u10l";
+        input_chroma_map[2] = "v10l";
+        input_chroma_map[3] = NULL;
     }
+    else if( raw_frame->alloc_img.csp == AV_PIX_FMT_YUV420P || raw_frame->alloc_img.csp == AV_PIX_FMT_YUV422P )
+    {
+        input_chroma_map[0] = "y8";
+        input_chroma_map[1] = "u8";
+        input_chroma_map[2] = "v8";
+        input_chroma_map[3] = NULL;
+    }
+
+    /* Unmap planes */
+    for (int i = 0; i < 3 && input_chroma_map[i] != NULL; i++)
+        uref_pic_plane_unmap(raw_frame->uref, input_chroma_map[i], 0, 0, -1, -1);
 
     /* Clear video */
     memset( &raw_frame->alloc_img, 0, sizeof(raw_frame->alloc_img) );
@@ -138,6 +168,63 @@ void obe_release_video_uref( void *ptr )
 
     uref_free(raw_frame->uref);
     raw_frame->uref = NULL;
+}
+
+void *obe_dup_video_uref( void *ptr )
+{
+    obe_raw_frame_t *raw_frame = ptr;
+    const char *input_chroma_map[3+1];
+
+    if( raw_frame->alloc_img.csp == AV_PIX_FMT_YUV420P10 || raw_frame->alloc_img.csp == AV_PIX_FMT_YUV422P10 )
+    {
+        input_chroma_map[0] = "y10l";
+        input_chroma_map[1] = "u10l";
+        input_chroma_map[2] = "v10l";
+        input_chroma_map[3] = NULL;
+    }
+    else if( raw_frame->alloc_img.csp == AV_PIX_FMT_YUV420P || raw_frame->alloc_img.csp == AV_PIX_FMT_YUV422P )
+    {
+        input_chroma_map[0] = "y8";
+        input_chroma_map[1] = "u8";
+        input_chroma_map[2] = "v8";
+        input_chroma_map[3] = NULL;
+    }
+
+    obe_raw_frame_t *raw_frame_dup = new_raw_frame();
+    if( !raw_frame_dup )
+        return NULL;
+
+    memcpy( raw_frame_dup, raw_frame, sizeof(*raw_frame) );
+    raw_frame_dup->num_user_data = 0;
+    raw_frame_dup->user_data = NULL;
+
+    raw_frame_dup->uref = uref_dup(raw_frame->uref);
+    if (!raw_frame_dup->uref)
+    {
+        free( raw_frame_dup );
+        raw_frame_dup = NULL;
+        return raw_frame_dup;
+    }
+
+    /* explicitly get new buffers */
+    for (int i = 0; i < 3 && input_chroma_map[i] != NULL; i++)
+    {
+        const uint8_t *data;
+        size_t stride;
+        if (unlikely(!ubase_check(uref_pic_plane_read(raw_frame_dup->uref, input_chroma_map[i], 0, 0, -1, -1, (uint8_t **)&data)) ||
+                        !ubase_check(uref_pic_plane_size(raw_frame_dup->uref, input_chroma_map[i], &stride, NULL, NULL, NULL)))) {
+            syslog(LOG_ERR, "invalid buffer received");
+            uref_free(raw_frame_dup->uref);
+            raw_frame_dup = NULL;
+            return raw_frame_dup;
+        }
+
+        raw_frame_dup->alloc_img.plane[i] = (uint8_t *)data;
+        raw_frame_dup->alloc_img.stride[i] = stride;
+    }
+    memcpy( &raw_frame_dup->img, &raw_frame_dup->alloc_img, sizeof(raw_frame_dup->alloc_img) );
+
+    return raw_frame_dup;
 }
 
 void obe_release_audio_data( void *ptr )
@@ -1061,6 +1148,26 @@ int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts )
         h->outputs[i]->output_dest.fec_type = output_opts->outputs[i].fec_type;
         h->outputs[i]->output_dest.fec_columns = output_opts->outputs[i].fec_columns;
         h->outputs[i]->output_dest.fec_rows = output_opts->outputs[i].fec_rows;
+
+        if( output_opts->outputs[i].stream_id )
+        {
+            h->outputs[i]->output_dest.stream_id = strdup( output_opts->outputs[i].stream_id );
+            if( !h->outputs[i]->output_dest.stream_id )
+            {
+                fprintf( stderr, "Malloc failed\n" );
+                return -1;
+            }
+        }
+
+        if( output_opts->outputs[i].srt_password )
+        {
+            h->outputs[i]->output_dest.srt_password = strdup( output_opts->outputs[i].srt_password );
+            if( !h->outputs[i]->output_dest.srt_password )
+            {
+                fprintf( stderr, "Malloc failed\n" );
+                return -1;
+            }
+        }
     }
     h->num_outputs = output_opts->num_outputs;
 
@@ -1111,6 +1218,14 @@ int obe_start( obe_t *h )
     /* TODO: a lot of sanity checks */
     /* TODO: decide upon thread priorities */
 
+#define UMEM_POOL               512
+    h->umem_mgr = umem_pool_mgr_alloc_simple( UMEM_POOL );
+    if( !h->umem_mgr )
+    {
+        fprintf( stderr, "Could not allocate umem_mgr \n" );
+        goto fail;
+    }
+
     /* Setup mutexes and cond vars */
     obe_init_queue( &h->enc_smoothing_queue );
     obe_init_queue( &h->mux_queue );
@@ -1148,7 +1263,9 @@ int obe_start( obe_t *h )
         obe_init_queue( &h->outputs[i]->queue );
         if( h->outputs[i]->output_dest.type == OUTPUT_UDP ||
                 h->outputs[i]->output_dest.type == OUTPUT_RTP ||
-                h->outputs[i]->output_dest.type == OUTPUT_ARQ )
+                h->outputs[i]->output_dest.type == OUTPUT_ARQ ||
+                h->outputs[i]->output_dest.type == OUTPUT_SRT ||
+                h->outputs[i]->output_dest.type == OUTPUT_SRT_RTP )
             output = ip_output;
         else if( h->outputs[i]->output_dest.type == OUTPUT_FILE )
             output = file_output;
@@ -1501,7 +1618,8 @@ int obe_get_arq_status( obe_t *h, int *arq_status )
     {
         if( h->outputs[i]->output_dest.type == OUTPUT_UDP ||
                 h->outputs[i]->output_dest.type == OUTPUT_RTP ||
-                h->outputs[i]->output_dest.type == OUTPUT_ARQ )
+                h->outputs[i]->output_dest.type == OUTPUT_ARQ ||
+                h->outputs[i]->output_dest.type == OUTPUT_SRT )
             output = ip_output;
         else if( h->outputs[i]->output_dest.type == OUTPUT_FILE )
             output = file_output;
@@ -1668,6 +1786,8 @@ void obe_close( obe_t *h )
 
     /* Destroy lock manager */
     av_lockmgr_register( NULL );
+
+    umem_mgr_release( h->umem_mgr );
 
     free( h );
     h = NULL;

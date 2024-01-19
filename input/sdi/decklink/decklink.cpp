@@ -36,7 +36,16 @@ extern "C"
 #include "input/bars/bars_common.h"
 #include <libavresample/avresample.h>
 #include <libavutil/opt.h>
-#include <libavutil/frame.h>
+
+#include <upipe/ubuf.h>
+#include <upipe/ubuf_pic.h>
+#include <upipe/ubuf_pic_mem.h>
+#include <upipe/uref.h>
+#include <upipe/uref_std.h>
+#include <upipe/uref_pic.h>
+#include <upipe/umem.h>
+#include <upipe/udict.h>
+#include <upipe/udict_inline.h>
 }
 
 #include "include/DeckLinkAPI.h"
@@ -46,6 +55,24 @@ extern "C"
 #define DECKLINK_SAMPLE_RATE 48000
 
 #define DROP_MIN 50
+
+static inline uint32_t rl32(const void *src)
+{
+    const uint8_t *s = (uint8_t*)src;
+    return s[0] |
+        (s[1] <<  8) |
+        (s[2] << 16) |
+        (s[3] << 24);
+}
+
+#define READ_PIXELS_10(a, b, c) \
+    do { \
+        uint32_t val = rl32(src); \
+        src += 4; \
+        *(a)++ = (val)       & 1023; \
+        *(b)++ = (val >> 10) & 1023; \
+        *(c)++ = (val >> 20) & 1023; \
+    } while (0)
 
 struct obe_to_decklink
 {
@@ -121,17 +148,23 @@ typedef struct
     int32_t  *audio_probe_buf;
 #endif
 
+    /* cpu flags */
+    uint32_t cpu_flags;
+
+    void (*v210_unpack) ( const uint32_t *src, uint16_t *y, uint16_t *u, uint16_t *v, int width );
+
+    /* upipe */
+    struct uref_mgr *uref_mgr;
+    struct ubuf_mgr *ubuf_mgr;
+
     /* Video */
-    AVFrame         *frame;
-    AVCodec         *dec;
-    AVCodecContext  *codec;
     int64_t         v_counter;
     AVRational      v_timebase;
     hnd_t           bars_hnd;
     int64_t         drop_count;
 
     /* frame data for black or last-frame */
-    obe_raw_frame_t stored_video_frame;
+    obe_raw_frame_t *stored_video_frame;
     obe_raw_frame_t stored_audio_frame;
 
     /* output frame pointers for bars and tone */
@@ -174,6 +207,7 @@ typedef struct
     int picture_on_loss;
     int downscale;
     obe_bars_opts_t obe_bars_opts;
+    int tc_source;
 
     /* Output */
     int probe_success;
@@ -195,11 +229,9 @@ struct decklink_status
     decklink_opts_t *decklink_opts;
 };
 
-static void setup_pixel_funcs( decklink_opts_t *decklink_opts )
+static void setup_ancillary_pixel_funcs( decklink_opts_t *decklink_opts )
 {
     decklink_ctx_t *decklink_ctx = &decklink_opts->decklink_ctx;
-
-    int cpu_flags = av_get_cpu_flags();
 
     /* Setup VBI and VANC unpack functions */
     if( IS_SD( decklink_opts->video_format ) )
@@ -208,10 +240,10 @@ static void setup_pixel_funcs( decklink_opts_t *decklink_opts )
         decklink_ctx->downscale_line = obe_downscale_line_c;
         decklink_ctx->blank_line = obe_blank_line_uyvy_c;
 
-        if( cpu_flags & AV_CPU_FLAG_MMX )
+        if( decklink_ctx->cpu_flags & AV_CPU_FLAG_MMX )
             decklink_ctx->downscale_line = obe_downscale_line_mmx;
 
-        if( cpu_flags & AV_CPU_FLAG_SSE2 )
+        if( decklink_ctx->cpu_flags & AV_CPU_FLAG_SSE2 )
             decklink_ctx->downscale_line = obe_downscale_line_sse2;
     }
     else
@@ -219,10 +251,10 @@ static void setup_pixel_funcs( decklink_opts_t *decklink_opts )
         decklink_ctx->unpack_line = obe_v210_line_to_nv20_c;
         decklink_ctx->blank_line = obe_blank_line_nv20_c;
 
-        if( cpu_flags & AV_CPU_FLAG_SSSE3 )
+        if( decklink_ctx->cpu_flags & AV_CPU_FLAG_SSSE3 )
             decklink_ctx->unpack_line = obe_v210_line_to_nv20_ssse3;
 
-        if( cpu_flags & AV_CPU_FLAG_AVX )
+        if( decklink_ctx->cpu_flags & AV_CPU_FLAG_AVX )
             decklink_ctx->unpack_line = obe_v210_line_to_nv20_avx;
     }
 }
@@ -328,14 +360,14 @@ public:
                 decklink_opts_->timebase_den = decklink_video_format_tab[i].timebase_den;
 
                 get_format_opts( decklink_opts_, p_display_mode );
-                setup_pixel_funcs( decklink_opts_ );
+                setup_ancillary_pixel_funcs( decklink_opts_ );
 
                 /* Need to change resolution if it's not the one that was setup originally */
                 if( decklink_opts_->picture_on_loss )
                 {
                     /* Clear old setup video and audio frames */
-                    if( decklink_ctx->stored_video_frame.release_data )
-                        decklink_ctx->stored_video_frame.release_data( &decklink_ctx->stored_video_frame );
+                    if( decklink_ctx->stored_video_frame && decklink_ctx->stored_video_frame->release_data )
+                        decklink_ctx->stored_video_frame->release_data( &decklink_ctx->stored_video_frame );
                     if( decklink_ctx->stored_audio_frame.release_data )
                         decklink_ctx->stored_audio_frame.release_data( &decklink_ctx->stored_audio_frame );
 
@@ -365,9 +397,9 @@ public:
                         if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
                             decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
                         {
-                            setup_stored_video_frame( &decklink_ctx->stored_video_frame, decklink_video_format_tab[i].width,
+                            setup_stored_video_frame( decklink_ctx->stored_video_frame, decklink_video_format_tab[i].width,
                                                       decklink_video_format_tab[i].height );
-                            blank_yuv422p_frame( &decklink_ctx->stored_video_frame );
+                            blank_yuv422p_frame( decklink_ctx->stored_video_frame );
                         }
 
                         setup_stored_audio_frame( &decklink_ctx->stored_audio_frame, decklink_ctx->sample_pattern->max );
@@ -396,10 +428,9 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 {
     decklink_ctx_t *decklink_ctx = &decklink_opts_->decklink_ctx;
     obe_raw_frame_t *raw_frame = NULL;
-    AVPacket pkt;
     void *frame_bytes, *anc_line;
     obe_t *h = decklink_ctx->h;
-    int finished = 0, ret, num_anc_lines = 0, anc_line_stride,
+    int num_anc_lines = 0, anc_line_stride,
     lines_read = 0, first_line = 0, last_line = 0, line, num_vbi_lines, vii_line;
     uint32_t *frame_ptr;
     uint16_t *anc_buf, *anc_buf_pos;
@@ -407,11 +438,12 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
     int anc_lines[DECKLINK_VANC_LINES];
     IDeckLinkVideoFrameAncillary *ancillary;
     int64_t pts = -1, video_duration = 0;
+    struct uref *uref;
 
     if( decklink_opts_->probe_success )
         return S_OK;
 
-    av_init_packet( &pkt );
+    video_duration = av_rescale_q( 1, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
 
     if( videoframe )
     {
@@ -443,20 +475,15 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
                     decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
                 {
-                    video_frame = new_raw_frame();
-                    if( !video_frame )
+                    if( decklink_ctx->stored_video_frame )
                     {
-                        syslog( LOG_ERR, "Malloc failed\n" );
-                        goto end;
+                        video_frame = (obe_raw_frame_t *)decklink_ctx->stored_video_frame->dup_frame( decklink_ctx->stored_video_frame );
+                        if( !video_frame )
+                        {
+                            syslog( LOG_ERR, "Malloc failed\n" );
+                            goto end;
+                        }
                     }
-                    memcpy( video_frame, &decklink_ctx->stored_video_frame, sizeof(*video_frame) );
-                    int i = 0;
-                    while( video_frame->buf_ref[i] != NULL )
-                    {
-                        video_frame->buf_ref[i] = av_buffer_ref( decklink_ctx->stored_video_frame.buf_ref[i] );
-                        i++;
-                    }
-                    video_frame->buf_ref[i] = NULL;
                 }
                 else if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_BARS )
                 {
@@ -467,6 +494,11 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                 }
 
                 video_frame->pts = pts;
+                for( int i = 0; i < h->device.num_input_streams; i++ )
+                {
+                    if( h->device.streams[i]->stream_format == VIDEO_UNCOMPRESSED )
+                        video_frame->input_stream_id = h->device.streams[i]->input_stream_id;
+                }
 
                 if( add_to_filter_queue( h, video_frame ) < 0 )
                     goto end;
@@ -498,6 +530,12 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
                 audio_frame->pts = av_rescale_q( decklink_ctx->a_counter, decklink_ctx->a_timebase,
                                                  (AVRational){1, OBE_CLOCK} );
+
+                if( pts != -1 )
+                {
+                    audio_frame->video_pts = pts;
+                    audio_frame->video_duration = video_duration;
+                }
                 decklink_ctx->a_counter += audio_frame->audio_frame.num_samples;
 
                 if( add_to_filter_queue( h, audio_frame ) < 0 )
@@ -546,7 +584,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         const int width = videoframe->GetWidth();
         const int height = videoframe->GetHeight();
         const int stride = videoframe->GetRowBytes();
-        video_duration = av_rescale_q( 1, decklink_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
 
         videoframe->GetBytes( &frame_bytes );
 
@@ -722,31 +759,91 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                     return -1;
                 }
                 raw_frame->buf_ref[1] = NULL;
+
+                raw_frame->release_data = obe_release_bufref;
+                raw_frame->release_frame = obe_release_frame;
+                raw_frame->dup_frame = obe_dup_bufref;
             }
             else
             {
-                decklink_ctx->codec->width = width;
-                decklink_ctx->codec->height = height;
+                const char *output_chroma_map[3+1];
+                output_chroma_map[0] = "y10l";
+                output_chroma_map[1] = "u10l";
+                output_chroma_map[2] = "v10l";
+                output_chroma_map[3] = NULL;
 
-                pkt.data = (uint8_t*)frame_bytes;
-                pkt.size = stride * height;
-
-                ret = avcodec_decode_video2( decklink_ctx->codec, decklink_ctx->frame, &finished, &pkt );
-                if( ret < 0 || !finished )
+                uref = uref_pic_alloc( decklink_ctx->uref_mgr, decklink_ctx->ubuf_mgr, width, height );
+                if( !uref )
                 {
-                    syslog( LOG_ERR, "[decklink]: Could not decode video frame\n" );
-                    goto end;
+                    syslog( LOG_ERR, "Malloc failed\n" );
+                    return -1;
                 }
 
-                memcpy( raw_frame->buf_ref, decklink_ctx->frame->buf, sizeof(decklink_ctx->frame->buf) );
+                for (int i = 0; i < 3 && output_chroma_map[i] != NULL; i++)
+                {
+                    uint8_t *data;
+                    size_t stride_out;
+                    if (unlikely(!ubase_check(uref_pic_plane_write(uref, output_chroma_map[i], 0, 0, -1, -1, &data)) ||
+                                !ubase_check(uref_pic_plane_size(uref, output_chroma_map[i], (size_t*)&stride_out, NULL, NULL, NULL)))) {
+                        syslog(LOG_ERR, "invalid buffer received");
+                        uref_free(uref);
+                        return -1;
+                    }
 
-                memcpy( raw_frame->alloc_img.stride, decklink_ctx->frame->linesize, sizeof(raw_frame->alloc_img.stride) );
-                memcpy( raw_frame->alloc_img.plane, decklink_ctx->frame->data, sizeof(raw_frame->alloc_img.plane) );
-                raw_frame->alloc_img.csp = decklink_ctx->codec->pix_fmt;
+                    raw_frame->alloc_img.plane[i] = (uint8_t *)data;
+                    raw_frame->alloc_img.stride[i] = stride_out;
+                }
+
+                uint8_t *input_plane = (uint8_t*)frame_bytes;
+                uint16_t *output_planes[3];
+                for( int i = 0; i < 3; i++ )
+                    output_planes[i] = (uint16_t*)raw_frame->alloc_img.plane[i];
+                for( int h = 0; h < height; h++ )
+                {
+                    uint16_t *y = output_planes[0];
+                    uint16_t *u = output_planes[1];
+                    uint16_t *v = output_planes[2];
+                    const uint32_t *src = (uint32_t*)input_plane;
+
+                    int w = (width / 6) * 6;
+                    decklink_ctx->v210_unpack(src, y, u, v, w);
+
+                    y += w;
+                    u += w >> 1;
+                    v += w >> 1;
+                    src += (w * 2) / 3;
+
+                    if( w < width - 1 )
+                    {
+                        READ_PIXELS_10(u, y, v);
+                        uint32_t val = rl32(src);
+                        src++;
+                        *y++ = val & 1023;
+
+                        if( w < width - 3 )
+                        {
+                            *u++ = (val >> 10) & 1023;
+                            *y++ = (val >> 20) & 1023;
+
+                            val = rl32(src);
+                            src++;
+                            *v++ = val & 1023;
+                            *y++ = (val >> 10) & 1023;
+                        }
+                    }
+
+                    for (int i = 0; i < 3; i++)
+                        output_planes[i] += raw_frame->alloc_img.stride[i] / 2;
+                    input_plane += stride;
+                }
+
+                raw_frame->alloc_img.csp = AV_PIX_FMT_YUV422P10;
+                raw_frame->uref = uref;
+
+                raw_frame->release_data = obe_release_video_uref;
+                raw_frame->release_frame = obe_release_frame;
+                raw_frame->dup_frame = obe_dup_video_uref;
             }
-
-            raw_frame->release_data = obe_release_bufref;
-            raw_frame->release_frame = obe_release_frame;
 
             raw_frame->alloc_img.planes = av_pix_fmt_count_planes( (AVPixelFormat)raw_frame->alloc_img.csp );
             raw_frame->alloc_img.format = decklink_opts_->video_format;
@@ -782,19 +879,30 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
             if( decklink_opts_->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
             {
                 int i = 0;
-                if( decklink_ctx->stored_video_frame.release_data )
-                    decklink_ctx->stored_video_frame.release_data( &decklink_ctx->stored_video_frame );
-
-                memcpy( &decklink_ctx->stored_video_frame, raw_frame, sizeof(decklink_ctx->stored_video_frame) );
-                while( raw_frame->buf_ref[i] != NULL )
+                if( decklink_ctx->stored_video_frame )
                 {
-                    decklink_ctx->stored_video_frame.buf_ref[i] = av_buffer_ref( raw_frame->buf_ref[i] );
-                    i++;
+                    if( decklink_ctx->stored_video_frame->release_data )
+                        decklink_ctx->stored_video_frame->release_data( decklink_ctx->stored_video_frame );
+                    if( decklink_ctx->stored_video_frame->release_frame )
+                        decklink_ctx->stored_video_frame->release_frame( decklink_ctx->stored_video_frame );
                 }
-                decklink_ctx->stored_video_frame.buf_ref[i] = NULL;
-                decklink_ctx->stored_video_frame.release_data = obe_release_bufref;
-                decklink_ctx->stored_video_frame.num_user_data = 0;
-                decklink_ctx->stored_video_frame.user_data = NULL;
+                decklink_ctx->stored_video_frame = (obe_raw_frame_t *)raw_frame->dup_frame( raw_frame );
+                if( !decklink_ctx->stored_video_frame )
+                    goto fail;
+            }
+
+            if( decklink_opts_->tc_source )
+            {
+                IDeckLinkTimecode *timecode;
+                if( videoframe->GetTimecode( decklink_opts_->tc_source == TC_SOURCE_RP188 ? bmdTimecodeRP188Any : bmdTimecodeVITC,
+                                             &timecode ) == S_OK )
+                {
+                    raw_frame->valid_timecode = 1;
+                    timecode->GetComponents( &raw_frame->timecode.hours, &raw_frame->timecode.mins,
+                                             &raw_frame->timecode.seconds, &raw_frame->timecode.frames );
+                    raw_frame->timecode.drop_frame = !!(timecode->GetFlags() & bmdTimecodeIsDropFrame);
+                    timecode->Release();
+                }
             }
 
             if( add_to_filter_queue( h, raw_frame ) < 0 )
@@ -936,8 +1044,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
 end:
 
-    av_free_packet( &pkt );
-
     return S_OK;
 
 fail:
@@ -970,15 +1076,6 @@ static void close_card( decklink_opts_t *decklink_opts )
     if( decklink_ctx->p_delegate )
         decklink_ctx->p_delegate->Release();
 
-    if( decklink_ctx->frame )
-        av_frame_free( &decklink_ctx->frame );
-
-    if( decklink_ctx->codec )
-    {
-        avcodec_close( decklink_ctx->codec );
-        avcodec_free_context( &decklink_ctx->codec );
-    }
-
     if( IS_SD( decklink_opts->video_format ) )
         vbi_raw_decoder_destroy( &decklink_ctx->non_display_parser.vbi_decoder );
 
@@ -991,12 +1088,20 @@ static void close_card( decklink_opts_t *decklink_opts )
     if( decklink_ctx->bars_hnd )
         close_bars( decklink_ctx->bars_hnd );
 
-    /* Stored frames are not malloced */
-    if( decklink_ctx->stored_video_frame.release_data )
-        decklink_ctx->stored_video_frame.release_data( &decklink_ctx->stored_video_frame );
+    if( decklink_ctx->stored_video_frame )
+    {
+        if( decklink_ctx->stored_video_frame->release_data )
+            decklink_ctx->stored_video_frame->release_data( decklink_ctx->stored_video_frame );
+        if( decklink_ctx->stored_video_frame->release_frame )
+            decklink_ctx->stored_video_frame->release_frame( decklink_ctx->stored_video_frame );
+    }
 
+    /* Audio stored frames is not malloced */
     if( decklink_ctx->stored_audio_frame.release_data )
         decklink_ctx->stored_audio_frame.release_data( &decklink_ctx->stored_audio_frame );
+
+    ubuf_mgr_release( decklink_ctx->ubuf_mgr );
+    uref_mgr_release( decklink_ctx->uref_mgr );
 }
 
 static int open_card( decklink_opts_t *decklink_opts )
@@ -1019,39 +1124,36 @@ static int open_card( decklink_opts_t *decklink_opts )
     IDeckLinkIterator *decklink_iterator = NULL;
     HRESULT result;
 
+    decklink_ctx->cpu_flags = av_get_cpu_flags();
+
     if( h->filter_bit_depth == OBE_BIT_DEPTH_10 && !decklink_opts->probe )
     {
-        decklink_ctx->frame = av_frame_alloc();
-        if( !decklink_ctx->frame )
-        {
-            fprintf( stderr, "[decklink] Could not allocate frame\n" );
-            goto finish;
-        }
+        #define UDICT_POOL_DEPTH 300
+        #define UREF_POOL_DEPTH 300
+        #define UBUF_POOL_DEPTH 300
 
-        decklink_ctx->dec = avcodec_find_decoder( AV_CODEC_ID_V210 );
-        if( !decklink_ctx->dec )
-        {
-            fprintf( stderr, "[decklink] Could not find v210 decoder\n" );
-            goto finish;
-        }
+        struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH, h->umem_mgr, -1, -1);
+        decklink_ctx->uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
+        udict_mgr_release(udict_mgr);
 
-        decklink_ctx->codec = avcodec_alloc_context3( decklink_ctx->dec );
-        if( !decklink_ctx->codec )
-        {
-            fprintf( stderr, "[decklink] Could not allocate AVCodecContext\n" );
-            goto finish;
-        }
+        decklink_ctx->ubuf_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, h->umem_mgr, 1, 0, 0, 0, 0, 64, 0);
+        assert(decklink_ctx->ubuf_mgr != NULL);
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(decklink_ctx->ubuf_mgr, "y10l", 1, 1, 2));
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(decklink_ctx->ubuf_mgr, "u10l", 2, 1, 2));
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(decklink_ctx->ubuf_mgr, "v10l", 2, 1, 2));
 
-#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(55, 48, 102)
-        decklink_ctx->codec->flags |= CODEC_FLAG_EMU_EDGE;
-#endif
+        decklink_ctx->v210_unpack = obe_v210_planar_unpack_c;
+        if( decklink_ctx->cpu_flags & AV_CPU_FLAG_SSSE3 )
+            decklink_ctx->v210_unpack = obe_v210_planar_unpack_aligned_ssse3;
 
-        /* TODO: setup custom strides */
-        if( avcodec_open2( decklink_ctx->codec, decklink_ctx->dec, NULL ) < 0 )
-        {
-            fprintf( stderr, "[decklink] Could not open libavcodec\n" );
-            goto finish;
-        }
+        if( decklink_ctx->cpu_flags & AV_CPU_FLAG_AVX )
+            decklink_ctx->v210_unpack = obe_v210_planar_unpack_aligned_avx;
+
+        if( decklink_ctx->cpu_flags & AV_CPU_FLAG_AVX2 )
+            decklink_ctx->v210_unpack = obe_v210_planar_unpack_aligned_avx2;
+
+        if( decklink_ctx->cpu_flags & AV_CPU_FLAG_AVX512ICL )
+            decklink_ctx->v210_unpack = obe_v210_planar_unpack_avx512icl;
     }
 
     decklink_iterator = CreateDeckLinkIteratorInstance();
@@ -1211,7 +1313,7 @@ static int open_card( decklink_opts_t *decklink_opts )
         {
             found_mode = true;
             get_format_opts( decklink_opts, p_display_mode );
-            setup_pixel_funcs( decklink_opts );
+            setup_ancillary_pixel_funcs( decklink_opts );
         }
 
         p_display_mode->Release();
@@ -1282,8 +1384,15 @@ static int open_card( decklink_opts_t *decklink_opts )
             if( decklink_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
                 decklink_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
             {
-                setup_stored_video_frame( &decklink_ctx->stored_video_frame, decklink_format->width, decklink_format->height );
-                blank_yuv422p_frame( &decklink_ctx->stored_video_frame );
+                decklink_ctx->stored_video_frame = new_raw_frame();
+                if( !decklink_ctx->stored_video_frame )
+                {
+                    fprintf( stderr, "[decklink] Malloc failed\n" );
+                    ret = -1;
+                    goto finish;
+                }
+                setup_stored_video_frame( decklink_ctx->stored_video_frame, decklink_format->width, decklink_format->height );
+                blank_yuv422p_frame( decklink_ctx->stored_video_frame );
             }
             else if( decklink_opts->picture_on_loss == PICTURE_ON_LOSS_BARS )
             {
@@ -1402,6 +1511,7 @@ static void *probe_stream( void *ptr )
     decklink_opts->audio_conn = user_opts->audio_connection;
     decklink_opts->video_format = user_opts->video_format;
     decklink_opts->downscale = user_opts->downscale;
+    decklink_opts->tc_source = user_opts->tc_source;
 
     decklink_opts->probe = non_display_parser->probe = 1;
 
@@ -1622,6 +1732,7 @@ static void *open_input( void *ptr )
     decklink_opts->obe_bars_opts.bars_beep = user_opts->bars_beep;
     decklink_opts->obe_bars_opts.bars_beep_interval = user_opts->bars_beep_interval;
     decklink_opts->obe_bars_opts.no_signal = 1;
+    decklink_opts->tc_source = user_opts->tc_source;
 
     decklink_ctx = &decklink_opts->decklink_ctx;
 

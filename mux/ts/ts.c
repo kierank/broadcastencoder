@@ -489,10 +489,12 @@ void *open_muxer( void *ptr )
                             int64_t mod = (int64_t)1 << 33;
                             uint64_t pts = scte35_splice_time_get_pts_time( splice_time );
                             pts += frames[num_frames].pts + 900000; /* mux starts at a clock of 10 seconds */
+                            syslog(LOG_INFO, "[SCTE-35] Splice Frame PTS %"PRIu64" (90kHz) Splice PTS %"PRIu64" (90kHz - 10 second offset)", frames[num_frames].pts, pts);
                             pts %= mod;
                             scte35_splice_time_set_pts_time( splice_time, pts );
-                            syslog(LOG_WARNING, "[SCTE-35] Splice Frame PTS %"PRIu64" (90kHz) Splice PTS %"PRIu64" (90kHz - 10 second offset)", frames[num_frames].pts, pts);
                         }
+                        else
+                            syslog(LOG_INFO, "[SCTE-35] Splice Frame PTS %"PRIu64" (90kHz) Immediate", frames[num_frames].pts);
                     }
 
                     psi_set_crc( frames[num_frames].data );

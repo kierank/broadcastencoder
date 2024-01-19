@@ -209,7 +209,7 @@ static void parse_rtcp(struct arq_ctx *ctx, struct upipe *upipe,
                 break;
 
             pthread_mutex_lock(&ctx->mutex);
-            ctx->last_rr_cr = uclock_now(ctx->uclock);
+            ctx->last_rr_cr = uclock_now(ctx->uref_ctx->uclock);
             pthread_mutex_unlock(&ctx->mutex);
 
             uint32_t delay = rtcp_rr_get_delay_since_last_sr(rtp);
@@ -239,7 +239,7 @@ static void parse_rtcp(struct arq_ctx *ctx, struct upipe *upipe,
 
             uint64_t ntp = rtcp_xr_rrtp_get_ntp(rtp);
 
-            struct uref *xr = uref_alloc(ctx->uref_mgr);
+            struct uref *xr = uref_alloc(ctx->uref_ctx->uref_mgr);
             if (!xr)
                 break;
 
@@ -331,7 +331,7 @@ static int catch_arq(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-struct uref *make_uref(struct arq_ctx *ctx, uint8_t *buf, size_t len,
+struct uref *make_uref(struct uref_ctx *ctx, uint8_t *buf, size_t len,
         int64_t timestamp)
 {
     struct uref *uref = uref_alloc(ctx->uref_mgr);;
@@ -369,18 +369,18 @@ static void *arq_thread(void *arg)
     struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
-    ctx->uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
+    ctx->uref_ctx->uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_loop(UPUMP_POOL,
                                                      UPUMP_BLOCKER_POOL);
-    ctx->uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
+    ctx->uref_ctx->uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
     struct uprobe *uprobe = uprobe_arq_alloc(NULL, catch_arq, ctx);
     struct uprobe *logger = uprobe_stdio_alloc(uprobe_use(uprobe), stdout, loglevel);
     assert(logger != NULL);
     struct uprobe *uprobe_dejitter = uprobe_dejitter_alloc(logger, true, 0);
     assert(uprobe_dejitter != NULL);
 
-    logger = uprobe_uref_mgr_alloc(uprobe_dejitter, ctx->uref_mgr);
+    logger = uprobe_uref_mgr_alloc(uprobe_dejitter, ctx->uref_ctx->uref_mgr);
 
     assert(logger != NULL);
     logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
@@ -389,7 +389,7 @@ static void *arq_thread(void *arg)
                                    UBUF_POOL_DEPTH);
     assert(logger != NULL);
 
-    logger = uprobe_uclock_alloc(logger, ctx->uclock);
+    logger = uprobe_uclock_alloc(logger, ctx->uref_ctx->uclock);
     assert(logger != NULL);
 
     /* rtp source */
@@ -401,7 +401,7 @@ static void *arq_thread(void *arg)
             uprobe_pfx_alloc(uprobe_use(logger), loglevel, "rtcp fb setflowdef"));
     upipe_mgr_release(upipe_setflowdef_mgr);
 
-    struct uref *flow_def = uref_block_flow_alloc_def(ctx->uref_mgr, "");
+    struct uref *flow_def = uref_block_flow_alloc_def(ctx->uref_ctx->uref_mgr, "");
     upipe_set_flow_def(upipe_setflowdef, flow_def);
     upipe_setflowdef_set_dict(upipe_setflowdef, flow_def);
     uref_free(flow_def);
@@ -495,7 +495,7 @@ static void *arq_thread(void *arg)
     upipe_release(ctx->upipe_udpsink_rtcp);
 
     /* fec */
-    flow_def = uref_block_flow_alloc_def(ctx->uref_mgr, "");
+    flow_def = uref_block_flow_alloc_def(ctx->uref_ctx->uref_mgr, "");
 
     if (ctx->row_dest_addr_len) {
         ctx->upipe_row_udpsink = upipe_void_alloc(upipe_udpsink_mgr,
@@ -527,8 +527,8 @@ static void *arq_thread(void *arg)
             catch_event, ctx, NULL);
     upump_start(event);
 
-    ctx->ubuf_mgr = ubuf_block_mem_mgr_alloc(255, 255, umem_mgr, 0, 0, 0, 0);
-    assert(ctx->ubuf_mgr);
+    ctx->uref_ctx->ubuf_mgr = ubuf_block_mem_mgr_alloc(255, 255, umem_mgr, 0, 0, 0, 0);
+    assert(ctx->uref_ctx->ubuf_mgr);
 
     /* fire loop ! */
     upump_mgr_run(upump_mgr, NULL);
@@ -540,22 +540,23 @@ static void *arq_thread(void *arg)
     uprobe_release(uprobe);
 
     upump_mgr_release(upump_mgr);
-    uref_mgr_release(ctx->uref_mgr);
-    ubuf_mgr_release(ctx->ubuf_mgr);
+    uref_mgr_release(ctx->uref_ctx->uref_mgr);
+    ubuf_mgr_release(ctx->uref_ctx->ubuf_mgr);
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
-    uclock_release(ctx->uclock);
+    uclock_release(ctx->uref_ctx->uclock);
 
     return NULL;
 }
 
 struct arq_ctx *open_arq(obe_udp_ctx *p_udp, obe_udp_ctx *p_row,
-        obe_udp_ctx *p_col, obe_udp_ctx *p_rtcp, unsigned latency)
+        obe_udp_ctx *p_col, obe_udp_ctx *p_rtcp, unsigned latency, struct uref_ctx *uref_ctx)
 {
     struct arq_ctx *ctx = calloc(1, sizeof(*ctx));
     if (!ctx)
         return NULL;
 
+    ctx->uref_ctx = uref_ctx;
     ctx->fd = p_udp->udp_fd;
     ctx->dest_addr = p_udp->dest_addr;
     ctx->dest_addr_len = p_udp->dest_addr_len;
@@ -633,7 +634,7 @@ void close_arq(struct arq_ctx *ctx)
 
 int arq_bidirectional(struct arq_ctx *ctx)
 {
-    uint64_t now = uclock_now(ctx->uclock);
+    uint64_t now = uclock_now(ctx->uref_ctx->uclock);
     uint64_t last_rr_cr = 0;
     pthread_mutex_lock(&ctx->mutex);
     last_rr_cr = ctx->last_rr_cr;

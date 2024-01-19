@@ -25,6 +25,7 @@
 #define _GNU_SOURCE
 #include "common/common.h"
 #include "input/input.h"
+#include "input/sdi/ancillary.h"
 #include "input/sdi/sdi.h"
 #include "input/sdi/vbi.h"
 #include "input/bars/bars_common.h"
@@ -45,8 +46,6 @@
 #include <upipe/uprobe_ubuf_mem.h>
 #include <upipe/uprobe_uclock.h>
 #include <upipe/uprobe_dejitter.h>
-#include <upipe/umem.h>
-#include <upipe/umem_pool.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
@@ -96,7 +95,6 @@
 #include <bitstream/dvb/vbi.h>
 #include <bitstream/smpte/291.h>
 
-#define UMEM_POOL               512
 #define UDICT_POOL_DEPTH        500
 #define UREF_POOL_DEPTH         500
 #define UBUF_POOL_DEPTH         3000
@@ -248,6 +246,7 @@ static void no_video_timer(struct upump *upump)
     obe_raw_frame_t *video_frame = NULL, *audio_frame = NULL;
     pts = av_rescale_q( netmap_ctx->v_counter, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
     obe_clock_tick( h, pts );
+    int video_duration = av_rescale_q( 1, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
 
     if( netmap_opts->picture_on_loss == PICTURE_ON_LOSS_BLACK ||
         netmap_opts->picture_on_loss == PICTURE_ON_LOSS_LASTFRAME )
@@ -327,6 +326,12 @@ static void no_video_timer(struct upump *upump)
     {
         if( h->device.streams[i]->stream_format == AUDIO_PCM )
             audio_frame->input_stream_id = h->device.streams[i]->input_stream_id;
+    }
+
+    if( pts != -1 )
+    {
+        audio_frame->video_pts = pts;
+        audio_frame->video_duration = video_duration;
     }
 
     audio_frame->pts = av_rescale_q( netmap_ctx->a_counter, netmap_ctx->a_timebase,
@@ -454,7 +459,7 @@ fail:
 }
 
 
-static void extract_op47(netmap_ctx_t *netmap_ctx, struct uref *uref)
+static void extract_ttx(netmap_ctx_t *netmap_ctx, struct uref *uref)
 {
     obe_sdi_non_display_data_t *non_display_data = &netmap_ctx->non_display_parser;
     obe_t *h = netmap_ctx->h;
@@ -628,6 +633,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
     netmap_ctx_t *netmap_ctx = uprobe_obe->data;
     netmap_opts_t *netmap_opts = &netmap_ctx->netmap_opts;
     obe_t *h = netmap_ctx->h;
+    int64_t video_duration = 0;
 
     if (netmap_ctx->stop)
         return UBASE_ERR_NONE;
@@ -652,8 +658,9 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
 
         }
         else {
-            /* check this matches the configured format */
-            int j = 0, detected_video_format = -1;
+            /* check this matches the configured format, starting from 1 to avoid
+               autodetect */
+            int j = 1, detected_video_format = -1;
             for( ; video_format_tab[j].obe_name != -1; j++ )
             {
                 if( netmap_opts->video_format == video_format_tab[j].obe_name )
@@ -674,7 +681,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                 netmap_ctx->video_good = 0;
 
                 /* Find the actual format */
-                j = 0;
+                j = 1;
                 for( ; video_format_tab[j].obe_name != -1; j++ )
                 {
                     if( video_format_tab[j].width == netmap_opts->width &&
@@ -719,7 +726,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
         if(netmap_opts->probe) {
             extract_cc(netmap_ctx, uref, NULL);
             extract_afd_bar_data(netmap_ctx, uref, NULL);
-            extract_op47(netmap_ctx, NULL);
+            extract_ttx(netmap_ctx, NULL);
             netmap_opts->probe_success = 1;
         } else if(netmap_ctx->video_good == 1) {
             /* drop first video frame,
@@ -789,6 +796,7 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
             raw_frame->uref = uref;
             raw_frame->release_data = obe_release_video_uref;
             raw_frame->release_frame = obe_release_frame;
+            raw_frame->dup_frame = obe_dup_video_uref;
 
             setup_picture_on_signal_loss_timer(netmap_ctx);
 
@@ -828,6 +836,10 @@ static int catch_video(struct uprobe *uprobe, struct upipe *upipe,
                 goto end;
 
             if( send_vbi_and_ttx( h, &netmap_ctx->non_display_parser, pts ) < 0 )
+                goto end;
+
+            video_duration = av_rescale_q( 1, netmap_ctx->v_timebase, (AVRational){1, OBE_CLOCK} );
+            if( send_scte35( h, &netmap_ctx->non_display_parser, pts, video_duration ) < 0 )
                 goto end;
 
             if (netmap_ctx->anc_frame) {
@@ -1036,13 +1048,36 @@ end:
     return UBASE_ERR_NONE;
 }
 
+static int catch_null(struct uprobe *uprobe, struct upipe *upipe,
+                       int event, va_list args)
+{
+    struct uref *flow_def;
+    const char *def;
+
+    if (!uprobe_plumber(event, args, &flow_def, &def))
+        return uprobe_throw_next(uprobe, upipe, event, args);
+
+    struct upipe_mgr *null_mgr = upipe_null_mgr_alloc();
+    struct upipe *pipe = upipe_void_alloc_output(upipe, null_mgr,
+                uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_DEBUG, "null"));
+    upipe_release(pipe);
+
+
+    return UBASE_ERR_NONE;
+}
+
 static int catch_ttx(struct uprobe *uprobe, struct upipe *upipe,
                        int event, va_list args)
 {
     struct uprobe_obe *uprobe_obe = uprobe_obe_from_uprobe(uprobe);
     netmap_ctx_t *netmap_ctx = uprobe_obe->data;
+    obe_t *h = netmap_ctx->h;
     struct uref *flow_def;
     const char *def;
+
+    obe_output_stream_t *output_stream = get_output_stream_by_format(h, MISC_TELETEXT);
+    if (!output_stream)
+        return catch_null(uprobe, upipe, event, args);
 
     if (event == UPROBE_PROBE_UREF) {
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
@@ -1051,7 +1086,8 @@ static int catch_ttx(struct uprobe *uprobe, struct upipe *upipe,
         bool *drop = va_arg(args, bool *);
         *drop = true;
 
-        extract_op47(netmap_ctx, uref);
+        if (netmap_ctx->video_good == 2)
+            extract_ttx(netmap_ctx, uref);
 
         return UBASE_ERR_NONE;
     }
@@ -1280,6 +1316,12 @@ static int restamp_audio_2110(struct uprobe *uprobe, struct upipe *upipe,
     // * 48000 / 27000000
     pts_orig = pts_orig * 2 / 1125;
 
+    /* A few packets at the beginning can be marked as reordered by rtp_reorder, drop these */
+    if (cr_sys == 0) {
+        *drop = 1;
+        return UBASE_ERR_NONE;
+    }
+
     uint64_t ptp_rtp = cr_sys * 2 / 1125;
     uint32_t timestamp = pts_orig;
     uint32_t expected_timestamp = ptp_rtp;
@@ -1420,22 +1462,56 @@ next:
     return UBASE_ERR_NONE;
 }
 
-static int catch_null(struct uprobe *uprobe, struct upipe *upipe,
+static int catch_scte104(struct uprobe *uprobe, struct upipe *upipe,
                        int event, va_list args)
 {
+    struct uprobe_obe *uprobe_obe = uprobe_obe_from_uprobe(uprobe);
+    netmap_ctx_t *netmap_ctx = uprobe_obe->data;
+    obe_sdi_non_display_data_t *non_display_data = &netmap_ctx->non_display_parser;
+    obe_t *h = netmap_ctx->h;
     struct uref *flow_def;
     const char *def;
+
+    obe_output_stream_t *output_stream = get_output_stream_by_format(h, MISC_SCTE35);
+    if (!output_stream)
+        return catch_null(uprobe, upipe, event, args);
+
+    if (event == UPROBE_PROBE_UREF) {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
+        struct uref *uref = va_arg(args, struct uref *);
+        va_arg(args, struct upump **);
+        bool *drop = va_arg(args, bool *);
+        *drop = true;
+
+        if (netmap_ctx->video_good == 2) {
+            int s = -1;
+            const uint8_t *buf;
+            if (!ubase_check(uref_block_read(uref, 0, &s, &buf)))
+                return -1;
+
+            if (decode_scte104( non_display_data, buf, s ) < 0) {
+                printf("Couldn't decode SCTE-104 message \n");
+                return -1;
+            }
+
+            uref_block_unmap(uref, 0);
+        }
+
+        return UBASE_ERR_NONE;
+    }
 
     if (!uprobe_plumber(event, args, &flow_def, &def))
         return uprobe_throw_next(uprobe, upipe, event, args);
 
-    struct upipe_mgr *null_mgr = upipe_null_mgr_alloc();
-    struct upipe *pipe = upipe_void_alloc_output(upipe, null_mgr,
-                uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_DEBUG, "null"));
-    upipe_release(pipe);
+    struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
+    struct upipe *probe_uref_ttx = upipe_void_alloc_output(upipe,
+            upipe_probe_uref_mgr,
+            uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe), catch_scte104, netmap_ctx),
+            UPROBE_LOG_DEBUG, "probe_uref_scte104"));
+    upipe_mgr_release(upipe_probe_uref_mgr);
+    upipe_release(probe_uref_ttx);
 
-
-    return UBASE_ERR_NONE;
+    return 0;
 }
 
 static int restamp_rfc4175_video(struct uprobe *uprobe, struct upipe *upipe,
@@ -1711,6 +1787,7 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
 {
     char *uri = netmap_ctx->uri;
     char *ptp_nic = netmap_ctx->ptp_nic;
+    obe_t *h = netmap_ctx->h;
 
     netmap_ctx->detected_video_format = -1;
     netmap_ctx->input_chroma_map[0] = "y10l";
@@ -1723,9 +1800,8 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     assert(main_upump_mgr);
     netmap_ctx->upump_mgr = main_upump_mgr;
     netmap_ctx->no_video_upump = NULL;
-    struct umem_mgr *umem_mgr = umem_pool_mgr_alloc_simple(UMEM_POOL);
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
-                                                         umem_mgr, -1, -1);
+                                                         h->umem_mgr, -1, -1);
     struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
                                                    0);
     udict_mgr_release(udict_mgr);
@@ -1738,13 +1814,12 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
     assert(uprobe_main);
     uprobe_main = uprobe_uref_mgr_alloc(uprobe_main, uref_mgr);
     assert(uprobe_main);
-    uprobe_main = uprobe_ubuf_mem_alloc(uprobe_main, umem_mgr, UBUF_POOL_DEPTH,
+    uprobe_main = uprobe_ubuf_mem_alloc(uprobe_main, h->umem_mgr, UBUF_POOL_DEPTH,
                                         UBUF_SHARED_POOL_DEPTH);
     uprobe_main = uprobe_pthread_upump_mgr_alloc(uprobe_main);
     assert(uprobe_main);
 
     uref_mgr_release(uref_mgr);
-    umem_mgr_release(umem_mgr);
     uprobe_pthread_upump_mgr_set(uprobe_main, main_upump_mgr);
 
     struct uprobe *uprobe_main_pthread = uprobe_main;
@@ -1971,14 +2046,14 @@ static int open_netmap( netmap_ctx_t *netmap_ctx )
         struct upipe *probe_vanc = upipe_void_alloc_output(vanc,
                 upipe_probe_uref_mgr,
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_vanc, netmap_ctx),
-                loglevel, "probe_uref_ttx"));
+                loglevel, "probe_uref_vanc"));
 
         probe_vanc = upipe_vanc_chain_output(probe_vanc,
                 upipe_filter_vanc_mgr,
                 uprobe_pfx_alloc(uprobe_use(uprobe_dejitter), loglevel, "vanc filter"),
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
                 loglevel, "afd"),
-                uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_null, netmap_ctx),
+                uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_scte104, netmap_ctx),
                 loglevel, "scte104"),
                 uprobe_pfx_alloc(uprobe_obe_alloc(uprobe_use(uprobe_dejitter), catch_ttx, netmap_ctx),
                 loglevel, "op47"),
@@ -2056,7 +2131,7 @@ static void *autoconf_input( void *ptr )
     obe_input_t *user_opts = &probe_ctx->user_opts;
     int cur_input_stream_id = 0;
 
-    for( int i = 0; i < 2; i++ )
+    for( int i = 0; i < 5; i++ )
     {
         streams[i] = (obe_int_input_stream_t*)calloc( 1, sizeof(*streams[i]) );
         if( !streams[i] )
@@ -2100,9 +2175,24 @@ static void *autoconf_input( void *ptr )
             /* TODO: support other sample rates */
             streams[i]->sample_rate = 48000;
         }
+        else if( i == 2 )
+        {
+            streams[i]->stream_type = STREAM_TYPE_MISC;
+            streams[i]->stream_format = MISC_TELETEXT;
+        }
+        else if( i == 3 )
+        {
+            streams[i]->stream_type = STREAM_TYPE_MISC;
+            streams[i]->stream_format = MISC_SCTE35;
+        }
+        else if( i == 4 )
+        {
+            streams[i]->stream_type = STREAM_TYPE_MISC;
+            streams[i]->stream_format = ANC_RAW;
+        }
     }
 
-    h->device.num_input_streams = 2;
+    h->device.num_input_streams = 5;
     memcpy( h->device.streams, streams, h->device.num_input_streams * sizeof(obe_int_input_stream_t**) );
     h->device.device_type = INPUT_DEVICE_NETMAP;
     memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );

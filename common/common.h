@@ -30,6 +30,8 @@
 #include <upipe/ulist.h>
 #include <upipe/uref.h>
 #include <upipe/uref_pic.h>
+#include <upipe/umem.h>
+#include <upipe/umem_pool.h>
 #include <libavutil/pixfmt.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/common.h>
@@ -407,11 +409,11 @@ typedef struct
 
 typedef struct
 {
-    int hours;
-    int mins;
-    int seconds;
-    int frames;
-    int drop_frame;
+    uint8_t hours;
+    uint8_t mins;
+    uint8_t seconds;
+    uint8_t frames;
+    uint8_t drop_frame;
 } obe_timecode_t;
 
 typedef struct
@@ -435,6 +437,7 @@ typedef struct
 
     void (*release_data)( void* );
     void (*release_frame)( void* );
+    void *(*dup_frame)( void* );
 
     /* Video */
     /* Some devices output visible and VBI/VANC data together. In order
@@ -582,6 +585,8 @@ struct obe_t
     int obe_system;
     int filter_bit_depth;
 
+    struct umem_mgr *umem_mgr;
+
     /* OBE recovered clock */
     pthread_mutex_t obe_clock_mutex;
     pthread_cond_t  obe_clock_cv;
@@ -672,7 +677,9 @@ obe_coded_frame_t *new_coded_frame( int stream_id, int len );
 void destroy_coded_frame( obe_coded_frame_t *coded_frame );
 void obe_release_video_data( void *ptr );
 void obe_release_bufref( void *ptr );
+void *obe_dup_bufref( void *ptr );
 void obe_release_video_uref( void *ptr );
+void *obe_dup_video_uref( void *ptr );
 void obe_release_audio_data( void *ptr );
 void obe_release_frame( void *ptr );
 

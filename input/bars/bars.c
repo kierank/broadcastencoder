@@ -126,7 +126,7 @@ static void *autoconf_input( void *ptr )
     }
 
     init_device(&h->device);
-    h->device.num_input_streams = 3;
+    h->device.num_input_streams = 5;
     memcpy( h->device.streams, streams, h->device.num_input_streams * sizeof(obe_int_input_stream_t**) );
     h->device.device_type = INPUT_DEVICE_BARS;
     memcpy( &h->device.user_opts, user_opts, sizeof(*user_opts) );

@@ -12,7 +12,7 @@ SRCS = obe.c common/lavc.c \
        filters/video/video.c filters/video/cc.c filters/audio/audio.c \
        encoders/smoothing.c encoders/audio/lavc/lavc.c encoders/video/avc/x264.c \
        mux/smoothing.c mux/ts/ts.c \
-       output/ip/ip.c output/ip/udp.c output/ip/arq.c output/file/file.c
+       output/ip/ip.c output/ip/udp.c output/ip/arq.c output/ip/srt.c output/file/file.c
 
 SRCCXX =
 
@@ -42,7 +42,7 @@ X86SRC  += $(X86SRC1:%=input/sdi/x86/%)
 ifeq ($(ARCH),X86_64)
 ARCH_X86 = yes
 ASMSRC   = $(X86SRC:-32.asm=-64.asm)
-ASFLAGS += -DARCH_X86_64=1 -DHAVE_CPUNOP=1
+ASFLAGS += -DARCH_X86_64=1 -DHAVE_CPUNOP=0 -DHAVE_ALIGNED_STACK=1
 endif
 
 ifdef ARCH_X86

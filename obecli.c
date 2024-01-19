@@ -30,6 +30,9 @@
 #include "config.h"
 
 #include <signal.h>
+
+#include <gcrypt.h>
+
 #define _GNU_SOURCE
 
 #include <readline/readline.h>
@@ -81,7 +84,7 @@ static const char * const aac_encapsulations[]       = { "adts", "latm", 0 };
 static const char * const mp2_modes[]                = { "auto", "stereo", "joint-stereo", "dual-channel", 0 };
 static const char * const channel_maps[]             = { "", "mono", "stereo", "5.0", "5.1", 0 };
 static const char * const mono_channels[]            = { "left", "right", 0 };
-static const char * const output_modules[]           = { "udp", "rtp", "arq", "file", 0 };
+static const char * const output_modules[]           = { "udp", "rtp", "arq", "srt", "srt-rtp", "file", 0 };
 static const char * const addable_streams[]          = { "audio", "ttx", "scte35", 0};
 static const char * const filter_bit_depths[]        = { "10", "8", 0 };
 static const char * const fec_types[]                = { "cop3-block-aligned", "cop3-non-block-aligned", "ldpc-staircase", 0 };
@@ -90,7 +93,9 @@ static const char * const flip_types[]               = { "", "horizontal" };
 
 static const char * system_opts[] = { "system-type", "filter-bit-depth", NULL };
 static const char * input_opts[]  = { "netmap-uri", "card-idx", "video-format", "video-connection", "audio-connection",
-                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", "netmap-mode", "netmap-audio", "netmap-audio-channels", "ptp-nic", "bars-beep", "bars-beep-interval", NULL };
+                                      "bars-line1", "bars-line2", "bars-line3", "bars-line4", "picture-on-loss", "netmap-mode", "netmap-audio", "netmap-audio-channels", "ptp-nic", "bars-beep", "bars-beep-interval", "tc-source", NULL };
+static const char * const tc_sources[]               = { "none", "rp188", "vitc", 0};
+
 static const char * add_opts[] =    { "type" };
 /* TODO: split the stream options into general options, video options, ts options */
 static const char * stream_opts[] = { "action", "format",
@@ -116,7 +121,7 @@ static const char * stream_opts[] = { "action", "format",
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", "service-name", "provider-name", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
-static const char * output_opts[] = { "type", "target", "fec-columns", "fec-rows", "fec-type", "dup-delay", "arq-latency", NULL };
+static const char * output_opts[] = { "type", "target", "fec-columns", "fec-rows", "fec-type", "dup-delay", "arq-latency", "srt-password", "stream-id", NULL };
 static const char * update_stream_opts[]  = { "bitrate", "vbv-bufsize" };
 static const char * update_muxer_opts[]  = { "ts-muxrate" };
 
@@ -549,6 +554,7 @@ static int set_input( char *command, obecli_command_t *child )
         char *ptp_nic = obe_get_option( input_opts[13], opts );
         char *bars_beep = obe_get_option( input_opts[14], opts );
         char *bars_beep_interval = obe_get_option( input_opts[15], opts );
+        char *tc_source        = obe_get_option( input_opts[16], opts );
 
         FAIL_IF_ERROR( video_format && ( check_enum_value( video_format, input_video_formats ) < 0 ),
                        "Invalid video format\n" );
@@ -561,6 +567,9 @@ static int set_input( char *command, obecli_command_t *child )
 
         FAIL_IF_ERROR( picture_on_loss && ( check_enum_value( picture_on_loss, picture_on_losses ) < 0 ),
                        "Invalid picture on loss\n" );
+
+        FAIL_IF_ERROR( tc_source && ( check_enum_value( tc_source, tc_sources ) < 0 ),
+                       "Invalid timecode source \n" );
 
         if( netmap_uri )
             strncpy(cli.input.netmap_uri, netmap_uri, sizeof(cli.input.netmap_uri));
@@ -591,6 +600,8 @@ static int set_input( char *command, obecli_command_t *child )
             parse_enum_value( picture_on_loss, picture_on_losses, &cli.input.picture_on_loss );
         cli.input.bars_beep = obe_otob( bars_beep, cli.input.bars_beep );
         cli.input.bars_beep_interval = obe_otoi( bars_beep_interval, cli.input.bars_beep_interval );
+        if( tc_source )
+            parse_enum_value( tc_source, tc_sources, &cli.input.tc_source );
 
         obe_free_string_array( opts );
     }
@@ -1067,6 +1078,8 @@ static int set_output( char *command, obecli_command_t *child )
         char *fec_type = obe_get_option( output_opts[4], opts );
         char *dup_delay = obe_get_option( output_opts[5], opts );
         char *arq_latency = obe_get_option( output_opts[6], opts );
+        char *srt_password = obe_get_option( output_opts[7], opts );
+        char *stream_id = obe_get_option( output_opts[8], opts );
 
         FAIL_IF_ERROR( type && ( check_enum_value( type, output_modules ) < 0 ),
                       "Invalid Output Type\n" );
@@ -1095,6 +1108,16 @@ static int set_output( char *command, obecli_command_t *child )
             cli.output.outputs[output_id].dup_delay = obe_otoi( dup_delay, cli.output.outputs[output_id].dup_delay );
         if( arq_latency )
             cli.output.outputs[output_id].arq_latency = obe_otoi( arq_latency, cli.output.outputs[output_id].arq_latency );
+        if( srt_password ) {
+             if( cli.output.outputs[output_id].srt_password )
+                 free( cli.output.outputs[output_id].srt_password );
+            cli.output.outputs[output_id].srt_password = strdup( srt_password );
+        }
+        if( stream_id ) {
+             if( cli.output.outputs[output_id].stream_id )
+                 free( cli.output.outputs[output_id].stream_id );
+            cli.output.outputs[output_id].stream_id = strdup( stream_id );
+        }
         obe_free_string_array( opts );
     }
 
@@ -1546,7 +1569,8 @@ static int start_encode( char *command, obecli_command_t *child )
     {
         if( ( cli.output.outputs[i].type == OUTPUT_UDP ||
                     cli.output.outputs[i].type == OUTPUT_RTP ||
-                    cli.output.outputs[i].type == OUTPUT_ARQ) &&
+                    cli.output.outputs[i].type == OUTPUT_ARQ ||
+                    cli.output.outputs[i].type == OUTPUT_SRT) &&
              !cli.output.outputs[i].target )
         {
             fprintf( stderr, "No output target chosen. Output-ID %d\n", i );
@@ -1716,6 +1740,9 @@ int main( int argc, char **argv )
     char *home_dir = getenv( "HOME" );
     char *history_filename;
     char *prompt = "obecli> ";
+
+    gcry_check_version(NULL);
+    gcry_control(GCRYCTL_INITIALIZATION_FINISHED, 0);
 
     history_filename = malloc( strlen( home_dir ) + 16 + 1 );
     if( !history_filename )

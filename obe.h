@@ -121,6 +121,13 @@ enum picture_on_loss_e
 
 /* video_format should be set to -1 for auto detection */
 
+enum tc_source_e
+{
+    TC_SOURCE_NONE,
+    TC_SOURCE_RP188,
+    TC_SOURCE_VITC,
+};
+
 typedef struct
 {
     int input_type;
@@ -146,6 +153,7 @@ typedef struct
 
     int picture_on_loss;
     int downscale;
+    int tc_source;
 } obe_input_t;
 
 /**** Stream Formats ****/
@@ -561,6 +569,8 @@ enum output_e
     OUTPUT_UDP, /* MPEG-TS in UDP */
     OUTPUT_RTP, /* MPEG-TS in RTP in UDP */
     OUTPUT_ARQ, /* MPEG-TS in RTP in UDP, with retransmission */
+    OUTPUT_SRT, /* MPEG-TS in UDP, with retransmission */
+    OUTPUT_SRT_RTP, /* MPEG-TS in RTP in UDP, with retransmission */
     OUTPUT_FILE, /* File output */
 //    OUTPUT_LINSYS_ASI,
 //    OUTPUT_LINSYS_SMPTE_310M,
@@ -591,6 +601,10 @@ typedef struct
     int dup_delay;
 
     unsigned arq_latency;
+
+    char *srt_password;
+
+    char *stream_id;
 } obe_output_dest_t;
 
 typedef struct
