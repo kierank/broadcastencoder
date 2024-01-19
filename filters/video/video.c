@@ -127,7 +127,6 @@ typedef struct
     JSAMPIMAGE row_pointers;
     jmp_buf setjmp_buffer;
 
-
     struct SwsContext *sws_context;
     int interlaced;
 
@@ -1778,7 +1777,6 @@ end:
         if( vfilt->sockfd )
             close( vfilt->sockfd );
 
-<<<<<<< HEAD
         if( vfilt->jpeg_frame )
             av_frame_free( &vfilt->jpeg_frame );
 
@@ -1791,8 +1789,6 @@ end:
         if( vfilt->overlay_frame.release_data )
             vfilt->overlay_frame.release_data( &vfilt->overlay_frame );
 
-=======
->>>>>>> staging-upipe
         free( vfilt );
     }
 
