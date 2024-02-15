@@ -540,6 +540,11 @@ static void *open_output( void *ptr )
     status.queue = &queue;
 
     udp_populate_opts( &udp_opts, output_dest->target );
+    if (output_dest->type == OUTPUT_SRT ||
+            output_dest->type == OUTPUT_SRT_RTP) {
+        if (output_dest->srt_type == 1)
+            udp_opts.bind_iface = 0; // triggers bind()
+    }
 
     if( output_dest->type == OUTPUT_RTP ||
             output_dest->type == OUTPUT_ARQ ||
