@@ -136,13 +136,6 @@ static void addr_to_str(const struct sockaddr *s, char uri[INET6_ADDRSTRLEN+6])
 
 static int start(struct srt_ctx *ctx)
 {
-    bool listener = false;
-    if (ctx->dest_addr.ss_family == AF_INET) {
-        struct sockaddr_in *in = (struct sockaddr_in *)&ctx->dest_addr;
-        if (in->sin_addr.s_addr == INADDR_ANY)
-            listener = true;
-    }
-
     unsigned n = ++ctx->n;
 
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
@@ -188,7 +181,7 @@ static int start(struct srt_ctx *ctx)
     struct upipe_mgr *upipe_srt_handshake_mgr = upipe_srt_handshake_mgr_alloc(seed);
     struct upipe *upipe_srt_handshake = upipe_void_alloc_output(ctx->upipe_udpsrc_srt, upipe_srt_handshake_mgr,
             uprobe_pfx_alloc_va(uprobe_use(ctx->logger), loglevel, "srt handshake %d", n));
-    upipe_set_option(upipe_srt_handshake, "listener", listener ? "1" : "0");
+    upipe_set_option(upipe_srt_handshake, "listener", ctx->listen ? "1" : "0");
     if (ctx->password)
         upipe_srt_handshake_set_password(upipe_srt_handshake, ctx->password, 128/8 /* fixme */);
 
@@ -219,7 +212,7 @@ static int start(struct srt_ctx *ctx)
         upipe_err(ctx->upipe_udpsink, "Could not set flags");;
 
     ubase_assert(upipe_udpsrc_set_fd(ctx->upipe_udpsrc_srt, dup(ctx->fd)));
-    if (!listener)
+    if (!ctx->listen)
         ubase_assert(upipe_udpsink_set_peer(ctx->upipe_udpsink,
                     (const struct sockaddr*)&ctx->dest_addr, ctx->dest_addr_len));
 
@@ -439,7 +432,7 @@ static void *srt_thread(void *arg)
     return NULL;
 }
 
-struct srt_ctx *open_srt(obe_udp_ctx *p_udp, unsigned latency, char *password, char *stream_id, struct uref_ctx *uref_ctx)
+struct srt_ctx *open_srt(obe_udp_ctx *p_udp, unsigned latency, char *password, char *stream_id, struct uref_ctx *uref_ctx, bool listen)
 {
     struct srt_ctx *ctx = calloc(1, sizeof(*ctx));
     if (!ctx)
@@ -455,6 +448,7 @@ struct srt_ctx *open_srt(obe_udp_ctx *p_udp, unsigned latency, char *password, c
     ctx->dest_addr_len = p_udp->dest_addr_len;
     ctx->latency = latency;
     ctx->end = false;
+    ctx->listen = listen;
     ctx->queue = malloc(sizeof(*ctx->queue));
     if (!ctx->queue) {
         free(ctx);

@@ -1145,6 +1145,7 @@ int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts )
         }
         h->outputs[i]->output_dest.arq_latency = output_opts->outputs[i].arq_latency;
         h->outputs[i]->output_dest.dup_delay = output_opts->outputs[i].dup_delay;
+        h->outputs[i]->output_dest.srt_type = output_opts->outputs[i].srt_type;
         h->outputs[i]->output_dest.fec_type = output_opts->outputs[i].fec_type;
         h->outputs[i]->output_dest.fec_columns = output_opts->outputs[i].fec_columns;
         h->outputs[i]->output_dest.fec_rows = output_opts->outputs[i].fec_rows;
