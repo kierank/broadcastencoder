@@ -156,14 +156,6 @@ void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri )
 
     if( p )
     {
-        if( av_find_info_tag( buf, sizeof(buf), "reuse", p ) )
-        {
-            const char *endptr = NULL;
-            udp_opts->reuse_socket = strtol( buf, (char **)&endptr, 10 );
-            /* assume if no digits were found it is a request to enable it */
-            if( buf == endptr )
-                udp_opts->reuse_socket = 1;
-        }
         if( av_find_info_tag( buf, sizeof(buf), "ttl", p ) )
             udp_opts->ttl = strtol( buf, NULL, 10 );
 
@@ -205,8 +197,8 @@ int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, int fd )
         if( udp_fd < 0 )
             goto fail;
 
-        udp_opts->reuse_socket = 1;
-        if( setsockopt( udp_fd, SOL_SOCKET, SO_REUSEADDR, &(udp_opts->reuse_socket), sizeof(udp_opts->reuse_socket) ) != 0)
+        int reuse_socket = 1;
+        if( setsockopt( udp_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_socket, sizeof(reuse_socket) ) != 0)
             goto fail;
 
         if( udp_opts->bind_iface )

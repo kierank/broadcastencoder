@@ -37,7 +37,6 @@ typedef struct obe_udp_opts_t
 {
     char hostname[1024];
     int  port;
-    int  reuse_socket;
     int  ttl;
     int  tos;
     int  bind_iface;

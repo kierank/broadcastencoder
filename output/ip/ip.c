@@ -148,7 +148,6 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         return -1;
     }
 
-    udp_opts->reuse_socket = 1;
     if( udp_open( &p_rtp->udp_handle, udp_opts, -1 ) < 0 )
     {
         fprintf( stderr, "[rtp] Could not create udp output \n" );
