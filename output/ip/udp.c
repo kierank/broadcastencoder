@@ -36,10 +36,8 @@
 
 static int udp_set_multicast_opts( int sockfd, obe_udp_ctx *s, int ttl )
 {
-    struct sockaddr *addr = (struct sockaddr *)&s->dest_addr;
-
-    if( addr->sa_family == AF_INET )
-    {
+    switch (s->dest_addr.ss_family) {
+    case AF_INET:
 #ifdef IP_MULTICAST_TTL
         if( setsockopt( sockfd, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl) ) < 0 )
         {
@@ -47,11 +45,10 @@ static int udp_set_multicast_opts( int sockfd, obe_udp_ctx *s, int ttl )
             return -1;
         }
 #endif
-    }
+        break;
 
 #ifdef IPPROTO_IPV6
-    if( addr->sa_family == AF_INET6 )
-    {
+    case AF_INET6:
 #ifdef IPV6_MULTICAST_HOPS
         if( setsockopt( sockfd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, &ttl, sizeof(ttl) ) < 0 )
         {
@@ -59,70 +56,62 @@ static int udp_set_multicast_opts( int sockfd, obe_udp_ctx *s, int ttl )
             return -1;
         }
 #endif
-    }
+    break;
 #endif
+    default:
+        break;
+    }
+
     return 0;
 }
 
 static int udp_set_tos_opts( int sockfd, obe_udp_ctx *s, int tos )
 {
-    struct sockaddr *addr = (struct sockaddr *)&s->dest_addr;
-    if (!tos)
-        return 0;
-
-    if( addr->sa_family == AF_INET )
-    {
+    switch (s->dest_addr.ss_family) {
+    case AF_INET:
         if( setsockopt( sockfd, IPPROTO_IP, IP_TOS, &tos, sizeof(tos) ) < 0 )
         {
             fprintf( stderr, "[udp] Could not setup IPv4 TOS\n" );
             return -1;
         }
+        break;
     }
 
     return 0;
 }
 
-static struct addrinfo* udp_resolve_host( const char *hostname, int port, int type, int family, int flags )
+static int udp_resolve_host(obe_udp_ctx *s, obe_udp_opts_t *udp_opts)
 {
     struct addrinfo hints, *res = 0;
-    int error;
     char sport[16];
     const char *node = 0, *service = "0";
 
-    if( port > 0 )
-    {
-        snprintf( sport, sizeof(sport), "%d", port );
+    const char *hostname = udp_opts->hostname;
+    const int port = udp_opts->port;
+
+    if (port > 0) {
+        snprintf(sport, sizeof(sport), "%d", port);
         service = sport;
     }
-    if( (hostname) && (hostname[0] != '\0') && (hostname[0] != '?') )
+    if (hostname && *hostname && *hostname != '?')
         node = hostname;
 
-    memset( &hints, 0, sizeof(hints) );
-    hints.ai_socktype = type;
-    hints.ai_family   = family;
-    hints.ai_flags    = flags;
-    if( (error = getaddrinfo( node, service, &hints, &res )) )
-    {
-        res = NULL;
-        fprintf( stderr, "[udp] error: %s \n", gai_strerror( error ) );
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_family   = AF_UNSPEC;
+
+    int error = getaddrinfo(node, service, &hints, &res);
+    if (error) {
+        fprintf(stderr, "[udp] error: %s \n", gai_strerror(error));
+        return 1;
     }
 
-    return res;
-}
+    s->dest_addr_len = res->ai_addrlen;
+    memcpy(&s->dest_addr, res->ai_addr, s->dest_addr_len );
 
-static int udp_set_url( struct sockaddr_storage *addr, const char *hostname, int port )
-{
-    struct addrinfo *res0;
-    int addr_len;
+    freeaddrinfo(res);
 
-    res0 = udp_resolve_host( hostname, port, SOCK_DGRAM, AF_UNSPEC, 0 );
-    if( res0 == 0 )
-        return -1;
-    memcpy( addr, res0->ai_addr, res0->ai_addrlen );
-    addr_len = res0->ai_addrlen;
-    freeaddrinfo( res0 );
-
-    return addr_len;
+    return 0;
 }
 
 static inline int is_multicast_address( struct sockaddr *addr )
@@ -173,66 +162,58 @@ void udp_populate_opts( obe_udp_opts_t *udp_opts, char *uri )
     av_url_split( NULL, 0, NULL, 0, udp_opts->hostname, sizeof(udp_opts->hostname), &udp_opts->port, NULL, 0, uri );
 }
 
-int udp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, int fd )
+hnd_t *udp_open(obe_udp_opts_t *udp_opts, int fd)
 {
     int udp_fd = -1;
 
     obe_udp_ctx *s = calloc( 1, sizeof(*s) );
-    *p_handle = NULL;
-    if( !s )
-        return -1;
+    if (!s)
+        return NULL;
 
-    s->dest_addr_len = udp_set_url( &s->dest_addr, udp_opts->hostname,
-            udp_opts->port );
-    if( s->dest_addr_len < 0 )
+    /* sets dst_addr */
+    if (udp_resolve_host(s, udp_opts))
         goto fail;
 
-    if (fd == -1)
-    {
-        int family = AF_INET;
-        if (s->dest_addr.ss_family)
-            family = s->dest_addr.ss_family;
-
-        udp_fd = socket( family, SOCK_DGRAM, 0 );
-        if( udp_fd < 0 )
-            goto fail;
-
-        int reuse_socket = 1;
-        if( setsockopt( udp_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_socket, sizeof(reuse_socket) ) != 0)
-            goto fail;
-
-        if( udp_opts->bind_iface ) {
-            if( setsockopt( udp_fd, SOL_SOCKET, SO_BINDTODEVICE, udp_opts->iface, strlen(udp_opts->iface ) ) )
-                goto fail;
-        } else {
-            if( bind( udp_fd, (struct sockaddr *)&s->dest_addr, s->dest_addr_len ) < 0 )
-                goto fail;
-        }
-
-        /* set output multicast ttl */
-
-        bool is_multicast = is_multicast_address( (struct sockaddr*) &s->dest_addr );
-        if( is_multicast && udp_set_multicast_opts( udp_fd, s, udp_opts->ttl) < 0 )
-            goto fail;
-
-        /* set tos/diffserv */
-        if( udp_set_tos_opts( udp_fd, s, udp_opts->tos) < 0 )
-            goto fail;
-    } else
-    {
-        udp_fd = dup(fd);
+    if (fd >= 0) {
+        /* reuse same socket (FEC) */
+        s->udp_fd = dup(fd);
+        return (hnd_t*)s;
     }
 
+    udp_fd = socket(s->dest_addr.ss_family , SOCK_DGRAM, 0);
+    if( udp_fd < 0 )
+        goto fail;
+
+    int reuse_socket = 1;
+    if( setsockopt( udp_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_socket, sizeof(reuse_socket) ) != 0)
+        goto fail;
+
+    if( udp_opts->bind_iface ) {
+        if( setsockopt( udp_fd, SOL_SOCKET, SO_BINDTODEVICE, udp_opts->iface, strlen(udp_opts->iface ) ) )
+            goto fail;
+    } else {
+        if( bind( udp_fd, (struct sockaddr *)&s->dest_addr, s->dest_addr_len ) < 0 )
+            goto fail;
+    }
+
+    /* set output multicast ttl */
+    bool is_multicast = is_multicast_address( (struct sockaddr*) &s->dest_addr );
+    if( is_multicast && udp_set_multicast_opts( udp_fd, s, udp_opts->ttl) < 0 )
+        goto fail;
+
+    /* set tos/diffserv */
+    if( udp_opts->tos && udp_set_tos_opts( udp_fd, s, udp_opts->tos) < 0 )
+        goto fail;
+
     s->udp_fd = udp_fd;
-    *p_handle = s;
-    return 0;
+    return (hnd_t*)s;
 
  fail:
     if( udp_fd >= 0 )
         close( udp_fd );
 
-    free( s );
-    return -1;
+    free(s);
+    return NULL;
 }
 
 int udp_write( hnd_t handle, uint8_t *buf, int size )

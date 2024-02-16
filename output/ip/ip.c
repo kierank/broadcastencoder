@@ -148,7 +148,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         return -1;
     }
 
-    if( udp_open( &p_rtp->udp_handle, udp_opts, -1 ) < 0 )
+    if( (p_rtp->udp_handle = udp_open(udp_opts, -1)) < 0 )
     {
         fprintf( stderr, "[rtp] Could not create udp output \n" );
         goto error;
@@ -182,14 +182,14 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         }
 
         udp_opts->port += 2;
-        if( udp_open( &p_rtp->column_handle, udp_opts, fd ) < 0 )
+        if( (p_rtp->column_handle = udp_open(udp_opts, fd)) < 0 )
         {
             fprintf( stderr, "[rtp] Could not create FEC column output \n" );
             goto error;
         }
 
         udp_opts->port += 2;
-        if( udp_open( &p_rtp->row_handle, udp_opts, fd ) < 0 )
+        if( (p_rtp->row_handle = udp_open(udp_opts, fd)) < 0 )
         {
             fprintf( stderr, "[rtp] Could not create FEC row output \n" );
             goto error;
@@ -200,7 +200,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         p_rtp->ssrc &= ~1;
 
         udp_opts->port = rtcp_port;
-        if( udp_open( &p_rtp->rtcp_handle, udp_opts, -1) < 0 )
+        if( (p_rtp->rtcp_handle = udp_open(udp_opts, -1)) < 0 )
         {
             fprintf( stderr, "[rtp] Could not create RTCP output \n" );
             goto error;
@@ -578,7 +578,7 @@ static void *open_output( void *ptr )
     }
     else
     {
-        if( udp_open( &ip_handle, &udp_opts, -1 ) < 0 )
+        if( (ip_handle = udp_open(&udp_opts, -1)) < 0 )
         {
             fprintf( stderr, "[udp] Could not create udp output" );
             return NULL;
