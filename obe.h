@@ -394,6 +394,14 @@ enum video_flip_e
     VIDEO_FLIP_HORIZONTAL,
 };
 
+/**** Video Flip ****/
+enum video_deinterlace_mode_e
+{
+    VIDEO_DEINTERLACE_NONE,
+    VIDEO_DEINTERLACE_MATCH,
+    VIDEO_DEINTERLACE_DOUBLE,
+};
+
 /**** AC-3 Encoding ****/
 /* Options:
  *
@@ -472,6 +480,7 @@ typedef struct
     obe_frame_anc_opts_t video_anc;
     int downscale;
     int flip;
+    int deinterlace_mode;
 
     /* AVC */
     x264_param_t avc_param;

@@ -67,8 +67,7 @@ static inline uint32_t rl32(const void *src)
 
 #define READ_PIXELS_10(a, b, c) \
     do { \
-        uint32_t val = rl32(src); \
-        src += 4; \
+        uint32_t val = rl32(src++); \
         *(a)++ = (val)       & 1023; \
         *(b)++ = (val >> 10) & 1023; \
         *(c)++ = (val >> 20) & 1023; \
@@ -729,42 +728,6 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
         {
             raw_frame->alloc_img.width = width;
             raw_frame->alloc_img.height = height;
-            if( h->filter_bit_depth == OBE_BIT_DEPTH_8 )
-            {
-                raw_frame->alloc_img.csp = AV_PIX_FMT_UYVY422;
-                int size = av_image_alloc( raw_frame->alloc_img.plane, raw_frame->alloc_img.stride,
-                                           raw_frame->alloc_img.width, raw_frame->alloc_img.height,
-                                           (AVPixelFormat)raw_frame->alloc_img.csp, 32 );
-                if( size < 0 )
-                {
-                    syslog( LOG_ERR, "Malloc failed\n" );
-                    return -1;
-                }
-
-                uint8_t *dst = raw_frame->alloc_img.plane[0];
-                uint8_t *uyvy_ptr = (uint8_t*)frame_bytes;
-                for( int i = 0; i < raw_frame->alloc_img.height; i++ )
-                {
-                    memcpy( dst, uyvy_ptr, raw_frame->alloc_img.width *2 );
-                    uyvy_ptr += stride;
-                    dst += raw_frame->alloc_img.stride[0];
-                }
-
-                raw_frame->buf_ref[0] = av_buffer_create( raw_frame->alloc_img.plane[0],
-                                                          size, av_buffer_default_free,
-                                                          NULL, 0 );
-                if( !raw_frame->buf_ref[0] )
-                {
-                    syslog( LOG_ERR, "Malloc failed\n" );
-                    return -1;
-                }
-                raw_frame->buf_ref[1] = NULL;
-
-                raw_frame->release_data = obe_release_bufref;
-                raw_frame->release_frame = obe_release_frame;
-                raw_frame->dup_frame = obe_dup_bufref;
-            }
-            else
             {
                 const char *output_chroma_map[3+1];
                 output_chroma_map[0] = "y10l";
@@ -813,22 +776,40 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
                     v += w >> 1;
                     src += (w * 2) / 3;
 
-                    if( w < width - 1 )
+                    if( w++ < width )
                     {
                         READ_PIXELS_10(u, y, v);
-                        uint32_t val = rl32(src);
-                        src++;
-                        *y++ = val & 1023;
 
-                        if( w < width - 3 )
+                        if( w++ < width )
                         {
-                            *u++ = (val >> 10) & 1023;
-                            *y++ = (val >> 20) & 1023;
+                            uint32_t val = rl32(src++);
+                            *y++ = val & 1023;
 
-                            val = rl32(src);
-                            src++;
-                            *v++ = val & 1023;
-                            *y++ = (val >> 10) & 1023;
+                            if( w++ < width )
+                            {
+                                *u++ = (val >> 10) & 1023;
+                                *y++ = (val >> 20) & 1023;
+                                val  = rl32(src++);
+                                *v++ = val & 1023;
+
+                                if( w++ < width )
+                                {
+                                    *y++ = (val >> 10) & 1023;
+
+                                    if( w++ < width )
+                                    {
+                                        *u++ = (val >> 20) & 1023;
+                                        val  = rl32(src++);
+                                        *y++ = val & 1023;
+                                        *v++ = (val >> 10) & 1023;
+
+                                        if( w++ < width )
+                                        {
+                                            *y++ = (val >> 20) & 1023;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -1035,7 +1016,7 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived( IDeckLinkVideoInputFram
 
             BMDPixelFormat pix_fmt;
             decklink_ctx->p_input->PauseStreams();
-            pix_fmt = h->filter_bit_depth == OBE_BIT_DEPTH_10 ? bmdFormat10BitYUV : bmdFormat8BitYUV;
+            pix_fmt = bmdFormat10BitYUV;
             decklink_ctx->p_input->EnableVideoInput( decklink_video_format_tab[i].bmd_name, pix_fmt, bmdVideoInputEnableFormatDetection );
             decklink_ctx->p_input->FlushStreams();
             decklink_ctx->p_input->StartStreams();
@@ -1348,7 +1329,7 @@ static int open_card( decklink_opts_t *decklink_opts )
         goto finish;
     }
 
-    pix_fmt = h->filter_bit_depth == OBE_BIT_DEPTH_10 ? bmdFormat10BitYUV : bmdFormat8BitYUV;
+    pix_fmt = bmdFormat10BitYUV;
     result = decklink_ctx->p_input->EnableVideoInput( wanted_mode_id, pix_fmt, flags );
     if( result != S_OK )
     {
