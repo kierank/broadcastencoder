@@ -1464,28 +1464,33 @@ static int setup_scte104_socket( obe_vid_filter_ctx_t *vfilt, obe_output_stream_
     return 0;
 }
 
-static void send_scte104_reply(obe_vid_filter_ctx_t *vfilt, uint16_t type)
+static void send_scte104_reply(obe_vid_filter_ctx_t *vfilt, uint8_t *scte104, uint16_t type, uint16_t result)
 {
     uint8_t msg[500];
+    uint16_t len = SCTE104S_HEADER_SIZE;
+    uint8_t as_index = scte104s_get_as_index( scte104 );
+    uint8_t *data;
+    uint16_t pi_size;
 
-    int len = SCTE104M_HEADER_SIZE + SCTE104T_HEADER_SIZE + 1 + SCTE104O_HEADER_SIZE;
+    scte104_set_opid(msg, type);
+    scte104_set_size(msg, len);
+    scte104s_set_result(msg, result);
+    scte104s_set_result_extension(msg, 0xffff);
+    scte104s_set_protocol(msg, 0);
+    scte104s_set_as_index(msg, as_index);
+    scte104s_set_message_num(msg, vfilt->msg_number++);
+    scte104s_set_dpi_pid_index(msg, 0);
 
-    scte104_set_opid(msg, SCTE104_OPID_MULTIPLE);
-    scte104o_set_data_length(msg, len);
-    scte104m_set_protocol(msg, 0);
-    scte104m_set_as_index(msg, 0);
-    scte104m_set_message_number(msg, vfilt->msg_number++);
-    scte104m_set_dpi_pid_index(msg, 0);
-    scte104m_set_scte35_protocol(msg, 0);
-
-    uint8_t *ts = scte104m_get_timestamp(msg);
-    scte104t_set_type(ts, SCTE104T_TYPE_NONE);
-
-    scte104m_set_num_ops(msg, 1);
-
-    uint8_t *op = ts + 2;
-    scte104o_set_opid(op, type);
-    scte104o_set_data_length(op, 0);
+    data = scte104s_get_data(msg, &pi_size);
+    if( type == SCTE104_OPID_INJECT_RESPONSE )
+    {
+        scte104ird_set_message_number(data, scte104s_get_message_number(scte104));
+    }
+    else if( type == SCTE104_OPID_INJECT_COMPLETE_RESPONSE )
+    {
+        scte104icrd_set_message_number(data, scte104s_get_message_number(scte104));
+        scte104icrd_set_cue_message_count(data, scte104m_get_num_ops(scte104));
+    }
 
     if( send(vfilt->connfd, msg, len, 0) < 0)
         fprintf( stderr, "Failed to send scte 104 reply \n" );
@@ -1513,29 +1518,42 @@ static int handle_scte104_message( obe_t *h, obe_vid_filter_ctx_t *vfilt, int64_
     if( len >= 14 )
     {
         /* Check it's a message we should decode */
-        if( scte104m_validate( scte104, len ) && scte104_get_opid( scte104 ) == SCTE104_OPID_MULTIPLE )
+        if( scte104_get_opid( scte104 ) != SCTE104_OPID_MULTIPLE && scte104s_validate( scte104, len ) )
         {
-            int num_ops = scte104m_get_num_ops( scte104 );
-            for( int i = 0; i < num_ops; i++ )
+            if( scte104_get_opid( scte104 ) == SCTE104_OPID_INIT_REQUEST_DATA ||
+                scte104_get_opid( scte104 ) == SCTE104_OPID_ALIVE_REQUEST_DATA )
             {
-                uint8_t *op = scte104m_get_op( scte104, i );
-                if( scte104o_get_opid( op ) == SCTE104_OPID_INIT_REQUEST_DATA ||
-                    scte104o_get_opid( op ) == SCTE104_OPID_ALIVE_REQUEST_DATA )
+                send_scte104_reply( vfilt, scte104, scte104_get_opid( scte104 ) + 1, SCTE104_RESULT_SUCCESSFUL );
+            }
+        }
+        else if( scte104_get_opid( scte104 ) == SCTE104_OPID_MULTIPLE )
+        {
+            if( scte104m_validate( scte104, len ) )
+            {
+                int num_ops = scte104m_get_num_ops( scte104 );
+                for( int i = 0; i < num_ops; i++ )
                 {
-                    send_scte104_reply( vfilt, scte104o_get_opid( op ) + 1 );
-                }
-                else if( scte104o_get_opid( op ) == SCTE104_OPID_SPLICE_NULL ||
-                         scte104o_get_opid( op ) == SCTE104_OPID_SPLICE ||
-                         scte104o_get_opid( op ) == SCTE104_OPID_TIME_SIGNAL ||
-                         scte104o_get_opid( op ) == SCTE104_OPID_INSERT_SEGMENTATION_DESCRIPTOR )
-                {
-                    decode_scte104( &non_display_data, scte104, len );
-                    if( non_display_data.scte35_frame )
+                    uint8_t *op = scte104m_get_op( scte104, i );
+                    if( scte104o_get_opid( op ) == SCTE104_OPID_SPLICE_NULL ||
+                        scte104o_get_opid( op ) == SCTE104_OPID_SPLICE ||
+                        scte104o_get_opid( op ) == SCTE104_OPID_TIME_SIGNAL ||
+                        scte104o_get_opid( op ) == SCTE104_OPID_INSERT_SEGMENTATION_DESCRIPTOR )
                     {
-                        if( send_scte35( h, &non_display_data, pts, vfilt->duration) < 0 )
-                            fprintf( stderr, "couldn't send scte35 data \n");
+                        decode_scte104( &non_display_data, scte104, len );
+                        if( non_display_data.scte35_frame )
+                        {
+                            if( send_scte35( h, &non_display_data, pts, vfilt->duration) < 0 )
+                                fprintf( stderr, "couldn't send scte35 data \n");
+                        }
                     }
                 }
+
+                send_scte104_reply( vfilt, scte104, SCTE104_OPID_INJECT_RESPONSE, SCTE104_RESULT_SUCCESSFUL );
+                send_scte104_reply( vfilt, scte104, SCTE104_OPID_INJECT_COMPLETE_RESPONSE, SCTE104_RESULT_SUCCESSFUL );
+            }
+            else
+            {
+                send_scte104_reply( vfilt, scte104, SCTE104_OPID_INJECT_RESPONSE, SCTE104_RESULT_INVALID_MESSAGE_SYNTAX );
             }
         }
     }
