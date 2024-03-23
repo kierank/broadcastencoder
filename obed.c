@@ -764,7 +764,7 @@ static void obed__encoder_config( Obed__EncoderCommunicate_Service *service,
 
                 if( output_opts_in->has_srt_type )
                 {
-                    // srt_type FIXME
+                    output_dst->srt_type = output_opts_in->srt_type;
                 }
 
                 if( output_opts_in->srt_stream_id && strlen(output_opts_in->srt_stream_id) > 0 ) 
