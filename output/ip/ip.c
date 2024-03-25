@@ -111,7 +111,8 @@ static void rtp_close( hnd_t handle )
     else if (p_rtp->srt)
         close_srt(p_rtp->srt_ctx);
 
-    udp_close( p_rtp->udp_handle );
+    if (p_rtp->udp_handle)
+        udp_close( p_rtp->udp_handle );
 
     if( p_rtp->dup_fifo )
     {
@@ -147,10 +148,7 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         return -1;
     }
 
-    if( !udp_opts->local_port )
-        udp_opts->local_port = udp_opts->port;
-    udp_opts->reuse_socket = 1;
-    if( udp_open( &p_rtp->udp_handle, udp_opts, -1 ) < 0 )
+    if( (p_rtp->udp_handle = udp_open(udp_opts, -1)) < 0 )
     {
         fprintf( stderr, "[rtp] Could not create udp output \n" );
         goto error;
@@ -184,14 +182,14 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
         }
 
         udp_opts->port += 2;
-        if( udp_open( &p_rtp->column_handle, udp_opts, fd ) < 0 )
+        if( (p_rtp->column_handle = udp_open(udp_opts, fd)) < 0 )
         {
             fprintf( stderr, "[rtp] Could not create FEC column output \n" );
             goto error;
         }
 
         udp_opts->port += 2;
-        if( udp_open( &p_rtp->row_handle, udp_opts, fd ) < 0 )
+        if( (p_rtp->row_handle = udp_open(udp_opts, fd)) < 0 )
         {
             fprintf( stderr, "[rtp] Could not create FEC row output \n" );
             goto error;
@@ -201,8 +199,8 @@ static int rtp_open( hnd_t *p_handle, obe_udp_opts_t *udp_opts, obe_output_dest_
     if (p_rtp->arq) {
         p_rtp->ssrc &= ~1;
 
-        udp_opts->local_port = udp_opts->port = rtcp_port;
-        if( udp_open( &p_rtp->rtcp_handle, udp_opts, -1) < 0 )
+        udp_opts->port = rtcp_port;
+        if( (p_rtp->rtcp_handle = udp_open(udp_opts, -1)) < 0 )
         {
             fprintf( stderr, "[rtp] Could not create RTCP output \n" );
             goto error;
@@ -540,6 +538,11 @@ static void *open_output( void *ptr )
     status.queue = &queue;
 
     udp_populate_opts( &udp_opts, output_dest->target );
+    if (output_dest->type == OUTPUT_SRT ||
+            output_dest->type == OUTPUT_SRT_RTP) {
+        if (output_dest->srt_type == 1)
+            udp_opts.bind_iface = 0; // triggers bind()
+    }
 
     if( output_dest->type == OUTPUT_RTP ||
             output_dest->type == OUTPUT_ARQ ||
@@ -563,7 +566,7 @@ static void *open_output( void *ptr )
             output->handle = (hnd_t)p_rtp;
         } else if (p_rtp->srt) {
             obe_udp_ctx *p_udp = p_rtp->udp_handle;
-            p_rtp->srt_ctx = open_srt(p_udp, p_rtp->latency, output_dest->srt_password, output_dest->stream_id, &p_rtp->uref_ctx);
+            p_rtp->srt_ctx = open_srt(p_udp, p_rtp->latency, output_dest->srt_password, output_dest->stream_id, &p_rtp->uref_ctx, output_dest->srt_type == 1);
             if (!p_rtp->srt_ctx) {
                 rtp_close(p_rtp);
                 fprintf( stderr, "[rtp] Could not create srt output" );
@@ -575,7 +578,7 @@ static void *open_output( void *ptr )
     }
     else
     {
-        if( udp_open( &ip_handle, &udp_opts, -1 ) < 0 )
+        if( (ip_handle = udp_open(&udp_opts, -1)) < 0 )
         {
             fprintf( stderr, "[udp] Could not create udp output" );
             return NULL;

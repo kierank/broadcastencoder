@@ -611,6 +611,8 @@ typedef struct
     char *srt_password;
 
     char *stream_id;
+
+    int srt_type;
 } obe_output_dest_t;
 
 typedef struct
