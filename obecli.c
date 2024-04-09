@@ -121,7 +121,7 @@ static const char * stream_opts[] = { "action", "format",
 static const char * muxer_opts[]  = { "ts-type", "cbr", "ts-muxrate", "ts-id", "program-num", "pmt-pid", "pcr-pid",
                                       "pcr-period", "pat-period", "service-name", "provider-name", NULL };
 static const char * ts_types[]    = { "generic", "dvb", "cablelabs", "atsc", "isdb", NULL };
-static const char * output_opts[] = { "type", "target", "fec-columns", "fec-rows", "fec-type", "dup-delay", "arq-latency", "srt-password", "stream-id", NULL };
+static const char * output_opts[] = { "type", "target", "fec-columns", "fec-rows", "fec-type", "dup-delay", "arq-latency", "srt-password", "stream-id", "srt-type", NULL };
 static const char * update_stream_opts[]  = { "bitrate", "vbv-bufsize" };
 static const char * update_muxer_opts[]  = { "ts-muxrate" };
 
@@ -1080,6 +1080,7 @@ static int set_output( char *command, obecli_command_t *child )
         char *arq_latency = obe_get_option( output_opts[6], opts );
         char *srt_password = obe_get_option( output_opts[7], opts );
         char *stream_id = obe_get_option( output_opts[8], opts );
+        char *srt_type = obe_get_option( output_opts[9], opts );
 
         FAIL_IF_ERROR( type && ( check_enum_value( type, output_modules ) < 0 ),
                       "Invalid Output Type\n" );
@@ -1117,6 +1118,9 @@ static int set_output( char *command, obecli_command_t *child )
              if( cli.output.outputs[output_id].stream_id )
                  free( cli.output.outputs[output_id].stream_id );
             cli.output.outputs[output_id].stream_id = strdup( stream_id );
+        }
+        if( srt_type ) {
+            cli.output.outputs[output_id].srt_type = !strcmp(srt_type, "listener") ? 1 : 0;
         }
         obe_free_string_array( opts );
     }
