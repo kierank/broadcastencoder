@@ -149,7 +149,6 @@ static int start(struct srt_ctx *ctx)
     struct uref *flow_def = uref_block_flow_alloc_def(ctx->uref_ctx->uref_mgr, "");
     upipe_set_flow_def(upipe_setflowdef, flow_def);
     upipe_setflowdef_set_dict(upipe_setflowdef, flow_def);
-    uref_free(flow_def);
 
     ctx->upipe_setflowdef = upipe_setflowdef;
 
@@ -162,8 +161,10 @@ static int start(struct srt_ctx *ctx)
     char lat[12];
     snprintf(lat, sizeof(lat) - 1, "%u", ctx->latency);
     lat[sizeof(lat)-1] = '\0';
-    if (!ubase_check(upipe_set_option(upipe_srt_sender, "latency", lat)))
+    if (!ubase_check(upipe_set_option(upipe_srt_sender, "latency", lat))) {
+        uref_free(flow_def);
         return EXIT_FAILURE;
+    }
 
     ctx->upipe_udpsrc_srt = upipe_void_alloc(upipe_udpsrc_mgr, uprobe_pfx_alloc_va(uprobe_use(ctx->uprobe_udp_srt), loglevel, "udp source srt %d", n));
     upipe_attach_uclock(ctx->upipe_udpsrc_srt);
@@ -188,8 +189,10 @@ static int start(struct srt_ctx *ctx)
     if (ctx->stream_id)
         upipe_set_option(upipe_srt_handshake, "stream_id", ctx->stream_id);
 
-    if (!ubase_check(upipe_set_option(upipe_srt_handshake, "latency", lat)))
+    if (!ubase_check(upipe_set_option(upipe_srt_handshake, "latency", lat))) {
+        uref_free(flow_def);
         return EXIT_FAILURE;
+    }
 
     upipe_mgr_release(upipe_srt_handshake_mgr);
 
@@ -229,6 +232,9 @@ static int start(struct srt_ctx *ctx)
         upipe_warn_va(upipe_srt_handshake, "Local %s", uri); // XXX: INADDR_ANY when listening
         upipe_srt_handshake_set_peer(upipe_srt_handshake, peer, peer_len);
     }
+
+    upipe_set_flow_def(upipe_srt_sender, flow_def);
+    uref_free(flow_def);
 
     return 0;
 }
