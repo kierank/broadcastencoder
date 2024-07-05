@@ -27,6 +27,7 @@ struct srt_ctx {
     bool restart;
     unsigned n;
 
+    int encryption;
     char *password;
     char *stream_id;
     int fd;
@@ -42,7 +43,7 @@ struct srt_ctx {
 };
 
 void srt_write(struct srt_ctx *ctx, struct uref *uref);
-struct srt_ctx *open_srt(obe_udp_ctx *p_udp, unsigned latency, char *password, char *stream_id, struct uref_ctx *uref_ctx, bool listen);
+struct srt_ctx *open_srt(obe_udp_ctx *p_udp, unsigned latency, int encryption, char *password, char *stream_id, struct uref_ctx *uref_ctx, bool listen);
 void close_srt(struct srt_ctx *ctx);
 int srt_bidirectional(struct srt_ctx *ctx);
 

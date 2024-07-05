@@ -442,8 +442,8 @@ static int write_rtp_pkt( struct ip_status *status, uint8_t *data, int len, int6
         write_rtp_header( pkt_ptr, RTP_TYPE_MP2T, p_rtp->seq, ts_90, p_rtp->ssrc );
         memcpy( &pkt_ptr[header_size], data, len );
     }
-    else { 
-        pkt_ptr = data;        
+    else {
+        pkt_ptr = data;
     }
 
     struct uref *uref = NULL;
@@ -566,7 +566,7 @@ static void *open_output( void *ptr )
             output->handle = (hnd_t)p_rtp;
         } else if (p_rtp->srt) {
             obe_udp_ctx *p_udp = p_rtp->udp_handle;
-            p_rtp->srt_ctx = open_srt(p_udp, p_rtp->latency, output_dest->srt_password, output_dest->stream_id, &p_rtp->uref_ctx, output_dest->srt_type == 1);
+            p_rtp->srt_ctx = open_srt(p_udp, p_rtp->latency, output_dest->srt_encryption, output_dest->srt_password, output_dest->stream_id, &p_rtp->uref_ctx, output_dest->srt_type == 1);
             if (!p_rtp->srt_ctx) {
                 rtp_close(p_rtp);
                 fprintf( stderr, "[rtp] Could not create srt output" );

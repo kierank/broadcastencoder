@@ -1160,6 +1160,7 @@ int obe_setup_output( obe_t *h, obe_output_opts_t *output_opts )
             }
         }
 
+        h->outputs[i]->output_dest.srt_encryption = output_opts->outputs[i].srt_encryption;
         if( output_opts->outputs[i].srt_password )
         {
             h->outputs[i]->output_dest.srt_password = strdup( output_opts->outputs[i].srt_password );

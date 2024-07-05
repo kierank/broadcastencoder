@@ -183,8 +183,11 @@ static int start(struct srt_ctx *ctx)
     struct upipe *upipe_srt_handshake = upipe_void_alloc_output(ctx->upipe_udpsrc_srt, upipe_srt_handshake_mgr,
             uprobe_pfx_alloc_va(uprobe_use(ctx->logger), loglevel, "srt handshake %d", n));
     upipe_set_option(upipe_srt_handshake, "listener", ctx->listen ? "1" : "0");
-    if (ctx->password)
-        upipe_srt_handshake_set_password(upipe_srt_handshake, ctx->password, 128/8 /* fixme */);
+    if (ctx->encryption && ctx->password)
+    {
+        int key_length = ctx->encryption == 1 ? 128 : ctx->encryption == 2 ? 192 : 256;
+        upipe_srt_handshake_set_password(upipe_srt_handshake, ctx->password, key_length/8);
+    }
 
     if (ctx->stream_id)
         upipe_set_option(upipe_srt_handshake, "stream_id", ctx->stream_id);
@@ -441,13 +444,14 @@ static void *srt_thread(void *arg)
     return NULL;
 }
 
-struct srt_ctx *open_srt(obe_udp_ctx *p_udp, unsigned latency, char *password, char *stream_id, struct uref_ctx *uref_ctx, bool listen)
+struct srt_ctx *open_srt(obe_udp_ctx *p_udp, unsigned latency, int encryption, char *password, char *stream_id, struct uref_ctx *uref_ctx, bool listen)
 {
     struct srt_ctx *ctx = calloc(1, sizeof(*ctx));
     if (!ctx)
         return NULL;
 
     ctx->uref_ctx = uref_ctx;
+    ctx->encryption = encryption;
     ctx->password = password;
     ctx->stream_id = stream_id;
     ctx->restart = true;

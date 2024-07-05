@@ -595,6 +595,14 @@ enum fec_type_e
     FEC_TYPE_FECFRAME_LDPC_STAIRCASE,
 };
 
+enum srt_encryption_e
+{
+    SRT_ENCRYPTION_NONE,
+    SRT_ENCRYPTION_AES_128,
+    SRT_ENCRYPTION_AES_192,
+    SRT_ENCRYPTION_AES_256,
+};
+
 typedef struct
 {
     int type;
@@ -608,6 +616,7 @@ typedef struct
 
     unsigned arq_latency;
 
+    int srt_encryption;
     char *srt_password;
 
     char *stream_id;
