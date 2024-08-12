@@ -373,7 +373,7 @@ static void *arq_thread(void *arg)
                                                    0);
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_loop(UPUMP_POOL,
                                                      UPUMP_BLOCKER_POOL);
-    ctx->uref_ctx->uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
+    ctx->uref_ctx->uclock = uclock_std_alloc(0);
     struct uprobe *uprobe = uprobe_arq_alloc(NULL, catch_arq, ctx);
     struct uprobe *logger = uprobe_stdio_alloc(uprobe_use(uprobe), stdout, loglevel);
     assert(logger != NULL);
