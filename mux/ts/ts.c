@@ -198,16 +198,12 @@ void *open_muxer( void *ptr )
             stream->audio_frame_size = (double)AC3_NUM_SAMPLES * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
             high_latency = 1;
         }
-        else if( stream_format == AUDIO_E_AC_3 || stream_format == AUDIO_AAC )
+        else if( stream_format == AUDIO_E_AC_3 || stream_format == AUDIO_AAC
+                || stream_format == AUDIO_OPUS )
         {
             encoder_wait( h, output_stream->output_stream_id );
             encoder = get_encoder( h, output_stream->output_stream_id );
             stream->audio_frame_size = (double)encoder->num_samples * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
-            high_latency = 1;
-        }
-        else if( stream_format == AUDIO_OPUS )
-        {
-            stream->audio_frame_size = (double)OPUS_NUM_SAMPLES * 90000LL * output_stream->ts_opts.frames_per_pes / input_stream->sample_rate;
             high_latency = 1;
         }
     }

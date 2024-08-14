@@ -150,6 +150,8 @@ static void *start_encoder( void *ptr )
         snprintf( tmp, sizeof(tmp), "%s", "constrained" );
         av_dict_set( &opts, "vbr", tmp, 0 );
         codec->compression_level = 10;
+        av_dict_set( &opts, "frame_duration", "10", 0 );
+        av_dict_set( &opts, "application", "lowdelay", 0 );
     }
 
     if( avcodec_open2( codec, enc, &opts ) < 0 )
@@ -206,7 +208,8 @@ static void *start_encoder( void *ptr )
     }
 
     /* The number of samples per E-AC3 frame is unknown until the encoder is ready */
-    if( stream->stream_format == AUDIO_E_AC_3 || stream->stream_format == AUDIO_AAC )
+    if( stream->stream_format == AUDIO_E_AC_3 || stream->stream_format == AUDIO_AAC
+            || stream->stream_format == AUDIO_OPUS )
     {
         pthread_mutex_lock( &encoder->queue.mutex );
         encoder->is_ready = 1;
