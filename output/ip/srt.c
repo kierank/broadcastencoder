@@ -213,17 +213,19 @@ static int start(struct srt_ctx *ctx)
             uprobe_pfx_alloc_va(uprobe_use(ctx->logger), loglevel, "udp sink %d", n));
     upipe_release(ctx->upipe_udpsink);
 
-    ubase_assert(upipe_udpsink_set_fd(ctx->upipe_udpsink, dup(ctx->fd)));
-
-    int flags = fcntl(ctx->fd, F_GETFL);
-    flags |= O_NONBLOCK;
-    if (fcntl(ctx->fd, F_SETFL, flags) < 0)
-        upipe_err(ctx->upipe_udpsink, "Could not set flags");;
-
-    ubase_assert(upipe_udpsrc_set_fd(ctx->upipe_udpsrc_srt, dup(ctx->fd)));
-    if (!ctx->listen)
+    if (!ctx->listen) {
+        ubase_assert(upipe_udpsink_set_fd(ctx->upipe_udpsink, dup(ctx->fd)));
         ubase_assert(upipe_udpsink_set_peer(ctx->upipe_udpsink,
                     (const struct sockaddr*)&ctx->dest_addr, ctx->dest_addr_len));
+    }
+
+    int src_fd = dup(ctx->fd);
+    int flags = fcntl(src_fd, F_GETFL);
+    flags |= O_NONBLOCK;
+    if (fcntl(src_fd, F_SETFL, flags) < 0)
+        upipe_err(ctx->upipe_udpsink, "Could not set flags");;
+
+    ubase_assert(upipe_udpsrc_set_fd(ctx->upipe_udpsrc_srt, src_fd));
 
     struct sockaddr_storage ad;
     socklen_t peer_len = sizeof(ad);
