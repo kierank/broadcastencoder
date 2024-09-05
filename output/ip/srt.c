@@ -344,6 +344,28 @@ static int catch_srt(struct uprobe *uprobe, struct upipe *upipe,
         upump_start(u);
         return uprobe_throw_next(uprobe, upipe, event, args);
 
+    case UPROBE_NEW_FLOW_DEF:
+        if (upipe->mgr->signature == UPIPE_SRT_HANDSHAKE_SIGNATURE) {
+            uint16_t latency_ms;
+            if (!ubase_check(upipe_srt_handshake_get_latency(upipe, &latency_ms))) {
+                upipe_err(upipe, "Couldn't get latency");
+            } else {
+                upipe_notice_va(upipe, "Latency %hu ms", latency_ms);
+                char latency_ms_str[16];
+                snprintf(latency_ms_str, sizeof(latency_ms_str), "%hu", latency_ms);
+
+                struct upipe *out;
+                if (ubase_check(upipe_get_output(upipe, &out)) && out) {
+                    assert(out->mgr->signature == UPIPE_SRT_SENDER_INPUT_SIGNATURE);
+                    struct upipe *srts;
+                    if (ubase_check(upipe_sub_get_super(out, &srts))) {
+                        if (!ubase_check(upipe_set_option(srts, "latency", latency_ms_str)))
+                            upipe_err(upipe, "Couldn't set sender latency");
+                    }
+                }
+            }
+        }
+
     case UPROBE_PROBE_UREF: {
         int sig = va_arg(args, int);
         if (sig != UPIPE_PROBE_UREF_SIGNATURE)
